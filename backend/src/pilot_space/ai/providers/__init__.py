@@ -10,3 +10,17 @@ BYOK (Bring Your Own Key):
 - Encrypted storage via Supabase Vault
 - Automatic failover on provider errors
 """
+
+from pilot_space.ai.providers.provider_selector import (
+    Provider,
+    ProviderConfig,
+    ProviderSelector,
+    TaskType,
+)
+
+__all__ = [
+    "Provider",
+    "ProviderConfig",
+    "ProviderSelector",
+    "TaskType",
+]

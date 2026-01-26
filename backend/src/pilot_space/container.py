@@ -30,6 +30,10 @@ from pilot_space.infrastructure.database.repositories.workspace_repository impor
 )
 
 if TYPE_CHECKING:
+    from pilot_space.ai.infrastructure.resilience import ResilientExecutor
+    from pilot_space.ai.providers.provider_selector import ProviderSelector
+    from pilot_space.ai.session.session_manager import SessionManager
+    from pilot_space.ai.tools.mcp_server import ToolRegistry
     from pilot_space.config import Settings
     from pilot_space.infrastructure.cache.redis import RedisClient
     from pilot_space.infrastructure.queue.supabase_queue import SupabaseQueueClient
@@ -104,6 +108,100 @@ class Container(containers.DeclarativeContainer):
 
     queue_client = providers.Singleton(_create_queue_client)
     redis_client = providers.Singleton(_create_redis_client)
+
+    # AI Infrastructure
+    # Note: Session-dependent services are created via dependency functions
+    # in dependencies.py, not as singletons in the container.
+
+    @staticmethod
+    def _create_session_manager(redis_client: RedisClient | None) -> SessionManager | None:
+        """Create session manager if Redis is available.
+
+        Args:
+            redis_client: Redis client instance.
+
+        Returns:
+            SessionManager instance or None if Redis not configured.
+        """
+        if redis_client is None:
+            return None
+
+        from pilot_space.ai.session.session_manager import SessionManager
+
+        return SessionManager(redis=redis_client)
+
+    @staticmethod
+    def _create_provider_selector() -> ProviderSelector:
+        """Create provider selector.
+
+        Returns:
+            ProviderSelector instance.
+        """
+        from pilot_space.ai.providers.provider_selector import ProviderSelector
+
+        return ProviderSelector()
+
+    @staticmethod
+    def _create_resilient_executor() -> ResilientExecutor:
+        """Create resilient executor with circuit breaker.
+
+        Returns:
+            ResilientExecutor instance.
+        """
+        from pilot_space.ai.infrastructure.resilience import (
+            CircuitBreakerConfig,
+            ResilientExecutor,
+        )
+
+        settings = get_settings()
+        circuit_config = CircuitBreakerConfig(
+            failure_threshold=5,
+            timeout_seconds=settings.ai_timeout_seconds,
+        )
+
+        return ResilientExecutor(circuit_config=circuit_config)
+
+    @staticmethod
+    def _create_tool_registry() -> ToolRegistry:
+        """Create tool registry.
+
+        Returns:
+            ToolRegistry instance.
+        """
+        from pilot_space.ai.tools.mcp_server import ToolRegistry
+
+        return ToolRegistry()
+
+    # AI service providers (stateless singletons only)
+    # Note: Services requiring AsyncSession are created per-request in dependencies.py
+
+    @staticmethod
+    def _get_encryption_key_from_config(settings: Settings) -> str:
+        """Get encryption key from settings.
+
+        Args:
+            settings: Application settings.
+
+        Returns:
+            Encryption key for API key storage.
+        """
+        return settings.encryption_key.get_secret_value()
+
+    encryption_key = providers.Factory(
+        _get_encryption_key_from_config,
+        settings=config,
+    )
+
+    session_manager = providers.Singleton(
+        _create_session_manager,
+        redis_client=redis_client,
+    )
+
+    provider_selector = providers.Singleton(_create_provider_selector)
+
+    resilient_executor = providers.Singleton(_create_resilient_executor)
+
+    tool_registry = providers.Singleton(_create_tool_registry)
 
 
 def create_container(settings: Settings | None = None) -> Container:

@@ -23,10 +23,16 @@ from pilot_space.infrastructure.database.base import (
     WorkspaceScopedModel,
 )
 from pilot_space.infrastructure.database.models.activity import Activity, ActivityType
+from pilot_space.infrastructure.database.models.ai_approval_request import (
+    AIApprovalRequest,
+    ApprovalStatus,
+)
 from pilot_space.infrastructure.database.models.ai_configuration import (
     AIConfiguration,
     LLMProvider,
 )
+from pilot_space.infrastructure.database.models.ai_cost_record import AICostRecord
+from pilot_space.infrastructure.database.models.ai_session import AISession
 from pilot_space.infrastructure.database.models.ai_context import AIContext
 from pilot_space.infrastructure.database.models.cycle import Cycle, CycleStatus
 from pilot_space.infrastructure.database.models.discussion_comment import (
@@ -66,6 +72,7 @@ from pilot_space.infrastructure.database.models.threaded_discussion import (
 )
 from pilot_space.infrastructure.database.models.user import User
 from pilot_space.infrastructure.database.models.workspace import Workspace
+from pilot_space.infrastructure.database.models.workspace_api_key import WorkspaceAPIKey
 from pilot_space.infrastructure.database.models.workspace_member import (
     WorkspaceMember,
     WorkspaceRole,
@@ -73,10 +80,14 @@ from pilot_space.infrastructure.database.models.workspace_member import (
 
 __all__ = [
     "DEFAULT_STATES",
+    "AIApprovalRequest",
     "AIConfiguration",
     "AIContext",
+    "AICostRecord",
+    "AISession",
     "Activity",
     "ActivityType",
+    "ApprovalStatus",
     "AnnotationStatus",
     "AnnotationType",
     "Base",
@@ -115,6 +126,7 @@ __all__ = [
     "WorkspaceMember",
     "WorkspaceRole",
     "WorkspaceScopedMixin",
+    "WorkspaceAPIKey",
     "WorkspaceScopedModel",
     "issue_labels",
 ]

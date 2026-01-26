@@ -53,6 +53,9 @@ dependencies = [
     "openai>=1.55.0",
     "google-generativeai>=0.8.0",
 
+    # Claude Agent SDK
+    "claude-agent-sdk>=0.1.0,<1.0",
+
     # Dependency Injection
     "dependency-injector>=4.43.0",
 

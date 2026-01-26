@@ -540,7 +540,223 @@ async def get_ai_config_or_demo(
     return configs[0] if configs else None
 
 
-# Type imports for service return types
+# ============================================================================
+# AI Infrastructure Dependencies
+# ============================================================================
+
+
+async def get_session_manager(request: Request) -> SessionManager | None:
+    """Get session manager from app state.
+
+    Args:
+        request: FastAPI request with app state.
+
+    Returns:
+        SessionManager instance or None if Redis not configured.
+
+    Raises:
+        RuntimeError: If container not initialized.
+    """
+    if not hasattr(request.app.state, "container"):
+        raise RuntimeError("DI container not initialized. Check app startup.")
+
+    container = request.app.state.container
+    return container.session_manager()
+
+
+async def get_provider_selector(request: Request) -> ProviderSelector:
+    """Get provider selector from app state.
+
+    Args:
+        request: FastAPI request with app state.
+
+    Returns:
+        ProviderSelector instance.
+
+    Raises:
+        RuntimeError: If container not initialized.
+    """
+    if not hasattr(request.app.state, "container"):
+        raise RuntimeError("DI container not initialized. Check app startup.")
+
+    container = request.app.state.container
+    return container.provider_selector()
+
+
+async def get_resilient_executor(request: Request) -> ResilientExecutor:
+    """Get resilient executor from app state.
+
+    Args:
+        request: FastAPI request with app state.
+
+    Returns:
+        ResilientExecutor instance.
+
+    Raises:
+        RuntimeError: If container not initialized.
+    """
+    if not hasattr(request.app.state, "container"):
+        raise RuntimeError("DI container not initialized. Check app startup.")
+
+    container = request.app.state.container
+    return container.resilient_executor()
+
+
+async def get_tool_registry(request: Request) -> ToolRegistry:
+    """Get tool registry from app state.
+
+    Args:
+        request: FastAPI request with app state.
+
+    Returns:
+        ToolRegistry instance.
+
+    Raises:
+        RuntimeError: If container not initialized.
+    """
+    if not hasattr(request.app.state, "container"):
+        raise RuntimeError("DI container not initialized. Check app startup.")
+
+    container = request.app.state.container
+    return container.tool_registry()
+
+
+async def get_key_storage(
+    session: Annotated[AsyncSession, Depends(get_session)],
+    request: Request,
+) -> SecureKeyStorage:
+    """Get secure key storage with request-scoped session.
+
+    Args:
+        session: Database session.
+        request: FastAPI request with app state.
+
+    Returns:
+        SecureKeyStorage instance.
+
+    Raises:
+        RuntimeError: If container not initialized.
+    """
+    from pilot_space.ai.infrastructure.key_storage import SecureKeyStorage
+
+    if not hasattr(request.app.state, "container"):
+        raise RuntimeError("DI container not initialized. Check app startup.")
+
+    container = request.app.state.container
+    encryption_key = container.encryption_key()
+
+    return SecureKeyStorage(db=session, master_secret=encryption_key)
+
+
+async def get_approval_service_dep(
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> ApprovalService:
+    """Get approval service with request-scoped session.
+
+    Args:
+        session: Database session.
+
+    Returns:
+        ApprovalService instance.
+    """
+    from pilot_space.ai.infrastructure.approval import ApprovalService
+
+    return ApprovalService(session=session)
+
+
+async def get_cost_tracker_dep(
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> CostTracker:
+    """Get cost tracker with request-scoped session.
+
+    Args:
+        session: Database session.
+
+    Returns:
+        CostTracker instance.
+    """
+    from pilot_space.ai.infrastructure.cost_tracker import CostTracker
+
+    return CostTracker(session=session)
+
+
+async def get_sdk_orchestrator(
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    session_manager: Annotated[SessionManager | None, Depends(get_session_manager)],
+    provider_selector: Annotated[ProviderSelector, Depends(get_provider_selector)],
+    resilient_executor: Annotated[ResilientExecutor, Depends(get_resilient_executor)],
+    tool_registry: Annotated[ToolRegistry, Depends(get_tool_registry)],
+) -> SDKOrchestrator:
+    """Get SDK orchestrator with all dependencies.
+
+    The orchestrator is created per-request with request-scoped session
+    for session-dependent services.
+
+    Args:
+        request: FastAPI request with app state.
+        session: Database session.
+        session_manager: Session manager (may be None if Redis not configured).
+        provider_selector: Provider selector.
+        resilient_executor: Resilient executor.
+        tool_registry: Tool registry.
+
+    Returns:
+        Configured SDKOrchestrator instance.
+
+    Raises:
+        RuntimeError: If container not initialized.
+    """
+    from pilot_space.ai.infrastructure.approval import ApprovalService
+    from pilot_space.ai.infrastructure.cost_tracker import CostTracker
+    from pilot_space.ai.infrastructure.key_storage import SecureKeyStorage
+    from pilot_space.ai.sdk_orchestrator import SDKOrchestrator
+
+    if not hasattr(request.app.state, "container"):
+        raise RuntimeError("DI container not initialized. Check app startup.")
+
+    container = request.app.state.container
+    encryption_key = container.encryption_key()
+
+    # Create session-dependent services
+    key_storage = SecureKeyStorage(db=session, master_secret=encryption_key)
+    approval_service = ApprovalService(session=session)
+    cost_tracker = CostTracker(session=session)
+
+    return SDKOrchestrator(
+        key_storage=key_storage,
+        approval_service=approval_service,
+        cost_tracker=cost_tracker,
+        session_manager=session_manager,  # type: ignore[arg-type]
+        provider_selector=provider_selector,
+        resilient_executor=resilient_executor,
+        tool_registry=tool_registry,
+    )
+
+
+# Type imports for service return types (must be before type aliases)
+if TYPE_CHECKING:
+    from pilot_space.ai.infrastructure.approval import ApprovalService
+    from pilot_space.ai.infrastructure.cost_tracker import CostTracker
+    from pilot_space.ai.infrastructure.key_storage import SecureKeyStorage
+    from pilot_space.ai.infrastructure.resilience import ResilientExecutor
+    from pilot_space.ai.providers.provider_selector import ProviderSelector
+    from pilot_space.ai.sdk_orchestrator import SDKOrchestrator
+    from pilot_space.ai.session.session_manager import SessionManager
+    from pilot_space.ai.tools.mcp_server import ToolRegistry
+
+# Type aliases for AI dependencies (using string forward references)
+OrchestratorDep = Annotated["SDKOrchestrator", Depends(get_sdk_orchestrator)]
+SessionManagerDep = Annotated["SessionManager | None", Depends(get_session_manager)]
+ProviderSelectorDep = Annotated["ProviderSelector", Depends(get_provider_selector)]
+ResilientExecutorDep = Annotated["ResilientExecutor", Depends(get_resilient_executor)]
+ToolRegistryDep = Annotated["ToolRegistry", Depends(get_tool_registry)]
+KeyStorageDep = Annotated["SecureKeyStorage", Depends(get_key_storage)]
+ApprovalServiceDep = Annotated["ApprovalService", Depends(get_approval_service_dep)]
+CostTrackerDep = Annotated["CostTracker", Depends(get_cost_tracker_dep)]
+
+
+# Additional type imports for other services
 if TYPE_CHECKING:
     from pilot_space.application.services.ai_context import GenerateAIContextService
     from pilot_space.application.services.issue import (

@@ -27,6 +27,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from pilot_space.infrastructure.database.base import WorkspaceScopedModel
 
 if TYPE_CHECKING:
+    from pilot_space.infrastructure.database.models.issue import Issue
     from pilot_space.infrastructure.database.models.project import Project
     from pilot_space.infrastructure.database.models.user import User
 
@@ -125,6 +126,11 @@ class Cycle(WorkspaceScopedModel):
     owned_by: Mapped[User | None] = relationship(
         "User",
         lazy="joined",
+    )
+    issues: Mapped[list[Issue]] = relationship(
+        "Issue",
+        back_populates="cycle",
+        lazy="selectin",
     )
 
     # Indexes and constraints
