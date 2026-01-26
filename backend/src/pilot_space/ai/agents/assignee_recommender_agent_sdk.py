@@ -307,7 +307,10 @@ class AssigneeRecommenderAgent(
             current_workload = workload_result.scalar() or 0
 
             # Get expertise labels (labels they've worked on)
-            expertise_labels: list[str] = []  # TODO: Query from completed issues
+            expertise_labels = await self._load_expertise_labels(
+                user_id=user.id,
+                session=session,
+            )
 
             team_members.append(
                 TeamMember(
@@ -320,6 +323,43 @@ class AssigneeRecommenderAgent(
             )
 
         return team_members
+
+    async def _load_expertise_labels(
+        self,
+        user_id: UUID,
+        session: AsyncSession,
+    ) -> list[str]:
+        """Load labels from issues completed by this user.
+
+        Extracts unique labels from issues where:
+        - User was the assignee
+        - Issue state is in COMPLETED group
+        - Issue is not soft-deleted
+
+        Args:
+            user_id: User UUID to load expertise for.
+            session: Async database session.
+
+        Returns:
+            List of unique label names representing user's expertise.
+        """
+        from sqlalchemy import distinct, select
+
+        from pilot_space.infrastructure.database.models import Issue, Label, State
+        from pilot_space.infrastructure.database.models.state import StateGroup
+
+        # Query distinct label names from completed issues assigned to this user
+        query = (
+            select(distinct(Label.name))
+            .join(Issue.labels)
+            .join(Issue.state)
+            .where(Issue.assignee_id == user_id)
+            .where(State.group == StateGroup.COMPLETED)
+            .where(Issue.is_deleted == False)  # noqa: E712
+        )
+
+        result = await session.execute(query)
+        return [row[0] for row in result.all()]
 
     async def _score_members(
         self,
