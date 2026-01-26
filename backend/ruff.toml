@@ -61,12 +61,16 @@ ignore = [
     "PLR2004",  # Magic value comparison (common in tests)
     "TRY003",   # Long exception messages (sometimes needed)
     "TRY300",   # Consider moving return to else block (style preference)
+    "TRY401",   # Redundant exception in logging.exception (useful for context)
     "ARG001",   # Unused function argument (often needed for interfaces)
     "TC001",    # Move application import into TYPE_CHECKING (needed at runtime)
     "TC003",    # Move standard library import into TYPE_CHECKING (needed at runtime for SQLAlchemy)
     "SIM102",   # Nested if for change detection readability
     "RUF034",   # Useless if-else (sometimes intentional for consistency)
     "PERF401",  # Use list comprehension (sometimes loop is clearer)
+    "UP046",    # PEP 695 Generic class - not fully supported by pyright for dataclasses
+    "UP047",    # PEP 695 Generic function - TypeVar needed for decorator patterns
+    "PYI034",   # __new__ returning Self - singleton pattern requires type: ignore
 ]
 
 # Allow autofix for all enabled rules
