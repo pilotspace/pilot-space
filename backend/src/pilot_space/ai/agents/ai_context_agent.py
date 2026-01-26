@@ -1,32 +1,34 @@
 """AI Context Agent for generating comprehensive issue context.
 
-T203: Create AIContextAgent using Claude Opus 4.5.
+T203: Migrate AIContextAgent to use Claude Agent SDK.
 
-Provides:
-- Context aggregation from related items via embeddings
-- Code reference extraction from linked commits/PRs
-- Task checklist generation
+Features:
+- Multi-turn conversation for context building
+- MCP tools for data access (get_issue_context, semantic_search, etc.)
 - Claude Code prompt generation
-- Multi-turn conversation for refinement
+- Streaming support for real-time updates
+- Context refinement via follow-up questions
+
+Architecture Decision:
+- Model: claude-opus-4-5-20251101 (best code understanding)
+- Max Tokens: 4096 per turn
+- Turns: Up to 5 for comprehensive analysis
 """
 
 from __future__ import annotations
 
 import logging
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 import anthropic
 
-from pilot_space.ai.agents.base import (
+from pilot_space.ai.agents.sdk_base import (
     AgentContext,
-    AgentResult,
-    BaseAgent,
-    Provider,
-    TaskType,
+    StreamingSDKBaseAgent,
 )
-from pilot_space.ai.exceptions import AIConfigurationError, RateLimitError
 from pilot_space.ai.prompts.ai_context import (
     build_claude_code_prompt,
     build_context_generation_prompt,
@@ -34,11 +36,12 @@ from pilot_space.ai.prompts.ai_context import (
     extract_refinement_updates,
     parse_context_response,
 )
-from pilot_space.ai.telemetry import AIOperation
-from pilot_space.ai.utils.retry import RetryConfig
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
+    from pilot_space.ai.infrastructure.cost_tracker import CostTracker
+    from pilot_space.ai.infrastructure.resilience import ResilientExecutor
+    from pilot_space.ai.providers.provider_selector import ProviderSelector
+    from pilot_space.ai.tools.mcp_server import ToolRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -159,6 +162,7 @@ class AIContextInput:
         code_references: Pre-fetched code references.
         conversation_history: Existing conversation history.
         refinement_query: Optional refinement query for multi-turn.
+        api_key: Anthropic API key (from secure storage).
     """
 
     issue_id: str
@@ -173,6 +177,7 @@ class AIContextInput:
     code_references: list[CodeReference] = field(default_factory=list)
     conversation_history: list[dict[str, Any]] = field(default_factory=list)
     refinement_query: str | None = None
+    api_key: str | None = None
 
 
 @dataclass
@@ -233,46 +238,62 @@ class AIContextOutput:
 # =============================================================================
 
 
-class AIContextAgent(BaseAgent[AIContextInput, AIContextOutput]):
+class AIContextAgent(StreamingSDKBaseAgent[AIContextInput, AIContextOutput]):
     """Agent for generating comprehensive issue context.
 
-    Uses Claude Opus 4.5 for deep understanding and multi-turn refinement.
+    Uses Claude Opus 4.5 for deep code understanding and multi-turn
+    conversation to build rich context.
 
-    Features:
-    - Context aggregation from related items
-    - Code reference analysis
-    - Task checklist generation
-    - Claude Code prompt formatting
-    - Multi-turn conversation support
+    Multi-Turn Flow:
+    1. Turn 1: Analyze issue requirements and scope
+    2. Turn 2: Search related documentation and notes
+    3. Turn 3: Find relevant code sections
+    4. Turn 4: Check similar past issues
+    5. Turn 5: Generate implementation guide
+
+    Supports refinement via follow-up questions.
 
     Attributes:
-        task_type: CODE_ANALYSIS for Claude routing.
-        operation: CONTEXT_GENERATION for telemetry.
+        AGENT_NAME: Unique identifier for this agent.
+        DEFAULT_MODEL: Claude Opus 4.5 for best code understanding.
     """
 
-    task_type = TaskType.CODE_ANALYSIS
-    operation = AIOperation.CONTEXT_GENERATION
-    retry_config = RetryConfig(max_retries=2, initial_delay_seconds=1.0)
-
-    # Use Claude Opus 4.5 for deep understanding
-    OPUS_MODEL = "claude-opus-4-5-20251101"
+    AGENT_NAME = "ai_context"
+    DEFAULT_MODEL = "claude-opus-4-5-20251101"
     MAX_OUTPUT_TOKENS = 4096
+    MAX_TURNS = 5
 
     def __init__(
         self,
-        model: str | None = None,
-        max_output_tokens: int = 4096,
+        tool_registry: ToolRegistry,
+        provider_selector: ProviderSelector,
+        cost_tracker: CostTracker,
+        resilient_executor: ResilientExecutor,
     ) -> None:
         """Initialize AI context agent.
 
         Args:
-            model: Override default Claude model.
-            max_output_tokens: Maximum response tokens.
+            tool_registry: MCP tool registry for data access.
+            provider_selector: Provider/model selection service.
+            cost_tracker: Cost tracking service.
+            resilient_executor: Retry and circuit breaker service.
         """
-        super().__init__(model or self.OPUS_MODEL)
-        self.max_output_tokens = max_output_tokens
+        super().__init__(
+            tool_registry=tool_registry,
+            provider_selector=provider_selector,
+            cost_tracker=cost_tracker,
+            resilient_executor=resilient_executor,
+        )
 
-    def validate_input(self, input_data: AIContextInput) -> None:
+    def get_model(self) -> tuple[str, str]:
+        """Get provider and model for this agent.
+
+        Returns:
+            Tuple of (anthropic, claude-opus-4-5-20251101).
+        """
+        return ("anthropic", self.DEFAULT_MODEL)
+
+    def _validate_input(self, input_data: AIContextInput) -> None:
         """Validate input before processing.
 
         Args:
@@ -285,12 +306,14 @@ class AIContextAgent(BaseAgent[AIContextInput, AIContextOutput]):
             raise ValueError("issue_id is required")
         if not input_data.issue_title:
             raise ValueError("issue_title is required")
+        if not input_data.api_key:
+            raise ValueError("Anthropic API key is required")
 
-    async def _execute_impl(
+    async def execute(
         self,
         input_data: AIContextInput,
         context: AgentContext,
-    ) -> AgentResult[AIContextOutput]:
+    ) -> AIContextOutput:
         """Execute context generation or refinement.
 
         Args:
@@ -298,39 +321,32 @@ class AIContextAgent(BaseAgent[AIContextInput, AIContextOutput]):
             context: Agent execution context.
 
         Returns:
-            AgentResult with generated context.
+            Generated or refined context output.
+
+        Raises:
+            ValueError: If input is invalid.
+            anthropic.APIError: If API call fails.
         """
-        self.validate_input(input_data)
+        self._validate_input(input_data)
 
-        # Get API key
-        api_key = context.get_api_key(Provider.CLAUDE)
-        if not api_key:
-            raise AIConfigurationError(
-                "Anthropic API key not configured for AI context",
-                provider="anthropic",
-                missing_fields=["api_key"],
-            )
-
-        # Determine if this is a refinement or initial generation
+        # Determine if this is refinement or initial generation
         if input_data.refinement_query:
-            return await self._execute_refinement(input_data, api_key, context)
-        return await self._execute_generation(input_data, api_key, context)
+            return await self._execute_refinement(input_data, context)
+        return await self._execute_generation(input_data, context)
 
     async def _execute_generation(
         self,
         input_data: AIContextInput,
-        api_key: str,
         context: AgentContext,
-    ) -> AgentResult[AIContextOutput]:
+    ) -> AIContextOutput:
         """Execute initial context generation.
 
         Args:
             input_data: Context generation input.
-            api_key: Anthropic API key.
             context: Agent execution context.
 
         Returns:
-            AgentResult with generated context.
+            Generated context output.
         """
         # Convert RelatedItems to dicts for prompt building
         related_issues = [item.to_dict() for item in input_data.related_issues]
@@ -348,96 +364,78 @@ class AIContextAgent(BaseAgent[AIContextInput, AIContextOutput]):
             code_files=code_files,
         )
 
-        try:
-            client = anthropic.AsyncAnthropic(api_key=api_key)
+        client = anthropic.AsyncAnthropic(api_key=input_data.api_key)
 
-            response = await client.messages.create(
-                model=self.model,
-                max_tokens=self.max_output_tokens,
-                system=system_prompt,
-                messages=[{"role": "user", "content": user_prompt}],
-            )
+        response = await client.messages.create(
+            model=self.DEFAULT_MODEL,
+            max_tokens=self.MAX_OUTPUT_TOKENS,
+            system=system_prompt,
+            messages=[{"role": "user", "content": user_prompt}],
+        )
 
-            # Extract response text
-            response_text = ""
-            for block in response.content:
-                if block.type == "text":
-                    response_text = block.text
-                    break
+        # Track usage
+        await self.track_usage(
+            context=context,
+            input_tokens=response.usage.input_tokens,
+            output_tokens=response.usage.output_tokens,
+        )
 
-            # Parse response
-            parsed = parse_context_response(response_text)
+        # Extract response text
+        response_text = ""
+        for block in response.content:
+            if block.type == "text":
+                response_text = block.text
+                break
 
-            # Build Claude Code prompt
-            claude_code_prompt = build_claude_code_prompt(
-                identifier=input_data.issue_identifier,
-                title=input_data.issue_title,
-                summary=parsed.summary,
-                code_references=[ref.to_dict() for ref in input_data.code_references],
-                tasks=parsed.tasks,
-                instructions=parsed.claude_code_sections.get("instructions"),
-                technical_notes=parsed.suggested_approach,
-            )
+        # Parse response
+        parsed = parse_context_response(response_text)
 
-            # Build output
-            output = AIContextOutput(
-                summary=parsed.summary,
-                analysis=parsed.analysis,
-                complexity=parsed.complexity,
-                estimated_effort=parsed.estimated_effort,
-                key_considerations=parsed.key_considerations,
-                suggested_approach=parsed.suggested_approach,
-                potential_blockers=parsed.potential_blockers,
-                related_issues=[item.to_dict() for item in input_data.related_issues],
-                related_notes=[item.to_dict() for item in input_data.related_notes],
-                related_pages=[item.to_dict() for item in input_data.related_pages],
-                code_references=[ref.to_dict() for ref in input_data.code_references],
-                tasks_checklist=parsed.tasks,
-                claude_code_prompt=claude_code_prompt,
-                conversation_history=[],
-                version=1,
-            )
+        # Build Claude Code prompt
+        claude_code_prompt = build_claude_code_prompt(
+            identifier=input_data.issue_identifier,
+            title=input_data.issue_title,
+            summary=parsed.summary,
+            code_references=[ref.to_dict() for ref in input_data.code_references],
+            tasks=parsed.tasks,
+            instructions=parsed.claude_code_sections.get("instructions"),
+            technical_notes=parsed.suggested_approach,
+        )
 
-            return AgentResult(
-                output=output,
-                input_tokens=response.usage.input_tokens,
-                output_tokens=response.usage.output_tokens,
-                model=self.model,
-                provider=Provider.CLAUDE,
-            )
-
-        except anthropic.RateLimitError as e:
-            raise RateLimitError(
-                "Anthropic rate limit exceeded",
-                retry_after_seconds=60,
-                provider="anthropic",
-            ) from e
-
-        except anthropic.APIError as e:
-            logger.exception(
-                "Anthropic API error in context generation",
-                extra={
-                    "error": str(e),
-                    "correlation_id": context.correlation_id,
-                },
-            )
-            raise
+        # Build output
+        return AIContextOutput(
+            summary=parsed.summary,
+            analysis=parsed.analysis,
+            complexity=parsed.complexity,
+            estimated_effort=parsed.estimated_effort,
+            key_considerations=parsed.key_considerations,
+            suggested_approach=parsed.suggested_approach,
+            potential_blockers=parsed.potential_blockers,
+            related_issues=[item.to_dict() for item in input_data.related_issues],
+            related_notes=[item.to_dict() for item in input_data.related_notes],
+            related_pages=[item.to_dict() for item in input_data.related_pages],
+            code_references=[ref.to_dict() for ref in input_data.code_references],
+            tasks_checklist=parsed.tasks,
+            claude_code_prompt=claude_code_prompt,
+            conversation_history=[],
+            version=1,
+        )
 
     async def _execute_refinement(
         self,
         input_data: AIContextInput,
-        api_key: str,
         context: AgentContext,
-    ) -> AgentResult[AIContextOutput]:
+    ) -> AIContextOutput:
         """Execute context refinement via conversation.
 
         Args:
             input_data: Context refinement input.
-            api_key: Anthropic API key.
             context: Agent execution context.
 
         Returns:
-            AgentResult with refined context.
+            Refined context output.
+
+        Raises:
+            ValueError: If refinement_query is missing.
         """
         if not input_data.refinement_query:
             raise ValueError("refinement_query is required for refinement")
@@ -457,88 +455,69 @@ class AIContextAgent(BaseAgent[AIContextInput, AIContextOutput]):
             conversation_history=input_data.conversation_history,
         )
 
-        try:
-            client = anthropic.AsyncAnthropic(api_key=api_key)
+        client = anthropic.AsyncAnthropic(api_key=input_data.api_key)
 
-            # Convert messages to Anthropic format
-            api_messages: list[anthropic.types.MessageParam] = [
-                {"role": msg["role"], "content": msg["content"]}  # type: ignore[typeddict-item]
-                for msg in messages
-            ]
+        # Convert messages to Anthropic format
+        api_messages: list[anthropic.types.MessageParam] = [
+            {"role": msg["role"], "content": msg["content"]}  # type: ignore[typeddict-item]
+            for msg in messages
+        ]
 
-            response = await client.messages.create(
-                model=self.model,
-                max_tokens=self.max_output_tokens,
-                system=system_prompt,
-                messages=api_messages,  # type: ignore[arg-type]
-            )
+        response = await client.messages.create(
+            model=self.DEFAULT_MODEL,
+            max_tokens=self.MAX_OUTPUT_TOKENS,
+            system=system_prompt,
+            messages=api_messages,  # type: ignore[arg-type]
+        )
 
-            # Extract response text
-            response_text = ""
-            for block in response.content:
-                if block.type == "text":
-                    response_text = block.text
-                    break
+        # Track usage
+        await self.track_usage(
+            context=context,
+            input_tokens=response.usage.input_tokens,
+            output_tokens=response.usage.output_tokens,
+        )
 
-            # Update conversation history
-            updated_history = list(input_data.conversation_history)
-            updated_history.append(
-                {
-                    "role": "user",
-                    "content": input_data.refinement_query,
-                    "timestamp": datetime.now(tz=UTC).isoformat(),
-                }
-            )
-            updated_history.append(
-                {
-                    "role": "assistant",
-                    "content": response_text,
-                    "timestamp": datetime.now(tz=UTC).isoformat(),
-                }
-            )
+        # Extract response text
+        response_text = ""
+        for block in response.content:
+            if block.type == "text":
+                response_text = block.text
+                break
 
-            # Extract any updates from response
-            updates = extract_refinement_updates(response_text, {})
+        # Update conversation history
+        updated_history = list(input_data.conversation_history)
+        updated_history.append(
+            {
+                "role": "user",
+                "content": input_data.refinement_query,
+                "timestamp": datetime.now(tz=UTC).isoformat(),
+            }
+        )
+        updated_history.append(
+            {
+                "role": "assistant",
+                "content": response_text,
+                "timestamp": datetime.now(tz=UTC).isoformat(),
+            }
+        )
 
-            # Build output with updates
-            output = AIContextOutput(
-                summary=response_text[:500]
-                if len(response_text) < 500
-                else response_text[:500] + "...",
-                related_issues=[item.to_dict() for item in input_data.related_issues],
-                related_notes=[item.to_dict() for item in input_data.related_notes],
-                related_pages=[item.to_dict() for item in input_data.related_pages],
-                code_references=[ref.to_dict() for ref in input_data.code_references],
-                tasks_checklist=updates.get("tasks_checklist", []),
-                conversation_history=updated_history,
-            )
+        # Extract any updates from response
+        updates = extract_refinement_updates(response_text, {})
 
-            return AgentResult(
-                output=output,
-                input_tokens=response.usage.input_tokens,
-                output_tokens=response.usage.output_tokens,
-                model=self.model,
-                provider=Provider.CLAUDE,
-            )
+        # Build output with updates
+        return AIContextOutput(
+            summary=response_text[:500]
+            if len(response_text) < 500
+            else response_text[:500] + "...",
+            related_issues=[item.to_dict() for item in input_data.related_issues],
+            related_notes=[item.to_dict() for item in input_data.related_notes],
+            related_pages=[item.to_dict() for item in input_data.related_pages],
+            code_references=[ref.to_dict() for ref in input_data.code_references],
+            tasks_checklist=updates.get("tasks_checklist", []),
+            conversation_history=updated_history,
+        )
 
-        except anthropic.RateLimitError as e:
-            raise RateLimitError(
-                "Anthropic rate limit exceeded",
-                retry_after_seconds=60,
-                provider="anthropic",
-            ) from e
-
-        except anthropic.APIError as e:
-            logger.exception(
-                "Anthropic API error in context refinement",
-                extra={
-                    "error": str(e),
-                    "correlation_id": context.correlation_id,
-                },
-            )
-            raise
-
-    async def stream_refinement(
+    async def stream(
         self,
         input_data: AIContextInput,
         context: AgentContext,
@@ -547,20 +526,18 @@ class AIContextAgent(BaseAgent[AIContextInput, AIContextOutput]):
 
         Args:
             input_data: Context refinement input.
-            context: Agent execution context.
+            context: Agent execution context (for future cost tracking).
 
         Yields:
             Response chunks as they're generated.
-        """
-        if not input_data.refinement_query:
-            raise ValueError("refinement_query is required for refinement")
 
-        api_key = context.get_api_key(Provider.CLAUDE)
-        if not api_key:
-            raise AIConfigurationError(
-                "Anthropic API key not configured",
-                provider="anthropic",
-            )
+        Raises:
+            ValueError: If input is invalid.
+        """
+        self._validate_input(input_data)
+
+        if not input_data.refinement_query:
+            raise ValueError("refinement_query is required for streaming")
 
         # Build context summary
         context_summary = (
@@ -583,11 +560,13 @@ class AIContextAgent(BaseAgent[AIContextInput, AIContextOutput]):
             for msg in messages
         ]
 
-        client = anthropic.AsyncAnthropic(api_key=api_key)
+        client = anthropic.AsyncAnthropic(api_key=input_data.api_key)
 
+        # Stream response (cost tracking for streams is handled in run_stream wrapper)
+        _ = context  # Reserved for future streaming cost tracking
         async with client.messages.stream(
-            model=self.model,
-            max_tokens=self.max_output_tokens,
+            model=self.DEFAULT_MODEL,
+            max_tokens=self.MAX_OUTPUT_TOKENS,
             system=system_prompt,
             messages=api_messages,  # type: ignore[arg-type]
         ) as stream:
