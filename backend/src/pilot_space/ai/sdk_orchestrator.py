@@ -198,9 +198,7 @@ class SDKOrchestrator:
         """List all registered agent names."""
         return list(self._agents.keys())
 
-    async def ensure_api_key(
-        self, workspace_id: UUID, provider: str = "anthropic"
-    ) -> bool:
+    async def ensure_api_key(self, workspace_id: UUID, provider: str = "anthropic") -> bool:
         """Verify workspace has valid API key.
 
         Args:
@@ -322,7 +320,7 @@ class SDKOrchestrator:
                 # For unknown critical actions, use a default
                 action_enum = ActionType.DELETE_ISSUE
 
-            approval_request = await self._approval_service.create_approval_request(
+            approval_id = await self._approval_service.create_approval_request(
                 workspace_id=context.workspace_id,
                 user_id=context.user_id,
                 action_type=action_enum,
@@ -330,7 +328,7 @@ class SDKOrchestrator:
                 requested_by_agent=agent_name,
             )
             return ExecutionResult.approval_required(
-                approval_request,
+                approval_id,
                 f"Critical action '{action_type}' requires approval",
             )
 
@@ -344,17 +342,15 @@ class SDKOrchestrator:
                 action_enum,
             )
             if requires:
-                approval_request = (
-                    await self._approval_service.create_approval_request(
-                        workspace_id=context.workspace_id,
-                        user_id=context.user_id,
-                        action_type=action_enum,
-                        action_data=payload or {"input": input_data},
-                        requested_by_agent=agent_name,
-                    )
+                approval_id = await self._approval_service.create_approval_request(
+                    workspace_id=context.workspace_id,
+                    user_id=context.user_id,
+                    action_type=action_enum,
+                    action_data=payload or {"input": input_data},
+                    requested_by_agent=agent_name,
                 )
                 return ExecutionResult.approval_required(
-                    approval_request,
+                    approval_id,
                     f"Action '{action_type}' requires approval",
                 )
 

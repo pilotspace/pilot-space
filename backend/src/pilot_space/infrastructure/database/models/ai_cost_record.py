@@ -24,6 +24,7 @@ from pilot_space.infrastructure.database.base import WorkspaceScopedModel
 
 if TYPE_CHECKING:
     from pilot_space.infrastructure.database.models.user import User
+    from pilot_space.infrastructure.database.models.workspace import Workspace
 
 
 class AICostRecord(WorkspaceScopedModel):
@@ -91,6 +92,11 @@ class AICostRecord(WorkspaceScopedModel):
         "User",
         lazy="joined",
     )
+    workspace: Mapped[Workspace] = relationship(
+        "Workspace",
+        back_populates="cost_records",
+        lazy="joined",
+    )
 
     # Indexes for efficient queries
     __table_args__ = (
@@ -114,11 +120,7 @@ class AICostRecord(WorkspaceScopedModel):
 
     def __repr__(self) -> str:
         """Return string representation."""
-        return (
-            f"<AICostRecord(id={self.id}, "
-            f"provider={self.provider}, "
-            f"cost=${self.cost_usd:.6f})>"
-        )
+        return f"<AICostRecord(id={self.id}, provider={self.provider}, cost=${self.cost_usd:.6f})>"
 
     @property
     def total_tokens(self) -> int:

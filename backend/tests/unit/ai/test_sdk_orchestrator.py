@@ -79,7 +79,12 @@ class TestAgentRegistration:
 
     def test_register_agent(self, orchestrator, mock_deps):
         """Verify agent registration."""
-        agent = MockAgent(tool_registry=mock_deps["tool_registry"], provider_selector=mock_deps["provider_selector"], cost_tracker=mock_deps["cost_tracker"], resilient_executor=mock_deps["resilient_executor"])
+        agent = MockAgent(
+            tool_registry=mock_deps["tool_registry"],
+            provider_selector=mock_deps["provider_selector"],
+            cost_tracker=mock_deps["cost_tracker"],
+            resilient_executor=mock_deps["resilient_executor"],
+        )
 
         orchestrator.register_agent("test", agent)
 
@@ -96,8 +101,18 @@ class TestAgentRegistration:
 
     def test_register_multiple_agents(self, orchestrator, mock_deps):
         """Verify multiple agents can be registered."""
-        agent1 = MockAgent(tool_registry=mock_deps["tool_registry"], provider_selector=mock_deps["provider_selector"], cost_tracker=mock_deps["cost_tracker"], resilient_executor=mock_deps["resilient_executor"])
-        agent2 = MockStreamingAgent(tool_registry=mock_deps["tool_registry"], provider_selector=mock_deps["provider_selector"], cost_tracker=mock_deps["cost_tracker"], resilient_executor=mock_deps["resilient_executor"])
+        agent1 = MockAgent(
+            tool_registry=mock_deps["tool_registry"],
+            provider_selector=mock_deps["provider_selector"],
+            cost_tracker=mock_deps["cost_tracker"],
+            resilient_executor=mock_deps["resilient_executor"],
+        )
+        agent2 = MockStreamingAgent(
+            tool_registry=mock_deps["tool_registry"],
+            provider_selector=mock_deps["provider_selector"],
+            cost_tracker=mock_deps["cost_tracker"],
+            resilient_executor=mock_deps["resilient_executor"],
+        )
 
         orchestrator.register_agent("agent1", agent1)
         orchestrator.register_agent("agent2", agent2)
@@ -157,7 +172,12 @@ class TestExecute:
     @pytest.mark.asyncio
     async def test_execute_success(self, orchestrator, mock_deps, context):
         """Verify successful agent execution."""
-        agent = MockAgent(tool_registry=mock_deps["tool_registry"], provider_selector=mock_deps["provider_selector"], cost_tracker=mock_deps["cost_tracker"], resilient_executor=mock_deps["resilient_executor"])
+        agent = MockAgent(
+            tool_registry=mock_deps["tool_registry"],
+            provider_selector=mock_deps["provider_selector"],
+            cost_tracker=mock_deps["cost_tracker"],
+            resilient_executor=mock_deps["resilient_executor"],
+        )
 
         async def mock_execute(provider, operation):
             return await operation()
@@ -184,7 +204,12 @@ class TestExecute:
     @pytest.mark.asyncio
     async def test_execute_no_api_key(self, orchestrator, mock_deps, context):
         """Verify execution fails without API key."""
-        agent = MockAgent(tool_registry=mock_deps["tool_registry"], provider_selector=mock_deps["provider_selector"], cost_tracker=mock_deps["cost_tracker"], resilient_executor=mock_deps["resilient_executor"])
+        agent = MockAgent(
+            tool_registry=mock_deps["tool_registry"],
+            provider_selector=mock_deps["provider_selector"],
+            cost_tracker=mock_deps["cost_tracker"],
+            resilient_executor=mock_deps["resilient_executor"],
+        )
         mock_deps["key_storage"].get_api_key = AsyncMock(return_value=None)
 
         orchestrator.register_agent("test", agent)
@@ -199,23 +224,10 @@ class TestExecuteWithApproval:
     @pytest.mark.asyncio
     async def test_critical_action_requires_approval(self, orchestrator, mock_deps, context):
         """Verify critical actions always require approval."""
-        from pilot_space.ai.infrastructure.approval import ActionType, ApprovalRequest
-
         approval_id = uuid4()
-        mock_approval = ApprovalRequest(
-            id=approval_id,
-            workspace_id=context.workspace_id,
-            action_type=ActionType.DELETE_ISSUE,
-            action_data={"input": "test"},
-            requested_by_agent="test",
-        )
-        mock_deps["approval_service"].create_approval_request = AsyncMock(
-            return_value=mock_approval
-        )
+        mock_deps["approval_service"].create_approval_request = AsyncMock(return_value=approval_id)
 
-        result = await orchestrator.execute_with_approval(
-            "test", "delete_issue", "input", context
-        )
+        result = await orchestrator.execute_with_approval("test", "delete_issue", "input", context)
 
         assert result.requires_approval is True
         assert result.approval_id == approval_id
@@ -224,7 +236,12 @@ class TestExecuteWithApproval:
     @pytest.mark.asyncio
     async def test_auto_execute_proceeds(self, orchestrator, mock_deps, context):
         """Verify auto-execute actions proceed without approval."""
-        agent = MockAgent(tool_registry=mock_deps["tool_registry"], provider_selector=mock_deps["provider_selector"], cost_tracker=mock_deps["cost_tracker"], resilient_executor=mock_deps["resilient_executor"])
+        agent = MockAgent(
+            tool_registry=mock_deps["tool_registry"],
+            provider_selector=mock_deps["provider_selector"],
+            cost_tracker=mock_deps["cost_tracker"],
+            resilient_executor=mock_deps["resilient_executor"],
+        )
 
         async def mock_execute(provider, operation):
             return await operation()
@@ -233,35 +250,18 @@ class TestExecuteWithApproval:
         mock_deps["key_storage"].get_api_key = AsyncMock(return_value="sk-test")
 
         orchestrator.register_agent("test", agent)
-        result = await orchestrator.execute_with_approval(
-            "test", "ghost_text", "input", context
-        )
+        result = await orchestrator.execute_with_approval("test", "ghost_text", "input", context)
 
         assert result.requires_approval is False
         assert result.success is True
         assert result.output == "result: input"
 
     @pytest.mark.asyncio
-    async def test_default_require_with_approval_enabled(
-        self, orchestrator, mock_deps, context
-    ):
+    async def test_default_require_with_approval_enabled(self, orchestrator, mock_deps, context):
         """Verify default require actions check workspace settings."""
-        from pilot_space.ai.infrastructure.approval import ActionType, ApprovalRequest
-
         approval_id = uuid4()
-        mock_approval = ApprovalRequest(
-            id=approval_id,
-            workspace_id=context.workspace_id,
-            action_type=ActionType.CREATE_SUB_ISSUES,
-            action_data={"input": "test"},
-            requested_by_agent="test",
-        )
-        mock_deps["approval_service"].check_approval_required = MagicMock(
-            return_value=True
-        )
-        mock_deps["approval_service"].create_approval_request = AsyncMock(
-            return_value=mock_approval
-        )
+        mock_deps["approval_service"].check_approval_required = MagicMock(return_value=True)
+        mock_deps["approval_service"].create_approval_request = AsyncMock(return_value=approval_id)
 
         result = await orchestrator.execute_with_approval(
             "test", "create_sub_issues", "input", context
@@ -271,20 +271,21 @@ class TestExecuteWithApproval:
         assert result.approval_id == approval_id
 
     @pytest.mark.asyncio
-    async def test_default_require_with_approval_disabled(
-        self, orchestrator, mock_deps, context
-    ):
+    async def test_default_require_with_approval_disabled(self, orchestrator, mock_deps, context):
         """Verify default require actions auto-execute when disabled."""
-        agent = MockAgent(tool_registry=mock_deps["tool_registry"], provider_selector=mock_deps["provider_selector"], cost_tracker=mock_deps["cost_tracker"], resilient_executor=mock_deps["resilient_executor"])
+        agent = MockAgent(
+            tool_registry=mock_deps["tool_registry"],
+            provider_selector=mock_deps["provider_selector"],
+            cost_tracker=mock_deps["cost_tracker"],
+            resilient_executor=mock_deps["resilient_executor"],
+        )
 
         async def mock_execute(provider, operation):
             return await operation()
 
         mock_deps["resilient_executor"].execute = AsyncMock(side_effect=mock_execute)
         mock_deps["key_storage"].get_api_key = AsyncMock(return_value="sk-test")
-        mock_deps["approval_service"].check_approval_required = MagicMock(
-            return_value=False
-        )
+        mock_deps["approval_service"].check_approval_required = MagicMock(return_value=False)
 
         orchestrator.register_agent("test", agent)
         result = await orchestrator.execute_with_approval(
@@ -301,7 +302,12 @@ class TestStreaming:
     @pytest.mark.asyncio
     async def test_stream_success(self, orchestrator, mock_deps, context):
         """Verify streaming agent output."""
-        agent = MockStreamingAgent(tool_registry=mock_deps["tool_registry"], provider_selector=mock_deps["provider_selector"], cost_tracker=mock_deps["cost_tracker"], resilient_executor=mock_deps["resilient_executor"])
+        agent = MockStreamingAgent(
+            tool_registry=mock_deps["tool_registry"],
+            provider_selector=mock_deps["provider_selector"],
+            cost_tracker=mock_deps["cost_tracker"],
+            resilient_executor=mock_deps["resilient_executor"],
+        )
         mock_deps["key_storage"].get_api_key = AsyncMock(return_value="sk-test")
 
         orchestrator.register_agent("streaming", agent)
@@ -325,7 +331,12 @@ class TestStreaming:
     @pytest.mark.asyncio
     async def test_stream_non_streaming_agent(self, orchestrator, mock_deps, context):
         """Verify streaming non-streaming agent yields error."""
-        agent = MockAgent(tool_registry=mock_deps["tool_registry"], provider_selector=mock_deps["provider_selector"], cost_tracker=mock_deps["cost_tracker"], resilient_executor=mock_deps["resilient_executor"])
+        agent = MockAgent(
+            tool_registry=mock_deps["tool_registry"],
+            provider_selector=mock_deps["provider_selector"],
+            cost_tracker=mock_deps["cost_tracker"],
+            resilient_executor=mock_deps["resilient_executor"],
+        )
         mock_deps["key_storage"].get_api_key = AsyncMock(return_value="sk-test")
 
         orchestrator.register_agent("non_streaming", agent)
@@ -340,7 +351,12 @@ class TestStreaming:
     @pytest.mark.asyncio
     async def test_stream_no_api_key(self, orchestrator, mock_deps, context):
         """Verify streaming fails without API key."""
-        agent = MockStreamingAgent(tool_registry=mock_deps["tool_registry"], provider_selector=mock_deps["provider_selector"], cost_tracker=mock_deps["cost_tracker"], resilient_executor=mock_deps["resilient_executor"])
+        agent = MockStreamingAgent(
+            tool_registry=mock_deps["tool_registry"],
+            provider_selector=mock_deps["provider_selector"],
+            cost_tracker=mock_deps["cost_tracker"],
+            resilient_executor=mock_deps["resilient_executor"],
+        )
         mock_deps["key_storage"].get_api_key = AsyncMock(return_value=None)
 
         orchestrator.register_agent("streaming", agent)
@@ -369,9 +385,7 @@ class TestSessionManagement:
             workspace_id=context.workspace_id,
             agent_name="test",
         )
-        mock_deps["session_manager"].create_session = AsyncMock(
-            return_value=mock_session
-        )
+        mock_deps["session_manager"].create_session = AsyncMock(return_value=mock_session)
 
         result_id = await orchestrator.create_session(context, "test", {"key": "value"})
 
@@ -423,9 +437,7 @@ class TestSessionManagement:
             workspace_id=uuid4(),
             agent_name="test",
         )
-        mock_deps["session_manager"].update_session = AsyncMock(
-            return_value=mock_session
-        )
+        mock_deps["session_manager"].update_session = AsyncMock(return_value=mock_session)
 
         await orchestrator.update_session(
             session_id,
