@@ -10,7 +10,17 @@ export { GhostTextStore } from './GhostTextStore';
 export { AIContextStore } from './AIContextStore';
 export { ApprovalStore } from './ApprovalStore';
 export { AISettingsStore } from './AISettingsStore';
+export { PRReviewStore } from './PRReviewStore';
 
 // Types
 export type { AIContextPhase, AIContextResult } from './AIContextStore';
 export type { ApprovalRequest } from '@/services/api';
+export type {
+  ReviewAspect,
+  ReviewAspectName,
+  AspectStatus,
+  ReviewFinding,
+  FindingSeverity,
+  PRReviewResult,
+  TokenUsage,
+} from './PRReviewStore';

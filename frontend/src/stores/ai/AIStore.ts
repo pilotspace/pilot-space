@@ -11,12 +11,14 @@ import { GhostTextStore } from './GhostTextStore';
 import { AIContextStore } from './AIContextStore';
 import { ApprovalStore } from './ApprovalStore';
 import { AISettingsStore } from './AISettingsStore';
+import { PRReviewStore } from './PRReviewStore';
 
 export class AIStore {
   ghostText: GhostTextStore;
   aiContext: AIContextStore;
   approval: ApprovalStore;
   settings: AISettingsStore;
+  prReview: PRReviewStore;
 
   isGloballyEnabled = true;
   globalError: string | null = null;
@@ -28,6 +30,7 @@ export class AIStore {
     this.aiContext = new AIContextStore(this);
     this.approval = new ApprovalStore(this);
     this.settings = new AISettingsStore(this);
+    this.prReview = new PRReviewStore(this);
   }
 
   setGloballyEnabled(enabled: boolean): void {
@@ -41,6 +44,7 @@ export class AIStore {
   abortAllStreams(): void {
     this.ghostText.abort();
     this.aiContext.abort();
+    this.prReview.abort();
   }
 
   async loadWorkspaceSettings(workspaceId: string): Promise<void> {
@@ -56,6 +60,7 @@ export class AIStore {
   reset(): void {
     this.ghostText.abort();
     this.aiContext.abort();
+    this.prReview.abort();
     this.approval.reset();
     this.settings.reset();
     this.globalError = null;
