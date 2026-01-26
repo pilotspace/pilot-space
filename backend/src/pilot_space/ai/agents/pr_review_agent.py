@@ -1,38 +1,50 @@
-"""PR Review Agent using Claude Opus with comprehensive analysis.
+"""PR Review Agent using Claude Agent SDK with comprehensive analysis.
 
 T193: Create PRReviewAgent for comprehensive AI-powered code review.
 
-Implements unified PR review covering 5 dimensions:
+Migrated to Claude Agent SDK patterns (T050-T055):
+- Extends StreamingSDKBaseAgent for streaming reviews
+- Uses MCP GitHub tools via ToolRegistry
+- Integrates with cost tracking and resilience
+- Implements 5-aspect review system per DD-006
+
+Review dimensions:
 - Architecture (T200c): SOLID, layer separation, modularity
 - Security (T200a): OWASP Top 10, auth, input validation, secrets
 - Quality: Readability, naming, error handling
 - Performance (T200b): N+1 queries, blocking I/O, complexity
 - Documentation (T200d): Docstrings, comments
 
-Handles large PRs (T200e):
+Large PR handling (T200e):
 - >5000 lines or >50 files triggers prioritized partial review
 - Priority files: auth/*, security/*, api/*, models/*
+
+Streaming output with SSE support.
 """
 
 from __future__ import annotations
 
+import json
 import logging
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
-from pilot_space.ai.agents.base import (
-    AgentContext,
-    AgentResult,
-    BaseAgent,
-    Provider,
-    TaskType,
-)
+from anthropic import Anthropic
+
+from pilot_space.ai.agents.sdk_base import AgentContext, StreamingSDKBaseAgent
 from pilot_space.ai.prompts.pr_review import (
     build_pr_review_prompt,
     parse_pr_review_response,
 )
-from pilot_space.ai.telemetry import AIOperation
-from pilot_space.ai.utils.retry import RetryConfig
+
+if TYPE_CHECKING:
+    from pilot_space.ai.infrastructure.cost_tracker import CostTracker
+    from pilot_space.ai.infrastructure.key_storage import SecureKeyStorage
+    from pilot_space.ai.infrastructure.resilience import ResilientExecutor
+    from pilot_space.ai.providers.provider_selector import ProviderSelector
+    from pilot_space.ai.tools.mcp_server import ToolRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -238,7 +250,7 @@ def _should_partial_review(input_data: PRReviewInput) -> bool:
     return line_count > MAX_LINES_FULL_REVIEW or file_count > MAX_FILES_FULL_REVIEW
 
 
-class PRReviewAgent(BaseAgent[PRReviewInput, PRReviewOutput]):
+class PRReviewAgent(StreamingSDKBaseAgent[PRReviewInput, PRReviewOutput]):
     """Agent for comprehensive PR code review using Claude Opus.
 
     Provides unified review covering:
@@ -248,46 +260,81 @@ class PRReviewAgent(BaseAgent[PRReviewInput, PRReviewOutput]):
     - Performance: N+1 queries, blocking I/O, complexity
     - Documentation: Docstrings, comments, API docs
 
-    Uses Claude Opus 4.5 for deep code analysis with 5-minute timeout.
+    Uses Claude Opus 4.5 for deep code analysis with streaming output.
+    Handles large PRs with prioritized partial review.
+
+    Per DD-006, classifies findings by severity:
+    - 🔴 Critical: Must fix before merge
+    - 🟡 Warning: Should fix, not blocking
+    - 🔵 Info: Suggestion for improvement
+
+    Approval recommendations:
+    - APPROVE: No critical issues
+    - REQUEST_CHANGES: Critical issues found
+    - COMMENT: Only info/warnings
+
+    MCP Tools (optional, GitHub integration):
+    - get_pr_details: Fetch PR metadata
+    - get_pr_diff: Retrieve unified diff
+    - search_codebase: Search repository code
+    - get_project_context: Fetch tech stack info
     """
 
-    task_type = TaskType.COMPLEX_REASONING  # Use Claude Opus for deep analysis
-    operation = AIOperation.PR_REVIEW
+    AGENT_NAME = "pr_review"
+    DEFAULT_MODEL = "claude-opus-4-5-20251101"  # Best code understanding
+    MAX_TOKENS = 8192  # Large output for detailed reviews
 
-    # Longer retry config for large PRs
-    retry_config = RetryConfig(
-        max_retries=3,
-        initial_delay_seconds=2.0,
-        max_delay_seconds=30.0,
-    )
-
-    def __init__(self) -> None:
-        """Initialize with Claude Opus model."""
-        super().__init__(model="claude-opus-4-5-20251101")
-
-    async def _execute_impl(
+    def __init__(
         self,
-        input_data: PRReviewInput,
-        context: AgentContext,
-    ) -> AgentResult[PRReviewOutput]:
-        """Execute PR review with Claude Opus.
-
-        Handles large PRs by filtering to priority files.
+        tool_registry: ToolRegistry,
+        provider_selector: ProviderSelector,
+        cost_tracker: CostTracker,
+        resilient_executor: ResilientExecutor,
+        key_storage: SecureKeyStorage,
+    ) -> None:
+        """Initialize PR Review Agent.
 
         Args:
-            input_data: PR content to review.
-            context: Agent execution context.
+            tool_registry: Registry for MCP tool access
+            provider_selector: Provider/model selection service
+            cost_tracker: Cost tracking service
+            resilient_executor: Retry and circuit breaker service
+            key_storage: Secure API key storage service
+        """
+        super().__init__(
+            tool_registry=tool_registry,
+            provider_selector=provider_selector,
+            cost_tracker=cost_tracker,
+            resilient_executor=resilient_executor,
+        )
+        self._key_storage = key_storage
+
+    def get_model(self) -> tuple[str, str]:
+        """Get provider and model for PR review.
+
+        Always uses Claude Opus for best code understanding.
 
         Returns:
-            AgentResult with review output and metadata.
+            Tuple of (provider="anthropic", model=claude-opus-4-5-20251101)
         """
-        import anthropic
-        from anthropic.types import TextBlock
+        return ("anthropic", self.DEFAULT_MODEL)
 
+    async def _prepare_review_input(
+        self,
+        input_data: PRReviewInput,
+    ) -> tuple[str, bool, int, int]:
+        """Prepare input for review, handling large PRs.
+
+        Args:
+            input_data: PR review input.
+
+        Returns:
+            Tuple of (prompt, partial_review, files_reviewed, files_skipped)
+        """
         # Determine if partial review needed
         partial_review = _should_partial_review(input_data)
         files_to_review = input_data.changed_files
-        files_skipped: list[str] = []
+        files_skipped_count = 0
 
         if partial_review:
             priority_files, other_files = _filter_priority_files(input_data.changed_files)
@@ -297,9 +344,9 @@ class PRReviewAgent(BaseAgent[PRReviewInput, PRReviewOutput]):
             remaining_capacity = MAX_FILES_FULL_REVIEW - len(priority_files)
             if remaining_capacity > 0:
                 files_to_review.extend(other_files[:remaining_capacity])
-                files_skipped = other_files[remaining_capacity:]
+                files_skipped_count = len(other_files[remaining_capacity:])
             else:
-                files_skipped = other_files
+                files_skipped_count = len(other_files)
 
             logger.info(
                 "Large PR detected, performing partial review",
@@ -307,7 +354,7 @@ class PRReviewAgent(BaseAgent[PRReviewInput, PRReviewOutput]):
                     "pr_number": input_data.pr_number,
                     "total_files": len(input_data.changed_files),
                     "reviewing_files": len(files_to_review),
-                    "skipped_files": len(files_skipped),
+                    "skipped_files": files_skipped_count,
                 },
             )
 
@@ -330,15 +377,114 @@ class PRReviewAgent(BaseAgent[PRReviewInput, PRReviewOutput]):
             files_reviewed=files_to_review,
         )
 
-        # Get API key
-        api_key = context.require_api_key(Provider.CLAUDE)
+        return prompt, partial_review, len(files_to_review), files_skipped_count
 
-        # Call Claude Opus API with extended timeout
-        client = anthropic.Anthropic(api_key=api_key)
+    async def stream(
+        self,
+        input_data: PRReviewInput,
+        context: AgentContext,
+    ) -> AsyncIterator[str]:
+        """Stream PR review output as tokens are generated.
+
+        Validates input, prepares review context, and streams
+        Claude Opus response token by token for SSE delivery.
+
+        Args:
+            input_data: PR review input with diff and file contents.
+            context: Execution context with workspace/user IDs.
+
+        Yields:
+            Review output tokens as they're generated.
+
+        Raises:
+            ValueError: If input validation fails.
+        """
+        # Validate input
+        if input_data.pr_number <= 0:
+            yield json.dumps({"error": "PR number must be positive"})
+            return
+
+        if not input_data.pr_title:
+            yield json.dumps({"error": "PR title is required"})
+            return
+
+        if not input_data.diff:
+            yield json.dumps({"error": "PR diff is required for review"})
+            return
+
+        # Prepare review input
+        prompt, _partial, _files_reviewed, _files_skipped = await self._prepare_review_input(
+            input_data
+        )
+
+        # Get API key (will raise if not configured)
+        api_key = await self._key_storage.get_api_key(context.workspace_id, "anthropic")
+
+        if not api_key:
+            yield json.dumps({"error": "Anthropic API key not configured"})
+            return
+
+        # Stream from Claude Opus
+        client = Anthropic(api_key=api_key)
+
+        with client.messages.stream(
+            model=self.DEFAULT_MODEL,
+            max_tokens=self.MAX_TOKENS,
+            messages=[{"role": "user", "content": prompt}],
+        ) as stream:
+            for text in stream.text_stream:
+                yield text
+
+    async def execute(
+        self,
+        input_data: PRReviewInput,
+        context: AgentContext,
+    ) -> PRReviewOutput:
+        """Execute PR review and return structured output.
+
+        Collects streaming output and parses into structured review.
+
+        Args:
+            input_data: PR review input.
+            context: Execution context.
+
+        Returns:
+            Structured PR review output with comments and recommendations.
+
+        Raises:
+            ValueError: If input validation fails.
+        """
+        # Validate input first
+        if input_data.pr_number <= 0:
+            msg = "PR number must be positive"
+            raise ValueError(msg)
+
+        if not input_data.pr_title:
+            msg = "PR title is required"
+            raise ValueError(msg)
+
+        if not input_data.diff:
+            msg = "PR diff is required for review"
+            raise ValueError(msg)
+
+        # Prepare review input
+        prompt, partial_review, files_reviewed, files_skipped = await self._prepare_review_input(
+            input_data
+        )
+
+        # Get API key
+        api_key = await self._key_storage.get_api_key(context.workspace_id, "anthropic")
+
+        if not api_key:
+            msg = "Anthropic API key not configured"
+            raise ValueError(msg)
+
+        # Call Claude Opus API
+        client = Anthropic(api_key=api_key)
 
         message = client.messages.create(
-            model=self.model,
-            max_tokens=8192,  # Large output for detailed review
+            model=self.DEFAULT_MODEL,
+            max_tokens=self.MAX_TOKENS,
             messages=[{"role": "user", "content": prompt}],
             timeout=300.0,  # 5-minute timeout for complex reviews
         )
@@ -346,47 +492,41 @@ class PRReviewAgent(BaseAgent[PRReviewInput, PRReviewOutput]):
         # Parse response
         response_text = ""
         if message.content:
+            from anthropic.types import TextBlock
+
             first_block = message.content[0]
             if isinstance(first_block, TextBlock):
                 response_text = first_block.text
 
+        # Track usage
+        await self.track_usage(
+            context=context,
+            input_tokens=message.usage.input_tokens,
+            output_tokens=message.usage.output_tokens,
+        )
+
+        # Parse into structured output
         output = parse_pr_review_response(
             response_text,
             partial_review=partial_review,
-            files_reviewed=len(files_to_review),
-            files_skipped=len(files_skipped),
+            files_reviewed=files_reviewed,
+            files_skipped=files_skipped,
         )
 
-        return AgentResult(
-            output=output,
-            input_tokens=message.usage.input_tokens,
-            output_tokens=message.usage.output_tokens,
-            model=self.model,
-            provider=self.provider,
-            metadata={
+        logger.info(
+            "PR review completed",
+            extra={
+                "pr_number": input_data.pr_number,
                 "partial_review": partial_review,
-                "files_reviewed": len(files_to_review),
-                "files_skipped": len(files_skipped),
+                "files_reviewed": files_reviewed,
+                "files_skipped": files_skipped,
+                "critical_count": output.critical_count,
+                "warning_count": output.warning_count,
+                "approval": output.approval_recommendation,
             },
         )
 
-    def validate_input(self, input_data: PRReviewInput) -> None:
-        """Validate PR review input.
-
-        Args:
-            input_data: Input to validate.
-
-        Raises:
-            ValueError: If input is invalid.
-        """
-        if input_data.pr_number <= 0:
-            raise ValueError("PR number must be positive")
-
-        if not input_data.pr_title:
-            raise ValueError("PR title is required")
-
-        if not input_data.diff:
-            raise ValueError("PR diff is required for review")
+        return output
 
 
 __all__ = [
