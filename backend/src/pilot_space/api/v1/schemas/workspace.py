@@ -149,7 +149,142 @@ class WorkspaceMemberResponse(BaseSchema):
     joined_at: datetime = Field(description="When member joined")
 
 
+# AI Settings schemas (T062-T064)
+class ProviderStatus(BaseSchema):
+    """Status of a configured AI provider.
+
+    Attributes:
+        provider: Provider name (anthropic, openai, google).
+        is_configured: Whether an API key exists for this provider.
+        is_valid: Whether the key has been validated (None if never validated).
+        last_validated_at: Timestamp of last successful validation.
+    """
+
+    provider: str = Field(description="Provider name (anthropic, openai, google)")
+    is_configured: bool = Field(description="Whether API key is configured")
+    is_valid: bool | None = Field(
+        default=None, description="Validation status (None if never validated)"
+    )
+    last_validated_at: datetime | None = Field(
+        default=None, description="Last validation timestamp"
+    )
+
+
+class AIFeatureToggles(BaseSchema):
+    """AI feature toggles for workspace.
+
+    Attributes:
+        ghost_text_enabled: Enable AI ghost text suggestions in editor.
+        ai_context_enabled: Enable AI context generation for issues.
+        pr_review_enabled: Enable AI PR review.
+        issue_extraction_enabled: Enable AI issue extraction from notes.
+        margin_annotations_enabled: Enable AI margin annotations.
+        auto_approve_non_destructive: Auto-approve non-destructive AI actions.
+    """
+
+    ghost_text_enabled: bool = Field(default=True, description="Enable ghost text")
+    ai_context_enabled: bool = Field(default=True, description="Enable AI context")
+    pr_review_enabled: bool = Field(default=True, description="Enable PR review")
+    issue_extraction_enabled: bool = Field(default=True, description="Enable issue extraction")
+    margin_annotations_enabled: bool = Field(default=True, description="Enable margin annotations")
+    auto_approve_non_destructive: bool = Field(
+        default=True, description="Auto-approve safe AI actions"
+    )
+
+
+class WorkspaceAISettingsResponse(BaseSchema):
+    """Response for workspace AI settings.
+
+    Attributes:
+        workspace_id: Workspace UUID.
+        providers: Status of configured providers.
+        features: AI feature toggles.
+        default_provider: Default provider for AI operations.
+        cost_limit_usd: Monthly cost limit (optional).
+    """
+
+    workspace_id: UUID = Field(description="Workspace UUID")
+    providers: list[ProviderStatus] = Field(description="Provider statuses")
+    features: AIFeatureToggles = Field(description="Feature toggles")
+    default_provider: str = Field(default="anthropic", description="Default AI provider")
+    cost_limit_usd: float | None = Field(default=None, description="Monthly cost limit USD")
+
+
+class APIKeyUpdate(BaseSchema):
+    """API key update for a provider.
+
+    Attributes:
+        provider: Provider name (anthropic, openai, google).
+        api_key: API key to store (None to remove).
+    """
+
+    provider: str = Field(
+        description="Provider name",
+        pattern="^(anthropic|openai|google)$",
+    )
+    api_key: str | None = Field(
+        default=None,
+        description="API key to store (None to remove)",
+        min_length=1,
+    )
+
+
+class WorkspaceAISettingsUpdate(BaseSchema):
+    """Request to update workspace AI settings.
+
+    Attributes:
+        api_keys: List of API key updates.
+        features: Feature toggle updates.
+        cost_limit_usd: Monthly cost limit update.
+    """
+
+    api_keys: list[APIKeyUpdate] | None = Field(
+        default=None, description="API key updates"
+    )
+    features: AIFeatureToggles | None = Field(default=None, description="Feature toggle updates")
+    cost_limit_usd: float | None = Field(
+        default=None, description="Monthly cost limit USD", ge=0
+    )
+
+
+class KeyValidationResult(BaseSchema):
+    """Result of API key validation.
+
+    Attributes:
+        provider: Provider name.
+        is_valid: Whether the key is valid.
+        error_message: Error message if validation failed.
+    """
+
+    provider: str = Field(description="Provider name")
+    is_valid: bool = Field(description="Validation result")
+    error_message: str | None = Field(default=None, description="Error message if failed")
+
+
+class WorkspaceAISettingsUpdateResponse(BaseSchema):
+    """Response after updating AI settings.
+
+    Attributes:
+        success: Whether all updates succeeded.
+        validation_results: Validation results per provider.
+        updated_providers: List of providers that were updated.
+        updated_features: Whether features were updated.
+    """
+
+    success: bool = Field(description="Overall success status")
+    validation_results: list[KeyValidationResult] = Field(description="Validation results")
+    updated_providers: list[str] = Field(description="Updated providers")
+    updated_features: bool = Field(description="Whether features were updated")
+
+
 __all__ = [
+    "AIFeatureToggles",
+    "APIKeyUpdate",
+    "KeyValidationResult",
+    "ProviderStatus",
+    "WorkspaceAISettingsResponse",
+    "WorkspaceAISettingsUpdate",
+    "WorkspaceAISettingsUpdateResponse",
     "WorkspaceCreate",
     "WorkspaceDetailResponse",
     "WorkspaceMemberCreate",
