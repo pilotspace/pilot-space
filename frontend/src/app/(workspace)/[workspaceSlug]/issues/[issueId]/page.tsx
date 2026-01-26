@@ -3,31 +3,15 @@
 import * as React from 'react';
 import { observer } from 'mobx-react-lite';
 import { useParams, useRouter } from 'next/navigation';
-import {
-  ArrowLeft,
-  MoreHorizontal,
-  Trash2,
-  Copy,
-  ExternalLink,
-  Sparkles,
-  User,
-  Calendar,
-  Link as LinkIcon,
-} from 'lucide-react';
+import { User, Calendar, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
 import { IssueStateSelect, IssuePrioritySelect } from '@/components/issues';
 import { AIConfidenceTag } from '@/components/ai/AIConfidenceTag';
+import { IssueHeader, AIContextSidebar } from '@/features/issues/components';
 import { useStore } from '@/stores';
 import type { IssueState, IssuePriority } from '@/types';
 
@@ -82,10 +66,13 @@ const IssueDetailPage = observer(function IssueDetailPage() {
   const workspaceSlug = params.workspaceSlug as string;
   const issueId = params.issueId as string;
 
-  const { issueStore, workspaceStore } = useStore();
+  const { issueStore, workspaceStore, aiStore } = useStore();
 
   const workspace = workspaceStore.currentWorkspace;
   const issue = issueStore.currentIssue;
+
+  // AI Context sidebar state
+  const [isAIContextOpen, setIsAIContextOpen] = React.useState(false);
 
   // Load issue on mount
   React.useEffect(() => {
@@ -161,54 +148,15 @@ const IssueDetailPage = observer(function IssueDetailPage() {
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between border-b px-6 py-4">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon-sm" onClick={handleBack}>
-            <ArrowLeft className="size-4" />
-          </Button>
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-muted-foreground">{issue.identifier}</span>
-            {issue.aiGenerated && (
-              <Badge variant="outline" className="gap-1 text-ai border-ai/30">
-                <Sparkles className="size-3" />
-                AI Generated
-              </Badge>
-            )}
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={handleCopyLink}>
-            <Copy className="mr-2 size-4" />
-            Copy link
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon-sm">
-                <MoreHorizontal className="size-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={handleCopyLink}>
-                <LinkIcon className="mr-2 size-4" />
-                Copy link
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <ExternalLink className="mr-2 size-4" />
-                Open in new tab
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={handleDelete}
-                className="text-destructive focus:text-destructive"
-              >
-                <Trash2 className="mr-2 size-4" />
-                Delete issue
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
+      <IssueHeader
+        identifier={issue.identifier}
+        aiGenerated={issue.aiGenerated}
+        showAIContext={aiStore.settings.aiContextEnabled}
+        onBack={handleBack}
+        onAIContextClick={() => setIsAIContextOpen(true)}
+        onCopyLink={handleCopyLink}
+        onDelete={handleDelete}
+      />
 
       {/* Content */}
       <div className="flex flex-1 overflow-hidden">
@@ -435,6 +383,14 @@ const IssueDetailPage = observer(function IssueDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* AI Context Sidebar */}
+      <AIContextSidebar
+        issueId={issueId}
+        issueIdentifier={issue.identifier}
+        open={isAIContextOpen}
+        onOpenChange={setIsAIContextOpen}
+      />
     </div>
   );
 });
