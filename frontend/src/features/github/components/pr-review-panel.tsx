@@ -61,7 +61,7 @@ export const PRReviewPanel = observer(function PRReviewPanel({
   }, [prReviewStore, repoId, prNumber]);
 
   return (
-    <Card className={cn('w-full', className)}>
+    <Card className={cn('w-full', className)} data-testid="pr-review-panel">
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
@@ -134,9 +134,9 @@ export const PRReviewPanel = observer(function PRReviewPanel({
 
         {/* Complete State - Show 5 aspect cards */}
         {isComplete && result && (
-          <div className="space-y-4">
+          <div className="space-y-4" data-testid="review-result">
             {/* Summary */}
-            <div className="rounded-lg bg-muted/50 p-4">
+            <div className="rounded-lg bg-muted/50 p-4" data-testid="review-summary">
               <p className="text-sm text-muted-foreground">{result.summary}</p>
             </div>
 

@@ -160,7 +160,7 @@ export function PRDetailPage({ repoId, prNumber, prData }: PRDetailPageProps) {
   };
 
   return (
-    <div className="container max-w-[1600px] mx-auto p-6 space-y-6">
+    <div className="container max-w-[1600px] mx-auto p-6 space-y-6" data-testid="pr-detail">
       {/* PR Header */}
       <PRHeader prData={mockPRData} prNumber={prNumber} />
 
