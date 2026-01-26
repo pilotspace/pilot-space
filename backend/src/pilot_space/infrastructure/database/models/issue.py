@@ -31,6 +31,7 @@ from pilot_space.infrastructure.database.base import WorkspaceScopedModel
 if TYPE_CHECKING:
     from pilot_space.infrastructure.database.models.activity import Activity
     from pilot_space.infrastructure.database.models.ai_context import AIContext
+    from pilot_space.infrastructure.database.models.cycle import Cycle
     from pilot_space.infrastructure.database.models.label import Label
     from pilot_space.infrastructure.database.models.module import Module
     from pilot_space.infrastructure.database.models.note_issue_link import NoteIssueLink
@@ -229,6 +230,11 @@ class Issue(WorkspaceScopedModel):
         "User",
         foreign_keys=[reporter_id],
         lazy="joined",
+    )
+    cycle: Mapped[Cycle | None] = relationship(
+        "Cycle",
+        back_populates="issues",
+        lazy="selectin",
     )
     module: Mapped[Module | None] = relationship(
         "Module",

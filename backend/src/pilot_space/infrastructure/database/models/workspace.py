@@ -16,11 +16,19 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from pilot_space.infrastructure.database.base import BaseModel
 
 if TYPE_CHECKING:
+    from pilot_space.infrastructure.database.models.ai_approval_request import (
+        AIApprovalRequest,
+    )
     from pilot_space.infrastructure.database.models.ai_configuration import (
         AIConfiguration,
     )
+    from pilot_space.infrastructure.database.models.ai_cost_record import AICostRecord
+    from pilot_space.infrastructure.database.models.ai_session import AISession
     from pilot_space.infrastructure.database.models.project import Project
     from pilot_space.infrastructure.database.models.user import User
+    from pilot_space.infrastructure.database.models.workspace_api_key import (
+        WorkspaceAPIKey,
+    )
     from pilot_space.infrastructure.database.models.workspace_member import (
         WorkspaceMember,
     )
@@ -93,6 +101,30 @@ class Workspace(BaseModel):
     )
     ai_configurations: Mapped[list[AIConfiguration]] = relationship(
         "AIConfiguration",
+        back_populates="workspace",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+    api_keys: Mapped[list[WorkspaceAPIKey]] = relationship(
+        "WorkspaceAPIKey",
+        back_populates="workspace",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+    approval_requests: Mapped[list[AIApprovalRequest]] = relationship(
+        "AIApprovalRequest",
+        back_populates="workspace",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+    cost_records: Mapped[list[AICostRecord]] = relationship(
+        "AICostRecord",
+        back_populates="workspace",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+    ai_sessions: Mapped[list[AISession]] = relationship(
+        "AISession",
         back_populates="workspace",
         cascade="all, delete-orphan",
         lazy="selectin",
