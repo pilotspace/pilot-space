@@ -11,20 +11,10 @@
 import { makeAutoObservable, runInAction } from 'mobx';
 import { SSEClient } from '@/lib/sse-client';
 import type { AIStore } from './AIStore';
+import type { NoteAnnotation, AnnotationStatus } from '@/types';
 
-export interface NoteAnnotation {
-  id: string;
-  noteId: string;
-  blockId: string;
-  type: 'suggestion' | 'warning' | 'question' | 'insight' | 'reference';
-  title: string;
-  summary: string;
-  content: string;
-  suggestedText?: string;
-  references?: Array<{ title: string; url: string }>;
-  confidence: number;
-  createdAt: string;
-}
+// Re-export for convenience
+export type { NoteAnnotation };
 
 export class MarginAnnotationStore {
   /** Annotations grouped by note ID */
@@ -47,6 +37,18 @@ export class MarginAnnotationStore {
 
   /** Currently generating for note ID */
   private generatingNoteId: string | null = null;
+
+  /** Cache for fetched annotations with TTL */
+  private cache: Map<string, { annotations: NoteAnnotation[]; timestamp: number }> = new Map();
+
+  /** Cache TTL in milliseconds (5 minutes) */
+  private readonly cacheTTL = 5 * 60 * 1000;
+
+  /** Auto-trigger debounce timer */
+  private autoTriggerTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /** Auto-trigger debounce duration in milliseconds */
+  private readonly autoTriggerDebounce = 2000;
 
   constructor(_aiStore: AIStore) {
     makeAutoObservable(this, {}, { autoBind: true });
@@ -121,10 +123,182 @@ export class MarginAnnotationStore {
    * Fetch existing annotations for a note (from cache or API).
    * Used on note load to restore previously generated annotations.
    */
-  async fetchAnnotations(_noteId: string): Promise<void> {
-    // TODO: Implement API fetch once backend endpoint is available
-    // For now, annotations are only generated via SSE streaming
+  async fetchAnnotations(noteId: string): Promise<void> {
+    // Check cache first
+    const cached = this.cache.get(noteId);
+    if (cached && Date.now() - cached.timestamp < this.cacheTTL) {
+      runInAction(() => {
+        this.annotations.set(noteId, cached.annotations);
+      });
+      return;
+    }
+
+    try {
+      this.error = null;
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000/api/v1';
+
+      const response = await fetch(`${apiUrl}/ai/notes/${noteId}/annotations`, {
+        method: 'GET',
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch annotations (${response.status})`);
+      }
+
+      const data = await response.json();
+      const annotations = data.annotations || [];
+
+      runInAction(() => {
+        this.annotations.set(noteId, annotations);
+        // Update cache
+        this.cache.set(noteId, { annotations, timestamp: Date.now() });
+      });
+    } catch (err) {
+      runInAction(() => {
+        this.error = err instanceof Error ? err.message : 'Failed to fetch annotations';
+      });
+    }
+  }
+
+  /**
+   * Update annotation status (accept, reject, dismiss).
+   * Persists to backend and updates local state.
+   */
+  async updateAnnotationStatus(
+    noteId: string,
+    annotationId: string,
+    status: Exclude<AnnotationStatus, 'pending'>
+  ): Promise<void> {
+    try {
+      this.error = null;
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000/api/v1';
+
+      const response = await fetch(
+        `${apiUrl}/ai/notes/${noteId}/annotations/${annotationId}/status`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ status }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to update annotation status (${response.status})`);
+      }
+
+      // Update local state
+      runInAction(() => {
+        const noteAnnotations = this.annotations.get(noteId) || [];
+        const updatedAnnotations = noteAnnotations.map((a) =>
+          a.id === annotationId ? { ...a, status } : a
+        );
+        this.annotations.set(noteId, updatedAnnotations);
+        // Invalidate cache
+        this.cache.delete(noteId);
+      });
+    } catch (err) {
+      runInAction(() => {
+        this.error = err instanceof Error ? err.message : 'Failed to update annotation status';
+      });
+      throw err;
+    }
+  }
+
+  /**
+   * Auto-trigger annotation generation for specific blocks.
+   * Used by MarginAnnotationAutoTriggerExtension when content changes.
+   * Debounced to prevent excessive API calls.
+   */
+  autoTriggerAnnotations(noteId: string, blockIds: string[]): void {
+    if (!this.enabled || this.isGenerating || blockIds.length === 0) {
+      return;
+    }
+
+    // Check cache first
+    const cached = this.cache.get(noteId);
+    if (cached && Date.now() - cached.timestamp < this.cacheTTL) {
+      runInAction(() => {
+        this.annotations.set(noteId, cached.annotations);
+      });
+      return;
+    }
+
+    // Clear existing timer
+    if (this.autoTriggerTimer) {
+      clearTimeout(this.autoTriggerTimer);
+    }
+
+    // Debounce the actual generation
+    this.autoTriggerTimer = setTimeout(() => {
+      this.generateAnnotationsInternal(noteId, blockIds);
+    }, this.autoTriggerDebounce);
+  }
+
+  /**
+   * Internal method to generate annotations via SSE.
+   * Called by autoTriggerAnnotations after debounce.
+   */
+  private async generateAnnotationsInternal(noteId: string, blockIds: string[]): Promise<void> {
+    // Abort any existing generation
+    this.abort();
+
+    this.isGenerating = true;
     this.error = null;
+    this.generatingNoteId = noteId;
+
+    this.sseClient = new SSEClient({
+      url: `/api/v1/ai/notes/${noteId}/annotations/auto`,
+      body: {
+        block_ids: blockIds,
+        context_blocks: 3,
+      },
+      onMessage: (event) => {
+        if (event.type === 'annotation') {
+          runInAction(() => {
+            const annotation = event.data as NoteAnnotation;
+            const current = this.annotations.get(noteId) || [];
+
+            // Append or update annotation
+            const existingIndex = current.findIndex((a) => a.id === annotation.id);
+            if (existingIndex >= 0) {
+              current[existingIndex] = annotation;
+              this.annotations.set(noteId, [...current]);
+            } else {
+              this.annotations.set(noteId, [...current, annotation]);
+            }
+          });
+        } else if (event.type === 'error') {
+          runInAction(() => {
+            this.error = (event.data as { message: string }).message || 'Auto-trigger failed';
+          });
+        }
+      },
+      onComplete: () => {
+        runInAction(() => {
+          this.isGenerating = false;
+          this.generatingNoteId = null;
+        });
+      },
+      onError: (err) => {
+        runInAction(() => {
+          this.error = err.message || 'Failed to auto-trigger annotations';
+          this.isGenerating = false;
+          this.generatingNoteId = null;
+        });
+      },
+    });
+
+    try {
+      await this.sseClient.connect();
+    } catch (err) {
+      runInAction(() => {
+        this.error = err instanceof Error ? err.message : 'Connection failed';
+        this.isGenerating = false;
+        this.generatingNoteId = null;
+      });
+    }
   }
 
   /**
@@ -211,6 +385,10 @@ export class MarginAnnotationStore {
       this.sseClient.abort();
       this.sseClient = null;
     }
+    if (this.autoTriggerTimer) {
+      clearTimeout(this.autoTriggerTimer);
+      this.autoTriggerTimer = null;
+    }
     this.isGenerating = false;
     this.generatingNoteId = null;
   }
@@ -229,6 +407,7 @@ export class MarginAnnotationStore {
   reset(): void {
     this.abort();
     this.annotations.clear();
+    this.cache.clear();
     this.selectedAnnotationId = null;
     this.error = null;
   }

@@ -11,7 +11,7 @@ import logging
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Path, status
+from fastapi import APIRouter, Depends, Path, status
 from pydantic import BaseModel, Field
 
 from pilot_space.ai.agents.margin_annotation_agent_sdk import (
@@ -28,6 +28,7 @@ from pilot_space.api.v1.schemas.annotation import (
 from pilot_space.dependencies import (
     CurrentUserIdOrDemo,
     DbSession,
+    get_sdk_orchestrator,
 )
 
 logger = logging.getLogger(__name__)
@@ -106,6 +107,8 @@ async def generate_annotations(
     note_id: Annotated[uuid.UUID, Path(description="Note ID")],
     body: AnnotateBlocksRequest,
     current_user_id: CurrentUserIdOrDemo,
+    orchestrator: Annotated[..., Depends(get_sdk_orchestrator)],
+    session: DbSession,
 ) -> SSEResponse:
     """Generate margin annotations for note blocks.
 
@@ -131,17 +134,6 @@ async def generate_annotations(
     async def generate_events():
         builder = SSEStreamBuilder()
         try:
-            # Get SDK orchestrator
-            from pilot_space.ai.sdk_orchestrator import SDKOrchestrator
-            from pilot_space.container import get_container
-
-            container = get_container()
-            orchestrator = container.sdk_orchestrator()
-
-            if not isinstance(orchestrator, SDKOrchestrator):
-                yield builder.error("SDK orchestrator not available", "config_error")
-                return
-
             yield builder.event("progress", {"status": "analyzing"})
 
             # Build input
@@ -186,11 +178,86 @@ async def generate_annotations(
                     },
                 )
 
+            # Persist annotations to database
+            saved_ids: list[str] = []
+            try:
+                from pilot_space.application.services.annotation.create_annotation_service import (
+                    CreateAnnotationPayload,
+                    CreateAnnotationService,
+                )
+                from pilot_space.infrastructure.database.models.note_annotation import (
+                    AnnotationType as DBAnnotationType,
+                )
+
+                annotation_service = CreateAnnotationService(session)
+
+                # Map AI annotation types to database types
+                type_mapping = {
+                    "clarification": DBAnnotationType.SUGGESTION,
+                    "expansion": DBAnnotationType.SUGGESTION,
+                    "simplification": DBAnnotationType.SUGGESTION,
+                    "action_item": DBAnnotationType.SUGGESTION,
+                    "issue_candidate": DBAnnotationType.ISSUE_CANDIDATE,
+                    "question": DBAnnotationType.INFO,
+                    "reference": DBAnnotationType.INFO,
+                    "technical_review": DBAnnotationType.WARNING,
+                }
+
+                for annotation in result.output.annotations:
+                    # Map annotation type
+                    db_type = type_mapping.get(
+                        annotation.type.value,
+                        DBAnnotationType.SUGGESTION,
+                    )
+
+                    payload = CreateAnnotationPayload(
+                        workspace_id=workspace_id,
+                        note_id=note_id,
+                        block_id=annotation.block_id,
+                        annotation_type=db_type,
+                        content=annotation.content,
+                        confidence=annotation.confidence,
+                        ai_metadata={
+                            "title": annotation.title,
+                            "action_label": annotation.action_label,
+                            "action_payload": annotation.action_payload,
+                            "correlation_id": correlation_id,
+                        },
+                    )
+
+                    create_result = await annotation_service.execute(payload)
+                    saved_ids.append(str(create_result.annotation.id))
+
+                await session.commit()
+                logger.info(
+                    "Persisted annotations to database",
+                    extra={
+                        "note_id": str(note_id),
+                        "annotation_count": len(saved_ids),
+                        "correlation_id": correlation_id,
+                    },
+                )
+
+            except Exception as persist_error:
+                # Log error but don't fail the stream - frontend already has annotations
+                logger.error(
+                    "Failed to persist annotations to database",
+                    extra={
+                        "note_id": str(note_id),
+                        "error": str(persist_error),
+                        "correlation_id": correlation_id,
+                    },
+                    exc_info=True,
+                )
+                await session.rollback()
+                # Continue with completion event even if persistence failed
+
             # Send completion
             yield builder.done(
                 {
                     "total_annotations": len(result.output.annotations),
                     "processed_blocks": result.output.processed_blocks,
+                    "saved_annotation_ids": saved_ids,
                 }
             )
 

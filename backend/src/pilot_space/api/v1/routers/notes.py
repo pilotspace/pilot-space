@@ -256,10 +256,55 @@ async def get_note_annotations(
     Returns:
         Paginated annotations.
     """
-    # TODO: Implement annotation listing
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Annotation listing not yet implemented",
+    from pilot_space.infrastructure.database.repositories.note_annotation_repository import (
+        NoteAnnotationRepository,
+    )
+
+    # Suppress unused parameters for MVP (pagination not yet implemented)
+    _ = cursor, page_size
+
+    repo = NoteAnnotationRepository(session)
+    annotations = await repo.get_by_note(note_id, include_deleted=False)
+
+    # Apply status filter if provided
+    if status_filter:
+        from pilot_space.infrastructure.database.models.note_annotation import (
+            AnnotationStatus as DBAnnotationStatus,
+        )
+
+        # Map schema enum to database enum
+        db_status = DBAnnotationStatus(status_filter.value)
+        annotations = [a for a in annotations if a.status == db_status]
+
+    # Map to response schema
+    items = [
+        AnnotationResponse(
+            id=a.id,
+            note_id=a.note_id,
+            block_id=a.block_id,
+            type=a.type.value,  # type: ignore[arg-type]
+            content=a.content,
+            confidence=a.confidence,
+            status=a.status.value,  # type: ignore[arg-type]
+            highlight_start=None,  # Not in MVP database model
+            highlight_end=None,  # Not in MVP database model
+            is_ai_generated=True,  # All annotations are AI-generated in MVP
+            created_by_id=None,  # AI-generated annotations have no user creator
+            converted_issue_id=None,  # Not in MVP
+            created_at=a.created_at,
+            updated_at=a.updated_at,
+        )
+        for a in annotations
+    ]
+
+    return AnnotationListResponse(
+        items=items,
+        total=len(items),
+        has_next=False,
+        has_prev=False,
+        next_cursor=None,
+        prev_cursor=None,
+        page_size=len(items),
     )
 
 
@@ -314,10 +359,53 @@ async def update_annotation_status(
     Returns:
         Updated annotation.
     """
-    # TODO: Implement annotation status update
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Annotation update not yet implemented",
+    from pilot_space.infrastructure.database.models.note_annotation import (
+        AnnotationStatus as DBAnnotationStatus,
+    )
+    from pilot_space.infrastructure.database.repositories.note_annotation_repository import (
+        NoteAnnotationRepository,
+    )
+
+    # Suppress unused parameter
+    _ = current_user_id
+
+    repo = NoteAnnotationRepository(session)
+    annotation = await repo.get_by_id(annotation_id)
+
+    if not annotation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Annotation with ID {annotation_id} not found",
+        )
+
+    if annotation.note_id != note_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Annotation does not belong to the specified note",
+        )
+
+    # Map schema enum to database enum
+    db_status = DBAnnotationStatus(status_data.status.value)
+    annotation.status = db_status
+
+    updated = await repo.update(annotation)
+    await session.commit()
+
+    return AnnotationResponse(
+        id=updated.id,
+        note_id=updated.note_id,
+        block_id=updated.block_id,
+        type=updated.type.value,  # type: ignore[arg-type]
+        content=updated.content,
+        confidence=updated.confidence,
+        status=updated.status.value,  # type: ignore[arg-type]
+        highlight_start=None,
+        highlight_end=None,
+        is_ai_generated=True,
+        created_by_id=None,
+        converted_issue_id=status_data.converted_issue_id,
+        created_at=updated.created_at,
+        updated_at=updated.updated_at,
     )
 
 

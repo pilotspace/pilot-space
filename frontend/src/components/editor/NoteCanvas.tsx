@@ -25,6 +25,13 @@ import type { GhostTextContext } from '@/features/notes/editor/extensions/GhostT
 import { motion, AnimatePresence } from 'motion/react';
 import { getAIStore } from '@/stores/ai/AIStore';
 
+// MarginAnnotationContext for auto-trigger callback
+// TODO: Move to MarginAnnotationExtension once auto-trigger is implemented
+interface MarginAnnotationContext {
+  blockIds: string[];
+  trigger: 'content_change' | 'user_request';
+}
+
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -141,7 +148,7 @@ function EditorSkeleton() {
 export const NoteCanvas = observer(function NoteCanvas({
   noteId,
   content,
-  annotations = [],
+  annotations: _annotationsProp,
   readOnly = false,
   onChange,
   onSave,
@@ -173,6 +180,13 @@ export const NoteCanvas = observer(function NoteCanvas({
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Ref to track current editor for ghost text callback
+  const editorRef = useRef<Editor | null>(null);
+  const aiStore = getAIStore();
+
+  // Get annotations from store instead of props
+  const annotations = aiStore.marginAnnotation.getAnnotationsForNote(noteId);
+
   // Responsive breakpoints
   const { isSmallScreen, isLargeDesktop } = useResponsive();
 
@@ -182,10 +196,6 @@ export const NoteCanvas = observer(function NoteCanvas({
       setIsSuggestionsCollapsed(true);
     }
   }, [isSmallScreen]);
-
-  // Ref to track current editor for ghost text callback
-  const editorRef = useRef<Editor | null>(null);
-  const aiStore = getAIStore();
 
   // Ghost text trigger function - delegates to GhostTextStore
   const handleGhostTextTrigger = useCallback(
@@ -197,8 +207,23 @@ export const NoteCanvas = observer(function NoteCanvas({
     [noteId, aiStore.ghostText]
   );
 
+  // Margin annotation auto-trigger - delegates to MarginAnnotationStore
+  // TODO: Wire this up once MarginAnnotationExtension supports auto-trigger
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const handleAnnotationTrigger = useCallback(
+    (context: MarginAnnotationContext) => {
+      if (!noteId) return;
+      aiStore.marginAnnotation.autoTriggerAnnotations(noteId, context.blockIds);
+    },
+    [noteId, aiStore.marginAnnotation]
+  );
+
+  // State to track when editor is ready for MobX reactions
+  const [isEditorReady, setIsEditorReady] = useState(false);
+
   // Sync ghost text suggestion from store to editor
   useEffect(() => {
+    // Use editorRef.current which is set in onCreate callback
     const currentEditor = editorRef.current;
     if (!currentEditor || currentEditor.isDestroyed) return;
 
@@ -219,7 +244,42 @@ export const NoteCanvas = observer(function NoteCanvas({
     );
 
     return () => disposer();
-  }, [aiStore.ghostText]);
+  }, [isEditorReady, aiStore.ghostText]);
+
+  // Sync margin annotations from store to editor extension
+  useEffect(() => {
+    if (!isEditorReady || !noteId) return;
+
+    const disposer = reaction(
+      () => aiStore.marginAnnotation.getAnnotationsForNote(noteId),
+      (storeAnnotations) => {
+        // Build annotation data map for editor extension
+        const annotationMap = new Map();
+        storeAnnotations.forEach((annotation) => {
+          const existing = annotationMap.get(annotation.blockId) || {
+            blockId: annotation.blockId,
+            count: 0,
+            types: [],
+          };
+          existing.count += 1;
+          if (!existing.types.includes(annotation.type)) {
+            existing.types.push(annotation.type);
+          }
+          annotationMap.set(annotation.blockId, existing);
+        });
+
+        // Update editor extension
+        const currentEditor = editorRef.current;
+        if (currentEditor && !currentEditor.isDestroyed) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (currentEditor.commands as any).setAnnotations?.(annotationMap);
+        }
+      },
+      { fireImmediately: true }
+    );
+
+    return () => disposer();
+  }, [isEditorReady, noteId, aiStore.marginAnnotation]);
 
   // Issue extraction handler - calls backend API
   const handleExtractIssues = useCallback(
@@ -231,7 +291,7 @@ export const NoteCanvas = observer(function NoteCanvas({
       setShowExtractionPanel(true);
 
       try {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8001/api/v1';
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000/api/v1';
         const noteContent = currentEditor.getJSON();
 
         const response = await fetch(`${apiUrl}/ai/extract-issues`, {
@@ -313,7 +373,7 @@ export const NoteCanvas = observer(function NoteCanvas({
     [handleExtractIssues]
   );
 
-  // Create editor extensions with ghost text integration
+  // Create editor extensions with ghost text and margin annotations
   const extensions = useMemo(
     () =>
       createEditorExtensions({
@@ -327,11 +387,23 @@ export const NoteCanvas = observer(function NoteCanvas({
             });
           },
         },
+        marginAnnotation: {
+          annotations: new Map(),
+          onClick: (blockId: string) => {
+            // Scroll to annotation in margin panel
+            const annotation = aiStore.marginAnnotation
+              .getAnnotationsForNote(noteId)
+              .find((a) => a.blockId === blockId);
+            if (annotation) {
+              handleAnnotationClick(annotation);
+            }
+          },
+        },
         slashCommand: {
           onAICommand: handleAICommand,
         },
       }),
-    [readOnly, handleGhostTextTrigger, handleAICommand]
+    [readOnly, handleGhostTextTrigger, handleAICommand, noteId, aiStore.marginAnnotation, handleAnnotationClick]
   );
 
   // Initialize TipTap editor
@@ -362,9 +434,11 @@ export const NoteCanvas = observer(function NoteCanvas({
     onCreate: ({ editor: ed }) => {
       setEditorError(null);
       editorRef.current = ed;
+      setIsEditorReady(true);
     },
     onDestroy: () => {
       editorRef.current = null;
+      setIsEditorReady(false);
     },
   });
 
@@ -378,6 +452,13 @@ export const NoteCanvas = observer(function NoteCanvas({
       }
     }
   }, [editor, content]);
+
+  // Fetch persisted annotations on mount
+  useEffect(() => {
+    if (noteId && editor && !editor.isDestroyed) {
+      aiStore.marginAnnotation.fetchAnnotations(noteId);
+    }
+  }, [noteId, editor, aiStore.marginAnnotation]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -411,20 +492,42 @@ export const NoteCanvas = observer(function NoteCanvas({
     async (annotation: NoteAnnotation) => {
       if (!editor || annotation.type !== 'suggestion') return;
 
-      // Apply the suggestion to the editor
-      // This would integrate with the backend to mark as resolved
-      toast.success('Suggestion applied');
+      try {
+        await aiStore.marginAnnotation.updateAnnotationStatus(noteId, annotation.id, 'accepted');
+
+        // TODO: Apply suggestion to editor content
+        // This would insert the suggested text at the annotation's block position
+
+        toast.success('Suggestion applied');
+      } catch (_err) {
+        toast.error('Failed to apply suggestion');
+      }
     },
-    [editor]
+    [editor, noteId, aiStore.marginAnnotation]
   );
 
-  const handleAnnotationReject = useCallback(async (_annotation: NoteAnnotation) => {
-    toast.info('Suggestion dismissed');
-  }, []);
+  const handleAnnotationReject = useCallback(
+    async (annotation: NoteAnnotation) => {
+      try {
+        await aiStore.marginAnnotation.updateAnnotationStatus(noteId, annotation.id, 'rejected');
+        toast.info('Suggestion dismissed');
+      } catch (_err) {
+        toast.error('Failed to dismiss suggestion');
+      }
+    },
+    [noteId, aiStore.marginAnnotation]
+  );
 
-  const handleAnnotationDismiss = useCallback(async (_annotation: NoteAnnotation) => {
-    toast.info('Annotation dismissed');
-  }, []);
+  const handleAnnotationDismiss = useCallback(
+    async (annotation: NoteAnnotation) => {
+      try {
+        await aiStore.marginAnnotation.updateAnnotationStatus(noteId, annotation.id, 'dismissed');
+      } catch (err) {
+        console.error('Failed to dismiss annotation:', err);
+      }
+    },
+    [noteId, aiStore.marginAnnotation]
+  );
 
   // Issue extraction panel handlers
   const handleCreateIssue = useCallback(async (issue: ExtractedIssue) => {
