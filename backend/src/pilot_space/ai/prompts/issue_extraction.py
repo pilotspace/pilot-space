@@ -16,13 +16,15 @@ class ConfidenceTag(Enum):
     """Confidence tags for extracted issues (DD-048).
 
     Attributes:
-        RECOMMENDED: High confidence (>0.8) - strongly recommended for creation.
-        DEFAULT: Medium confidence (0.5-0.8) - reasonable suggestion.
-        ALTERNATIVE: Low confidence (<0.5) - consider but review carefully.
+        RECOMMENDED: AI strongly suggests (>0.8).
+        DEFAULT: Standard choice (0.6-0.8).
+        CURRENT: Matches existing patterns (0.5-0.7).
+        ALTERNATIVE: Valid but less preferred (<0.6).
     """
 
     RECOMMENDED = "recommended"
     DEFAULT = "default"
+    CURRENT = "current"
     ALTERNATIVE = "alternative"
 
 
@@ -36,34 +38,54 @@ class IssuePriority(Enum):
     NONE = "none"
 
 
-# System prompt for issue extraction
-ISSUE_EXTRACTION_SYSTEM_PROMPT = """You are an AI assistant for a project management platform.
-Your task is to identify and extract potential issues from note content.
+# System prompt for issue extraction (DD-048)
+ISSUE_EXTRACTION_SYSTEM_PROMPT = """You are an expert at analyzing technical notes and extracting actionable issues.
 
-An issue is a trackable work item that can be:
-- A feature request
-- A bug report
-- A task to complete
-- A technical debt item
-- A user story
-- A research spike
+Your task is to identify potential issues, tasks, bugs, and improvements from the note content.
 
-CONFIDENCE SCORING:
-- RECOMMENDED (>0.8): Clear, well-defined issue with actionable title and description
-- DEFAULT (0.5-0.8): Reasonable issue but may need refinement
-- ALTERNATIVE (<0.5): Possible issue but unclear or needs significant editing
+## Confidence Tag Definitions (DD-048)
 
-OUTPUT FORMAT:
-Return a JSON object with an "issues" array. Each issue must have:
+When extracting issues, assign one of these confidence tags:
+
+### RECOMMENDED (confidence_score >= 0.8)
+- Clear bug report or error description
+- Explicit TODO or action item
+- Direct feature request with specific requirements
+- Security or performance concern with evidence
+
+### DEFAULT (confidence_score 0.6-0.8)
+- Implied improvement opportunity
+- Pattern suggesting potential issue
+- Discussion point that needs resolution
+- Technical debt indication
+
+### CURRENT (confidence_score 0.5-0.7)
+- Matches existing issue patterns in the project
+- Similar to previously extracted issues
+- Follows established conventions
+
+### ALTERNATIVE (confidence_score 0.4-0.6)
+- Possible issue requiring human judgment
+- Ambiguous requirement
+- Opinion or suggestion that may not need tracking
+- Question that could become an issue
+
+## Output Format
+
+Return valid JSON matching this schema:
 {{
-  "title": "Clear, actionable issue title (max 100 chars)",
-  "description": "Detailed description with context (max 500 chars)",
-  "priority": "urgent|high|medium|low|none",
-  "labels": ["label1", "label2"],
-  "confidence": 0.0-1.0,
-  "confidence_tag": "recommended|default|alternative",
-  "source_block_ids": ["block-123"],
-  "source_text": "The original text this issue was extracted from"
+  "issues": [
+    {{
+      "title": "Imperative action title",
+      "description": "Detailed description with context",
+      "priority": "urgent|high|medium|low|none",
+      "labels": ["bug", "enhancement", etc.],
+      "confidence": 0.0-1.0,
+      "confidence_tag": "recommended|default|current|alternative",
+      "source_block_ids": ["block-uuid-1"],
+      "source_text": "The original text this issue was extracted from"
+    }}
+  ]
 }}
 
 Example output:
@@ -176,7 +198,7 @@ The user has selected the following text - prioritize extracting issues from thi
 
 
 def get_confidence_tag(confidence: float) -> ConfidenceTag:
-    """Determine confidence tag from confidence score.
+    """Determine confidence tag from confidence score per DD-048.
 
     Args:
         confidence: Confidence score 0.0-1.0.
@@ -184,10 +206,12 @@ def get_confidence_tag(confidence: float) -> ConfidenceTag:
     Returns:
         Appropriate ConfidenceTag.
     """
-    if confidence > 0.8:
+    if confidence >= 0.8:
         return ConfidenceTag.RECOMMENDED
-    if confidence >= 0.5:
+    if confidence >= 0.6:
         return ConfidenceTag.DEFAULT
+    if confidence >= 0.4:
+        return ConfidenceTag.CURRENT
     return ConfidenceTag.ALTERNATIVE
 
 
