@@ -253,6 +253,21 @@ class SDKOrchestrator:
             KeyError: If agent_name not registered
             ValueError: If no API key configured
         """
+        # Check for mock mode first
+        from pilot_space.ai.providers.mock import MockProvider
+
+        mock_provider = MockProvider.get_instance()
+        if mock_provider.is_enabled():
+            agent = self._agents.get(agent_name)
+            if agent:
+                mock_result = await mock_provider.execute(agent, input_data, context)
+                return ExecutionResult(
+                    success=mock_result.success,
+                    output=mock_result.output,
+                    cost_usd=mock_result.cost_usd,
+                    error=mock_result.error,
+                )
+
         agent = self._agents.get(agent_name)
         if not agent:
             return ExecutionResult(
@@ -261,7 +276,7 @@ class SDKOrchestrator:
                 error=f"Agent '{agent_name}' not registered",
             )
 
-        # Verify API key
+        # Verify API key (skip in mock mode)
         await self.ensure_api_key(context.workspace_id)
 
         # Execute agent
@@ -377,6 +392,28 @@ class SDKOrchestrator:
             TypeError: If agent doesn't support streaming
             KeyError: If agent not registered
         """
+        # Check for mock mode first
+        from pilot_space.ai.providers.mock import MockProvider, stream_mock_response
+
+        mock_provider = MockProvider.get_instance()
+        if mock_provider.is_enabled():
+            agent = self._agents.get(agent_name)
+            if agent:
+                # Get mock response and stream it
+                mock_result = await mock_provider.execute(agent, input_data, context)
+                if mock_result.success and mock_result.output:
+                    # Convert output to string for streaming
+                    import json
+
+                    content = (
+                        json.dumps(mock_result.output)
+                        if isinstance(mock_result.output, dict)
+                        else str(mock_result.output)
+                    )
+                    async for chunk in stream_mock_response(content):
+                        yield chunk
+                return
+
         agent = self._agents.get(agent_name)
         if not agent:
             yield f"ERROR: Agent '{agent_name}' not registered"
@@ -386,7 +423,7 @@ class SDKOrchestrator:
             yield f"ERROR: Agent '{agent_name}' does not support streaming"
             return
 
-        # Verify API key
+        # Verify API key (skip in mock mode)
         try:
             await self.ensure_api_key(context.workspace_id)
         except ValueError as e:
