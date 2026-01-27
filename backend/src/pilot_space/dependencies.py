@@ -864,6 +864,83 @@ async def get_sdk_orchestrator(
     return orchestrator
 
 
+# ============================================================================
+# SDK Configuration Dependencies
+# ============================================================================
+
+
+async def get_permission_handler_dep(
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> PermissionHandler:
+    """Get permission handler for SDK agents.
+
+    Args:
+        session: Database session.
+
+    Returns:
+        PermissionHandler instance.
+    """
+    from pilot_space.ai.infrastructure.approval import ApprovalService
+    from pilot_space.ai.sdk import PermissionHandler
+
+    approval_service = ApprovalService(session=session)
+    return PermissionHandler(approval_service=approval_service)
+
+
+async def get_session_handler_dep(request: Request) -> SessionHandler | None:
+    """Get session handler for SDK agents.
+
+    Args:
+        request: FastAPI request with app state.
+
+    Returns:
+        SessionHandler instance or None if Redis not configured.
+
+    Raises:
+        RuntimeError: If container not initialized.
+    """
+    if not hasattr(request.app.state, "container"):
+        raise RuntimeError("DI container not initialized. Check app startup.")
+
+    from pilot_space.ai.sdk import SessionHandler
+
+    container = request.app.state.container
+    session_manager = container.session_manager()
+
+    if session_manager is None:
+        return None
+
+    return SessionHandler(session_manager=session_manager)
+
+
+async def get_skill_registry_dep(request: Request) -> SkillRegistry:
+    """Get skill registry for SDK agents.
+
+    Args:
+        request: FastAPI request with app state.
+
+    Returns:
+        SkillRegistry instance with cached skills.
+    """
+    from pathlib import Path
+
+    from pilot_space.ai.sdk import SkillRegistry
+
+    # Cache skill registry in app state for reuse
+    if not hasattr(request.app.state, "skill_registry"):
+        # Get skills directory from backend/.claude/skills
+        backend_dir = Path(__file__).parent.parent.parent
+        skills_dir = backend_dir / ".claude" / "skills"
+
+        skill_registry = SkillRegistry(skills_dir)
+        # Pre-load skills for faster access
+        skill_registry.list_skills()
+
+        request.app.state.skill_registry = skill_registry
+
+    return request.app.state.skill_registry  # type: ignore[no-any-return]
+
+
 # Type imports for service return types (must be before type aliases)
 if TYPE_CHECKING:
     from pilot_space.ai.infrastructure.approval import ApprovalService
@@ -871,6 +948,7 @@ if TYPE_CHECKING:
     from pilot_space.ai.infrastructure.key_storage import SecureKeyStorage
     from pilot_space.ai.infrastructure.resilience import ResilientExecutor
     from pilot_space.ai.providers.provider_selector import ProviderSelector
+    from pilot_space.ai.sdk import PermissionHandler, SessionHandler, SkillRegistry
     from pilot_space.ai.sdk_orchestrator import SDKOrchestrator
     from pilot_space.ai.session.session_manager import SessionManager
     from pilot_space.ai.tools.mcp_server import ToolRegistry
@@ -884,6 +962,11 @@ ToolRegistryDep = Annotated["ToolRegistry", Depends(get_tool_registry)]
 KeyStorageDep = Annotated["SecureKeyStorage", Depends(get_key_storage)]
 ApprovalServiceDep = Annotated["ApprovalService", Depends(get_approval_service_dep)]
 CostTrackerDep = Annotated["CostTracker", Depends(get_cost_tracker_dep)]
+
+# SDK Configuration dependencies
+PermissionHandlerDep = Annotated["PermissionHandler", Depends(get_permission_handler_dep)]
+SessionHandlerDep = Annotated["SessionHandler | None", Depends(get_session_handler_dep)]
+SkillRegistryDep = Annotated["SkillRegistry", Depends(get_skill_registry_dep)]
 
 
 # Additional type imports for other services
