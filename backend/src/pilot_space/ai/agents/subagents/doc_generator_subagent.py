@@ -11,11 +11,20 @@ Reference: docs/architect/ai-layer.md
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
+from claude_agent_sdk import ClaudeAgentOptions, query
+
 from pilot_space.ai.agents.sdk_base import AgentContext, StreamingSDKBaseAgent
+from pilot_space.ai.context import (
+    clear_context,
+    get_api_key_lock,
+    set_api_key,
+    set_workspace_context,
+)
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -146,10 +155,165 @@ Format with proper Markdown:
             },
         ]
 
+    async def _get_api_key(self, workspace_id: UUID | None) -> str:
+        """Get Anthropic API key from workspace settings.
+
+        Args:
+            workspace_id: Workspace UUID
+
+        Returns:
+            Decrypted API key
+
+        Raises:
+            ValueError: If API key not found
+        """
+        if not workspace_id:
+            api_key = os.getenv("ANTHROPIC_API_KEY")
+            if not api_key:
+                msg = "No workspace_id provided and ANTHROPIC_API_KEY not set"
+                raise ValueError(msg)
+            return api_key
+
+        # TODO: Integrate with SecureKeyStorage when available
+        api_key = os.getenv("ANTHROPIC_API_KEY")
+        if not api_key:
+            msg = (
+                f"Anthropic API key not found for workspace {workspace_id}. "
+                "Please set ANTHROPIC_API_KEY environment variable or "
+                "configure in workspace settings."
+            )
+            raise ValueError(msg)
+        return api_key
+
+    def _build_prompt(self, input_data: DocGeneratorInput) -> str:
+        """Build documentation generation prompt from input data.
+
+        Args:
+            input_data: Doc generator input
+
+        Returns:
+            Formatted prompt string
+        """
+        files_list = "\n".join(f"- {file}" for file in input_data.source_files)
+
+        doc_type_guidance = {
+            "api": "Document API endpoints with parameters, responses, and authentication",
+            "adr": "Create Architecture Decision Record with context, decision, consequences, alternatives",
+            "readme": "Generate README with overview, setup instructions, usage examples, contributing guidelines",
+            "comments": "Add docstrings and inline comments explaining code intent and usage",
+        }.get(input_data.doc_type, "Create comprehensive technical documentation")
+
+        return f"""Generate {input_data.doc_type} documentation in {input_data.output_format} format.
+
+Source files:
+{files_list}
+
+Documentation guidance:
+{doc_type_guidance}
+
+Requirements:
+- Use active voice and present tense
+- Include code examples with syntax highlighting
+- Add links to related documentation
+- Document error cases and edge conditions
+- Keep paragraphs concise (3-4 sentences)
+
+Format with proper {input_data.output_format}:
+- Use headers (##, ###) for structure
+- Code blocks with language specifiers
+- Tables for parameters/responses
+- Lists for steps and options
+
+Use available tools to:
+1. Read source files for analysis
+2. Analyze API endpoints if applicable
+3. Review existing documentation for consistency
+4. Generate comprehensive, accurate documentation"""
+
+    def _create_agent_options(self, context: AgentContext) -> ClaudeAgentOptions:  # noqa: ARG002
+        """Create Claude SDK options for doc generation.
+
+        Args:
+            context: Agent execution context
+
+        Returns:
+            ClaudeAgentOptions configured for doc generation
+        """
+        return ClaudeAgentOptions(  # type: ignore[call-arg]
+            model=self.DEFAULT_MODEL,
+            allowed_tools=[
+                "Read",
+                "Glob",
+                "Write",
+            ],
+            setting_sources=["project"],  # type: ignore[call-arg]
+        )
+
+    def _transform_sdk_message(
+        self, message: Any, context: AgentContext  # noqa: ARG002
+    ) -> str | None:
+        """Transform Claude SDK message to SSE event.
+
+        Args:
+            message: SDK message object
+            context: Agent execution context
+
+        Returns:
+            SSE-formatted string or None if message should be ignored
+        """
+        # Handle StreamEvent messages
+        if hasattr(message, "type"):
+            msg_type = getattr(message, "type", None)
+
+            # Text streaming
+            if msg_type == "text_delta" and hasattr(message, "delta"):
+                content = message.delta
+                content_escaped = content.replace("'", "\\'").replace("\n", "\\n")
+                return f"data: {{'type': 'text_delta', 'content': '{content_escaped}'}}\n\n"
+
+            # Tool use
+            if msg_type == "tool_use" and hasattr(message, "id"):
+                tool_call_id = message.id
+                tool_name = getattr(message, "name", "")
+                return (
+                    f"data: {{'type': 'tool_use', 'tool_call_id': '{tool_call_id}', "
+                    f"'tool_name': '{tool_name}'}}\n\n"
+                )
+
+            # Tool result
+            if msg_type == "tool_result" and hasattr(message, "tool_use_id"):
+                tool_call_id = message.tool_use_id
+                is_error = getattr(message, "is_error", False)
+                status = "failed" if is_error else "completed"
+                return (
+                    f"data: {{'type': 'tool_result', 'tool_call_id': '{tool_call_id}', "
+                    f"'status': '{status}'}}\n\n"
+                )
+
+            # Message stop
+            if msg_type == "stop":
+                return "data: {'type': 'message_stop'}\n\n"
+
+        # Handle AssistantMessage (final response)
+        if hasattr(message, "content") and hasattr(message, "role"):
+            if message.role == "assistant":
+                content = message.content
+                if isinstance(content, list):
+                    text_content = " ".join(
+                        block.get("text", "") for block in content if isinstance(block, dict)
+                    )
+                else:
+                    text_content = str(content)
+
+                text_escaped = text_content.replace("'", "\\'").replace("\n", "\\n")
+                return f"data: {{'type': 'text_delta', 'content': '{text_escaped}'}}\n\n"
+
+        return None
+
     async def stream(
         self,
         input_data: DocGeneratorInput,
-        context: AgentContext,  # noqa: ARG002
+        context: AgentContext,
     ) -> AsyncIterator[str]:
         """Execute doc generation with streaming.
 
@@ -160,8 +324,41 @@ Format with proper Markdown:
         Yields:
             SSE chunks with generated documentation
         """
-        # Implementation will use ClaudeSDKClient for streaming
-        yield "Generating documentation...\n"
-        yield f"Type: {input_data.doc_type}\n"
-        yield f"Format: {input_data.output_format}\n"
-        yield f"Analyzing {len(input_data.source_files)} files...\n"
+        try:
+            # Get API key from context
+            api_key = await self._get_api_key(context.workspace_id)
+
+            # Build prompt specific to doc generation
+            prompt = self._build_prompt(input_data)
+
+            # Create SDK options
+            sdk_options = self._create_agent_options(context)
+
+            # Set context for observability
+            set_api_key(api_key)
+            set_workspace_context(context.workspace_id, context.user_id)
+
+            # CRITICAL: Acquire lock before setting os.environ
+            async with get_api_key_lock():
+                original_api_key = os.getenv("ANTHROPIC_API_KEY")
+                os.environ["ANTHROPIC_API_KEY"] = api_key
+
+                try:
+                    # Stream from Claude SDK
+                    async for message in query(prompt=prompt, options=sdk_options):
+                        # Transform SDK message to SSE event
+                        sse_event = self._transform_sdk_message(message, context)
+                        if sse_event:
+                            yield sse_event
+                finally:
+                    # Restore original API key
+                    if original_api_key:
+                        os.environ["ANTHROPIC_API_KEY"] = original_api_key
+                    elif "ANTHROPIC_API_KEY" in os.environ:
+                        del os.environ["ANTHROPIC_API_KEY"]
+                    clear_context()
+
+        except Exception as e:
+            # Error handling
+            error_msg = str(e).replace("'", "\\'")
+            yield f"data: {{'type': 'error', 'error_type': 'doc_generator_error', 'message': '{error_msg}'}}\n\n"
