@@ -46,6 +46,12 @@ import {
 import type { SkillDefinition, ConfidenceTag } from './types/skills';
 
 /**
+ * API base URL for backend requests.
+ * Falls back to localhost if not configured.
+ */
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000/api/v1';
+
+/**
  * Task state for long-running operations.
  * Maps to backend task tracking.
  */
@@ -375,7 +381,7 @@ export class PilotSpaceStore {
 
     try {
       // Send approval to backend via API
-      await fetch('/api/v1/ai/approvals', {
+      await fetch(`${API_BASE}/ai/approvals`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -410,7 +416,7 @@ export class PilotSpaceStore {
 
     try {
       // Send rejection to backend via API
-      await fetch('/api/v1/ai/approvals', {
+      await fetch(`${API_BASE}/ai/approvals`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -518,6 +524,10 @@ export class PilotSpaceStore {
   /**
    * Send message to AI and stream response via SSE.
    *
+   * Supports both queue mode and direct mode:
+   * - Queue mode (AI_QUEUE_MODE=true): POST /chat returns job_id + stream_url, then connect to GET /chat/stream/{job_id}
+   * - Direct mode (AI_QUEUE_MODE=false): POST /chat returns StreamingResponse with SSE
+   *
    * Implements SSE streaming with 8 event types:
    * - message_start: Initialize new message
    * - text_delta: Append streaming text
@@ -552,15 +562,79 @@ export class PilotSpaceStore {
       this.error = null;
     });
 
-    // Create SSE client for streaming response
+    try {
+      // Get auth headers
+      const authHeaders = await this.getAuthHeaders();
+
+      // Attempt to POST to /chat endpoint
+      const response = await fetch(`${API_BASE}/ai/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders,
+        },
+        body: JSON.stringify({
+          message: content,
+          context: this.conversationContext,
+          session_id: this.sessionId,
+          metadata,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Chat request failed: ${response.status} ${response.statusText}`);
+      }
+
+      // Check Content-Type to determine response mode
+      const contentType = response.headers.get('Content-Type') || '';
+
+      if (contentType.includes('application/json')) {
+        // Queue mode: Extract job_id and stream_url from JSON response
+        const queueResponse = await response.json();
+        const { job_id, session_id, stream_url } = queueResponse;
+
+        // Update session_id if provided
+        if (session_id) {
+          runInAction(() => {
+            this.sessionId = session_id;
+          });
+        }
+
+        // Connect to queue stream endpoint
+        await this.connectToStream(stream_url, job_id);
+      } else if (contentType.includes('text/event-stream')) {
+        // Direct mode: Response is already an SSE stream
+        // Parse SSE events directly from response body
+        await this.consumeSSEStream(response);
+      } else {
+        throw new Error(`Unexpected response content type: ${contentType}`);
+      }
+    } catch (err) {
+      runInAction(() => {
+        this.streamingState = {
+          isStreaming: false,
+          streamContent: '',
+          currentMessageId: null,
+        };
+        this.error = err instanceof Error ? err.message : 'Failed to send message';
+      });
+    }
+  }
+
+  /**
+   * Connect to a specific SSE stream URL (queue mode).
+   * @param streamUrl - Stream URL (e.g., /api/v1/ai/chat/stream/{job_id})
+   * @param _jobId - Optional job identifier for tracking (reserved for future use)
+   */
+  private async connectToStream(streamUrl: string, _jobId?: string): Promise<void> {
+    // Ensure absolute URL
+    const absoluteUrl = streamUrl.startsWith('http')
+      ? streamUrl
+      : `${API_BASE}${streamUrl.startsWith('/') ? '' : '/'}${streamUrl}`;
+
     this.client = new SSEClient({
-      url: '/api/v1/ai/chat',
-      body: {
-        message: content,
-        context: this.conversationContext,
-        session_id: this.sessionId,
-        metadata,
-      },
+      url: absoluteUrl,
+      method: 'GET', // Queue mode uses GET for stream endpoint
       onMessage: (event: SSEEvent) => this.handleSSEEvent(event),
       onComplete: () => {
         runInAction(() => {
@@ -584,6 +658,121 @@ export class PilotSpaceStore {
     });
 
     await this.client.connect();
+  }
+
+  /**
+   * Consume SSE events from a fetch Response stream (direct mode).
+   * @param response - Fetch Response with text/event-stream body
+   */
+  private async consumeSSEStream(response: Response): Promise<void> {
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error('No response body available');
+    }
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+
+        if (done) {
+          // Process remaining buffer
+          if (buffer.trim()) {
+            const events = this.parseSSEBuffer(buffer + '\n\n');
+            for (const event of events) {
+              this.handleSSEEvent(event);
+            }
+          }
+          runInAction(() => {
+            this.streamingState = {
+              isStreaming: false,
+              streamContent: '',
+              currentMessageId: null,
+            };
+          });
+          break;
+        }
+
+        buffer += decoder.decode(value, { stream: true });
+        const events = this.parseSSEBuffer(buffer);
+
+        // Update buffer with remaining unparsed data
+        const lastDoubleNewline = buffer.lastIndexOf('\n\n');
+        if (lastDoubleNewline !== -1) {
+          buffer = buffer.slice(lastDoubleNewline + 2);
+        }
+
+        for (const event of events) {
+          this.handleSSEEvent(event);
+        }
+      }
+    } catch (err) {
+      runInAction(() => {
+        this.streamingState = {
+          isStreaming: false,
+          streamContent: '',
+          currentMessageId: null,
+        };
+        this.error = err instanceof Error ? err.message : 'Stream error';
+      });
+    } finally {
+      reader.releaseLock();
+    }
+  }
+
+  /**
+   * Parse SSE buffer into events.
+   * Returns array of parsed events.
+   */
+  private parseSSEBuffer(buffer: string): SSEEvent[] {
+    const events: SSEEvent[] = [];
+    const eventBlocks = buffer.split('\n\n').filter(block => block.trim());
+
+    for (const block of eventBlocks) {
+      const lines = block.split('\n');
+      let eventType = '';
+      let eventData = '';
+
+      for (const line of lines) {
+        if (line.startsWith('event:')) {
+          eventType = line.slice(6).trim();
+        } else if (line.startsWith('data:')) {
+          eventData += line.slice(5).trim();
+        }
+      }
+
+      if (eventType && eventData) {
+        try {
+          const data = JSON.parse(eventData);
+          events.push({ type: eventType, data });
+        } catch {
+          // Skip invalid JSON
+        }
+      }
+    }
+
+    return events;
+  }
+
+  /**
+   * Get Supabase auth headers for authenticated requests.
+   */
+  private async getAuthHeaders(): Promise<Record<string, string>> {
+    try {
+      const { supabase } = await import('@/lib/supabase');
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (session?.access_token) {
+        return { Authorization: `Bearer ${session.access_token}` };
+      }
+    } catch {
+      console.warn('Failed to get auth session for chat request');
+    }
+    return {};
   }
 
   // ========================================

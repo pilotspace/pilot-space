@@ -15,8 +15,10 @@ import { supabase } from '@/lib/supabase';
 export interface SSEClientOptions {
   /** SSE endpoint URL */
   url: string;
-  /** Request body for POST requests */
+  /** Request body for POST requests (omit for GET) */
   body?: Record<string, unknown>;
+  /** HTTP method (default: POST if body provided, GET otherwise) */
+  method?: 'GET' | 'POST';
   /** Additional headers */
   headers?: Record<string, string>;
   /** Called for each parsed SSE event */
@@ -80,15 +82,18 @@ export class SSEClient {
     try {
       const authHeaders = await this.getAuthHeaders();
 
+      // Determine HTTP method: explicit, or based on body presence
+      const method = this.options.method ?? (this.options.body ? 'POST' : 'GET');
+
       const response = await fetch(this.options.url, {
-        method: 'POST',
+        method,
         headers: {
           Accept: 'text/event-stream',
-          'Content-Type': 'application/json',
+          ...(method === 'POST' ? { 'Content-Type': 'application/json' } : {}),
           ...authHeaders,
           ...this.options.headers,
         },
-        body: this.options.body ? JSON.stringify(this.options.body) : undefined,
+        body: this.options.body && method === 'POST' ? JSON.stringify(this.options.body) : undefined,
         signal: this.abortController.signal,
       });
 
