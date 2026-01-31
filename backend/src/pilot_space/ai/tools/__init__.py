@@ -7,6 +7,8 @@ Tool Categories:
     database: Issue, Note, Project, Cycle context retrieval and mutations
     github: PR details, diff, code search, comments
     search: Semantic search, similar issue detection
+    note: Note content manipulation and AI enhancements
+    issue: Issue creation and linking from notes
 
 Usage:
     from pilot_space.ai.tools import ToolRegistry, ToolContext
@@ -46,6 +48,14 @@ from pilot_space.ai.tools.mcp_server import (
     ToolRegistry,
     register_tool,
 )
+from pilot_space.ai.tools.note_tools import (
+    create_issue_from_note,
+    enhance_text,
+    extract_issues,
+    link_existing_issues,
+    summarize_note,
+    update_note_block,
+)
 from pilot_space.ai.tools.search_tools import (
     search_codebase,
     semantic_search,
@@ -55,7 +65,10 @@ __all__ = [
     "ToolContext",
     "ToolRegistry",
     "create_issue",
+    "create_issue_from_note",
     "create_note_annotation",
+    "enhance_text",
+    "extract_issues",
     "find_similar_issues",
     "get_cycle_context",
     "get_issue_context",
@@ -65,9 +78,12 @@ __all__ = [
     "get_pr_diff",
     "get_project_context",
     "get_workspace_members",
+    "link_existing_issues",
     "post_pr_comment",
     "register_tool",
     "search_code_in_repo",
     "search_codebase",
     "semantic_search",
+    "summarize_note",
+    "update_note_block",
 ]

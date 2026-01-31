@@ -26,6 +26,8 @@ _TOOL_CATEGORIES: dict[str, list[str]] = {
     "database": [],
     "github": [],
     "search": [],
+    "note": [],
+    "issue": [],
 }
 
 
