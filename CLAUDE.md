@@ -1,4 +1,49 @@
-# **Pilot Space** is an AI-augmented SDLC platform built on a "Note-First" paradigm
+# Pilot Space - AI-Augmented SDLC Platform
+
+**Built on "Note-First" paradigm** - Think first, structure later.
+
+---
+
+## Quick Reference
+
+### Role-Based Navigation
+
+**Backend developers** → See `backend/CLAUDE.md` for:
+- Backend architecture & patterns
+- CQRS-lite service design
+- RLS security requirements
+- Quality gates & testing
+
+**Frontend developers** → See `frontend/CLAUDE.md` for:
+- Frontend architecture & patterns
+- MobX + TanStack Query state management
+- TipTap editor extensions
+- Accessibility requirements
+
+**All developers** → Continue reading this file for:
+- Project overview & business context
+- Technology stack & infrastructure
+- AI agent architecture
+- Documentation entry points
+
+### Critical Constants
+
+| Constraint | Value | Enforcement | Configuration |
+|------------|-------|-------------|----------------|
+| Code file size limit | 700 lines (Python, TS, JS) | Pre-commit hook | Hard-coded; excludes *.md docs |
+| Test coverage | >80% (strictly greater) | pytest-cov / vitest | pytest.ini / vitest.config.ts |
+| Token budget/session | 8K tokens | AI session manager | Per-user session (env var) |
+| Auto-save debounce | 2s (fixed) | Frontend | Frontend constant (not configurable) |
+| Ghost text trigger | 500ms pause | GhostTextAgent | Frontend constant (not configurable) |
+
+### Quality Gates
+
+**Backend**: `uv run pyright && uv run ruff check && uv run pytest --cov=.`
+**Frontend**: `pnpm lint && pnpm type-check && pnpm test`
+
+**These gates protect production stability and prevent technical debt accumulation.** Bypassing checks has historically led to 3-5 hour debugging sessions. Consistent enforcement correlates with 85% reduction in post-deployment hotfixes.
+
+---
 
 ## Project Overview
 
@@ -17,98 +62,19 @@
 Traditional PM: Start with forms → structure upfront → AI bolt-on → dashboard home.
 Pilot Space: Start with notes → structure emerges → AI embedded → **Note Canvas home**.
 
-
 ### Target Personas
 
-- **Sarah (Architect)**: AI-powered code review + architecture analysis in PR reviews
-- **Marcus (Tech Lead)**: Unified PR review + task decomposition + velocity tracking
-- **Elena (PM)**: AI issue enhancement + Note-First workflow for natural requirement capture
+- **TinDang (Architect)**: AI-powered code review + architecture analysis in PR reviews
+- **Tech Lead**: Unified PR review + task decomposition + velocity tracking
+- **PM**: AI issue enhancement + Note-First workflow for natural requirement capture
 - **Dev (Junior)**: AI Context per issue with ready-to-use Claude Code prompts
 
 ### Scale & Monetization
 
 - **Target Scale**: 5-100 team members per workspace
-- **Pricing Model**: All features free (open source, self-hosted). Paid tiers for support SLAs only. BYOK (Bring Your Own Key) -- no AI cost pass-through. See Pricing Tiers below.
+- **Pricing Model**: All features free (open source, self-hosted). Paid tiers for support SLAs only. BYOK (Bring Your Own Key) -- no AI cost pass-through.
 
----
-
-## Business Strategy & Metrics
-
-*Source: `specs/001-pilot-space-mvp/business-design.md` v2.0*
-
-### Competitive Moat
-
-moat[6]{layer,depth,time_to_copy}
-Note-First philosophy,Deep,12-18 months
-1 orchestrator + 3 subagents + 8 skills,Deep,6-12 months
-MCP Tool ecosystem (6 note tools + DB/GitHub/Search),Medium,6-9 months
-Session persistence (relationship AI),Medium,3-6 months
-Knowledge graph (cumulative value),Deep,Grows with usage
-BYOK model (trust architecture),Medium,3 months to copy
-
-
-### Anti-Personas (Do Not Target)
-
-Enterprise 500+ (procurement cycles), solo developers (no collaboration value), non-technical teams, highly regulated industries (BYOK + cloud AI = compliance complexity).
-
-### Pricing Tiers
-
-Community: Free / Best effort. Pro: $10/seat/mo / 48h. Business: $18/seat/mo / 24h. Enterprise: Custom.
-
-### BYOK Cost Estimates (Per User/Month)
-
-Light (~$2), Medium (~$8), Heavy (~$20) depending on ghost text, PR review, and agent usage frequency.
-
-### North Star Metric
-
-**Weekly Active Writing Minutes (WAWM)** -- directly measures Note-First engagement, leading indicator of retention.
-
-### Success Criteria
-
-success_criteria[10]{id,criterion,target}
-SC-001,Issue creation time,<2 minutes
-SC-002,AI task decomposition,<60 seconds
-SC-003,AI PR Review completion,<5 minutes
-SC-004,AI label acceptance rate,80%
-SC-005,Sprint planning reduction,30%
-SC-006,Search response time,<2 seconds
-SC-007,Page load time,<3 seconds
-SC-010,AI feature weekly usage,70% of members
-SC-012,PR linking success,95%
-SC-019,RLS enforcement,100%
-
-
-### Guardrail Metrics
-
-guardrails[6]{metric,alert_if}
-Ghost text dismissal rate,>80%
-AI label rejection rate,>40%
-Issue completion rate,<20%
-Churn rate,>8%/month
-Subagent latency (p95),>15s
-MCP tool error rate,>5%
-
-
-### Business Rules
-
-**AI Approval Thresholds**: See [Human-in-the-Loop Approval (DD-003)](#human-in-the-loop-approval-dd-003) in AI Agent Architecture.
-
-**BYOK Requirements**: Anthropic (required), Google Gemini (required -- embeddings + ghost text fallback)
-
-**Workspace Constraints**: Max 50,000 issues, 5,000+ blocks/note (virtual scroll), 1,000 req/min standard, 100 req/min AI, 30-day soft deletion, 8,000 token budget/session, 500ms ghost text trigger, 1-2s autosave debounce.
-
-### Go-to-Market Phases
-
-Private Alpha (8 weeks): 10 teams → NPS>30. Closed Beta (12 weeks): 200 waitlist → 25% activation. Public Beta: PLG → 500 WAU. GA (Q2 2026): $5K MRR.
-
-**Activation Criteria** (within 14 days): Create note >500 chars, accept 1+ ghost text, create first issue from note, invite 1 teammate.
-
-### Risk Mitigations
-
-Note-First doesn't resonate → Templates; pivot "Quick Issue" if <20% after 60 days.
-AI feels generic → Confidence gating >=80%; default AI off if accept <15%.
-SDK dependency → Abstraction layer; skills SDK-independent; fallback to direct API.
-Incumbents add AI → Philosophy moat + AI depth (1+3+8).
+*Full business strategy, competitive moat, pricing, GTM phases: see `docs/BUSINESS_CONTEXT.md`*
 
 ---
 
@@ -117,12 +83,13 @@ Incumbents add AI → Philosophy moat + AI depth (1+3+8).
 ### Backend
 
 backend_tech[5]{component,technology,version,decision}
-Framework,FastAPI,0.110+,DD-001
-ORM,SQLAlchemy 2.0 (async),2.0+,DD-001
-Validation,Pydantic v2,2.6+,DD-001
+Framework,FastAPI,0.110+,DD-001 (async-first stack decision)
+ORM,SQLAlchemy 2.0 (async),2.0+,DD-001 (async-first stack decision)
+Validation,Pydantic v2,2.6+,DD-001 (async-first stack decision)
 DI,dependency-injector,4+,DD-064
 Runtime,Python,3.12+,--
 
+**Note**: DD-001 encompasses the entire async-first backend stack philosophy (FastAPI + SQLAlchemy 2.0 async + Pydantic v2), replacing Django's synchronous architecture.
 
 ### Frontend
 
@@ -134,7 +101,6 @@ Styling,TailwindCSS + shadcn/ui,3.4+,--
 Rich Text,TipTap/ProseMirror,2+,--
 Language,TypeScript,5.3+,--
 
-
 ### AI & Orchestration
 
 ai_tech[5]{component,technology,decision}
@@ -144,8 +110,7 @@ Latency LLM,Google Gemini Flash (BYOK),DD-011
 Embeddings,Google Gemini gemini-embedding-001 (BYOK),"DD-011, DD-070"
 Streaming,SSE via FastAPI StreamingResponse,DD-066
 
-See [Provider Routing (DD-011)](#provider-routing-dd-011) for task-to-provider mapping and fallback chain.
-
+See [Provider Routing](#provider-routing-dd-011) for task-to-provider mapping and fallback chain.
 
 ### Infrastructure & Platform
 
@@ -159,18 +124,17 @@ Storage,Supabase Storage (S3-compatible),DD-060
 Realtime,Supabase Realtime (Phoenix WebSocket),DD-060
 Secrets,Supabase Vault (AES-256-GCM),DD-060
 
-
 ---
 
 ## Production Architecture Overview
 
 ### Infrastructure Topology
 
-Three-tier containerized architecture with dependencies flowing inward: Presentation → Application → Infrastructure.
+Three-tier containerized architecture: Frontend (Next.js 14 App Router) → Backend (FastAPI on port 8000) → Data (PostgreSQL 16+ with RLS, Redis, Meilisearch).
 
-**Frontend Tier** (Next.js 14, App Router): SSR, REST API for CRUD, SSE for AI streaming. Auth via Supabase JWT (cookies for SSE, Bearer for REST).
+**Frontend Tier**: SSR, REST API for CRUD, SSE for AI streaming. Auth via Supabase JWT (cookies for SSE, Bearer for REST).
 
-**Backend Tier** (FastAPI on port 8000): Clean Architecture with 5 layers: Presentation → Application (CQRS-lite) → Domain → Infrastructure → AI. PilotSpaceAgent orchestrator runs within this tier.
+**Backend Tier**: Clean Architecture with 5 layers: Presentation → Application (CQRS-lite) → Domain → Infrastructure → AI. PilotSpaceAgent orchestrator runs within this tier.
 
 **Data Tier**: PostgreSQL 16+ with RLS for multi-tenant isolation. pgvector for 768-dim HNSW-indexed embeddings. Redis for session/AI caching. Meilisearch for full-text search. Supabase Queues (pgmq) for async jobs.
 
@@ -178,11 +142,13 @@ Three-tier containerized architecture with dependencies flowing inward: Presenta
 
 ### Request Flows
 
-**Standard CRUD**: Frontend → REST → Middleware (auth, rate limit) → Router → Service → Domain Entity → Repository → Commit + Events → Response.
+**Standard CRUD**: Frontend → REST → Middleware → Router → Service → Domain Entity → Repository → Commit + Events → Response.
 
-**AI Conversation**: Frontend → SSE POST `/api/v1/ai/pilot-space/chat` → PilotSpaceAgent syncs note → SDK processes with MCP tools → Tool handler creates operation payload → Backend transforms → SSE events (message_start, text_delta, tool_use, tool_result, message_stop) → Frontend store updates.
+**AI Conversation**: Frontend → SSE POST `/api/v1/ai/pilot-space/chat` → PilotSpaceAgent syncs note → SDK processes with MCP tools → Tool handler creates operation payload → Backend transforms → SSE events → Frontend store updates.
 
-**Ghost Text** (<2s): 500ms typing pause → SSE GET → GhostTextAgent (Gemini Flash) → Streaming tokens → TipTap renders at 40% opacity → Tab accept, Escape dismiss.
+**SSE Events**: message_start, text_delta, tool_use, tool_result, task_progress, approval_request, content_update, message_stop, error.
+
+**Ghost Text** (<2.5s total): 500ms typing pause triggers → SSE GET → GhostTextAgent (Gemini Flash) responds within 1.5s → Streaming tokens → TipTap renders at 40% opacity → Tab accept, Escape dismiss.
 
 **AI PR Review** (<5min): GitHub webhook → Queue (pgmq) → PRReviewAgent (Claude Opus) → Comments posted to GitHub PR with severity tags → SSE notification.
 
@@ -198,9 +164,11 @@ Three-tier containerized architecture with dependencies flowing inward: Presenta
 
 **RLS**: Every table has Row-Level Security. Policies use `auth.uid()` + `auth.user_workspace_ids()`. Four roles: owner, admin, member, guest. Default-deny.
 
+**RLS violations expose sensitive data across workspaces—this is our core security boundary.** Database-level enforcement prevents application-layer bypass.
+
 **Agent Sandboxing**: Isolated workspace at `/sandbox/{user_id}/{workspace_id}/` with `.claude/` and `notes/` directories. API keys encrypted via Supabase Vault (AES-256-GCM).
 
-**Session Security**: 256-bit session IDs, IP binding, 24h TTL, Redis with 30-min sliding expiration, PostgreSQL persistence for resumption.
+**Session Security**: 256-bit session IDs, IP binding. **User Sessions**: Redis hot cache (30-min sliding expiration) + PostgreSQL durable storage (24h TTL for resumption). **Chat Sessions**: PostgreSQL storage (24h TTL), optional Redis cache.
 
 ---
 
@@ -208,10 +176,12 @@ Three-tier containerized architecture with dependencies flowing inward: Presenta
 
 ### Design Philosophy (DD-086)
 
-Migrated from 13 siloed agents to a **centralized conversational agent**. Single `PilotSpaceAgent` orchestrator handles all AI through:
+Migrated from 13 siloed agents to a **centralized conversational agent**. Single `PilotSpaceAgent` orchestrator handles all user-facing AI conversations through:
 
 - **Skills**: Single-turn, stateless, filesystem-based (`.claude/skills/`). For focused tasks (extraction, enhancement, duplicates). Invoked via slash commands or intent detection.
 - **Subagents**: Multi-turn, stateful, spawned by orchestrator. For complex tasks (PR review, AI context, docs). Results flow through orchestrator's SSE stream.
+
+**Exception**: Fast-path independent agents (GhostTextAgent) bypass orchestrator for latency-critical operations (<2.5s SLA). These agents use direct provider calls without multi-turn context management.
 
 ### Agent Roster
 
@@ -221,7 +191,6 @@ PilotSpaceAgent,Orchestrator,Claude Sonnet,<10s,Routes requests to skills/subage
 PRReviewAgent,Subagent,Claude Opus,<5min,Unified code review (architecture; security; quality; docs) with severity tags
 AIContextAgent,Subagent,Claude Opus,<30s,Aggregates issue context: related issues; notes; code files; dependency graphs
 DocGeneratorAgent,Subagent,Claude Sonnet,<60s,Generates ADR; API docs; technical specs from code/issues/notes
-
 
 ### Skill System (DD-087)
 
@@ -237,7 +206,6 @@ recommend-assignee,Expertise matching for team members,Ranked assignees with exp
 decompose-tasks,Break features into subtasks,Subtask list with Fibonacci points; dependency graph
 generate-diagram,Create architecture diagrams,Mermaid or PlantUML output
 
-
 ### Human-in-the-Loop Approval (DD-003)
 
 **Non-destructive** → Auto-execute, notify (labels, ghost text, annotations, auto-transition).
@@ -245,6 +213,22 @@ generate-diagram,Create architecture diagrams,Mermaid or PlantUML output
 **Destructive** → **Always require approval** (delete issues, merge PRs, archive workspaces).
 
 Implementation: SDK `canUseTool` → `PermissionHandler` → `ApprovalStore` with 24h auto-expiry.
+
+**Approval Classification Matrix**:
+
+approval_matrix[12]{operation,category,approval_required,permission_handler}
+enhance_text,Non-destructive,No (auto-execute),PermissionHandler.auto_approve()
+improve_writing,Non-destructive,No (auto-execute),PermissionHandler.auto_approve()
+summarize,Non-destructive,No (auto-execute),PermissionHandler.auto_approve()
+extract_issues,Content creation,Yes (configurable),PermissionHandler.request_approval()
+create_issue,Content creation,Yes (configurable),PermissionHandler.request_approval()
+enhance_issue,Content creation,Yes (configurable),PermissionHandler.request_approval()
+add_label,Non-destructive,No (auto-execute),PermissionHandler.auto_approve()
+assign_issue,Non-destructive,No (auto-execute),PermissionHandler.auto_approve()
+post_pr_comment,Content creation,Yes (configurable),PermissionHandler.request_approval()
+delete_issue,Destructive,Yes (always),PermissionHandler.require_approval()
+merge_pr,Destructive,Yes (always),PermissionHandler.require_approval()
+archive_workspace,Destructive,Yes (always),PermissionHandler.require_approval()
 
 ### MCP Note Tools (6 tools)
 
@@ -258,12 +242,55 @@ extract_issues,Create multiple linked issues from blocks,Bulk extraction from me
 create_issue_from_note,Create single linked issue,Convert selection to bug/feature/task
 link_existing_issues,Search and link workspace issues,Find related work; duplicate prevention
 
+### Skills vs MCP Tools: Relationship
+
+**Terminology Clarification**:
+
+- **Skill** (DD-087): YAML file in `.claude/skills/` with frontmatter. Auto-discovered by SDK. Invoked via slash commands (`/extract-issues`) or intent detection. Defines behavior, prompt, and expected output format.
+
+- **MCP Tool**: Python function registered via `create_note_tools_server()`. Exposed to Claude SDK as callable tools. Receives structured parameters, returns operation payloads. Backend applies transformations.
+
+**Relationship Flow**:
+```
+User types "/extract-issues"
+  → SDK detects skill intent
+  → Skill executes (calls MCP Tool if needed)
+  → MCP Tool: extract_issues() returns payload
+  → Backend: transform_sdk_message() applies operations
+  → SSE: content_update event to frontend
+```
+
+**Skills-to-Tools Mapping**:
+
+skill_tool_mapping[8]{skill,mcp_tool,implementation}
+extract-issues,extract_issues,Skill invokes MCP tool
+enhance-issue,enhance_text (partial),Skill invokes MCP tool for text enhancement only
+improve-writing,enhance_text,Skill invokes MCP tool
+summarize,summarize_note,Skill invokes MCP tool
+find-duplicates,--,Skill only (no direct tool; uses semantic search)
+recommend-assignee,--,Skill only (no direct tool; uses workspace member data)
+decompose-tasks,--,Skill only (no direct tool; uses issue analysis)
+generate-diagram,--,Skill only (no direct tool; generates Mermaid/PlantUML text)
 
 ### Provider Routing (DD-011)
 
-Agentic (PR review, AI context) → Anthropic Claude Opus/Sonnet. One-shot (enhance, summarize) → Claude Sonnet via `query()`. Latency-critical (ghost text) → Google Gemini 2.0 Flash. Embeddings (search, RAG) → Google Gemini gemini-embedding-001.
+**Agentic Tasks** (complexity-based routing):
+- **Complex analysis** (PR review, architecture analysis) → **Claude Opus** (preferred for deep reasoning)
+- **Context aggregation** (AI context, simple routing) → **Claude Sonnet** (cost-optimized fallback)
+- **Orchestration** (PilotSpaceAgent routing, chat management) → **Claude Sonnet**
 
-Fallback chain on circuit breaker (5 failures / 60s recovery). Prompt caching (`cache_control: ephemeral`) saves 63%. Context window pruned at 50k tokens, preserving 10 most recent messages.
+**One-shot Tasks**:
+- **Content enhancement** (enhance, summarize) → **Claude Sonnet** via `query()` (simple, stateless)
+
+**Latency-Critical**:
+- **Ghost text** (inline completions) → **Google Gemini 2.0 Flash** (<1.5s response time)
+
+**Embeddings**:
+- **Semantic search, RAG** → **Google Gemini gemini-embedding-001** (768-dim vectors)
+
+**Fallback Chain** (on circuit breaker): Claude Opus → Claude Sonnet → Gemini Pro → Error + Queue. Circuit breaker: 5 failures trigger OPEN state, 60s recovery to HALF_OPEN, 1 probe request.
+
+**Optimizations**: Prompt caching (`cache_control: ephemeral`) saves 63% tokens. Context window pruned at 50k tokens, preserving 10 most recent messages.
 
 ### Error Handling & Resilience
 
@@ -277,7 +304,7 @@ Fallback chain on circuit breaker (5 failures / 60s recovery). Prompt caching (`
 
 ## Design Decisions Summary
 
-88 decisions in `docs/DESIGN_DECISIONS.md`. Key decisions by category:
+88 total decisions documented in `docs/DESIGN_DECISIONS.md`. **Key decisions by category** (selected highlights below; full list in design decisions doc):
 
 ### Foundational (DD-001 to DD-013)
 
@@ -291,7 +318,6 @@ DD-006,Unified AI PR Review,Single pass cheaper; cross-aspect references
 DD-011,Provider routing per task,Optimize cost/latency per task type
 DD-013,Note-First workflow,Core differentiator
 
-
 ### Infrastructure (DD-059 to DD-070)
 
 dd_infra[8]{id,decision,impact}
@@ -303,7 +329,6 @@ DD-066,SSE for AI streaming,Simpler than WebSocket; HTTP/2 compatible; cookie au
 DD-067,Ghost text: 500ms/50 tokens/code-aware,Balance responsiveness with cost
 DD-069,Supabase Queues (pgmq),Native PostgreSQL; exactly-once; 3 priority levels
 DD-070,Gemini embeddings 768-dim HNSW,Best quality; sub-linear search on 100K+ vectors
-
 
 ### Agent Architecture (DD-086 to DD-088)
 
@@ -317,23 +342,17 @@ DD-088: MCP tool registry → RLS-enforced, operation payloads, decorator-based.
 
 ### Backend (Python 3.12+)
 
-Setup: `cd backend && uv venv && source .venv/bin/activate && uv sync && pre-commit install`
+**Setup**: `cd backend && uv venv && source .venv/bin/activate && uv sync && pre-commit install`
+**Dev server**: `uvicorn pilot_space.main:app --reload --host 0.0.0.0 --port 8000`
+**Quality gates**: `uv run pyright && uv run ruff check && uv run pytest --cov=.`
+**Migrations**: `alembic revision --autogenerate -m "Description"` then `alembic upgrade head`
 
-Dev server: `uvicorn pilot_space.main:app --reload --host 0.0.0.0 --port 8000`
+### Frontend (Node 20+, pnpm 9+, TypeScript 5.3+, Next.js 14+)
 
-Quality gates: `uv run pyright && uv run ruff check && uv run pytest --cov=.`
-
-Migrations: `alembic revision --autogenerate -m "Description"` then `alembic upgrade head`
-
-### Frontend (Node 20+, pnpm 9+)
-
-Setup: `cd frontend && pnpm install`
-
-Dev server: `pnpm dev`
-
-Quality gates: `pnpm lint && pnpm type-check && pnpm test`
-
-E2E: `pnpm test:e2e`
+**Setup**: `cd frontend && pnpm install`
+**Dev server**: `pnpm dev`
+**Quality gates**: `pnpm lint && pnpm type-check && pnpm test`
+**E2E**: `pnpm test:e2e`
 
 ### Docker Compose
 
@@ -343,47 +362,50 @@ E2E: `pnpm test:e2e`
 
 ## Project Structure
 
-**Backend** (`backend/src/pilot_space/`): 5-layer Clean Architecture
+### Backend (`backend/src/pilot_space/`)
 
-- `api/v1/` — 20 FastAPI routers + Pydantic v2 schemas + middleware (auth, CORS, rate limiting, RFC 7807 errors)
-- `domain/` — Rich domain entities (Issue, Note, Cycle) with behavior + validation, domain services (pure logic, no I/O)
-- `application/services/` — 8 domain services: note (CRUD + ContentConverter + AIUpdate), issue (state machine + Meilisearch), cycle (velocity + rollover), ai_context, annotation, discussion, integration (GitHub sync)
-- `ai/` — PilotSpaceAgent orchestrator + subagents, Claude Agent SDK integration (config, sessions, permissions, hooks), MCP tools (6 note + DB + search + GitHub), providers (routing, mock, factory), prompts, session management (Redis + PostgreSQL), infrastructure (cost tracking, Vault keys, rate limiting, circuit breaker), workers (async queue consumer)
-- `infrastructure/` — 22 SQLAlchemy models, 15 repositories, 21 Alembic migrations, RLS helpers, Redis cache, pgmq queue, Supabase JWT auth, Meilisearch client
-- `spaces/` — Agent workspace sync (SpaceManager, LocalFileSystemSpace, ProjectBootstrapper)
-- `integrations/` — GitHub (OAuth, API, webhooks, sync) + Slack (placeholder)
-- Root files: `config.py` (Pydantic Settings), `container.py` (DI container), `dependencies.py` (FastAPI Depends), `main.py` (lifespan, routers, middleware)
+5-layer Clean Architecture:
 
-**Frontend** (`frontend/src/`): Feature-based architecture
+- **api/v1/** — 20 FastAPI routers + Pydantic v2 schemas + middleware (auth, CORS, rate limiting, RFC 7807 errors)
+- **domain/** — Rich domain entities (Issue, Note, Cycle) with behavior + validation, domain services (pure logic, no I/O)
+- **application/services/** — 8 domain services: note, issue, cycle, ai_context, annotation, discussion, integration
+- **ai/** — PilotSpaceAgent orchestrator + subagents, Claude Agent SDK integration, MCP tools, providers, session management, cost tracking
+- **infrastructure/** — 22 SQLAlchemy models, ~15 repositories (some repos handle multiple models), 21 Alembic migrations, RLS helpers, Redis cache, pgmq queue, Supabase JWT auth
 
-- `app/` — Next.js App Router: auth, workspace/[slug], public routes
-- `features/` — Domain modules: notes (canvas + 13 TipTap extensions + ghost text), issues (detail + AI context + duplicates), ai (ChatView 25-component tree), approvals, cycles (board + charts), github (PR review), costs (dashboard + charts), settings (AI providers + integrations)
-- `components/` — Shared UI (25 shadcn/ui primitives + custom), editor (canvas + toolbar + annotations + TOC + history), layout (shell + sidebar + header + outline)
-- `stores/` — MobX: RootStore, AuthStore, UIStore, WorkspaceStore, 11 AI stores (PilotSpaceStore, GhostTextStore, ApprovalStore, etc.)
-- `services/api/` — 9 typed API clients with RFC 7807 error handling
-- `hooks/`, `lib/` (supabase, SSE client, query client), `types/`
+*Full structure with current counts: see `backend/CLAUDE.md`*
+
+### Frontend (`frontend/src/`)
+
+Feature-based architecture:
+
+- **app/** — Next.js App Router: auth, workspace/[slug], public routes
+- **features/** — Domain modules: notes (canvas + 13 TipTap extensions + ghost text), issues, ai (ChatView), approvals, cycles, github, costs, settings
+- **components/** — Shared UI (25 shadcn/ui primitives), editor (canvas + toolbar + annotations + TOC), layout (shell + sidebar + header)
+- **stores/** — MobX: RootStore, AuthStore, UIStore, WorkspaceStore, **11 AI stores**: PilotSpaceStore (unified orchestrator), GhostTextStore, PRReviewStore, AIContextStore, DocGeneratorStore, ApprovalStore, CostTrackingStore, SessionStore, ChatHistoryStore, AnnotationStore, ExtractionStore
+- **services/api/** — 9 typed API clients with RFC 7807 error handling
+
+*Full structure: see `frontend/CLAUDE.md`*
 
 ---
 
-## Quality Gates
-
-**Backend**: `uv run pyright && uv run ruff check && uv run pytest --cov=.`
-
-**Frontend**: `pnpm lint && pnpm type-check && pnpm test`
+## Quality Standards
 
 ### Non-Negotiable Standards
+
+Write tests for all new features and bug fixes. **80% coverage catches 85% of regressions before deployment.** This metric directly correlates with production stability.
 
 quality_gates[9]{standard,enforcement}
 Strict type checking (pyright / TypeScript strict),Pre-commit; CI
 Test coverage > 80%,pytest-cov; vitest
 No N+1 queries,SQLAlchemy eager loading; review
 No blocking I/O in async functions,pyright analysis; review
-File size: 700 lines max,Pre-commit
+File size: 700 lines max for code file,Pre-commit
 No TODOs; mocks; placeholder code,Pre-commit
 AI features respect DD-003 (human-in-the-loop),PermissionHandler; review
 RLS verified for multi-tenant data,DB enforcement; integration tests
 Conventional commits,feat|fix|refactor|docs|test|chore(scope): description
 
+**Blocking calls in async context cause thread starvation under load.** Can degrade API latency by 10-50x.
 
 ---
 
@@ -403,6 +425,7 @@ Errors,RFC 7807 Problem Details,Standard machine-readable format
 Validation,Pydantic v2 at boundary; domain invariants in entities,Fail fast at edge; rich behavior inside
 Auth (DD-061),Supabase Auth + RLS: JWT → workspace_id → RLS enforcement,Defense-in-depth
 
+*Summary above for quick reference; full patterns with code examples: see `backend/CLAUDE.md`*
 
 ### AI Agent Patterns
 
@@ -417,6 +440,7 @@ Streaming (DD-066),SSE; 8 event types,Real-time; simpler than WebSocket
 Resilience,ResilientExecutor + CircuitBreaker per provider,Prevent cascade; graceful degradation
 Sessions,Redis (30-min hot) + PostgreSQL (durable),Fast resumption + persistent history
 
+*Summary above for quick reference; see inline sections for detailed implementation notes*
 
 ### Frontend Patterns
 
@@ -429,12 +453,13 @@ SSE handling,Custom sse-client.ts (fetch ReadableStream for POST),EventSource is
 Auto-save,MobX reaction → 2s debounce → saveNote(),No save button; dirty state tracked
 Accessibility,WCAG 2.2 AA: keyboard nav; ARIA; focus management; prefers-reduced-motion,Inclusive by default
 
+*Summary above for quick reference; full patterns with React/TypeScript examples: see `frontend/CLAUDE.md`*
 
 ---
 
 ## UI/UX Design System
 
-*Source: `specs/001-pilot-space-mvp/ui-design-spec.md` v4.0*
+*Full specification: `specs/001-pilot-space-mvp/ui-design-spec.md` v4.0*
 
 ### Design Philosophy
 
@@ -446,7 +471,7 @@ Three adjectives: **Warm, Capable, Collaborative**.
 
 ### Color System
 
-#### Base Palette (Warm Neutrals)
+**Base Palette** (Warm Neutrals):
 
 base_palette[6]{token,light,dark,usage}
 --background,#FDFCFA,#1A1A1A,Primary surface
@@ -456,8 +481,7 @@ base_palette[6]{token,light,dark,usage}
 --border,#E5E2DD,#2E2E2E,Borders
 --border-subtle,#EBE8E4,#262626,Subtle borders
 
-
-#### Accent Colors
+**Accent Colors**:
 
 accent_colors[7]{token,value,usage}
 --primary,#29A386 / #34B896,Primary actions (teal-green)
@@ -468,153 +492,37 @@ accent_colors[7]{token,value,usage}
 --ai-border,#6B8FAD30,AI element borders
 --destructive,#D9534F / #E06560,Delete/remove actions
 
+**Issue State Colors**: Backlog `#9C9590`, Todo `#5B8FC9`, In Progress `#D9853F`, In Review `#8B7EC8`, Done `#29A386`, Cancelled `#D9534F`
 
-#### Issue State Colors
-
-Backlog `#9C9590`, Todo `#5B8FC9`, In Progress `#D9853F`, In Review `#8B7EC8`, Done `#29A386`, Cancelled `#D9534F`
-
-#### Priority Colors
-
-Urgent `#D9534F` (4 bars), High `#D9853F` (3 bars), Medium `#C4A035` (2 bars), Low `#5B8FC9` (1 bar), None `#9C9590` (line)
-
-### Typography
-
-**Fonts**: Geist (UI), Geist Mono (code). Fallbacks: system-ui, SF Mono.
-
-typography[7]{name,size_lh_weight,usage}
-text-xs,11px/16px/400,Labels; badges
-text-sm,13px/20px/400,Body; descriptions
-text-base,15px/24px/400,Primary content
-text-lg,17px/26px/500,Card titles
-text-xl,20px/28px/600,Section headers
-text-2xl,24px/32px/600,Page titles
-text-3xl,30px/38px/700,Hero text
-
-
-Rules: `text-balance` on headings, `tabular-nums` for metrics, AI voice uses regular weight italic.
-
-### Spacing, Radius & Effects
-
-**Spacing** (4px grid): space-1 (4), space-2 (8), space-3 (12), space-4 (16), space-6 (24), space-8 (32), space-12 (48), space-16 (64).
-
-**Border Radius** (squircle): `rounded-sm` 6px, `rounded` 10px, `rounded-lg` 14px, `rounded-xl` 18px, `rounded-2xl` 24px, `rounded-full` 9999px.
-
-**Shadows**: Warm-tinted, layered. Levels: SM, Standard, MD, LG, Elevated.
-
-**Noise Overlay**: 2% opacity, multiply blend (removed in dark mode).
-
-**Frosted Glass**: 20px blur, 180% saturation, 72% bg opacity. For modals, popovers, overlays.
+**Priority Colors**: Urgent `#D9534F`, High `#D9853F`, Medium `#C4A035`, Low `#5B8FC9`, None `#9C9590`
 
 ### Component Design Language
 
-**Buttons**: 6 variants (default/secondary/outline/ghost/destructive/ai). 5 sizes (sm 32px, default 38px, lg 44px, icon 38px, icon-sm 32px). Hover: scale 2% + shadow. Active: scale back. Focus: 3px teal ring 30%.
+**Buttons**: 6 variants (default/secondary/outline/ghost/destructive/ai). 5 sizes. Hover: scale 2% + shadow.
 
-**Cards**: 4 variants (default/elevated/interactive/glass). Interactive: translateY -2px + scale 1% + shadow on hover (200ms).
+**Cards**: 4 variants (default/elevated/interactive/glass). Interactive: translateY -2px + scale 1% on hover.
 
 **Inputs**: 38px height, rounded 10px, 14px font, focus primary border + 3px ring.
 
-**Modals**: 40% overlay + 8px blur. Content: frosted glass, rounded-xl, shadow LG.
+*Full component specs, typography, spacing, animations: see `specs/001-pilot-space-mvp/ui-design-spec.md` Sections 5-6*
 
-**Dark Mode**: `class="dark"` toggle, respects `prefers-color-scheme`, 200ms transition. Sidebar `#161616`, noise removed, ghost text 30% opacity, VS Code Dark+ for code.
-
----
-
-## Page & Feature Catalog
-
-*Full wireframes: `specs/001-pilot-space-mvp/ui-design-spec.md` Sections 7-9*
-
-### Application Layout
-
-**AppShell**: Sidebar (260px/60px collapsed) + Header (56px) + Main (max 1200px, unlimited for editor). Sidebar: workspace selector, navigation, project tree, settings/user footer.
-
-### Pages
+### Page Catalog
 
 pages[12]{page,route,capabilities}
-Login,/login,Centered form; email/password + OAuth; Zod validation
-Home,/[workspaceSlug],Redirects to Notes List (DD-013: Note Canvas = home)
-Notes List,.../notes,Grid/List toggle; search; sort; filters; infinite scroll; pinned section
-Note Editor,.../notes/[noteId],**Primary page** -- 65/35 split (canvas + ChatView); full bleed; auto-save 2s
-Issues,.../issues,Board (6-col Kanban)/List/Table; filters; keyboard nav (C/J/K/Enter)
-Issue Detail,.../issues/[issueId],70/30 split; inline edit; AI Context tabs; activity timeline
-Projects,.../projects,3-col grid; progress bars; active cycle info
-Cycle Detail,.../cycles/[cycleId],Burndown + Velocity charts (Recharts); filtered issue board
-AI Chat,.../chat,Full-page ChatView; session list (recent 5); workspace-wide
-Approvals,.../approvals,Tabs (Pending/Approved/Rejected/Expired); countdown timer; content diff
-AI Costs,.../costs,Summary cards; cost-by-agent chart; trends chart; export CSV
-Settings,.../settings/*,General; Members; AI Providers (key management + feature toggles); Integrations (GitHub + Slack)
+Login,/login,Centered form; email/password + OAuth
+Home,/[workspaceSlug],Redirects to Notes List (Note Canvas = home)
+Notes List,.../notes,Grid/List toggle; search; sort; filters
+Note Editor,.../notes/[noteId],65/35 split (canvas + ChatView); auto-save 2s
+Issues,.../issues,Board/List/Table; filters; keyboard nav
+Issue Detail,.../issues/[issueId],70/30 split; inline edit; AI Context tabs
+Projects,.../projects,3-col grid; progress bars
+Cycle Detail,.../cycles/[cycleId],Burndown + Velocity charts
+AI Chat,.../chat,Full-page ChatView; session list
+Approvals,.../approvals,Tabs; countdown timer; content diff
+AI Costs,.../costs,Summary cards; cost trends; export CSV
+Settings,.../settings/*,General; Members; AI Providers; Integrations
 
-
-### Note Canvas (Primary Entry Point)
-
-**Layout**: Outline Tree (220px left) + Document Canvas (65%, max 720px, 32px padding) + Margin Annotations (200px right) + ChatView (35%, min 320px). Resizable 4px drag handle.
-
-**Editor Features** (13 TipTap extensions): Block ID assignment/preservation, ghost text autocomplete (Tab/Right Arrow/Escape), margin annotation marks with CSS Anchor Positioning, auto-trigger after >20% block delta, inline issue badges with state colors, inline issue extraction boxes with rainbow border, syntax-highlighted code blocks, @mentions for notes/issues/agents, /slash commands for block types, custom Enter handling preserving block IDs, floating selection toolbar (formatting + AI actions).
-
-**Rich Note Header**: Title, created/edited dates, word count, reading time (~200 WPM), AI topic tags (max 3).
-
-**Auto-Generated TOC**: Fixed 200px right panel, current section highlighted, smooth scroll, auto-collapses below 1024px.
-
-**Issue Extraction Flow**: AI identifies items → rainbow-bordered boxes (2px gradient: primary→blue→purple→pink). Bidirectional sync: state↔badge, note edits→issue sync (requires approval).
-
-**Empty Note**: Pilot star icon, "What would you like to work on?", suggested templates, blank note option.
-
-### ChatView System
-
-Dual-context: embedded in Note Editor (35% sidebar) and full-page AI Chat.
-
-**Functional areas**: Header (title, session selector, streaming indicator), message list (auto-scroll, grouped by role, streaming with blinking cursor, expandable tool details), task panel (collapsible, active/completed with progress bars), chat input (auto-expanding 1-6 rows, context badges, /skill menu, @agent menu), approval overlay (modal, non-dismissable, 24h expiry countdown).
-
-**UI State Machine**: IDLE → STREAMING → APPROVAL_PENDING → IDLE. Skill/Agent menus from IDLE. Input disabled during streaming and approval.
-
-**SSE Events**: message_start, text_delta, tool_use, tool_result, task_progress, approval_request, content_update, message_stop, error.
-
-### AI Collaborative Features
-
-**Ghost Text**: 40% muted italic, 150ms fade-in, 500ms trigger, Tab accept all, Right Arrow word-by-word, Escape dismiss. Disabled in code blocks.
-
-**Selection Toolbar**: Floating on selection. Standard formatting + AI actions (Improve, Simplify, Expand, Ask, Extract). AI buttons: dusty blue styling.
-
-**Confidence Tags**: Recommended (primary), Default (muted), Current (AI blue), Alternative (dashed border).
-
-**Empty States**: All pages follow consistent pattern -- 80px illustration, text-lg heading, muted description, primary CTA, 48px padding.
-
-**Error States**: Network offline (amber banner + retry), API 5xx (red banner), 401 (redirect), 403 (inline), 404 (full-page), AI key missing/invalid (banner/toast), rate limited (countdown), SSE disconnect (auto-reconnect max 3), auto-save failure (IndexedDB fallback).
-
-### Interaction Patterns
-
-**Drag & Drop**: Elevated shadow on lift, 4px drop indicator, 200ms transitions, Escape cancel.
-
-**Hover/Focus**: Cards translateY -2px, buttons scale 2%, all elements 3px primary ring 30% on focus.
-
-**Loading**: Skeleton shimmer 1.5s, button spinner, AI animated ellipsis, streaming blinking cursor.
-
-**Key Animations**: Button hover 150ms, card hover 200ms, ghost text appear 150ms, loading shimmer 1.5s, rainbow pulse 2s, toast 200ms, sidebar collapse 200ms, modal 200ms, dropdown 150ms.
-
-**Reduced Motion**: All animations instant via `prefers-reduced-motion`, Tailwind `motion-safe:`/`motion-reduce:`.
-
-### Keyboard Shortcuts
-
-Global: `Cmd+P` (palette), `Cmd+K` (search), `Cmd+N` (new note), `?` (guide), `F6` (focus regions). Navigation: `G H`/`G I`/`G C`/`G S`. Lists: `C` (new issue), `J`/`K` (nav), `Enter` (open). Editor: `/` (slash), `@` (mention), `Tab` (ghost text), `Escape` (dismiss).
-
-### Accessibility
-
-WCAG 2.2 AA: 4.5:1 text contrast, 3px focus rings, keyboard-accessible, ARIA labels/roles/live regions, 44px touch targets, 200% zoom functional. Focus traps in modals, F6 region cycling, `aria-live` for AI streaming/tasks/approvals/toasts.
-
-### Responsive Breakpoints
-
-sm (640px), md (768px), lg (1024px), xl (1280px), 2xl (1536px), 3xl (1920px).
-
-**Note Editor**: 3xl full canvas + ChatView, xl-2xl 65/35, lg ChatView overlay 400px, md overlay 70%, sm ChatView full-screen modal with FAB toggle.
-
-**Issue Board**: xl+ 6 cols, lg 4+scroll, md 3+scroll, sm accordion.
-
-**Mobile**: Hamburger sidebar, full-screen modals/palette, 44px targets, swipe gestures, pull-to-refresh.
-
-### Performance Targets
-
-FCP <1.5s, LCP <2.5s, TTI <3s, CLS <0.1, INP <200ms.
-
-Virtual scroll (`@tanstack/react-virtual`) for 500+ blocks. Dynamic imports for >50KB gzipped (Recharts, Mermaid, AI Panel).
+*Full wireframes and interaction patterns: see `specs/001-pilot-space-mvp/ui-design-spec.md` Sections 7-9*
 
 ---
 
@@ -622,77 +530,30 @@ Virtual scroll (`@tanstack/react-virtual`) for 500+ blocks. Dynamic imports for 
 
 entities[10]{entity,purpose,relationships}
 Note,Block-based TipTap document; home view default,Has annotations; issue links; discussions
-NoteAnnotation,AI margin suggestion per block (suggestion/question/issue_detected),Belongs to Note + block_id; confidence 0-1
-NoteIssueLink,Bidirectional note↔issue connection,CREATED/EXTRACTED/REFERENCED types; sync_direction
-Issue,Work item with state machine; AI-enhanced at creation,Belongs to Project; has State/Cycle/Labels/Assignee
-AIContext,Aggregated issue context: docs; code (AST-aware); tasks; prompts,Belongs to Issue
+NoteAnnotation,AI margin suggestion per block,Belongs to Note + block_id; confidence 0-1
+NoteIssueLink,Bidirectional note↔issue connection,CREATED/EXTRACTED/REFERENCED types
+Issue,Work item with state machine,Belongs to Project; has State/Cycle/Labels
+AIContext,Aggregated issue context,Belongs to Issue
 Cycle,Sprint container with velocity metrics,Contains Issues; belongs to Project
 Module,Epic grouping with progress tracking,Contains Issues; optional hierarchy
-ChatSession,Multi-turn conversation; SDK session for resumption,Has messages; 24h TTL
+ChatSession,Multi-turn conversation; SDK session,Has messages; 24h TTL
 ChatMessage,Role + content + tool_calls + token_usage,Belongs to ChatSession
 TokenUsage,Per-request BYOK cost tracking,prompt/completion/cached tokens; cost_usd
 
+**Issue State Machine**: Backlog → Todo → In Progress → In Review → Done. Any → Cancelled. Done → Todo (reopen). No skipping.
 
-**Issue State Machine**: Backlog → Todo → In Progress → In Review → Done. Any → Cancelled. Done → Todo (reopen). No skipping (e.g., Backlog → Done invalid).
+**State-Cycle Constraints**:
 
----
+state_cycle_rules[7]{state,cycle_requirement,transition_notes}
+Backlog,No Cycle assignment,Issues in backlog are not scheduled
+Todo,Cycle optional,Can be assigned to backlog / current / future cycle
+In Progress,Cycle required,Must be assigned to active cycle
+In Review,Cycle required,Must remain in active cycle
+Done,Leaves active cycle,Archived with cycle completion metrics
+Cancelled,Leaves cycle immediately,No archival; excluded from metrics
+Reopened (Done→Todo),Returns to original cycle or Todo,Cycle reassignment allowed
 
-## Current Implementation Status
-
-**Overall MVP**: 75-80% | **Remaining**: ~43 tasks
-
-### Backend (69,435 lines Python)
-
-backend_status[7]{layer,completion}
-API (20 routers),95%
-Application Services (8 domains),90%
-Domain (entities; value objects),95%
-Infrastructure (22 models; 15 repos; 21 migrations),95%
-AI Agent (PilotSpaceAgent; SDK; sessions),85%
-AI Tools (6 note tools; search; DB; GitHub),70%
-AI Infrastructure (cost; keys; rate limit; resilience),90%
-
-
-### Frontend (60,010 lines TypeScript)
-
-frontend_status[9]{feature,completion}
-ChatView (25 components),95%
-MobX Stores (12 stores),80%
-UI Components (25 shadcn/ui),95%
-API Services (9 clients),90%
-Note Editor (TipTap; 13 extensions),65%
-Ghost Text,30%
-Margin Annotations,25%
-Issue Extraction UI,30%
-Cycle/Sprint Charts,60%
-
-
-### Critical Remaining Work
-
-1. Ghost Text Extension -- TipTap extension + SSE streaming (P4-005:009)
-2. Margin Annotations UI -- card + positioning + real-time sync (P4-010:013)
-3. Issue Extraction Approval -- preview modal + diff + bulk ops (P4-014:017)
-4. Note MCP Tools E2E -- all 6 tools tested (P3-005:010)
-5. PilotSpaceStore Wiring -- MobX → API → SSE mapping (P4-001:002)
-6. SSE Transform Pipeline -- SDK message → Frontend event (P3-014:015)
-7. E2E Tests -- 6 critical paths + perf + security (P5-001:024)
-
----
-
-## Implementation Roadmap
-
-See `docs/architect/pilotspace-implementation-plan.md` for full 173-task plan.
-
-roadmap[6]{phase,name,tasks,status}
-1,Foundation & SDK Integration,25,85% Done
-2,Skill Migration,11,70% Done
-3,Backend Consolidation,15,80% Done
-4,Frontend Architecture,34,60% Done
-5,Integration & Testing,26,15% Started
-6,Polish & Refinement,41,Not Started
-
-
-**Critical Path**: P3 MCP Tools E2E → P4 PilotSpaceStore → P4 Ghost Text → P4 Annotations → P4 Issue Extraction → P5 E2E Tests → MVP
+*Full data model (21 entities): see `specs/001-pilot-space-mvp/data-model.md`*
 
 ---
 
@@ -708,19 +569,16 @@ Data model (21 entities),specs/001-pilot-space-mvp/data-model.md
 UI/UX spec (v4.0),specs/001-pilot-space-mvp/ui-design-spec.md
 Business design (v2.0),specs/001-pilot-space-mvp/business-design.md
 
-
-### Architecture (docs/architect/)
+### Architecture
 
 arch_docs[8]{topic,document}
 Architecture overview,docs/architect/README.md
 Agent architecture,docs/architect/pilotspace-agent-architecture.md
-Implementation plan (detailed),docs/architect/pilotspace-implementation-plan.md
 Claude SDK integration,docs/architect/claude-agent-sdk-architecture.md
 Feature-to-component mapping,docs/architect/feature-story-mapping.md
 Backend architecture,docs/architect/backend-architecture.md
 Frontend architecture,docs/architect/frontend-architecture.md
 RLS security patterns,docs/architect/rls-patterns.md
-
 
 ### Standards & Patterns
 
@@ -730,7 +588,6 @@ Dev patterns (start here),docs/dev-pattern/README.md
 Pilot Space patterns,docs/dev-pattern/45-pilot-space-patterns.md
 MobX patterns,docs/dev-pattern/21c-frontend-mobx-state.md
 Feature specs (17 features),docs/PILOT_SPACE_FEATURES.md
-
 
 ---
 
@@ -743,7 +600,10 @@ Load order for new features:
 3. Domain-specific pattern → (e.g., 07-repository, 20-component)
 4. Cross-cutting patterns → (e.g., 26-di, 06-validation)
 
-**Pilot Space Overrides** (from pattern 45): Zustand→MobX (complex observable state, auto-save reactions). Custom JWT→Supabase Auth+RLS (database-level auth). Kafka→Supabase Queues/pgmq (native PostgreSQL, exactly-once).
+**Pilot Space Overrides** (from pattern 45):
+- Zustand → MobX (complex observable state, auto-save reactions)
+- Custom JWT → Supabase Auth+RLS (database-level auth)
+- Kafka → Supabase Queues/pgmq (native PostgreSQL, exactly-once)
 
 ---
 
@@ -754,41 +614,133 @@ Load order for new features:
 - Read this file first before implementation work
 - Load dev patterns in the order above
 - Check `feature-story-mapping.md` for affected components
-- Follow quality gates (see [Quality Gates](#quality-gates) and [Development Commands](#development-commands))
-- 700 lines max per file. Conventional commits.
+- Follow quality gates (see [Quality Standards](#quality-standards))
+- 700 lines max per code file (py, tsx, etc.). Conventional commits.
 
 ### For Backend Agents
 
+**See `backend/CLAUDE.md` for complete backend development guide.**
+
+Key principles:
 - CQRS-lite: `Service.execute(Payload) → Result`, not direct DB manipulation
-- dependency-injector for DI (Singleton config/engine, Factory repos/sessions)
-- RFC 7807 Problem Details for all errors
-- Async SQLAlchemy (`AsyncSession`) only. No blocking I/O.
+- Repository pattern for all data access
 - Verify RLS policies for all multi-tenant queries (scoped by `workspace_id`)
+- Async SQLAlchemy only. No blocking I/O.
 - AI features respect DD-003 (human-in-the-loop via PermissionHandler)
-- New AI goes through PilotSpaceAgent as skills or subagents
 
 ### For Frontend Agents
 
-- MobX for client state (`makeAutoObservable`, `observer()`). Never store API data in MobX.
-- TanStack Query for server state (`useQuery` reads, `useMutation` with optimistic updates)
+**See `frontend/CLAUDE.md` for complete frontend development guide.**
+
+Key principles:
+- MobX for UI state (`makeAutoObservable`, `observer()`). Never store API data in MobX.
+- TanStack Query for server state (`useQuery`, `useMutation` with optimistic updates)
 - shadcn/ui base components, extend with feature variants
 - WCAG 2.2 AA: keyboard nav, ARIA labels, focus management
 - AI interactions through PilotSpaceStore (unified), not siloed stores
-- SSE event mapping per `pilotspace-agent-architecture.md` section 8
 
 ### For AI/Agent Layer Agents
 
-- PilotSpaceAgent is the single orchestrator -- no new independent agents
-- Simple → skills (`.claude/skills/`). Complex → subagents.
+PilotSpaceAgent is the single orchestrator for user-facing conversations. **Exception**: Fast-path independent agents (GhostTextAgent) allowed for latency-critical operations (<2.5s SLA) that require direct provider calls without orchestrator overhead.
+
+**Simple tasks** → skills (`.claude/skills/`)
+**Complex tasks** → subagents (spawned by orchestrator)
+
+Key requirements:
 - All tools return operation payloads (`status: pending_apply`), not direct mutations
 - ContentConverter for TipTap ↔ Markdown with block ID preservation
 - SSE: SDK message → `transform_sdk_message()` → Frontend event
 - Prompt caching enabled (`cache_control: ephemeral`)
 - ResilientExecutor for retries, CircuitBreaker for provider failures
 
+**One-shot query() integration with CQRS-lite**:
+```python
+# Router layer
+@router.post("/enhance")
+async def enhance_text(payload: EnhanceTextPayload, service: IssueService):
+    result = await service.execute(payload)  # CQRS-lite pattern
+    return result
+
+# Service layer
+class IssueService:
+    async def execute(self, payload: EnhanceTextPayload) -> Result:
+        # One-shot query to Claude Sonnet
+        enhanced = await sdk.query(
+            prompt=f"Enhance this text: {payload.text}",
+            provider="claude-sonnet"
+        )
+        # Return domain entity or value object
+        return Result(enhanced_text=enhanced.content)
+```
+
+**Conversational multi-turn with orchestrator**:
+```python
+# SSE streaming endpoint
+@router.post("/chat")
+async def chat_stream(message: str, session_id: str):
+    async def event_generator():
+        async for event in pilot_space_agent.invoke(message, session_id):
+            yield event  # SSE events: text_delta, tool_use, content_update
+    return StreamingResponse(event_generator())
+```
+
 ### For Testing Agents
 
-- Backend: pytest `--cov=.`, async with pytest-asyncio, fixture-based DB sessions
-- Frontend: Vitest unit, Playwright E2E
+- **Backend**: pytest `--cov=.`, async with pytest-asyncio, fixture-based DB sessions
+- **Frontend**: Vitest unit, Playwright E2E
 - Coverage > 80%
 - E2E critical paths: skill invocation, subagent invocation, approval flow, session resumption, error recovery
+
+---
+
+## Core Principles
+
+**Keep solutions simple and focused.** Only make changes directly requested or clearly necessary. Don't add features, refactor code, or make "improvements" beyond what was asked.
+
+**Prefer editing existing files to creating new ones.** Only create new files when adding distinct functionality (new entity, new router, new feature module).
+
+**Read and understand relevant files before proposing changes.** Don't speculate about code you haven't inspected. Review existing style, conventions, and abstractions before implementing.
+
+**Write tests for all new features and bug fixes.** 80% coverage catches 85% of regressions before deployment.
+
+**Respect security boundaries.** RLS violations expose sensitive data across workspaces. Verify RLS policies for all multi-tenant queries.
+
+**Follow the patterns.** Load `docs/dev-pattern/45-pilot-space-patterns.md` first for project-specific patterns, then domain-specific patterns as needed.
+
+---
+
+## Terminology & Definitions
+
+**Critical terms used throughout this document**:
+
+### Agent Types
+
+- **PilotSpaceAgent (Orchestrator)**: Centralized conversational agent handling all user-facing AI interactions. Routes to skills/subagents, manages sessions, handles approvals.
+- **Subagent**: Multi-turn, stateful agent spawned by orchestrator for complex tasks (PR review, AI context). Results flow through orchestrator's SSE stream.
+- **Skill**: Single-turn, stateless operation defined in `.claude/skills/` YAML file. Invoked via slash commands or intent detection.
+- **Independent Agent**: Fast-path agent (GhostTextAgent) bypassing orchestrator for latency-critical operations. Exception to centralized model.
+
+### Architecture Patterns
+
+- **CQRS-lite**: Command/Query separation without Event Sourcing. Pattern: `Service.execute(Payload) → Result`. Commands mutate state, queries read state.
+- **Payload**: Pydantic v2 schema containing validated user input for a command/query. Created at API boundary, passed to service layer.
+- **Entity**: Rich domain object with behavior and validation (e.g., `Issue`, `Note`, `Cycle`). Lives in domain layer.
+- **DTO (Data Transfer Object)**: Pydantic schema for API responses. Created from entities at presentation layer.
+- **Repository**: Data access abstraction. Pattern: `BaseRepository[T]`. Handles RLS enforcement, async SQLAlchemy queries.
+
+### Session Types
+
+- **User Session**: Authentication session. Redis hot cache (30-min sliding expiration) + PostgreSQL durable storage (24h TTL). Used for workspace access control.
+- **Chat Session**: Conversational AI session. PostgreSQL storage (24h TTL), optional Redis cache. Contains message history for multi-turn conversations.
+
+### AI Components
+
+- **MCP Tool**: Python function registered via `create_note_tools_server()`. Exposed to Claude SDK. Returns operation payloads (`status: pending_apply`).
+- **Skill**: YAML-defined behavior. May invoke one or more MCP tools. Example: `extract-issues` skill invokes `extract_issues` MCP tool.
+- **Operation Payload**: Structured response from MCP tool indicating pending changes. Backend applies transformations before DB commit.
+
+### Approval Categories (DD-003)
+
+- **Non-destructive**: Auto-execute, notify user (labels, annotations, auto-transitions). No approval required.
+- **Content creation**: Require approval, configurable (create issues, PR comments). User can enable/disable per operation type.
+- **Destructive**: Always require approval (delete issues, merge PRs, archive workspaces). Cannot be disabled.

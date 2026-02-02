@@ -49,6 +49,15 @@ repos:
         files: ^frontend/.*\.(ts|tsx|js|jsx|json|md|yaml|yml|css|scss)$
         pass_filenames: true
 
+      # File size check for frontend code (max 700 lines)
+      - id: check-frontend-file-size
+        name: Check frontend code file size (max 700 lines)
+        entry: bash -c 'for f in "$@"; do if [[ "$f" =~ \.(ts|tsx|js|jsx)$ ]] && [[ ! "$f" =~ \.md$ ]]; then lines=$(wc -l < "$f"); if [ "$lines" -gt 700 ]; then echo "Error - $f has $lines lines (max 700 for code files)"; exit 1; fi; fi; done' --
+        language: system
+        files: ^frontend/.*\.(ts|tsx|js|jsx)$
+        exclude: (\.md$|CLAUDE\.md$|\.test\.(ts|tsx|js|jsx)$|\.spec\.(ts|tsx|js|jsx)$)
+        pass_filenames: true
+
   # ============================================
   # Backend (Python) - Ready for when backend is added
   # ============================================
