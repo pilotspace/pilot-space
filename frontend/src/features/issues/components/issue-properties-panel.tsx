@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useCallback } from 'react';
+import { observer } from 'mobx-react-lite';
 import { format } from 'date-fns';
 import { CalendarIcon } from 'lucide-react';
 
@@ -19,6 +20,7 @@ import type {
   NoteIssueLink,
   StateGroup,
 } from '@/types';
+import { useIssueStore } from '@/stores';
 import { useSaveStatus, type WorkspaceMember } from '@/features/issues/hooks';
 import {
   IssueStateSelect,
@@ -106,20 +108,14 @@ function formatDate(iso: string): string {
 
 interface PropertyRowProps {
   label: string;
-  fieldName: string;
   children: React.ReactNode;
 }
 
-function PropertyRow({ label, fieldName, children }: PropertyRowProps) {
-  const { status } = useSaveStatus(fieldName);
-
+function PropertyRow({ label, children }: PropertyRowProps) {
   return (
     <div className="flex items-center gap-2">
       <span className="w-24 shrink-0 text-sm text-muted-foreground">{label}</span>
-      <div className="flex min-w-0 flex-1 items-center gap-2">
-        {children}
-        <SaveStatus status={status} className="shrink-0" />
-      </div>
+      <div className="flex min-w-0 flex-1 items-center gap-2">{children}</div>
     </div>
   );
 }
@@ -143,7 +139,7 @@ function DatePickerField({
   onUpdate,
   disabled,
 }: DatePickerFieldProps) {
-  const { status, wrapMutation } = useSaveStatus(fieldName);
+  const { wrapMutation } = useSaveStatus(fieldName);
   const selected = value ? new Date(value) : undefined;
 
   const handleSelect = useCallback(
@@ -181,7 +177,6 @@ function DatePickerField({
             <Calendar mode="single" selected={selected} onSelect={handleSelect} />
           </PopoverContent>
         </Popover>
-        <SaveStatus status={status} className="shrink-0" />
       </div>
     </div>
   );
@@ -191,7 +186,7 @@ function DatePickerField({
 // Main component
 // ---------------------------------------------------------------------------
 
-export function IssuePropertiesPanel({
+export const IssuePropertiesPanel = observer(function IssuePropertiesPanel({
   issue,
   workspaceId: _workspaceId,
   workspaceSlug,
@@ -204,6 +199,8 @@ export function IssuePropertiesPanel({
   onUpdate,
   disabled = false,
 }: IssuePropertiesPanelProps) {
+  const issueStore = useIssueStore();
+
   // Derive IssueState from StateBrief.group
   const currentIssueState = STATE_GROUP_MAP[issue.state.group] ?? 'backlog';
 
@@ -322,11 +319,14 @@ export function IssuePropertiesPanel({
     >
       {/* ---- Properties ---- */}
       <section className="space-y-3 p-4">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Properties
-        </h3>
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Properties
+          </h3>
+          <SaveStatus status={issueStore.aggregateSaveStatus} />
+        </div>
 
-        <PropertyRow label="State" fieldName="state">
+        <PropertyRow label="State">
           <IssueStateSelect
             value={currentIssueState}
             onChange={handleStateChange}
@@ -335,7 +335,7 @@ export function IssuePropertiesPanel({
           />
         </PropertyRow>
 
-        <PropertyRow label="Priority" fieldName="priority">
+        <PropertyRow label="Priority">
           <IssuePrioritySelect
             value={issue.priority}
             onChange={handlePriorityChange}
@@ -344,7 +344,7 @@ export function IssuePropertiesPanel({
           />
         </PropertyRow>
 
-        <PropertyRow label="Type" fieldName="type">
+        <PropertyRow label="Type">
           <IssueTypeSelect
             value={issue.type ?? 'task'}
             onChange={handleTypeChange}
@@ -353,7 +353,7 @@ export function IssuePropertiesPanel({
           />
         </PropertyRow>
 
-        <PropertyRow label="Assignee" fieldName="assignee">
+        <PropertyRow label="Assignee">
           <AssigneeSelector
             value={assigneeUser}
             members={memberUsers}
@@ -363,7 +363,7 @@ export function IssuePropertiesPanel({
           />
         </PropertyRow>
 
-        <PropertyRow label="Labels" fieldName="labels">
+        <PropertyRow label="Labels">
           <LabelSelector
             selectedLabels={selectedLabels}
             availableLabels={labels}
@@ -373,7 +373,7 @@ export function IssuePropertiesPanel({
           />
         </PropertyRow>
 
-        <PropertyRow label="Cycle" fieldName="cycle">
+        <PropertyRow label="Cycle">
           <CycleSelector
             value={issue.cycleId ?? null}
             onChange={handleCycleChange}
@@ -383,7 +383,7 @@ export function IssuePropertiesPanel({
           />
         </PropertyRow>
 
-        <PropertyRow label="Estimate" fieldName="estimate">
+        <PropertyRow label="Estimate">
           <EstimateSelector
             value={issue.estimatePoints}
             onChange={handleEstimateChange}
@@ -467,4 +467,4 @@ export function IssuePropertiesPanel({
       </section>
     </aside>
   );
-}
+});
