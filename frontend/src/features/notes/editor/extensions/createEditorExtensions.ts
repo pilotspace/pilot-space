@@ -41,6 +41,8 @@ import {
   type InlineIssueAttributes,
 } from './InlineIssueExtension';
 import { ParagraphSplitExtension, type ParagraphSplitOptions } from './ParagraphSplitExtension';
+import { AIBlockProcessingExtension } from './AIBlockProcessingExtension';
+import { LineGutterExtension } from './LineGutterExtension';
 
 export interface EditorExtensionsOptions {
   /** Placeholder text for empty editor */
@@ -349,6 +351,20 @@ export function createEditorExtensions(options: EditorExtensionsOptions = {}): A
       })
     );
   }
+
+  // AI block processing indicator (decoration-based, reads from editor.storage)
+  extensions.push(
+    AIBlockProcessingExtension.configure({
+      attributeName: 'blockId',
+    })
+  );
+
+  // Line gutter: line numbers (CSS counter) + heading fold/unfold widgets
+  extensions.push(
+    LineGutterExtension.configure({
+      foldableTypes: ['heading'],
+    })
+  );
 
   return extensions;
 }

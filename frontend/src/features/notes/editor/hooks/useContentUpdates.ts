@@ -14,7 +14,7 @@
  * @module features/notes/editor/hooks/useContentUpdates
  */
 
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { reaction } from 'mobx';
 import { toast } from 'sonner';
 import type { Editor } from '@tiptap/core';
@@ -61,12 +61,15 @@ export function useContentUpdates(
   store: PilotSpaceStore,
   noteId: string,
   workspaceId?: string
-): void {
+): { processingBlockIds: string[] } {
   // Track user's active editing position for conflict detection
   const userEditingBlockRef = useRef<string | null>(null);
 
   // Retry queue for failed updates (exponential backoff)
   const retryQueueRef = useRef<RetryQueueEntry[]>([]);
+
+  // Track block IDs being processed by AI for visual indicator
+  const [processingBlockIds, setProcessingBlockIds] = useState<string[]>([]);
 
   // Track user selection changes to detect editing block
   useEffect(() => {
@@ -224,7 +227,18 @@ export function useContentUpdates(
         const processUpdates = async () => {
           let update = store.consumeContentUpdate(noteId);
           while (update) {
+            // Add block to processing indicator
+            const blockId = update.blockId || update.issueData?.sourceBlockId || null;
+            if (blockId) {
+              setProcessingBlockIds((prev) => (prev.includes(blockId) ? prev : [...prev, blockId]));
+            }
+
             const success = await applyContentUpdate(update, userEditingBlockRef.current);
+
+            // Remove block from processing indicator
+            if (blockId) {
+              setProcessingBlockIds((prev) => prev.filter((id) => id !== blockId));
+            }
 
             // Add to retry queue if conflict occurred
             if (!success && update.blockId) {
@@ -242,6 +256,8 @@ export function useContentUpdates(
 
     return () => dispose();
   }, [editor, store, noteId, applyContentUpdate, addToRetryQueue]);
+
+  return { processingBlockIds };
 }
 
 /**

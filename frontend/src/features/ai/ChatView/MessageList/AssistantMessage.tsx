@@ -4,8 +4,7 @@
  */
 
 import { memo } from 'react';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Sparkles } from 'lucide-react';
+import { Bot } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ChatMessage } from '@/stores/ai/types/conversation';
 import { ToolCallList } from './ToolCallList';
@@ -21,15 +20,13 @@ export const AssistantMessage = memo<AssistantMessageProps>(({ message, classNam
       className={cn('flex items-start gap-3 px-4 py-3 bg-muted/30', className)}
       data-testid="message-assistant"
     >
-      <Avatar className="h-8 w-8 shrink-0 bg-gradient-to-br from-purple-500 to-pink-500">
-        <AvatarFallback className="bg-transparent">
-          <Sparkles className="h-4 w-4 text-white" />
-        </AvatarFallback>
-      </Avatar>
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-ai-muted">
+        <Bot className="h-4 w-4 text-ai" />
+      </div>
 
       <div className="flex-1 space-y-3 overflow-hidden">
         <div className="flex items-baseline gap-2">
-          <span className="text-sm font-semibold">PilotSpace AI</span>
+          <span className="text-sm font-semibold">PilotSpace Agent</span>
           <time className="text-xs text-muted-foreground">
             {message.timestamp.toLocaleTimeString([], {
               hour: '2-digit',

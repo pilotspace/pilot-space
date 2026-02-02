@@ -18,7 +18,7 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import type { Content, Editor } from '@tiptap/core';
 import { observer } from 'mobx-react-lite';
 import { reaction } from 'mobx';
-import { AlertTriangle, X, MessageSquare } from 'lucide-react';
+import { AlertTriangle, X } from 'lucide-react';
 import { toast } from 'sonner';
 import type { GhostTextContext } from '@/features/notes/editor/extensions/GhostTextExtension';
 import { motion, AnimatePresence } from 'motion/react';
@@ -29,7 +29,6 @@ import { ChatView } from '@/features/ai/ChatView/ChatView';
 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { createEditorExtensions } from '@/features/notes/editor/extensions';
 import { useResponsive } from '@/hooks/useMediaQuery';
@@ -38,6 +37,7 @@ import type { JSONContent } from '@/types';
 import { SelectionToolbar } from './SelectionToolbar';
 import { InlineNoteHeader } from './InlineNoteHeader';
 import { NoteTitleBlock } from './NoteTitleBlock';
+import { CollapsedChatStrip } from './CollapsedChatStrip';
 import type { User } from '@/types';
 
 export interface NoteCanvasProps {
@@ -71,6 +71,8 @@ export interface NoteCanvasProps {
   isPinned?: boolean;
   /** Whether note has AI-assisted edits */
   isAIAssisted?: boolean;
+  /** Topic tags for the note */
+  topics?: string[];
   /** Workspace slug for breadcrumb */
   workspaceSlug?: string;
   /** Callback when title changes */
@@ -150,6 +152,7 @@ export const NoteCanvas = observer(function NoteCanvas({
   wordCount = 0,
   isPinned = false,
   isAIAssisted = false,
+  topics,
   workspaceSlug = '',
   onTitleChange,
   onShare,
@@ -159,7 +162,7 @@ export const NoteCanvas = observer(function NoteCanvas({
   onVersionHistory,
 }: NoteCanvasProps) {
   const [editorError, setEditorError] = useState<string | null>(null);
-  const [isChatViewOpen, setIsChatViewOpen] = useState(false);
+  const [isChatViewOpen, setIsChatViewOpen] = useState(true);
 
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -367,7 +370,7 @@ export const NoteCanvas = observer(function NoteCanvas({
       attributes: {
         class: cn(
           'prose prose-slate dark:prose-invert max-w-none',
-          'prose-p:leading-[1.75] prose-li:leading-[1.75]', // UI Spec v3.3: line-height 1.75
+          'prose-p:leading-[1.5] prose-li:leading-[1.5]', // Compact line-height
           'focus:outline-none',
           'min-h-[calc(100vh-200px)]'
         ),
@@ -414,7 +417,23 @@ export const NoteCanvas = observer(function NoteCanvas({
   useSelectionContext(editor, aiStore.pilotSpace, noteId, title);
 
   // Apply AI content updates from PilotSpace
-  useContentUpdates(editor, aiStore.pilotSpace, noteId, resolvedWorkspaceId ?? undefined);
+  const { processingBlockIds } = useContentUpdates(
+    editor,
+    aiStore.pilotSpace,
+    noteId,
+    resolvedWorkspaceId ?? undefined
+  );
+
+  // Update AIBlockProcessingExtension with current processing block IDs
+  useEffect(() => {
+    if (editor && !editor.isDestroyed) {
+      (editor.storage as unknown as Record<string, unknown>).aiBlockProcessing = {
+        processingBlockIds,
+      };
+      // Force decoration update by dispatching an empty transaction
+      editor.view.dispatch(editor.state.tr);
+    }
+  }, [editor, processingBlockIds]);
 
   // Open ChatView and set note context
   const handleChatViewOpen = useCallback(() => {
@@ -485,6 +504,7 @@ export const NoteCanvas = observer(function NoteCanvas({
             wordCount={wordCount}
             isPinned={isPinned}
             isAIAssisted={isAIAssisted}
+            topics={topics}
             workspaceSlug={workspaceSlug}
             onShare={onShare}
             onExport={onExport}
@@ -534,29 +554,6 @@ export const NoteCanvas = observer(function NoteCanvas({
             </div>
           </div>
         </div>
-
-        {/* Chat trigger bar - opens ChatView sidebar */}
-        {!isChatViewOpen && (
-          <button
-            onClick={handleChatViewOpen}
-            className={cn(
-              'sticky bottom-0 w-full border-t border-border',
-              'bg-background/80 backdrop-blur-sm',
-              'px-4 py-2.5 text-left text-sm text-muted-foreground',
-              'hover:text-foreground hover:bg-muted/50 transition-colors'
-            )}
-            data-testid="chat-trigger"
-            aria-label="Open AI Chat"
-          >
-            <div className="max-w-[800px] mx-auto flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-primary shrink-0" />
-              <span>Ask Pilot...</span>
-              <kbd className="ml-auto hidden sm:inline-flex items-center gap-0.5 rounded border bg-muted px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground">
-                ⌘⇧P
-              </kbd>
-            </div>
-          </button>
-        )}
       </div>
 
       {/* Right Panel: ChatView Sidebar */}
@@ -600,7 +597,11 @@ export const NoteCanvas = observer(function NoteCanvas({
                     </Button>
                   </div>
                   <div className="h-full overflow-hidden">
-                    <ChatView store={aiStore.pilotSpace} autoFocus />
+                    <ChatView
+                      store={aiStore.pilotSpace}
+                      autoFocus
+                      onClose={() => setIsChatViewOpen(false)}
+                    />
                   </div>
                 </motion.aside>
               </>
@@ -613,13 +614,11 @@ export const NoteCanvas = observer(function NoteCanvas({
                 className="hidden lg:flex flex-shrink-0 overflow-hidden border-l border-border"
               >
                 <div className={cn('h-full', isLargeDesktop ? 'w-[480px]' : 'w-[400px]')}>
-                  <div className="flex items-center justify-between p-2 border-b border-border">
-                    <span className="text-sm font-medium">PilotSpace AI</span>
-                    <Button variant="ghost" size="icon-sm" onClick={() => setIsChatViewOpen(false)}>
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <ChatView store={aiStore.pilotSpace} autoFocus className="h-[calc(100%-48px)]" />
+                  <ChatView
+                    store={aiStore.pilotSpace}
+                    autoFocus
+                    onClose={() => setIsChatViewOpen(false)}
+                  />
                 </div>
               </motion.aside>
             )}
@@ -627,50 +626,8 @@ export const NoteCanvas = observer(function NoteCanvas({
         ) : null}
       </AnimatePresence>
 
-      {/* Collapsed ChatView indicator */}
-      {!isChatViewOpen && (
-        <>
-          {/* Desktop: Vertical edge toggle */}
-          <div className="hidden lg:flex flex-shrink-0 border-l border-border bg-ai-muted/20">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleChatViewOpen}
-                  className="h-full w-10 rounded-none text-ai hover:text-ai hover:bg-ai-muted/50"
-                >
-                  <span className="writing-mode-vertical text-xs font-medium">AI Chat</span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="left">Open PilotSpace AI (Cmd+Shift+P)</TooltipContent>
-            </Tooltip>
-          </div>
-
-          {/* Mobile/Tablet: Floating action button */}
-          <div className="lg:hidden fixed bottom-4 right-4 z-30">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="default"
-                  size="icon"
-                  data-testid="chat-fab-button"
-                  onClick={handleChatViewOpen}
-                  className={cn(
-                    'h-12 w-12 rounded-full shadow-lg',
-                    'bg-primary hover:bg-primary/90',
-                    'text-primary-foreground'
-                  )}
-                >
-                  <MessageSquare className="h-5 w-5" />
-                  <span className="sr-only">Open ChatView</span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="left">Open PilotSpace AI (Cmd+Shift+P)</TooltipContent>
-            </Tooltip>
-          </div>
-        </>
-      )}
+      {/* Collapsed ChatView strip */}
+      {!isChatViewOpen && <CollapsedChatStrip onClick={handleChatViewOpen} />}
     </div>
   );
 });

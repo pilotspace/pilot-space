@@ -22,7 +22,24 @@ import { MessageList } from './MessageList/MessageList';
 import { TaskPanel } from './TaskPanel/TaskPanel';
 import { ApprovalOverlay } from './ApprovalOverlay/ApprovalOverlay';
 import { ChatInput } from './ChatInput/ChatInput';
+import { SuggestionCard } from './MessageList/SuggestionCard';
 import { ChatViewErrorBoundary } from './ChatViewErrorBoundary';
+
+/**
+ * Destructive actions that require modal overlay approval (DD-003).
+ * Non-destructive actions render as inline SuggestionCard instead.
+ */
+const DESTRUCTIVE_ACTIONS = new Set([
+  'delete_issue',
+  'merge_pr',
+  'archive_workspace',
+  'delete_note',
+  'delete_comment',
+]);
+
+export function isDestructiveAction(actionType: string): boolean {
+  return DESTRUCTIVE_ACTIONS.has(actionType);
+}
 
 interface ChatViewProps {
   store: PilotSpaceStore;
@@ -30,11 +47,13 @@ interface ChatViewProps {
   userAvatar?: string;
   /** Auto-focus the chat input when the view becomes visible */
   autoFocus?: boolean;
+  /** Callback to close the chat panel */
+  onClose?: () => void;
   className?: string;
 }
 
 const ChatViewInternal = observer<ChatViewProps>(
-  ({ store, userName, userAvatar, autoFocus, className }) => {
+  ({ store, userName, userAvatar, autoFocus, onClose, className }) => {
     const [inputValue, setInputValue] = useState('');
     const [taskPanelOpen, setTaskPanelOpen] = useState(true);
 
@@ -91,6 +110,22 @@ const ChatViewInternal = observer<ChatViewProps>(
         reasoning: req.consequences,
       }));
     }, [store.pendingApprovals]);
+
+    // Split approvals: non-destructive inline cards vs destructive modal overlay
+    const { inlineApprovals, modalApprovals } = useMemo(() => {
+      const inline: typeof chatViewApprovals = [];
+      const modal: typeof chatViewApprovals = [];
+
+      for (const req of chatViewApprovals) {
+        if (isDestructiveAction(req.actionType)) {
+          modal.push(req);
+        } else {
+          inline.push(req);
+        }
+      }
+
+      return { inlineApprovals: inline, modalApprovals: modal };
+    }, [chatViewApprovals]);
 
     // Auto-open task panel when tasks exist
     useEffect(() => {
@@ -174,12 +209,13 @@ const ChatViewInternal = observer<ChatViewProps>(
       <div className={cn('flex flex-col h-full bg-background', className)} data-testid="chat-view">
         {/* Header with session selector (T075-T079) */}
         <ChatHeader
-          title="PilotSpace AI"
+          title="PilotSpace Agent"
           isStreaming={store.isStreaming}
           activeTaskCount={store.activeTasks.length}
           sessionId={store.sessionId}
           recentSessions={recentSessions}
           onClear={handleClearConversation}
+          onClose={onClose}
           onNewSession={handleNewSession}
           onSelectSession={handleSelectSession}
         />
@@ -222,6 +258,16 @@ const ChatViewInternal = observer<ChatViewProps>(
           )}
         </div>
 
+        {/* Inline suggestion cards for non-destructive approvals */}
+        {inlineApprovals.map((approval) => (
+          <SuggestionCard
+            key={approval.id}
+            approval={approval}
+            onApprove={handleApproveAction}
+            onReject={handleRejectAction}
+          />
+        ))}
+
         {/* Input */}
         <ChatInput
           value={inputValue}
@@ -257,9 +303,9 @@ const ChatViewInternal = observer<ChatViewProps>(
           onAbort={handleAbort}
         />
 
-        {/* Approval overlay */}
+        {/* Modal overlay only for destructive actions (DD-003) */}
         <ApprovalOverlay
-          approvals={chatViewApprovals}
+          approvals={modalApprovals}
           onApprove={handleApproveAction}
           onReject={handleRejectAction}
         />

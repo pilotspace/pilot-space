@@ -14,7 +14,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Sparkles, Loader2, X, MessageSquare, ChevronDown, Plus } from 'lucide-react';
+import { Bot, Loader2, X, MessageSquare, ChevronDown, Plus, Timer } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface ChatHeaderProps {
@@ -28,6 +28,7 @@ interface ChatHeaderProps {
     updatedAt: Date;
   }>;
   onClear?: () => void;
+  onClose?: () => void;
   onNewSession?: () => void;
   onSelectSession?: (sessionId: string) => void;
   className?: string;
@@ -41,6 +42,7 @@ export const ChatHeader = observer<ChatHeaderProps>(
     sessionId,
     recentSessions = [],
     onClear,
+    onClose,
     onNewSession,
     onSelectSession,
     className,
@@ -49,12 +51,12 @@ export const ChatHeader = observer<ChatHeaderProps>(
       <div className={cn('border-b bg-background', className)} data-testid="chat-header">
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center h-9 w-9 rounded-full bg-gradient-to-br from-purple-500 to-pink-500">
-              <Sparkles className="h-5 w-5 text-white" />
+            <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-ai-muted">
+              <Bot className="h-4 w-4 text-ai" />
             </div>
 
             <div className="space-y-0.5">
-              <h2 className="text-sm font-semibold leading-none">{title || 'PilotSpace AI'}</h2>
+              <h2 className="text-sm font-semibold leading-none">{title || 'PilotSpace Agent'}</h2>
 
               <div className="flex items-center gap-2">
                 {isStreaming && (
@@ -143,6 +145,16 @@ export const ChatHeader = observer<ChatHeaderProps>(
               </Badge>
             )}
 
+            <Button
+              variant="ghost"
+              size="icon"
+              data-testid="timer-button"
+              aria-label="Session history"
+            >
+              <Timer className="h-4 w-4" />
+              <span className="sr-only">Session history</span>
+            </Button>
+
             {onClear && (
               <Button
                 variant="ghost"
@@ -153,6 +165,13 @@ export const ChatHeader = observer<ChatHeaderProps>(
               >
                 <X className="h-4 w-4" />
                 <span className="sr-only">Clear conversation</span>
+              </Button>
+            )}
+
+            {onClose && (
+              <Button variant="ghost" size="icon" onClick={onClose} data-testid="close-chat-button">
+                <X className="h-4 w-4" />
+                <span className="sr-only">Close PilotSpace Agent</span>
               </Button>
             )}
           </div>

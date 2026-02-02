@@ -11,6 +11,9 @@ import { cn } from '@/lib/utils';
 export type IssueType = 'bug' | 'improvement' | 'performance' | 'task';
 export type IssueStatus = 'new' | 'in-progress' | 'completed';
 
+/** Issue type for border-image gradient variants */
+export type IssueTypeVariant = 'bug' | 'improvement' | 'feature' | 'task';
+
 export interface IssueBoxProps {
   /** Issue identifier (e.g., "PS-201") */
   issueId: string;
@@ -18,6 +21,8 @@ export interface IssueBoxProps {
   title: string;
   /** Issue type for icon selection */
   type?: IssueType;
+  /** Issue type variant for border-image gradient (bug/improvement/feature/task) */
+  issueType?: IssueTypeVariant;
   /** Issue status */
   status?: IssueStatus;
   /** Whether this is a newly created issue (shows rainbow animation) */
@@ -46,7 +51,16 @@ const iconColors: Record<IssueType, string> = {
  * IssueBox component for inline issue references in notes
  */
 export const IssueBox = forwardRef<HTMLSpanElement, IssueBoxProps>(function IssueBox(
-  { issueId, title, type = 'task', status = 'in-progress', isNew = false, onClick, className },
+  {
+    issueId,
+    title,
+    type = 'task',
+    issueType,
+    status = 'in-progress',
+    isNew = false,
+    onClick,
+    className,
+  },
   ref
 ) {
   const [showRainbow, setShowRainbow] = useState(isNew);
@@ -70,6 +84,7 @@ export const IssueBox = forwardRef<HTMLSpanElement, IssueBoxProps>(function Issu
         'issue-box',
         status === 'completed' && 'issue-box-completed',
         showRainbow && 'issue-box-new',
+        issueType && `type-${issueType}`,
         onClick && 'cursor-pointer',
         className
       )}

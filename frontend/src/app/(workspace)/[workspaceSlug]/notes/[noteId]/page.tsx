@@ -326,6 +326,7 @@ const NoteDetailPage = observer(function NoteDetailPage() {
           wordCount={note.wordCount}
           isPinned={note.isPinned}
           isAIAssisted={note.isAIAssisted}
+          topics={note.topics}
           workspaceSlug={workspaceSlug}
           onTitleChange={handleTitleChange}
           onShare={handleShare}

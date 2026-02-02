@@ -44,8 +44,50 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import type { User } from '@/types';
+
+/**
+ * Deterministic color mapping for topic tags.
+ * Known tags map to specific color buckets; unknown tags use a hash-based fallback.
+ */
+const TAG_COLOR_MAP: Record<string, { bg: string; text: string }> = {
+  // Category keywords -> primary (teal)
+  'ai features': { bg: 'bg-primary', text: 'text-primary-foreground' },
+  ai: { bg: 'bg-primary', text: 'text-primary-foreground' },
+  features: { bg: 'bg-primary', text: 'text-primary-foreground' },
+
+  // Topic keywords -> ai (blue)
+  product: { bg: 'bg-ai', text: 'text-ai-foreground' },
+  design: { bg: 'bg-ai', text: 'text-ai-foreground' },
+  ux: { bg: 'bg-ai', text: 'text-ai-foreground' },
+
+  // Domain keywords -> dark neutral
+  architecture: { bg: 'bg-foreground', text: 'text-background' },
+  engineering: { bg: 'bg-foreground', text: 'text-background' },
+  infrastructure: { bg: 'bg-foreground', text: 'text-background' },
+};
+
+const DEFAULT_TAG_COLOR: { bg: string; text: string } = {
+  bg: 'bg-primary',
+  text: 'text-primary-foreground',
+};
+
+const FALLBACK_COLORS: { bg: string; text: string }[] = [
+  DEFAULT_TAG_COLOR,
+  { bg: 'bg-ai', text: 'text-ai-foreground' },
+  { bg: 'bg-foreground', text: 'text-background' },
+];
+
+export function getTagColor(tag: string): { bg: string; text: string } {
+  const key = tag.toLowerCase().trim();
+  const mapped = TAG_COLOR_MAP[key];
+  if (mapped) return mapped;
+  // Simple hash for deterministic fallback
+  const hash = key.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+  return FALLBACK_COLORS[hash % FALLBACK_COLORS.length] ?? DEFAULT_TAG_COLOR;
+}
 
 /** Save status type */
 export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
@@ -65,8 +107,8 @@ export interface InlineNoteHeaderProps {
   isPinned?: boolean;
   /** Whether note has AI-assisted edits */
   isAIAssisted?: boolean;
-  /** Topic tag for the note */
-  topicTag?: string;
+  /** Topic tags for the note */
+  topics?: string[];
   /** Workspace slug for breadcrumb */
   workspaceSlug: string;
   /** Save status for cloud icon */
@@ -151,7 +193,7 @@ export function InlineNoteHeader({
   wordCount,
   isPinned = false,
   isAIAssisted = false,
-  topicTag: _topicTag,
+  topics,
   workspaceSlug,
   saveStatus = 'idle',
   onShare,
@@ -350,6 +392,27 @@ export function InlineNoteHeader({
             </DropdownMenu>
           </div>
         </div>
+
+        {/* Topic tags */}
+        {topics && topics.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 px-0 pb-2">
+            {topics.map((tag) => {
+              const color = getTagColor(tag);
+              return (
+                <Badge
+                  key={tag}
+                  className={cn(
+                    'text-xs font-medium px-2.5 py-0.5 rounded-md border-0',
+                    color.bg,
+                    color.text
+                  )}
+                >
+                  {tag}
+                </Badge>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Delete confirmation dialog */}
