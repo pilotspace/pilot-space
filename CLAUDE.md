@@ -362,6 +362,8 @@ DD-088: MCP tool registry → RLS-enforced, operation payloads, decorator-based.
 
 ## Project Structure
 
+Read details at `project-structure.md` but concise summary below.
+
 ### Backend (`backend/src/pilot_space/`)
 
 5-layer Clean Architecture:
