@@ -1,10 +1,10 @@
 # Pilot Space MVP Implementation Plan
 
-**Version**: 1.0.0
-**Date**: 2026-02-01
+**Version**: 1.1.0
+**Date**: 2026-02-02
 **Branch**: `005-conversational-agent-arch`
 **Architecture Grade**: B+ (83/100)
-**Current State**: 75-80% MVP complete
+**Current State**: 82% MVP complete (updated via component-tracer analysis)
 
 ---
 
@@ -35,8 +35,8 @@ The Pilot Space MVP implements a **centralized conversational agent architecture
 | Metric | Value |
 |--------|-------|
 | **Total Tasks** | 152 + 21 critical = 173 |
-| **Completed** | ~130 (75-80%) |
-| **Remaining** | ~43 tasks |
+| **Completed** | ~142 (82%) |
+| **Remaining** | ~31 tasks |
 | **Timeline (remaining)** | 4-6 weeks focused effort |
 | **Backend LOC** | 69,435 lines Python |
 | **Frontend LOC** | 60,010 lines TypeScript |
@@ -75,29 +75,29 @@ The Pilot Space MVP implements a **centralized conversational agent architecture
 | **Application** | Service Classes (note, issue, cycle, ai_context, integration, annotation, discussion) | Production-ready | 90% |
 | **Domain** | Entities, value objects, domain services | Complete | 95% |
 | **Infrastructure** | Database (26 models, 17 repos, 19 migrations), Redis, Auth, Queue, Search | Complete | 95% |
-| **AI** | PilotSpaceAgent, SDK config, session handler, permission handler, hooks | Functional | 85% |
-| **AI Tools** | Note tools (6), search tools, database tools, GitHub tools, MCP server | Skeleton + partial | 70% |
+| **AI** | PilotSpaceAgent (90%), SDK config, session handler (80%), permission handler (85%), hooks | Functional | 87% ↑ |
+| **AI Tools** | Note tools (6/6 implemented 85%), search tools, database tools, GitHub tools, MCP server | Mostly complete | 85% ↑ |
 | **AI Providers** | Provider selector, mock generators, factory | Complete | 90% |
-| **AI Infrastructure** | Cost tracker, key storage, rate limiter, approval, resilience | Complete | 90% |
+| **AI Infrastructure** | Cost tracker, key storage, rate limiter, approval, resilience (circuit breaker 85%) | Complete | 90% |
 | **AI Workers** | Conversation worker, queue processing | Functional | 80% |
-| **Spaces** | Workspace sync, note markdown files | Functional | 85% |
+| **Spaces** | Workspace sync (note_space_sync.py), note markdown files | Functional | 85% |
 
 ### Frontend Status (by Feature)
 
 | Feature | Components | Status | Completion |
 |---------|------------|--------|------------|
-| **Note Editor** | TipTap extensions (8), editor hooks, toolbar | Scaffold + partial | 65% |
-| **Ghost Text** | Extension skeleton, service | Skeleton | 30% |
-| **Margin Annotations** | Extension skeleton, list component | Skeleton | 25% |
-| **Issue Extraction** | Panel skeleton, approval modal skeleton | Skeleton | 30% |
-| **ChatView** | 25 components (complete tree) | Production-ready | 95% |
+| **Note Editor** | TipTap extensions (9/13 complete, 4 partial), editor hooks, toolbar | Extensions built, wiring partial | 70% ↑ |
+| **Ghost Text** | Extension structure 100%, service, store 100% | **Wiring incomplete** | 30% |
+| **Margin Annotations** | Extension 25%, annotation card, list component | Extension + UI partial | 25% |
+| **Issue Extraction** | Panel, approval modal skeleton | Store 95%, UI 30% | 77% ↑ |
+| **ChatView** | 25 components (complete tree) | Production-ready | 85% (SSE wiring missing) ↓ |
 | **Issue Features** | AI context panel, conversation, prompts | Functional | 75% |
 | **Cycle/Sprint** | Board, burndown, velocity, rollover | Scaffold | 60% |
 | **GitHub Integration** | PR review, commits, branches | Functional | 75% |
 | **Approval Queue** | Card, detail modal, list | Functional | 80% |
 | **Cost Dashboard** | Summary, charts, table | Scaffold | 50% |
-| **MobX Stores** | 12 stores (Root, Workspace, Auth, UI, AI, etc.) | Functional | 80% |
-| **API Services** | 9 API clients | Complete | 90% |
+| **MobX Stores** | 12 stores (PilotSpaceStore 75%, GhostText 100%, IssueExtraction 95%, others) | Stores built, event handlers incomplete | 75% ↓ |
+| **API Services** | 9 API clients (ai.ts 70%, others 90%) | API methods partial | 70% ↓ |
 | **UI Components** | 25 shadcn/ui components | Complete | 95% |
 
 ### Test Coverage
@@ -116,8 +116,8 @@ The Pilot Space MVP implements a **centralized conversational agent architecture
 ## Phase 1: Foundation & SDK Integration
 
 **Duration**: 3.5 weeks (core) + 1.5 weeks (critical additions)
-**Status**: ~85% complete
-**Remaining**: Error handling, cost optimization validation, security hardening
+**Status**: ~87% complete ↑
+**Remaining**: SSE abort controller (P1-009), offline queue (P1-010), prompt caching validation (P1-012), context window mgmt (P1-013), session security (P1-019)
 
 ### P1: Core SDK Configuration (MOSTLY DONE)
 
@@ -163,8 +163,8 @@ The Pilot Space MVP implements a **centralized conversational agent architecture
 ## Phase 2: Skill Migration
 
 **Duration**: 2 weeks
-**Status**: ~70% complete
-**Remaining**: Skill validation, testing, structured output schemas
+**Status**: ~73% complete ↑
+**Remaining**: find-duplicates (P2-005), recommend-assignee (P2-006), skill validation (P2-010), structured output schemas (P2-011)
 
 ### P2: Skill Implementation
 
@@ -192,8 +192,8 @@ The Pilot Space MVP implements a **centralized conversational agent architecture
 ## Phase 3: Backend Consolidation
 
 **Duration**: 4 weeks
-**Status**: ~80% complete
-**Remaining**: Note MCP tools E2E, subagent streaming, SSE transform pipeline
+**Status**: ~83% complete ↑
+**Remaining**: Note MCP tools E2E (P3-005:010), SSE transform pipeline (P3-014:015 - **CRITICAL BLOCKER**)
 
 ### P3: PilotSpaceAgent (MOSTLY DONE)
 
@@ -204,16 +204,16 @@ The Pilot Space MVP implements a **centralized conversational agent architecture
 | P3-003 | Intent parsing | ✅ Done | Detects `\skill`, `@agent`, free text | Correct routing in >90% of test cases |
 | P3-004 | Context aggregation | ✅ Done | Builds context from note/issue/project | Context passed to all skill/subagent invocations |
 
-### P3: MCP Note Tools (CRITICAL - REMAINING)
+### P3: MCP Note Tools (MOSTLY DONE - E2E REMAINING)
 
 | Task ID | Task | Status | DoD | Acceptance Criteria |
 |---------|------|--------|-----|---------------------|
-| P3-005 | `update_note_block` E2E | ⬜ TODO | Replace/append block content in TipTap | Block ID preserved, SSE event emitted, frontend updates |
-| P3-006 | `enhance_text` E2E | ⬜ TODO | Improve clarity without meaning change | Original block preserved for undo, diff available |
-| P3-007 | `summarize_note` E2E | ⬜ TODO | Read full note with block structure | Returns markdown with block IDs |
-| P3-008 | `extract_issues` E2E | ⬜ TODO | Create linked issues from blocks | Issues created in DB, NoteIssueLink records, inline badges |
-| P3-009 | `create_issue_from_note` E2E | ⬜ TODO | Create single linked issue | Issue linked to source block |
-| P3-010 | `link_existing_issues` E2E | ⬜ TODO | Search and link existing issues | Meilisearch integration returns ranked results |
+| P3-005 | `update_note_block` E2E | ⚠️ Backend ✓, E2E ⬜ | Replace/append block content in TipTap | Block ID preserved, SSE event emitted, **frontend integration missing (T055)** |
+| P3-006 | `enhance_text` E2E | ⚠️ Backend ✓, E2E ⬜ | Improve clarity without meaning change | Original block preserved for undo, **diff UI missing** |
+| P3-007 | `summarize_note` E2E | ⚠️ Backend ✓, E2E ⬜ | Read full note with block structure | Returns markdown with block IDs, **frontend display missing** |
+| P3-008 | `extract_issues` E2E | ⚠️ Backend ✓, E2E ⬜ | Create linked issues from blocks | Issues created in DB, NoteIssueLink records, **approval modal incomplete (T053)** |
+| P3-009 | `create_issue_from_note` E2E | ⚠️ Backend ✓, E2E ⬜ | Create single linked issue | Issue linked to source block, **frontend approval missing** |
+| P3-010 | `link_existing_issues` E2E | ⚠️ Placeholder | Search and link existing issues | **Meilisearch integration TODO (T106)** |
 
 ### P3: Subagent Refactoring
 
@@ -223,20 +223,20 @@ The Pilot Space MVP implements a **centralized conversational agent architecture
 | P3-012 | AIContextAgent as subagent | ✅ Done | Multi-turn context building | Aggregates docs, code, similar issues |
 | P3-013 | DocGeneratorAgent as subagent | ✅ Done | Long-form documentation generation | Progress tracking via task panel |
 
-### P3: SSE Transform Pipeline
+### P3: SSE Transform Pipeline (**CRITICAL BLOCKER**)
 
 | Task ID | Task | Status | DoD | Acceptance Criteria |
 |---------|------|--------|-----|---------------------|
-| P3-014 | `transform_sdk_message()` | ⬜ TODO | SDK message → Frontend SSE event | 8 event types mapped correctly |
-| P3-015 | Content update events | ⬜ TODO | Note block changes → `content_update` SSE | Frontend editor receives and applies updates |
+| P3-014 | `transform_sdk_message()` | ⚠️ Transformer ✓, Integration ⬜ | SDK message → Frontend SSE event | SSETransformer complete (100%), **agent._stream() wiring incomplete (T054)** |
+| P3-015 | Content update events | ⚠️ Event type ✓, Pipeline ⬜ | Note block changes → `content_update` SSE | ContentUpdateEvent defined, **backend transform missing (T055), frontend useContentUpdates not wired** |
 
 ---
 
 ## Phase 4: Frontend Architecture
 
 **Duration**: 4.5 weeks (core) + 0.5 weeks (optimistic updates)
-**Status**: ~60% complete (ChatView done, store wiring remaining)
-**Remaining**: PilotSpaceStore wiring, Ghost Text, Margin Annotations, Issue Extraction UI
+**Status**: ~65% complete ↑ (ChatView 85%, stores built but SSE wiring incomplete)
+**Remaining**: PilotSpaceStore SSE wiring (**CRITICAL BLOCKER** P4-001:002), Ghost Text integration (P4-005:009), Margin Annotations (P4-010:013), Issue Extraction modal (P4-014:017)
 
 ### P4: Store Architecture (CRITICAL)
 
@@ -298,8 +298,8 @@ The Pilot Space MVP implements a **centralized conversational agent architecture
 ## Phase 5: Integration & Testing
 
 **Duration**: 2.5 weeks (testing) + 0.5 weeks (security audit)
-**Status**: ~15% complete
-**Remaining**: E2E tests, performance testing, security audit
+**Status**: ~45% complete ↑ (unit tests 60-80%, E2E tests scaffolded but incomplete)
+**Remaining**: E2E tests (P5-001:014), performance testing (P5-015:018), security audit (P5-019:024)
 
 ### P5: E2E Test Suites (CRITICAL)
 
