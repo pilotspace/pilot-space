@@ -82,15 +82,51 @@ class TestTruncate:
 
 
 class TestAuditLogHook:
-    """Tests for PostToolUse audit logging."""
+    """Tests for PreToolUse + PostToolUse audit logging (G-05)."""
 
     @pytest.mark.asyncio
-    async def test_produces_post_tool_use_hooks(self) -> None:
+    async def test_produces_pre_and_post_tool_use_hooks(self) -> None:
         hook = AuditLogHook()
         sdk_hooks = hook.to_sdk_hooks()
+        assert "PreToolUse" in sdk_hooks
         assert "PostToolUse" in sdk_hooks
+        assert len(sdk_hooks["PreToolUse"]) == 1
         assert len(sdk_hooks["PostToolUse"]) == 1
+        assert sdk_hooks["PreToolUse"][0]["matcher"] == ".*"
         assert sdk_hooks["PostToolUse"][0]["matcher"] == ".*"
+
+    @pytest.mark.asyncio
+    async def test_pre_tool_use_records_start_time(self) -> None:
+        hook = AuditLogHook()
+        await _invoke_hook_callback(
+            hook,
+            "PreToolUse",
+            _make_input_data(),
+        )
+        assert "test-tool-use-id" in hook._tool_start_times
+
+    @pytest.mark.asyncio
+    async def test_pre_then_post_produces_duration(self) -> None:
+        queue: asyncio.Queue[str] = asyncio.Queue()
+        hook = AuditLogHook(event_queue=queue)
+        # Pre: record start
+        await _invoke_hook_callback(hook, "PreToolUse", _make_input_data())
+        # Post: should compute duration
+        await _invoke_hook_callback(hook, "PostToolUse", _make_input_data())
+        event = await queue.get()
+        data = json.loads(event.split("data: ")[1].strip())
+        assert data["durationMs"] is not None
+        assert data["durationMs"] >= 0
+
+    @pytest.mark.asyncio
+    async def test_post_without_pre_has_null_duration(self) -> None:
+        queue: asyncio.Queue[str] = asyncio.Queue()
+        hook = AuditLogHook(event_queue=queue)
+        # Post without Pre — no start time recorded
+        await _invoke_hook_callback(hook, "PostToolUse", _make_input_data())
+        event = await queue.get()
+        data = json.loads(event.split("data: ")[1].strip())
+        assert data["durationMs"] is None
 
     @pytest.mark.asyncio
     async def test_callback_returns_empty_dict(self) -> None:

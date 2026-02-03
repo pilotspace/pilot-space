@@ -286,16 +286,19 @@ def transform_sdk_message(  # noqa: PLR0911
             }
             return f"event: error\ndata: {json.dumps(error_data)}\n\n"
 
-        # Check for structured output in result
+        # Check for structured output in result (G-03: validate before emission)
         events_prefix = ""
         result_raw = getattr(message, "result", None)
         if isinstance(result_raw, dict) and "schemaType" in result_raw:
-            structured_data: dict[str, Any] = {
-                "messageId": message_id,
-                "schemaType": result_raw["schemaType"],
-                "data": result_raw,
-            }
-            events_prefix = f"event: structured_result\ndata: {json.dumps(structured_data)}\n\n"
+            schema_type = result_raw["schemaType"]
+            validated = _validate_structured_output(schema_type, result_raw)
+            if validated is not None:
+                structured_data: dict[str, Any] = {
+                    "messageId": message_id,
+                    "schemaType": schema_type,
+                    "data": validated,
+                }
+                events_prefix = f"event: structured_result\ndata: {json.dumps(structured_data)}\n\n"
 
         data_stop: dict[str, Any] = {
             "messageId": message_id,
@@ -629,7 +632,7 @@ def _transform_todo_to_task_progress(
     tool_name: str, result_data: Any, tool_use_id: Any
 ) -> str | None:
     """Map TodoWrite results to task_progress SSE events."""
-    if tool_name not in ("TodoWrite", "mcp__TodoWrite"):
+    if tool_name not in ("TodoWrite", "mcp__TodoWrite", "TodoRead", "mcp__TodoRead"):
         return None
     if not isinstance(result_data, dict):
         return None
@@ -649,6 +652,32 @@ def _transform_todo_to_task_progress(
         }
         events.append(f"event: task_progress\ndata: {json.dumps(task_data)}\n\n")
     return "".join(events) if events else None
+
+
+def _validate_structured_output(
+    schema_type: str, result_data: dict[str, Any]
+) -> dict[str, Any] | None:
+    """Validate structured output against registered Pydantic schema (G-03).
+
+    Returns validated dict (model_dump) on success, None on failure.
+    Unknown schema types pass through without validation.
+    """
+    from pilot_space.ai.sdk.output_schemas import get_output_schema
+
+    schema_cls = get_output_schema(schema_type)
+    if schema_cls is None:
+        # Unknown schema type — pass through raw data
+        return result_data
+    try:
+        validated = schema_cls.model_validate(result_data)
+        return validated.model_dump(by_alias=True)
+    except Exception:
+        logger.warning(
+            "Structured output validation failed for schema_type=%s, falling back to plain message",
+            schema_type,
+            exc_info=True,
+        )
+        return None
 
 
 def _map_todo_status(status: str) -> str:

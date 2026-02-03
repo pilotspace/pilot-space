@@ -39,11 +39,11 @@ def _truncate(text: str, max_length: int = 500) -> str:
 
 
 class AuditLogHook:
-    """PostToolUse hook for audit logging (G8).
+    """PreToolUse + PostToolUse hook for audit logging (G8, G-05).
 
-    Logs tool execution details (name, input/output summary,
-    duration) for compliance and debugging. Fire-and-forget:
-    never blocks or modifies tool output.
+    PreToolUse records tool start time. PostToolUse logs execution
+    details (name, input/output summary, duration) for compliance
+    and debugging. Fire-and-forget: never blocks or modifies tool output.
     """
 
     def __init__(self, event_queue: Any | None = None) -> None:
@@ -51,8 +51,14 @@ class AuditLogHook:
         self._tool_start_times: dict[str, float] = {}
 
     def to_sdk_hooks(self) -> dict[str, list[dict[str, Any]]]:
-        """Create SDK-compatible PostToolUse hooks."""
+        """Create SDK-compatible PreToolUse + PostToolUse hooks."""
         return {
+            "PreToolUse": [
+                {
+                    "matcher": ".*",
+                    "hooks": [self._create_start_time_callback()],
+                },
+            ],
             "PostToolUse": [
                 {
                     "matcher": ".*",
@@ -64,6 +70,22 @@ class AuditLogHook:
     def record_tool_start(self, tool_use_id: str) -> None:
         """Record when a tool starts execution for duration tracking."""
         self._tool_start_times[tool_use_id] = time.monotonic()
+
+    def _create_start_time_callback(self):
+        """Create async callback for PreToolUse that records start time."""
+        hook_self = self
+
+        async def callback(
+            input_data: dict[str, Any],
+            tool_use_id: str | None,
+            context: Any,
+        ) -> dict[str, Any]:
+            """Record tool start time before execution."""
+            if tool_use_id:
+                hook_self.record_tool_start(tool_use_id)
+            return {}  # Never modify input
+
+        return callback
 
     def _create_audit_callback(self):
         """Create async callback for post-tool audit logging."""

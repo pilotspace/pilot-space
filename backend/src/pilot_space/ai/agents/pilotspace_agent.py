@@ -644,27 +644,37 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
         )
 
 
-# Module-level helpers (kept outside class to avoid line bloat)
-
-# Patterns for low-effort queries (T7/G-09) — pre-compiled for performance (T69)
+# Pre-compiled patterns for effort classification (T7/G-07, T69)
 _SIMPLE_PATTERNS = [
     re.compile(r"^(hi|hello|hey|thanks|thank you|ok|okay)\b"),
     re.compile(r"^what (can you|do you) do"),
     re.compile(r"^help\b"),
     re.compile(r"^(yes|no|sure|yep|nope)\b"),
 ]
+_COMPLEX_PATTERNS = [
+    re.compile(r"\b(analy[sz]e|audit|review|refactor|architect)\b"),
+    re.compile(r"\b(compare|contrast|evaluate|assess)\b"),
+    re.compile(r"\b(explain.{0,20}(in detail|thoroughly|step by step))\b"),
+    re.compile(r"\b(design|implement|migrate|optimize)\b"),
+    re.compile(r"\b(security|vulnerability|performance)\s+(review|audit|check)\b"),
+]
 
 
 def _classify_effort(message: str) -> str | None:
     """Classify query effort level for latency optimization.
 
-    Returns 'low' for simple greetings/confirmations, None for default.
+    Returns 'low' for greetings, 'high' for complex queries, None for default.
     """
     msg_lower = message.strip().lower()
     if len(msg_lower) < 50:
-        for pattern in _SIMPLE_PATTERNS:
-            if pattern.match(msg_lower):
+        for p in _SIMPLE_PATTERNS:
+            if p.match(msg_lower):
                 return "low"
+    if len(msg_lower) > 200:
+        return "high"
+    for p in _COMPLEX_PATTERNS:
+        if p.search(msg_lower):
+            return "high"
     return None
 
 
@@ -682,18 +692,7 @@ def _detect_skill_from_message(message: str) -> str | None:
 
 
 def _estimate_tokens(input_data: ChatInput) -> int:
-    """Rough token estimate for context size detection (T62).
-
-    Uses ~4 chars per token heuristic. Counts message + context fields.
-    """
+    """Rough token estimate (~4 chars/token) for context size detection (T62)."""
     total_chars = len(input_data.message)
-    for value in input_data.context.values():
-        total_chars += len(str(value))
+    total_chars += sum(len(str(v)) for v in input_data.context.values())
     return total_chars // 4
-
-
-__all__ = [
-    "ChatInput",
-    "ChatOutput",
-    "PilotSpaceAgent",
-]
