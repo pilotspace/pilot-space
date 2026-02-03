@@ -272,6 +272,7 @@ def transform_sdk_message(  # noqa: PLR0911
                 "inputTokens": input_tokens,
                 "outputTokens": output_tokens,
                 "totalTokens": input_tokens + output_tokens,
+                "cachedTokens": cached_read + cached_creation,
                 "cachedReadTokens": cached_read,
                 "cachedCreationTokens": cached_creation,
             }
