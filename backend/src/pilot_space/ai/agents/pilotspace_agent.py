@@ -446,6 +446,8 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
                 },
                 hook_executor=hook_executor,
                 include_partial_messages=True,
+                memory_enabled=True,
+                citations_enabled=True,
                 system_prompt_base=self.SYSTEM_PROMPT_BASE,
                 output_format=output_format,
                 enable_file_checkpointing=True,

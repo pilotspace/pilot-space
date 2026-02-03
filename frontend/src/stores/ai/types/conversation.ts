@@ -59,6 +59,15 @@ export interface ChatMessage {
     schemaType: string;
     data: Record<string, unknown>;
   };
+  /** Citation references from source documents (T58) */
+  citations?: Array<{
+    sourceType: string;
+    sourceId: string;
+    sourceTitle: string;
+    citedText: string;
+    startIndex?: number;
+    endIndex?: number;
+  }>;
   /** Additional message metadata */
   metadata?: MessageMetadata;
 }

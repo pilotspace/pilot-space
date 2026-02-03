@@ -30,6 +30,9 @@ export type SSEEventType =
   | 'message_stop'
   | 'budget_warning'
   | 'tool_audit'
+  | 'citation'
+  | 'memory_update'
+  | 'tool_input_delta'
   | 'error';
 
 /**
@@ -503,6 +506,42 @@ export type ErrorCode =
   | 'provider_error'
   | 'timeout';
 
+/** T58: Citation event for source attribution. */
+export interface CitationEvent extends SSEEvent {
+  type: 'citation';
+  data: {
+    messageId: string;
+    citations: Array<{
+      sourceType: string;
+      sourceId: string;
+      sourceTitle: string;
+      citedText: string;
+      startIndex?: number;
+      endIndex?: number;
+    }>;
+  };
+}
+
+/** T57: Memory update event from cross-session memory tool. */
+export interface MemoryUpdateEvent extends SSEEvent {
+  type: 'memory_update';
+  data: {
+    operation: 'write' | 'read' | 'delete';
+    key: string;
+    value?: unknown;
+  };
+}
+
+/** T59: Tool input delta for progressive tool parameter rendering. */
+export interface ToolInputDeltaEvent extends SSEEvent {
+  type: 'tool_input_delta';
+  data: {
+    toolUseId: string;
+    toolName: string;
+    inputDelta: string;
+  };
+}
+
 /**
  * Type guard to narrow SSEEvent to specific event type.
  *
@@ -602,4 +641,16 @@ export function isToolAuditEvent(event: SSEEvent): event is ToolAuditEvent {
 
 export function isErrorEvent(event: SSEEvent): event is ErrorEvent {
   return event.type === 'error';
+}
+
+export function isCitationEvent(event: SSEEvent): event is CitationEvent {
+  return event.type === 'citation';
+}
+
+export function isMemoryUpdateEvent(event: SSEEvent): event is MemoryUpdateEvent {
+  return event.type === 'memory_update';
+}
+
+export function isToolInputDeltaEvent(event: SSEEvent): event is ToolInputDeltaEvent {
+  return event.type === 'tool_input_delta';
 }

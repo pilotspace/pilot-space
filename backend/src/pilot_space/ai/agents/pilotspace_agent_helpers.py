@@ -162,6 +162,14 @@ def transform_sdk_message(  # noqa: PLR0911
                 if model:
                     data["model"] = str(model)
                 return f"event: message_start\ndata: {json.dumps(data)}\n\n"
+            # T57: Memory update events from cross-session memory tool
+            if subtype == "memory":
+                memory_data: dict[str, Any] = {
+                    "operation": raw_data.get("operation", "write"),
+                    "key": raw_data.get("key", ""),
+                    "value": raw_data.get("value"),
+                }
+                return f"event: memory_update\ndata: {json.dumps(memory_data)}\n\n"
         return None
 
     if msg_type == "AssistantMessage":
@@ -176,6 +184,7 @@ def transform_sdk_message(  # noqa: PLR0911
             events: list[str] = []
             text_parts: list[str] = []
             thinking_parts: list[str] = []
+            citation_parts: list[dict[str, Any]] = []
 
             for block_idx, block in enumerate(content):
                 block_type = _get_block_type(block)
@@ -208,6 +217,11 @@ def transform_sdk_message(  # noqa: PLR0911
                     tool_event = _handle_tool_use_block(block, message_id)
                     if tool_event:
                         events.append(tool_event)
+                elif block_type == "citation":
+                    # T58: Extract citation blocks for source attribution
+                    citation_data = _extract_citation(block)
+                    if citation_data:
+                        citation_parts.append(citation_data)
                 else:
                     text = _get_block_text(block, "text")
                     if text:
@@ -231,6 +245,16 @@ def transform_sdk_message(  # noqa: PLR0911
                 }
                 events.append(
                     f"event: text_delta\ndata: {json.dumps(text_data)}\n\n",
+                )
+
+            # T58: Emit citation events for source attribution
+            if citation_parts:
+                citation_event_data: dict[str, Any] = {
+                    "messageId": message_id,
+                    "citations": citation_parts,
+                }
+                events.append(
+                    f"event: citation\ndata: {json.dumps(citation_event_data)}\n\n",
                 )
 
             return "".join(events) if events else None
@@ -393,6 +417,32 @@ def _get_block_text(block: Any, attr: str = "text") -> str:
     if isinstance(block, dict):
         return str(block.get(attr, block.get("text", "")))
     return str(getattr(block, attr, getattr(block, "text", "")))
+
+
+def _extract_citation(block: Any) -> dict[str, Any] | None:
+    """Extract citation data from SDK citation block (T58).
+
+    Citation blocks reference source documents used in the response.
+    """
+    if isinstance(block, dict):
+        source = block.get("source", {})
+        cited_text = block.get("cited_text", block.get("text", ""))
+    else:
+        source = getattr(block, "source", {})
+        cited_text = getattr(block, "cited_text", getattr(block, "text", ""))
+
+    if not source and not cited_text:
+        return None
+
+    source_dict = source if isinstance(source, dict) else {}
+    return {
+        "sourceType": source_dict.get("type", "document"),
+        "sourceId": source_dict.get("id", ""),
+        "sourceTitle": source_dict.get("title", ""),
+        "citedText": str(cited_text),
+        "startIndex": source_dict.get("start_index"),
+        "endIndex": source_dict.get("end_index"),
+    }
 
 
 def transform_tool_result(message: Message) -> str | None:

@@ -26,6 +26,9 @@ import type {
   BudgetWarningEvent,
   ToolAuditEvent,
   ErrorEvent,
+  CitationEvent,
+  MemoryUpdateEvent,
+  ToolInputDeltaEvent,
 } from './types/events';
 import {
   isMessageStartEvent,
@@ -42,6 +45,9 @@ import {
   isBudgetWarningEvent,
   isToolAuditEvent,
   isErrorEvent,
+  isCitationEvent,
+  isMemoryUpdateEvent,
+  isToolInputDeltaEvent,
 } from './types/events';
 import type { PilotSpaceStore } from './PilotSpaceStore';
 
@@ -269,7 +275,10 @@ export class PilotSpaceStreamHandler {
         | MessageStopEvent
         | BudgetWarningEvent
         | ToolAuditEvent
-        | ErrorEvent;
+        | ErrorEvent
+        | CitationEvent
+        | MemoryUpdateEvent
+        | ToolInputDeltaEvent;
 
       // Route to type-specific handler
       if (isMessageStartEvent(event)) {
@@ -295,6 +304,12 @@ export class PilotSpaceStreamHandler {
         this.store.handleContentUpdate(event as ContentUpdateEvent);
       } else if (isStructuredResultEvent(event)) {
         this.handleStructuredResult(event);
+      } else if (isCitationEvent(event)) {
+        this.handleCitation(event);
+      } else if (isMemoryUpdateEvent(event)) {
+        this.handleMemoryUpdate(event);
+      } else if (isToolInputDeltaEvent(event)) {
+        this.handleToolInputDelta(event);
       } else if (isMessageStopEvent(event)) {
         this.handleTextComplete(event);
       } else if (isBudgetWarningEvent(event)) {
@@ -628,6 +643,39 @@ export class PilotSpaceStreamHandler {
       streamContent: '',
       currentMessageId: null,
     };
+  }
+
+  /**
+   * Handle citation event — attach citations to current assistant message (T58).
+   */
+  handleCitation(event: CitationEvent): void {
+    const { messageId, citations } = event.data;
+    const msg = this.store.messages.find((m) => m.id === messageId);
+    if (msg) {
+      msg.citations = [...(msg.citations ?? []), ...citations];
+    }
+  }
+
+  /**
+   * Handle memory_update event — notify user of cross-session memory write (T57).
+   */
+  handleMemoryUpdate(_event: MemoryUpdateEvent): void {
+    // Store memory update for UI notification (toast or status indicator).
+    // Currently a no-op pass-through; the store can observe this via
+    // a dedicated observable if a MemoryPanel is added later.
+  }
+
+  /**
+   * Handle tool_input_delta — progressive tool parameter rendering (T59).
+   */
+  handleToolInputDelta(event: ToolInputDeltaEvent): void {
+    const { toolUseId, inputDelta } = event.data;
+    const currentMsg = this.store.messages[this.store.messages.length - 1];
+    if (!currentMsg?.toolCalls) return;
+    const tc = currentMsg.toolCalls.find((t) => t.id === toolUseId);
+    if (tc) {
+      tc.input = (tc.input ?? '') + inputDelta;
+    }
   }
 
   /**
