@@ -1,34 +1,9 @@
-export interface AIContextResultForCopy {
-  summary: {
-    issueIdentifier: string;
-    title: string;
-    summaryText: string;
-    stats: { relatedCount: number; docsCount: number; filesCount: number; tasksCount: number };
-  } | null;
-  relatedIssues: Array<{
-    relationType: string;
-    identifier: string;
-    title: string;
-    summary: string;
-    status: string;
-  }>;
-  relatedDocs: Array<{
-    docType: string;
-    title: string;
-    summary?: string;
-  }>;
-  tasks: Array<{
-    id: number;
-    title: string;
-    estimate: string;
-    dependencies: number[];
-  }>;
-  prompts: Array<{
-    taskId: number;
-    title: string;
-    content: string;
-  }>;
-}
+import type { AIContextResult } from '@/stores/ai/AIContextStore';
+
+export type AIContextResultForCopy = Pick<
+  AIContextResult,
+  'summary' | 'relatedIssues' | 'relatedDocs' | 'tasks' | 'prompts'
+>;
 
 export function generateFullContextMarkdown(result: AIContextResultForCopy): string {
   const sections: string[] = [];

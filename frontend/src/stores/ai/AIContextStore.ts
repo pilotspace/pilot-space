@@ -100,7 +100,7 @@ export class AIContextStore {
   }
 
   get hasStructuredData(): boolean {
-    return this.result?.summary !== null && this.result?.summary !== undefined;
+    return this.result?.summary != null;
   }
 
   setEnabled(enabled: boolean): void {
@@ -171,20 +171,25 @@ export class AIContextStore {
     await this.client.connect();
   }
 
+  /** Ensure this.result is initialized, returning the (possibly new) result. */
+  private ensureResult(): AIContextResult {
+    if (!this.result) {
+      this.result = this.createEmptyResult();
+    }
+    return this.result;
+  }
+
   private handleEvent(event: SSEEvent): void {
     runInAction(() => {
       const data = event.data as Record<string, unknown>;
 
       switch (event.type) {
         case 'phase': {
-          const phaseIndex = this.phases.findIndex((p) => p.name === data.name);
-          if (phaseIndex >= 0) {
-            const phase = this.phases[phaseIndex];
-            if (phase) {
-              phase.status = data.status as 'pending' | 'in_progress' | 'complete';
-              if (data.content) {
-                phase.content = data.content as string;
-              }
+          const phase = this.phases.find((p) => p.name === data.name);
+          if (phase) {
+            phase.status = data.status as 'pending' | 'in_progress' | 'complete';
+            if (data.content) {
+              phase.content = data.content as string;
             }
           }
           break;
@@ -193,52 +198,34 @@ export class AIContextStore {
           this.result = data as unknown as AIContextResult;
           break;
         case 'context_summary':
-          this.result = {
-            ...(this.result ?? this.createEmptyResult()),
-            summary: data as unknown as ContextSummary,
-          };
+          this.ensureResult().summary = data as unknown as ContextSummary;
           break;
         case 'related_issues':
-          this.result = {
-            ...(this.result ?? this.createEmptyResult()),
-            relatedIssues: (data as { items: ContextRelatedIssue[] }).items,
-          };
+          this.ensureResult().relatedIssues = (data as { items: ContextRelatedIssue[] }).items;
           break;
         case 'related_docs':
-          this.result = {
-            ...(this.result ?? this.createEmptyResult()),
-            relatedDocs: (data as { items: ContextRelatedDoc[] }).items,
-          };
+          this.ensureResult().relatedDocs = (data as { items: ContextRelatedDoc[] }).items;
           break;
         case 'ai_tasks':
-          this.result = {
-            ...(this.result ?? this.createEmptyResult()),
-            tasks: (data as { items: ContextTask[] }).items,
-          };
+          this.ensureResult().tasks = (data as { items: ContextTask[] }).items;
           break;
         case 'ai_prompts':
-          this.result = {
-            ...(this.result ?? this.createEmptyResult()),
-            prompts: (data as { items: ContextPrompt[] }).items,
-          };
+          this.ensureResult().prompts = (data as { items: ContextPrompt[] }).items;
           break;
-        case 'context_error':
-          this.sectionErrors.set(
-            (data as { section: string; message: string }).section,
-            (data as { section: string; message: string }).message
-          );
+        case 'context_error': {
+          const errorData = data as { section: string; message: string };
+          this.sectionErrors.set(errorData.section, errorData.message);
           break;
+        }
         case 'error':
           this.error = (data as { message: string }).message ?? 'Unknown error';
           this.isLoading = false;
           break;
         case 'context_complete':
           this.isLoading = false;
-          if (!this.result) {
-            this.result = this.createEmptyResult();
-          }
+          this.ensureResult();
           if (this.currentIssueId) {
-            this.cache.set(this.currentIssueId, this.result);
+            this.cache.set(this.currentIssueId, this.result!);
           }
           break;
       }

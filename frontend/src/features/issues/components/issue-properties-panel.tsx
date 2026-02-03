@@ -5,6 +5,7 @@ import { format } from 'date-fns';
 import { CalendarIcon } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
+import { stateNameToKey } from '@/lib/issue-helpers';
 import type {
   Issue,
   UpdateIssueData,
@@ -222,7 +223,7 @@ export function IssuePropertiesPanel({
     (state: IssueState) => {
       const matched = states.find(
         (s) =>
-          STATE_GROUP_MAP[s.group] === state || s.name.toLowerCase().replace(/\s+/g, '_') === state
+          STATE_GROUP_MAP[s.group] === state || stateNameToKey(s.name) === state
       );
       if (matched) {
         wrapState(() => onUpdate({ stateId: matched.id })).catch(() => {});

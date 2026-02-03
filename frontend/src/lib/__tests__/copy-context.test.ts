@@ -16,14 +16,16 @@ const createTestData = (overrides?: Partial<AIContextResultForCopy>): AIContextR
   relatedIssues: [
     {
       relationType: 'blocks',
+      issueId: 'issue-1',
       identifier: 'PS-40',
       title: 'Related',
       summary: 'Summary',
       status: 'Done',
+      stateGroup: 'completed',
     },
   ],
   relatedDocs: [{ docType: 'ADR', title: 'Doc', summary: 'Doc summary' }],
-  tasks: [{ id: 1, title: 'Task', estimate: '3 points', dependencies: [] }],
+  tasks: [{ id: 1, title: 'Task', estimate: '3 points', dependencies: [], completed: false }],
   prompts: [{ taskId: 1, title: 'Task', content: 'Prompt content' }],
   ...overrides,
 });
@@ -33,7 +35,7 @@ describe('copy-context', () => {
     it('should generate markdown with all sections', () => {
       const markdown = generateFullContextMarkdown(
         createTestData({
-          tasks: [{ id: 1, title: 'Task', estimate: '3', dependencies: [2] }],
+          tasks: [{ id: 1, title: 'Task', estimate: '3', dependencies: [2], completed: false }],
         })
       );
 
