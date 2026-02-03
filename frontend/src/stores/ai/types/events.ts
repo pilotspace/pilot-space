@@ -420,6 +420,8 @@ export interface TokenUsage {
   outputTokens: number;
   /** Total tokens (input + output) */
   totalTokens?: number;
+  /** Total cached tokens (read + creation) */
+  cachedTokens?: number;
   /** Tokens read from prompt cache (saves cost) */
   cachedReadTokens?: number;
   /** Tokens written to prompt cache */
