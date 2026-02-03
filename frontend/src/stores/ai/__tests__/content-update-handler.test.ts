@@ -22,6 +22,7 @@ vi.mock('@/lib/sse-client', () => ({
 }));
 
 import { PilotSpaceStore } from '../PilotSpaceStore';
+import { PilotSpaceStreamHandler } from '../PilotSpaceStreamHandler';
 import type { AIStore } from '../AIStore';
 import { isContentUpdateEvent, type ContentUpdateEvent, type SSEEvent } from '../types/events';
 
@@ -328,13 +329,15 @@ describe('PilotSpaceStore.handleContentUpdate', () => {
   });
 });
 
-describe('PilotSpaceStore.handleSSEEvent routing', () => {
+describe('PilotSpaceStreamHandler.handleSSEEvent routing', () => {
   let store: PilotSpaceStore;
+  let streamHandler: PilotSpaceStreamHandler;
   let mockRootStore: AIStore;
 
   beforeEach(() => {
     mockRootStore = {} as AIStore;
     store = new PilotSpaceStore(mockRootStore);
+    streamHandler = new PilotSpaceStreamHandler(store);
     vi.spyOn(store, 'handleContentUpdate');
   });
 
@@ -352,9 +355,7 @@ describe('PilotSpaceStore.handleSSEEvent routing', () => {
       },
     };
 
-    // Use private method via type assertion
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (store as any).handleSSEEvent(sseEvent);
+    streamHandler.handleSSEEvent(sseEvent);
 
     expect(store.handleContentUpdate).toHaveBeenCalledTimes(1);
     expect(store.handleContentUpdate).toHaveBeenCalledWith(
@@ -377,8 +378,7 @@ describe('PilotSpaceStore.handleSSEEvent routing', () => {
       },
     };
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (store as any).handleSSEEvent(textDeltaEvent);
+    streamHandler.handleSSEEvent(textDeltaEvent);
 
     // Streaming state should be updated
     expect(store.streamContent).toContain('Hello world');
@@ -397,8 +397,7 @@ describe('PilotSpaceStore.handleSSEEvent routing', () => {
       },
     };
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (store as any).handleSSEEvent(contentUpdateEvent);
+    streamHandler.handleSSEEvent(contentUpdateEvent);
 
     // Both should work independently
     expect(store.handleContentUpdate).toHaveBeenCalledTimes(1);

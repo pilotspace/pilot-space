@@ -19,11 +19,14 @@ export type SSEEventType =
   | 'message_start'
   | 'content_block_start'
   | 'text_delta'
+  | 'thinking_delta'
   | 'tool_use'
   | 'tool_result'
   | 'task_progress'
   | 'approval_request'
+  | 'ask_user_question'
   | 'content_update'
+  | 'structured_result'
   | 'message_stop'
   | 'error';
 
@@ -82,6 +85,21 @@ export interface TextDeltaEvent extends SSEEvent {
     delta: string;
     /** Content block index (for multi-block messages) */
     index?: number;
+  };
+}
+
+/**
+ * Thinking delta event.
+ * Streamed extended thinking content from Claude (Opus tasks).
+ * Rendered in a collapsible "Agent Reasoning" block.
+ */
+export interface ThinkingDeltaEvent extends SSEEvent {
+  type: 'thinking_delta';
+  data: {
+    /** Message ID this thinking belongs to */
+    messageId: string;
+    /** Thinking content chunk (append to existing thinking content) */
+    delta: string;
   };
 }
 
@@ -146,6 +164,10 @@ export interface TaskProgressEvent extends SSEEvent {
     totalSteps?: number;
     /** Estimated time remaining in seconds */
     estimatedSecondsRemaining?: number;
+    /** Subagent name executing this task */
+    agentName?: string;
+    /** AI model used by this subagent */
+    model?: string;
   };
 }
 
@@ -215,6 +237,47 @@ export interface AffectedEntity {
 }
 
 /**
+ * Question option for AskUserQuestion.
+ */
+export interface QuestionOption {
+  /** Display label */
+  label: string;
+  /** Description of this option */
+  description?: string;
+}
+
+/**
+ * Question from AI agent needing user input.
+ */
+export interface AgentQuestion {
+  /** Question text */
+  question: string;
+  /** Available options */
+  options: QuestionOption[];
+  /** Whether multiple options can be selected */
+  multiSelect: boolean;
+  /** Short header label */
+  header?: string;
+}
+
+/**
+ * Ask user question event.
+ * AI agent needs clarification during execution.
+ * Frontend renders inline QuestionCard for user response.
+ */
+export interface AskUserQuestionEvent extends SSEEvent {
+  type: 'ask_user_question';
+  data: {
+    /** Message ID this question belongs to */
+    messageId: string;
+    /** Question ID (tool call ID, used to submit answer) */
+    questionId: string;
+    /** Questions to display */
+    questions: AgentQuestion[];
+  };
+}
+
+/**
  * Content update event data.
  * Data payload for content_update SSE event.
  */
@@ -263,6 +326,65 @@ export interface ContentUpdateEvent extends SSEEvent {
 }
 
 /**
+ * Structured result schema type discriminator.
+ * Maps to backend output_schemas.py Pydantic models.
+ */
+export type StructuredResultSchemaType =
+  | 'extraction_result'
+  | 'decomposition_result'
+  | 'duplicate_search_result';
+
+/**
+ * Extracted issue from structured output.
+ */
+export interface ExtractedIssue {
+  title: string;
+  description: string;
+  issue_type: string;
+  priority: string;
+  source_block_id?: string | null;
+  category: string;
+}
+
+/**
+ * Subtask from task decomposition.
+ */
+export interface DecomposedSubtask {
+  title: string;
+  description: string;
+  storyPoints: number;
+  dependsOn: number[];
+}
+
+/**
+ * Duplicate candidate from similarity search.
+ */
+export interface DuplicateCandidate {
+  issueId: string;
+  issueKey: string;
+  title: string;
+  similarityScore: number;
+  reason: string;
+}
+
+/**
+ * Structured result event.
+ * AI agent returned a typed, schema-validated response.
+ * Used for rich UI rendering of extraction, decomposition, etc.
+ */
+export interface StructuredResultEvent extends SSEEvent {
+  type: 'structured_result';
+  data: {
+    /** Message ID this result belongs to */
+    messageId: string;
+    /** Schema type for frontend rendering dispatch */
+    schemaType: StructuredResultSchemaType;
+    /** Typed result data (matches backend Pydantic model) */
+    data: Record<string, unknown>;
+  };
+}
+
+/**
  * Message stop event.
  * Signals the end of message streaming.
  */
@@ -296,6 +418,10 @@ export interface TokenUsage {
   outputTokens: number;
   /** Total tokens (input + output) */
   totalTokens?: number;
+  /** Tokens read from prompt cache (saves cost) */
+  cachedReadTokens?: number;
+  /** Tokens written to prompt cache */
+  cachedCreationTokens?: number;
 }
 
 /**
@@ -347,8 +473,16 @@ export function isMessageStartEvent(event: SSEEvent): event is MessageStartEvent
   return event.type === 'message_start';
 }
 
+export function isContentBlockStartEvent(event: SSEEvent): event is ContentBlockStartEvent {
+  return event.type === 'content_block_start';
+}
+
 export function isTextDeltaEvent(event: SSEEvent): event is TextDeltaEvent {
   return event.type === 'text_delta';
+}
+
+export function isThinkingDeltaEvent(event: SSEEvent): event is ThinkingDeltaEvent {
+  return event.type === 'thinking_delta';
 }
 
 export function isToolUseEvent(event: SSEEvent): event is ToolUseEvent {
@@ -400,6 +534,14 @@ export function isContentUpdateEvent(event: unknown): event is ContentUpdateEven
 
   // All required fields present and valid
   return true;
+}
+
+export function isAskUserQuestionEvent(event: SSEEvent): event is AskUserQuestionEvent {
+  return event.type === 'ask_user_question';
+}
+
+export function isStructuredResultEvent(event: SSEEvent): event is StructuredResultEvent {
+  return event.type === 'structured_result';
 }
 
 export function isMessageStopEvent(event: SSEEvent): event is MessageStopEvent {

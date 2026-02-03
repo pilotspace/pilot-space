@@ -32,6 +32,7 @@ from pilot_space.ai.agents.agent_base import AgentContext, StreamingSDKBaseAgent
 from pilot_space.ai.agents.note_space_sync import NoteSpaceSync
 from pilot_space.ai.agents.pilotspace_agent_helpers import (
     build_contextual_message,
+    build_subagent_definitions,
     transform_sdk_message as transform_sdk_message_helper,
 )
 from pilot_space.ai.context import clear_context, set_workspace_context
@@ -40,7 +41,7 @@ from pilot_space.ai.mcp.note_server import (
     TOOL_NAMES as NOTE_TOOL_NAMES,
     create_note_tools_server,
 )
-from pilot_space.ai.sdk.sandbox_config import configure_sdk_for_space
+from pilot_space.ai.sdk.sandbox_config import ModelTier, configure_sdk_for_space
 from pilot_space.spaces.manager import SpaceManager
 
 if TYPE_CHECKING:
@@ -120,7 +121,7 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
     """
 
     AGENT_NAME = "pilotspace_agent"
-    DEFAULT_MODEL = "claude-sonnet-4-20250514"
+    DEFAULT_MODEL_TIER: ClassVar[ModelTier] = ModelTier.SONNET
 
     # Subagent routing map
     SUBAGENT_MAP: ClassVar[dict[str, str]] = {
@@ -173,28 +174,8 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
     # _plan_tasks, _handle_natural_language) - SDK handles all routing via .claude/
 
     def _build_subagent_definitions(self) -> dict[str, AgentDefinition]:
-        """Build subagent definitions for SDK agent spawning.
-
-        Returns:
-            Dict of agent name to AgentDefinition for SDK's Task tool.
-        """
-        return {
-            "pr-review": AgentDefinition(
-                description="Expert code reviewer for GitHub PRs",
-                prompt="Analyze pull requests for architecture, security, and performance",
-                tools=["Read", "Glob", "Grep", "WebFetch"],
-            ),
-            "ai-context": AgentDefinition(
-                description="Aggregates context for issues from notes, code, and tasks",
-                prompt="Find related notes, code snippets, and similar issues",
-                tools=["Read", "Glob", "Grep"],
-            ),
-            "doc-generator": AgentDefinition(
-                description="Generates technical documentation from code",
-                prompt="Create comprehensive documentation with examples",
-                tools=["Read", "Glob", "Write"],
-            ),
-        }
+        """Build subagent definitions for SDK agent spawning."""
+        return build_subagent_definitions()
 
     async def _get_api_key(self, workspace_id: UUID | None) -> str:
         """Get Anthropic API key from workspace settings.
@@ -256,6 +237,21 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
                 e,
             )
             return False
+
+    async def submit_tool_result(
+        self,
+        session_id: str,
+        tool_call_id: str,
+        result: str,
+    ) -> None:
+        """Submit user answer for AskUserQuestion tool call via follow-up query."""
+        client = self._active_clients.get(session_id)
+        if not client:
+            raise ValueError(f"No active client for session {session_id}")
+
+        answer_msg = f"[Answer to question {tool_call_id}]: {result}"
+        await client.query(answer_msg, session_id=session_id)
+        logger.info("[SDK/Answer] tool_call=%s session=%s", tool_call_id, session_id)
 
     def transform_sdk_message(
         self,
@@ -419,19 +415,31 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
         space = self._space_manager.get_space(context.workspace_id, context.user_id)
 
         async with space.session() as space_context:
+            # Create event queue for tool-generated SSE events
+            tool_event_queue: asyncio.Queue[str] = asyncio.Queue()
+
             # Load file-based hooks if hooks.json exists
-            hook_executor = None
+            file_hook_executor = None
             if space_context.hooks_file.exists():
                 from pilot_space.ai.sdk.file_hooks import FileBasedHookExecutor
 
-                hook_executor = FileBasedHookExecutor(
+                file_hook_executor = FileBasedHookExecutor(
                     space_context.hooks_file,
                     cwd=space_context.path,
                 )
                 logger.debug(f"[SDK/Space] Loaded hooks from {space_context.hooks_file}")
 
-            # Create event queue for tool-generated SSE events
-            tool_event_queue: asyncio.Queue[str] = asyncio.Queue()
+            # Compose file hooks + DD-003 permission checks into
+            # a single SDK-compatible hook executor
+            from pilot_space.ai.sdk.hooks import PermissionAwareHookExecutor
+
+            hook_executor = PermissionAwareHookExecutor(
+                permission_handler=self._permission_handler,
+                workspace_id=context.workspace_id,
+                user_id=context.user_id,
+                file_hook_executor=file_hook_executor,
+                event_queue=tool_event_queue,
+            )
 
             # Create in-process MCP server with note tools
             # Pass context_note_id to prevent LLM UUID corruption
@@ -442,17 +450,17 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
             )
 
             # Configure SDK for this space (with hooks if available)
+            # Model selection per DD-011: DEFAULT_MODEL (Sonnet) for orchestration
             sdk_config = configure_sdk_for_space(
                 space_context,
                 permission_mode="default",
-                model="kimi-k2.5:cloud",
+                model=self.DEFAULT_MODEL_TIER,
                 additional_tools=NOTE_TOOL_NAMES,
                 additional_env={
                     "ANTHROPIC_API_KEY": api_key,
-                    "ANTHROPIC_BASE_URL": "http://localhost:11434",
-                    "ANTHROPIC_AUTH_TOKEN": "dummy-token",
                 },
                 hook_executor=hook_executor,
+                include_partial_messages=True,
             )
 
             # Build SDK options from space config
@@ -464,7 +472,7 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
                 sdk_env["PATH"] = os.environ.get("PATH", "")
 
             sdk_options = ClaudeAgentOptions(
-                model=sdk_params.get("model", self.DEFAULT_MODEL),
+                model=sdk_params.get("model", self.DEFAULT_MODEL_TIER.model_id),
                 cwd=sdk_params.get("cwd"),
                 setting_sources=sdk_params.get("setting_sources", ["project"]),
                 allowed_tools=sdk_params.get("allowed_tools", []),
@@ -607,7 +615,7 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
             sdk_env["PATH"] = os.environ.get("PATH", "")
 
         sdk_options = ClaudeAgentOptions(
-            model=sdk_params.get("model", self.DEFAULT_MODEL),
+            model=sdk_params.get("model", self.DEFAULT_MODEL_TIER.model_id),
             cwd=sdk_params.get("cwd"),
             setting_sources=sdk_params.get("setting_sources", ["project"]),
             allowed_tools=sdk_params.get("allowed_tools", []),
@@ -651,7 +659,7 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
             tasks=[],  # SDK handles task tracking internally
             metadata={
                 "agent": self.AGENT_NAME,
-                "model": self.DEFAULT_MODEL,
+                "model": self.DEFAULT_MODEL_TIER.model_id,
             },
         )
 

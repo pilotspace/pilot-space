@@ -46,6 +46,15 @@ export interface ChatMessage {
   timestamp: Date;
   /** Tool calls invoked during message generation */
   toolCalls?: ToolCall[];
+  /** Extended thinking content (from Claude Opus reasoning) */
+  thinkingContent?: string;
+  /** Duration of thinking phase in milliseconds */
+  thinkingDurationMs?: number;
+  /** Structured result data (from schema-validated AI responses) */
+  structuredResult?: {
+    schemaType: string;
+    data: Record<string, unknown>;
+  };
   /** Additional message metadata */
   metadata?: MessageMetadata;
 }
@@ -125,6 +134,12 @@ export interface StreamingState {
   currentMessageId: string | null;
   /** Current streaming phase */
   phase?: StreamingPhase;
+  /** Accumulated thinking content (thinking deltas from extended thinking) */
+  thinkingContent?: string;
+  /** Whether thinking is actively streaming */
+  isThinking?: boolean;
+  /** Timestamp when thinking started (for duration display) */
+  thinkingStartedAt?: number | null;
 }
 
 /**
@@ -135,4 +150,10 @@ export interface StreamingState {
  * - tool_use: Agent is using tools
  * - completing: Backend sent message_stop event
  */
-export type StreamingPhase = 'connecting' | 'message_start' | 'content' | 'tool_use' | 'completing';
+export type StreamingPhase =
+  | 'connecting'
+  | 'message_start'
+  | 'thinking'
+  | 'content'
+  | 'tool_use'
+  | 'completing';

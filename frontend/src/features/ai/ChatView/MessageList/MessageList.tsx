@@ -17,6 +17,10 @@ interface MessageListProps {
   messages: ChatMessage[];
   isStreaming?: boolean;
   streamContent?: string;
+  /** Thinking content being streamed (extended thinking) */
+  thinkingContent?: string;
+  /** Whether thinking is actively streaming */
+  isThinking?: boolean;
   userName?: string;
   userAvatar?: string;
   className?: string;
@@ -48,7 +52,16 @@ function groupMessagesByRole(messages: ChatMessage[]): ChatMessage[][] {
 }
 
 export const MessageList = observer<MessageListProps>(
-  ({ messages, isStreaming, streamContent, userName, userAvatar, className }) => {
+  ({
+    messages,
+    isStreaming,
+    streamContent,
+    thinkingContent,
+    isThinking,
+    userName,
+    userAvatar,
+    className,
+  }) => {
     const scrollRef = useRef<HTMLDivElement>(null);
     const [showScrollButton, setShowScrollButton] = useState(false);
     const [autoScroll, setAutoScroll] = useState(true);
@@ -109,9 +122,13 @@ export const MessageList = observer<MessageListProps>(
               />
             ))}
 
-            {isStreaming && streamContent && (
+            {isStreaming && (streamContent || thinkingContent) && (
               <div className="px-4 py-3 bg-muted/30">
-                <StreamingContent content={streamContent} />
+                <StreamingContent
+                  content={streamContent ?? ''}
+                  thinkingContent={thinkingContent}
+                  isThinking={isThinking}
+                />
               </div>
             )}
           </div>

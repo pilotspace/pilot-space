@@ -9,13 +9,73 @@ Design Decisions: DD-002 (BYOK), DD-003 (Human-in-the-Loop)
 
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from enum import Enum
+from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
-    from pilot_space.ai.sdk.file_hooks import FileBasedHookExecutor
     from pilot_space.spaces.base import SpaceContext
+
+
+class ModelTier(str, Enum):
+    """Model tier enum for DD-011 provider routing.
+
+    Users select a tier (sonnet/opus), which resolves to a full model ID
+    via environment variables. This decouples model selection from hardcoded IDs.
+
+    Env vars:
+        PILOTSPACE_MODEL_SONNET_DEFAULT: Full model ID for sonnet tier
+        PILOTSPACE_MODEL_OPUS_DEFAULT: Full model ID for opus tier
+    """
+
+    SONNET = "sonnet"
+    OPUS = "opus"
+
+    @property
+    def model_id(self) -> str:
+        """Resolve tier to full model ID from env vars with sensible defaults."""
+        defaults = {
+            ModelTier.SONNET: "claude-sonnet-4-20250514",
+            ModelTier.OPUS: "claude-opus-4-20250514",
+        }
+        env_keys = {
+            ModelTier.SONNET: "PILOTSPACE_MODEL_SONNET_DEFAULT",
+            ModelTier.OPUS: "PILOTSPACE_MODEL_OPUS_DEFAULT",
+        }
+        return os.environ.get(env_keys[self], defaults[self])
+
+
+def resolve_model(model: str | ModelTier) -> str:
+    """Resolve a model identifier to a full model ID.
+
+    Accepts either a ModelTier enum or a raw model string.
+    If a ModelTier is provided, resolves via env var.
+    If a raw string matching a tier name is provided, treats it as a tier.
+    Otherwise returns the string as-is (for custom/direct model IDs).
+
+    Args:
+        model: ModelTier enum, tier name ("sonnet"/"opus"), or full model ID
+
+    Returns:
+        Full model identifier string
+    """
+    if isinstance(model, ModelTier):
+        return model.model_id
+
+    # Check if string matches a tier name
+    try:
+        tier = ModelTier(model.lower())
+        return tier.model_id
+    except ValueError:
+        return model
+
+
+class HookExecutor(Protocol):
+    """Protocol for hook executors that produce SDK-compatible hooks."""
+
+    def to_sdk_hooks(self) -> dict[str, list[dict[str, Any]]]: ...
 
 
 # Safe bash command patterns that auto-execute in sandbox
@@ -112,10 +172,17 @@ class SDKConfiguration:
     hooks: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     max_tokens: int = 8192
     model: str = "claude-sonnet-4-20250514"
+    prompt_caching: bool = True
+    max_thinking_tokens: int | None = None
+    include_partial_messages: bool = False
+    tool_search_enabled: bool = False
+    effort: str | None = None  # "low" | "medium" | "high"
+    citations_enabled: bool = False
+    memory_enabled: bool = False
 
     def to_sdk_params(self) -> dict[str, Any]:
         """Convert to parameters for Claude SDK."""
-        params = {
+        params: dict[str, Any] = {
             "cwd": self.cwd,
             "setting_sources": self.setting_sources,
             "sandbox": {
@@ -131,6 +198,18 @@ class SDKConfiguration:
         }
         if self.hooks:
             params["hooks"] = self.hooks
+        if self.max_thinking_tokens is not None:
+            params["max_thinking_tokens"] = self.max_thinking_tokens
+        if self.include_partial_messages:
+            params["include_partial_messages"] = True
+        if self.tool_search_enabled:
+            params["tool_search"] = True
+        if self.effort is not None:
+            params["effort"] = self.effort
+        if self.citations_enabled:
+            params["citations"] = True
+        if self.memory_enabled:
+            params["memory"] = True
         return params
 
 
@@ -138,11 +217,16 @@ def configure_sdk_for_space(
     space_context: SpaceContext,
     *,
     permission_mode: str = "default",
-    model: str = "claude-sonnet-4-20250514",
+    model: str | ModelTier = ModelTier.SONNET,
     max_tokens: int = 8192,
     additional_tools: list[str] | None = None,
     additional_env: dict[str, str] | None = None,
-    hook_executor: FileBasedHookExecutor | None = None,
+    hook_executor: HookExecutor | None = None,
+    include_partial_messages: bool = False,
+    max_thinking_tokens: int | None = None,
+    effort: str | None = None,
+    citations_enabled: bool = False,
+    memory_enabled: bool = False,
 ) -> SDKConfiguration:
     """Configure Claude SDK with space-rooted sandbox settings.
 
@@ -160,6 +244,11 @@ def configure_sdk_for_space(
         additional_tools: Extra tools to enable
         additional_env: Extra environment variables
         hook_executor: Optional FileBasedHookExecutor for SDK hooks
+        include_partial_messages: Enable partial streaming during tool execution
+        max_thinking_tokens: Max tokens for extended thinking (None=disabled)
+        effort: Quality/speed tradeoff ("low"|"medium"|"high"|None)
+        citations_enabled: Enable source citation tracking
+        memory_enabled: Enable cross-session memory persistence
 
     Returns:
         SDKConfiguration ready for SDK initialization.
@@ -207,6 +296,17 @@ def configure_sdk_for_space(
     if hook_executor:
         hooks = hook_executor.to_sdk_hooks()
 
+    # Auto-enable tool search when >10 tools to optimize context window
+    tool_search_enabled = len(allowed_tools) > 10
+
+    # Resolve model tier to full model ID (DD-011 provider routing)
+    resolved_model = resolve_model(model)
+
+    # Auto-set max_thinking_tokens for Opus models (B2: extended thinking)
+    effective_thinking_tokens = max_thinking_tokens
+    if effective_thinking_tokens is None and "opus" in resolved_model.lower():
+        effective_thinking_tokens = 10000
+
     return SDKConfiguration(
         cwd=str(space_context.path),
         setting_sources=["project"],  # Load from .claude/
@@ -223,7 +323,13 @@ def configure_sdk_for_space(
         allowed_tools=allowed_tools,
         hooks=hooks,
         max_tokens=max_tokens,
-        model=model,
+        model=resolved_model,
+        tool_search_enabled=tool_search_enabled,
+        include_partial_messages=include_partial_messages,
+        max_thinking_tokens=effective_thinking_tokens,
+        effort=effort,
+        citations_enabled=citations_enabled,
+        memory_enabled=memory_enabled,
     )
 
 

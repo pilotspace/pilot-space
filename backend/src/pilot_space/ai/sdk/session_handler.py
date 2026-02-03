@@ -341,6 +341,70 @@ class SessionHandler:
             cost_delta=cost_usd,
         )
 
+    async def fork_session(
+        self,
+        source_session_id: UUID,
+        workspace_id: UUID,
+        user_id: UUID,
+    ) -> ConversationSession:
+        """Fork a session by copying its message history into a new session.
+
+        Creates a branch for "what-if" exploration. The new session gets a
+        copy of all messages from the source, enabling divergent conversations.
+        Limit: 3 forks per source session.
+
+        Args:
+            source_session_id: Session to fork from.
+            workspace_id: Workspace UUID for new session.
+            user_id: User UUID for new session.
+
+        Returns:
+            New ConversationSession with copied messages.
+
+        Raises:
+            SessionNotFoundError: If source session doesn't exist.
+            ValueError: If fork limit exceeded (max 3 per source).
+        """
+        source = await self.get_session(source_session_id)
+        if not source:
+            raise SessionNotFoundError(source_session_id)
+
+        # Check fork limit (stored in metadata)
+        fork_count = source.metadata.get("fork_count", 0)
+        if fork_count >= 3:
+            raise ValueError(f"Fork limit reached for session {source_session_id} (max 3)")
+
+        # Create new session with fork metadata
+        fork_metadata = {
+            "forked_from": str(source_session_id),
+            "fork_count": 0,
+        }
+        forked = await self.create_session(
+            workspace_id=workspace_id,
+            user_id=user_id,
+            agent_name=source.agent_name,
+            metadata=fork_metadata,
+        )
+
+        # Copy messages from source to forked session
+        for msg in source.messages:
+            await self.add_message(
+                session_id=forked.session_id,
+                role=msg.role,
+                content=msg.content,
+                tokens=msg.tokens,
+                metadata=msg.metadata,
+            )
+
+        # Increment fork count on source
+        source.metadata["fork_count"] = fork_count + 1
+        await self._session_manager.update_session(
+            source_session_id,
+            context_update=source.metadata,
+        )
+
+        return forked
+
     async def delete_session(self, session_id: UUID) -> bool:
         """Delete session.
 
