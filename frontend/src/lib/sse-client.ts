@@ -93,7 +93,8 @@ export class SSEClient {
           ...authHeaders,
           ...this.options.headers,
         },
-        body: this.options.body && method === 'POST' ? JSON.stringify(this.options.body) : undefined,
+        body:
+          this.options.body && method === 'POST' ? JSON.stringify(this.options.body) : undefined,
         signal: this.abortController.signal,
       });
 
@@ -144,8 +145,9 @@ export class SSEClient {
         return;
       }
 
-      // Retry on recoverable errors
-      if (this.retryCount < this.maxRetries) {
+      // Retry on recoverable errors — skip for POST to prevent duplicate side effects
+      const method = this.options.method ?? (this.options.body ? 'POST' : 'GET');
+      if (method === 'GET' && this.retryCount < this.maxRetries) {
         this.retryCount++;
         const delay = this.retryDelayMs * Math.pow(2, this.retryCount - 1);
         await this.delay(delay);

@@ -8,6 +8,11 @@ import type {
   UpdateIssueData,
   AIContext,
 } from '@/types';
+
+/** Normalize StateBrief.name to IssueState key (e.g. "In Progress" → "in_progress") */
+function stateNameToKey(name: string): IssueState {
+  return name.toLowerCase().replace(/\s+/g, '_') as IssueState;
+}
 import { issuesApi } from '@/services/api';
 
 // AI Suggestion types
@@ -118,7 +123,7 @@ export class IssueStore {
 
     // Apply filters
     if (this.filters.state && this.filters.state !== 'all') {
-      issues = issues.filter((i) => i.state === this.filters.state);
+      issues = issues.filter((i) => stateNameToKey(i.state.name) === this.filters.state);
     }
     if (this.filters.priority && this.filters.priority !== 'all') {
       issues = issues.filter((i) => i.priority === this.filters.priority);
@@ -162,7 +167,7 @@ export class IssueStore {
     const grouped: Record<IssueState, Issue[]> = {} as Record<IssueState, Issue[]>;
 
     states.forEach((state) => {
-      grouped[state] = this.filteredIssues.filter((i) => i.state === state);
+      grouped[state] = this.filteredIssues.filter((i) => stateNameToKey(i.state.name) === state);
     });
 
     return grouped;
@@ -180,15 +185,17 @@ export class IssueStore {
   }
 
   get backlogIssues(): Issue[] {
-    return this.filteredIssues.filter((i) => i.state === 'backlog');
+    return this.filteredIssues.filter((i) => i.state.group === 'backlog');
   }
 
   get inProgressIssues(): Issue[] {
-    return this.filteredIssues.filter((i) => i.state === 'in_progress');
+    return this.filteredIssues.filter((i) => i.state.group === 'started');
   }
 
   get completedIssues(): Issue[] {
-    return this.filteredIssues.filter((i) => i.state === 'done' || i.state === 'cancelled');
+    return this.filteredIssues.filter(
+      (i) => i.state.group === 'completed' || i.state.group === 'cancelled'
+    );
   }
 
   // Helper
@@ -258,10 +265,15 @@ export class IssueStore {
   }
 
   // Optimistic update for drag and drop
-  optimisticUpdateState(issueId: string, newState: IssueState) {
+  optimisticUpdateState(issueId: string, newState: string) {
     const issue = this.issues.get(issueId);
     if (issue) {
-      this.issues.set(issueId, { ...issue, state: newState });
+      // Partial optimistic update: set state name for instant UI feedback;
+      // the full StateBrief is corrected when the API response arrives.
+      this.issues.set(issueId, {
+        ...issue,
+        state: { ...issue.state, name: newState },
+      });
     }
   }
 
@@ -346,7 +358,7 @@ export class IssueStore {
     }
   }
 
-  async updateIssueState(workspaceId: string, issueId: string, state: IssueState) {
+  async updateIssueState(workspaceId: string, issueId: string, state: string) {
     // Optimistic update
     this.optimisticUpdateState(issueId, state);
 

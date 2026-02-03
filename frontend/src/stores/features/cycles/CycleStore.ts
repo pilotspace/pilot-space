@@ -16,6 +16,11 @@ import type {
   BurndownChartData,
   VelocityChartData,
 } from '@/types';
+
+/** Normalize StateBrief.name to IssueState key (e.g. "In Progress" → "in_progress") */
+function stateNameToKey(name: string): IssueState {
+  return name.toLowerCase().replace(/\s+/g, '_') as IssueState;
+}
 import { cyclesApi, type CycleListResponse } from '@/services/api';
 
 /**
@@ -191,7 +196,9 @@ export class CycleStore {
     const grouped: Record<IssueState, CycleIssue[]> = {} as Record<IssueState, CycleIssue[]>;
 
     states.forEach((state) => {
-      grouped[state] = Array.from(this.cycleIssues.values()).filter((i) => i.state === state);
+      grouped[state] = Array.from(this.cycleIssues.values()).filter(
+        (i) => stateNameToKey(i.state.name) === state
+      );
     });
 
     return grouped;
@@ -202,7 +209,7 @@ export class CycleStore {
    */
   get incompleteIssues(): CycleIssue[] {
     return Array.from(this.cycleIssues.values()).filter(
-      (i) => i.state !== 'done' && i.state !== 'cancelled'
+      (i) => i.state.group !== 'completed' && i.state.group !== 'cancelled'
     );
   }
 
@@ -210,7 +217,7 @@ export class CycleStore {
    * Completed issues
    */
   get completedIssues(): CycleIssue[] {
-    return Array.from(this.cycleIssues.values()).filter((i) => i.state === 'done');
+    return Array.from(this.cycleIssues.values()).filter((i) => i.state.group === 'completed');
   }
 
   // ============================================================================
@@ -658,10 +665,13 @@ export class CycleStore {
   /**
    * Optimistic update for issue state (drag-drop)
    */
-  optimisticUpdateIssueState(issueId: string, newState: IssueState): void {
+  optimisticUpdateIssueState(issueId: string, newState: string): void {
     const issue = this.cycleIssues.get(issueId);
     if (issue) {
-      this.cycleIssues.set(issueId, { ...issue, state: newState });
+      this.cycleIssues.set(issueId, {
+        ...issue,
+        state: { ...issue.state, name: newState },
+      });
     }
   }
 

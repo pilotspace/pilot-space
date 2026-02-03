@@ -11,9 +11,9 @@ import type {
   IssueState,
   IssuePriority,
   IssueType,
-  Label,
+  LabelBrief,
   Cycle,
-  User,
+  UserBrief,
   StateBrief,
   IntegrationLink,
   NoteIssueLink,
@@ -55,7 +55,7 @@ export interface IssuePropertiesPanelProps {
   workspaceId: string;
   workspaceSlug: string;
   members: WorkspaceMember[];
-  labels: Label[];
+  labels: LabelBrief[];
   cycles: Cycle[];
   states?: StateBrief[];
   integrationLinks?: IntegrationLink[];
@@ -67,23 +67,6 @@ export interface IssuePropertiesPanelProps {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-/** Map UserBrief to User (AssigneeSelector expects User). */
-function toUser(brief: { id: string; email: string; displayName: string | null }): User {
-  return {
-    id: brief.id,
-    email: brief.email,
-    name: brief.displayName ?? brief.email,
-    avatarUrl: undefined,
-    createdAt: '',
-    updatedAt: '',
-  };
-}
-
-/** Map LabelBrief to Label (LabelSelector expects Label). */
-function toLabel(brief: { id: string; name: string; color: string }, projectId: string): Label {
-  return { id: brief.id, name: brief.name, color: brief.color, projectId };
-}
 
 /** Get initials from a display name for the reporter avatar. */
 function getInitials(name: string): string {
@@ -207,8 +190,8 @@ export function IssuePropertiesPanel({
   // Derive IssueState from StateBrief.group
   const currentIssueState = STATE_GROUP_MAP[issue.state.group] ?? 'backlog';
 
-  // Map members -> User[] for AssigneeSelector (deduplicate by user_id)
-  const memberUsers = useMemo<User[]>(() => {
+  // Map members -> UserBrief[] for AssigneeSelector (deduplicate by user_id)
+  const memberUsers = useMemo<UserBrief[]>(() => {
     const seen = new Set<string>();
     return members
       .filter((m) => {
@@ -219,24 +202,15 @@ export function IssuePropertiesPanel({
       .map((m) => ({
         id: m.user_id,
         email: m.email,
-        name: m.full_name ?? m.email,
-        avatarUrl: m.avatar_url ?? undefined,
-        createdAt: m.joined_at,
-        updatedAt: m.joined_at,
+        displayName: m.full_name ?? null,
       }));
   }, [members]);
 
-  // Map issue.assignee (UserBrief | null) -> User | null
-  const assigneeUser = useMemo<User | null>(
-    () => (issue.assignee ? toUser(issue.assignee) : null),
-    [issue.assignee]
-  );
+  // Assignee as UserBrief (already in correct shape)
+  const assigneeUser = useMemo<UserBrief | null>(() => issue.assignee ?? null, [issue.assignee]);
 
-  // Map issue.labels (LabelBrief[]) -> Label[]
-  const selectedLabels = useMemo<Label[]>(
-    () => (issue.labels ?? []).map((lb) => toLabel(lb, issue.projectId)),
-    [issue.labels, issue.projectId]
-  );
+  // Labels as LabelBrief[] (already in correct shape)
+  const selectedLabels = useMemo<LabelBrief[]>(() => issue.labels ?? [], [issue.labels]);
 
   // Reporter display
   const reporterName = issue.reporter?.displayName ?? issue.reporter?.email ?? 'Unknown';
@@ -273,7 +247,7 @@ export function IssuePropertiesPanel({
 
   const { wrapMutation: wrapAssignee } = useSaveStatus('assignee');
   const handleAssigneeChange = useCallback(
-    (user: User | null) => {
+    (user: UserBrief | null) => {
       if (user) {
         wrapAssignee(() => onUpdate({ assigneeId: user.id })).catch(() => {});
       } else {
@@ -285,7 +259,7 @@ export function IssuePropertiesPanel({
 
   const { wrapMutation: wrapLabels } = useSaveStatus('labels');
   const handleLabelsChange = useCallback(
-    (next: Label[]) => {
+    (next: LabelBrief[]) => {
       wrapLabels(() => onUpdate({ labelIds: next.map((l) => l.id) })).catch(() => {});
     },
     [wrapLabels, onUpdate]

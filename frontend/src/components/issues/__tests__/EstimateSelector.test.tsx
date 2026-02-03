@@ -13,15 +13,10 @@ import { EstimateSelector } from '../EstimateSelector';
 // Mocks - Radix Popover
 // ---------------------------------------------------------------------------
 
-const mockOpen = true;
-
 vi.mock('@/components/ui/popover', () => {
-  const React = require('react');
   return {
     Popover: ({
       children,
-      open,
-      onOpenChange,
     }: {
       children: React.ReactNode;
       open?: boolean;

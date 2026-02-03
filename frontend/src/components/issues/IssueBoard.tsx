@@ -17,6 +17,10 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { IssueCard } from './IssueCard';
 import type { Issue, IssueState } from '@/types';
 
+/** Convert StateBrief.name to IssueState key (e.g. "In Progress" → "in_progress") */
+const stateNameToKey = (name: string): IssueState =>
+  name.toLowerCase().replace(/\s+/g, '_') as IssueState;
+
 export interface IssueBoardProps {
   /** Issues grouped by state */
   issuesByState: Record<IssueState, Issue[]>;
@@ -132,7 +136,7 @@ export const IssueBoard = observer(function IssueBoard({
   const handleDrop = (e: React.DragEvent, state: IssueState) => {
     e.preventDefault();
     const issueId = e.dataTransfer.getData('text/plain');
-    if (issueId && onIssueDrop && draggedIssue?.state !== state) {
+    if (issueId && onIssueDrop && stateNameToKey(draggedIssue?.state?.name ?? '') !== state) {
       onIssueDrop(issueId, state);
     }
     setDraggedIssue(null);
@@ -145,7 +149,8 @@ export const IssueBoard = observer(function IssueBoard({
         const Icon = column.icon;
         const issues = issuesByState[column.state] || [];
         const isDropTarget = dropTarget === column.state;
-        const canDrop = draggedIssue && draggedIssue.state !== column.state;
+        const canDrop =
+          draggedIssue && stateNameToKey(draggedIssue.state?.name ?? '') !== column.state;
 
         return (
           <div
