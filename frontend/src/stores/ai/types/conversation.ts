@@ -32,6 +32,8 @@ export interface ToolCall {
   errorMessage?: string;
   /** Parent tool use ID for subagent correlation (G12) */
   parentToolUseId?: string;
+  /** Execution duration in milliseconds (from tool_audit) */
+  durationMs?: number;
 }
 
 /**

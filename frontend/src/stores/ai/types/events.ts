@@ -28,6 +28,8 @@ export type SSEEventType =
   | 'content_update'
   | 'structured_result'
   | 'message_stop'
+  | 'budget_warning'
+  | 'tool_audit'
   | 'error';
 
 /**
@@ -429,6 +431,44 @@ export interface TokenUsage {
 }
 
 /**
+ * Budget warning event.
+ * Emitted when session token usage reaches 80% of budget ceiling.
+ */
+export interface BudgetWarningEvent extends SSEEvent {
+  type: 'budget_warning';
+  data: {
+    /** Current cost in USD */
+    currentCostUsd: number;
+    /** Budget ceiling in USD */
+    maxBudgetUsd: number;
+    /** Percentage of budget used (0-100) */
+    percentUsed: number;
+    /** Warning message */
+    message: string;
+  };
+}
+
+/**
+ * Tool audit event.
+ * Emitted after each tool execution for audit logging.
+ */
+export interface ToolAuditEvent extends SSEEvent {
+  type: 'tool_audit';
+  data: {
+    /** Tool use identifier */
+    tool_use_id: string;
+    /** Tool name */
+    tool_name: string;
+    /** Truncated input summary */
+    input_summary: string;
+    /** Truncated output summary */
+    output_summary: string;
+    /** Execution duration in milliseconds */
+    duration_ms: number | null;
+  };
+}
+
+/**
  * Error event.
  * Signals an error during message generation.
  */
@@ -550,6 +590,14 @@ export function isStructuredResultEvent(event: SSEEvent): event is StructuredRes
 
 export function isMessageStopEvent(event: SSEEvent): event is MessageStopEvent {
   return event.type === 'message_stop';
+}
+
+export function isBudgetWarningEvent(event: SSEEvent): event is BudgetWarningEvent {
+  return event.type === 'budget_warning';
+}
+
+export function isToolAuditEvent(event: SSEEvent): event is ToolAuditEvent {
+  return event.type === 'tool_audit';
 }
 
 export function isErrorEvent(event: SSEEvent): event is ErrorEvent {

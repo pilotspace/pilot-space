@@ -336,14 +336,13 @@ describe('PilotSpaceStreamHandler', () => {
       handler.handleSSEEvent({
         type: 'error',
         data: {
-          errorCode: 'rate_limited',
-          message: 'Too many requests',
-          retryable: true,
-          retryAfter: 10,
+          errorCode: 'internal_error',
+          message: 'Something went wrong',
+          retryable: false,
         },
       });
 
-      expect(store.error).toBe('[rate_limited] Too many requests');
+      expect(store.error).toBe('[internal_error] Something went wrong');
       expect(store.streamingState.isStreaming).toBe(false);
     });
   });
@@ -487,6 +486,204 @@ describe('PilotSpaceStreamHandler', () => {
   describe('abortClient', () => {
     it('should not throw when no client exists', () => {
       expect(() => handler.abortClient()).not.toThrow();
+    });
+  });
+
+  describe('budget_warning handler', () => {
+    it('should set store.error with warning message and cost info', () => {
+      const event: SSEEvent = {
+        type: 'budget_warning',
+        data: {
+          currentCostUsd: 0.45,
+          maxBudgetUsd: 0.5,
+          percentUsed: 90,
+          message: 'Budget nearly exhausted',
+        },
+      };
+
+      handler.handleSSEEvent(event);
+
+      expect(store.error).toContain('Budget warning');
+      expect(store.error).toContain('90%');
+      expect(store.error).toContain('0.4500');
+      expect(store.error).toContain('0.50');
+    });
+  });
+
+  describe('tool_audit handler', () => {
+    it('should update durationMs on matching tool call', () => {
+      // Setup: create a message with a tool call
+      handler.handleSSEEvent({
+        type: 'message_start',
+        data: { messageId: 'm1', sessionId: 's1' },
+      });
+
+      store.addMessage({
+        id: 'm1',
+        role: 'assistant',
+        content: '',
+        timestamp: new Date(),
+        toolCalls: [{ id: 'tc1', name: 'read_note', input: {}, status: 'pending' }],
+      });
+
+      // Dispatch tool_audit
+      handler.handleSSEEvent({
+        type: 'tool_audit',
+        data: {
+          tool_use_id: 'tc1',
+          tool_name: 'read_note',
+          input_summary: '{}',
+          output_summary: 'ok',
+          duration_ms: 150,
+        },
+      });
+
+      const msg = store.messages.find((m) => m.toolCalls?.some((tc) => tc.id === 'tc1'));
+      expect(msg).toBeDefined();
+      expect(msg?.toolCalls?.[0]?.durationMs).toBe(150);
+    });
+
+    it('should not throw when tool call ID is not found', () => {
+      handler.handleSSEEvent({
+        type: 'tool_audit',
+        data: {
+          tool_use_id: 'nonexistent',
+          tool_name: 'read_note',
+          input_summary: '{}',
+          output_summary: 'ok',
+          duration_ms: 100,
+        },
+      });
+
+      // No messages, no error thrown
+      expect(store.messages).toHaveLength(0);
+    });
+  });
+
+  describe('error auto-retry', () => {
+    it('should set retry message and keep streaming on retryable error', () => {
+      vi.useFakeTimers();
+
+      handler.handleSSEEvent({
+        type: 'message_start',
+        data: { messageId: 'm1', sessionId: 's1' },
+      });
+
+      handler.handleSSEEvent({
+        type: 'error',
+        data: {
+          errorCode: 'rate_limited',
+          message: 'Rate limited',
+          retryable: true,
+          retryAfter: 2,
+        },
+      });
+
+      expect(store.error).toContain('retrying');
+      expect(store.error).toContain('1/3');
+      expect(store.streamingState.isStreaming).toBe(true);
+
+      vi.useRealTimers();
+    });
+
+    it('should reset streaming after max retries exceeded', () => {
+      vi.useFakeTimers();
+
+      handler.handleSSEEvent({
+        type: 'message_start',
+        data: { messageId: 'm1', sessionId: 's1' },
+      });
+
+      // Exhaust all 3 retry attempts
+      for (let i = 0; i < 3; i++) {
+        handler.handleSSEEvent({
+          type: 'error',
+          data: {
+            errorCode: 'rate_limited',
+            message: 'Rate limited',
+            retryable: true,
+            retryAfter: 1,
+          },
+        });
+      }
+
+      // 4th retryable error should exceed max retries and reset
+      handler.handleSSEEvent({
+        type: 'error',
+        data: {
+          errorCode: 'rate_limited',
+          message: 'Rate limited',
+          retryable: true,
+          retryAfter: 1,
+        },
+      });
+
+      expect(store.streamingState.isStreaming).toBe(false);
+      expect(store.error).toBe('[rate_limited] Rate limited');
+
+      vi.useRealTimers();
+    });
+
+    it('should immediately reset streaming on non-retryable error', () => {
+      handler.handleSSEEvent({
+        type: 'message_start',
+        data: { messageId: 'm1', sessionId: 's1' },
+      });
+
+      handler.handleSSEEvent({
+        type: 'error',
+        data: {
+          errorCode: 'internal_error',
+          message: 'Something broke',
+          retryable: false,
+        },
+      });
+
+      expect(store.streamingState.isStreaming).toBe(false);
+      expect(store.error).toBe('[internal_error] Something broke');
+    });
+  });
+
+  describe('resetRetryState', () => {
+    it('should clear retry count so next error starts at 1/3', () => {
+      vi.useFakeTimers();
+
+      // First retryable error increments to 1/3
+      handler.handleSSEEvent({
+        type: 'message_start',
+        data: { messageId: 'm1', sessionId: 's1' },
+      });
+
+      handler.handleSSEEvent({
+        type: 'error',
+        data: {
+          errorCode: 'rate_limited',
+          message: 'err',
+          retryable: true,
+          retryAfter: 1,
+        },
+      });
+
+      expect(store.error).toContain('1/3');
+
+      // Reset retry state
+      handler.resetRetryState();
+
+      // Next retryable error should say 1/3, not 2/3
+      handler.handleSSEEvent({
+        type: 'error',
+        data: {
+          errorCode: 'rate_limited',
+          message: 'err again',
+          retryable: true,
+          retryAfter: 1,
+        },
+      });
+
+      expect(store.error).toContain('1/3');
+      expect(store.error).not.toContain('2/3');
+
+      vi.useRealTimers();
     });
   });
 });

@@ -154,10 +154,13 @@ def transform_sdk_message(  # noqa: PLR0911
             if subtype == "init":
                 session_id = raw_data.get("session_id", "")
                 current_message_id_holder["_current_message_id"] = str(uuid4())
-                data = {
+                data: dict[str, Any] = {
                     "messageId": current_message_id_holder["_current_message_id"],
                     "sessionId": str(session_id),
                 }
+                model = raw_data.get("model")
+                if model:
+                    data["model"] = str(model)
                 return f"event: message_start\ndata: {json.dumps(data)}\n\n"
         return None
 
@@ -179,7 +182,20 @@ def transform_sdk_message(  # noqa: PLR0911
 
                 # Emit content_block_start for each block
                 content_type = "tool_use" if block_type == "tool_use" else "text"
-                block_start_data = {"index": block_idx, "contentType": content_type}
+                block_start_data: dict[str, Any] = {
+                    "index": block_idx,
+                    "contentType": content_type,
+                }
+
+                # Include parentToolUseId for subagent content correlation (G12)
+                parent_id = None
+                if isinstance(block, dict):
+                    parent_id = block.get("parent_tool_use_id")
+                else:
+                    parent_id = getattr(block, "parent_tool_use_id", None)
+                if parent_id:
+                    block_start_data["parentToolUseId"] = str(parent_id)
+
                 events.append(
                     f"event: content_block_start\ndata: {json.dumps(block_start_data)}\n\n",
                 )
@@ -380,46 +396,70 @@ def _get_block_text(block: Any, attr: str = "text") -> str:
 
 
 def transform_tool_result(message: Message) -> str | None:
-    """Transform MCP tool result to content_update SSE event.
+    """Transform MCP tool result to SSE event.
 
-    Intercepts tool results from note tools and emits content_update events
-    with appropriate operation types.
+    For note tools with pending_apply status, emits content_update events.
+    For all other tool results, emits tool_result events so the frontend
+    can update tool call status in the message UI.
 
     Args:
         message: Tool result message from SDK
 
     Returns:
-        SSE-formatted content_update event or None for non-content operations
+        SSE-formatted event string or None if message should be ignored
     """
     result_data = getattr(message, "result", {})
+    tool_use_id = getattr(message, "tool_use_id", "")
 
-    if not isinstance(result_data, dict) or result_data.get("status") != "pending_apply":
+    # Handle note tool content_update operations
+    if isinstance(result_data, dict) and result_data.get("status") == "pending_apply":
+        operation = result_data.get("operation")
+        note_id = result_data.get("note_id")
+
+        if not note_id or not isinstance(note_id, str):
+            logger.warning(
+                f"Tool result missing valid note_id: operation={operation}, note_id={note_id}"
+            )
+            return None
+
+        if not operation or not isinstance(operation, str):
+            return None
+
+        operation_handlers = {
+            "replace_block": emit_replace_block_event,
+            "append_blocks": emit_append_blocks_event,
+            "create_issues": emit_issue_creation_events,
+            "create_single_issue": emit_issue_creation_events,
+        }
+
+        handler = operation_handlers.get(operation)
+        if handler:
+            return handler(result_data, note_id)
+
         return None
 
-    operation = result_data.get("operation")
-    note_id = result_data.get("note_id")
+    # Emit generic tool_result event for non-content tools
+    is_error = False
+    output = result_data
+    error_message: str | None = None
 
-    if not note_id or not isinstance(note_id, str):
-        logger.warning(
-            f"Tool result missing valid note_id: operation={operation}, note_id={note_id}"
-        )
-        return None
+    if isinstance(result_data, dict):
+        is_error = result_data.get("is_error", False) is True
+        error_message = result_data.get("error") if is_error else None
+    elif isinstance(result_data, str) and result_data.startswith("Error"):
+        is_error = True
+        error_message = result_data
 
-    if not operation or not isinstance(operation, str):
-        return None
-
-    operation_handlers = {
-        "replace_block": emit_replace_block_event,
-        "append_blocks": emit_append_blocks_event,
-        "create_issues": emit_issue_creation_events,
-        "create_single_issue": emit_issue_creation_events,
+    tool_result_data: dict[str, Any] = {
+        "toolCallId": str(tool_use_id) if tool_use_id else str(uuid4()),
+        "status": "failed" if is_error else "completed",
     }
+    if not is_error:
+        tool_result_data["output"] = output
+    if error_message:
+        tool_result_data["errorMessage"] = error_message
 
-    handler = operation_handlers.get(operation)
-    if handler:
-        return handler(result_data, note_id)
-
-    return None
+    return f"event: tool_result\ndata: {json.dumps(tool_result_data, default=str)}\n\n"
 
 
 def emit_replace_block_event(result_data: dict[str, Any], note_id: str) -> str:

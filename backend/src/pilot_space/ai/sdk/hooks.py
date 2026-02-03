@@ -15,6 +15,7 @@ import json
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from datetime import UTC
 from typing import TYPE_CHECKING, Any, ClassVar
 from uuid import UUID, uuid4
 
@@ -617,27 +618,75 @@ class SubagentProgressHook:
         return callback
 
 
+def _classify_urgency(tool_name: str) -> str:
+    """Classify approval urgency based on tool name.
+
+    Destructive operations → high, content creation → medium, other → low.
+    """
+    destructive = {"delete_issue_from_db", "merge_pull_request", "close_pull_request"}
+    content_creation = {"create_issue_in_db", "create_subtasks"}
+    if tool_name in destructive:
+        return "high"
+    if tool_name in content_creation:
+        return "medium"
+    return "low"
+
+
+def _build_affected_entities(tool_name: str, tool_input: dict[str, Any]) -> list[dict[str, str]]:
+    """Extract affected entities from tool input for approval UI."""
+    entities: list[dict[str, str]] = []
+    if "issue_id" in tool_input:
+        entities.append(
+            {
+                "type": "issue",
+                "id": str(tool_input["issue_id"]),
+                "name": str(tool_input.get("name", tool_input.get("issue_id", ""))),
+            }
+        )
+    if "note_id" in tool_input:
+        entities.append(
+            {
+                "type": "note",
+                "id": str(tool_input["note_id"]),
+                "name": str(tool_input.get("note_id", "")),
+            }
+        )
+    if "pr_number" in tool_input:
+        entities.append(
+            {
+                "type": "file",
+                "id": str(tool_input["pr_number"]),
+                "name": f"PR #{tool_input['pr_number']}",
+            }
+        )
+    return entities
+
+
 def _build_approval_sse_event(
     approval_id: UUID,
     tool_name: str,
     tool_input: dict[str, Any],
     reason: str,
 ) -> str:
-    """Build SSE event string for approval_request.
+    """Build SSE event string for approval_request with all frontend-expected fields."""
+    from datetime import datetime, timedelta
 
-    Args:
-        approval_id: UUID of the approval request
-        tool_name: Tool that triggered approval
-        tool_input: Tool input parameters
-        reason: Reason for approval requirement
+    urgency = _classify_urgency(tool_name)
+    expires_at = datetime.now(tz=UTC) + timedelta(hours=24)
+    affected_entities = _build_affected_entities(tool_name, tool_input)
 
-    Returns:
-        SSE-formatted event string.
-    """
-    data = {
+    action_mapping = PermissionCheckHook.TOOL_ACTION_MAPPING
+    action_type = action_mapping.get(tool_name, tool_name)
+
+    data: dict[str, Any] = {
         "requestId": str(approval_id),
-        "actionType": tool_name,
+        "actionType": action_type,
         "description": reason,
-        "proposedChanges": tool_input,
+        "consequences": f"This will {action_type.replace('_', ' ')} in the workspace.",
+        "affectedEntities": affected_entities,
+        "urgency": urgency,
+        "proposedContent": tool_input,
+        "expiresAt": expires_at.isoformat(),
+        "confidenceTag": "DEFAULT",
     }
     return f"event: approval_request\ndata: {json.dumps(data)}\n\n"

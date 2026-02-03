@@ -23,6 +23,8 @@ import type {
   ContentUpdateEvent,
   StructuredResultEvent,
   MessageStopEvent,
+  BudgetWarningEvent,
+  ToolAuditEvent,
   ErrorEvent,
 } from './types/events';
 import {
@@ -37,6 +39,8 @@ import {
   isAskUserQuestionEvent,
   isStructuredResultEvent,
   isMessageStopEvent,
+  isBudgetWarningEvent,
+  isToolAuditEvent,
   isErrorEvent,
 } from './types/events';
 import type { PilotSpaceStore } from './PilotSpaceStore';
@@ -53,11 +57,18 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000/api/v
  * Separated from PilotSpaceStore to keep the store focused on state
  * and simple mutations while this class handles stream I/O.
  */
+/** Maximum retry attempts for retryable errors */
+const MAX_RETRY_ATTEMPTS = 3;
+
 export class PilotSpaceStreamHandler {
   /** Active SSE client instance */
   private client: SSEClient | null = null;
   /** Last parent tool use ID from content_block_start for subagent correlation (G12) */
   private _lastParentToolUseId: string | null = null;
+  /** Current retry attempt count */
+  private _retryCount = 0;
+  /** Pending retry timer ID */
+  private _retryTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(private store: PilotSpaceStore) {}
 
@@ -71,6 +82,7 @@ export class PilotSpaceStreamHandler {
    * @param _jobId - Optional job identifier for tracking (reserved for future use)
    */
   async connectToStream(streamUrl: string, _jobId?: string): Promise<void> {
+    this.resetRetryState();
     // Ensure absolute URL
     const absoluteUrl = streamUrl.startsWith('http')
       ? streamUrl
@@ -109,6 +121,7 @@ export class PilotSpaceStreamHandler {
    * @param response - Fetch Response with text/event-stream body
    */
   async consumeSSEStream(response: Response): Promise<void> {
+    this.resetRetryState();
     const reader = response.body?.getReader();
     if (!reader) {
       throw new Error('No response body available');
@@ -223,6 +236,7 @@ export class PilotSpaceStreamHandler {
    * Abort the active SSE client connection.
    */
   abortClient(): void {
+    this.resetRetryState();
     this.client?.abort();
     this.client = null;
   }
@@ -253,6 +267,8 @@ export class PilotSpaceStreamHandler {
         | ContentUpdateEvent
         | StructuredResultEvent
         | MessageStopEvent
+        | BudgetWarningEvent
+        | ToolAuditEvent
         | ErrorEvent;
 
       // Route to type-specific handler
@@ -281,6 +297,10 @@ export class PilotSpaceStreamHandler {
         this.handleStructuredResult(event);
       } else if (isMessageStopEvent(event)) {
         this.handleTextComplete(event);
+      } else if (isBudgetWarningEvent(event)) {
+        this.handleBudgetWarning(event);
+      } else if (isToolAuditEvent(event)) {
+        this.handleToolAudit(event);
       } else if (isErrorEvent(event)) {
         this.handleError(event);
       }
@@ -547,12 +567,59 @@ export class PilotSpaceStreamHandler {
   }
 
   /**
+   * Handle budget_warning event.
+   * Surfaces budget warning to user via store error state.
+   */
+  handleBudgetWarning(event: BudgetWarningEvent): void {
+    const { currentCostUsd, maxBudgetUsd, percentUsed, message } = event.data;
+    this.store.error = `Budget warning (${percentUsed}%): ${message} ($${currentCostUsd.toFixed(4)} / $${maxBudgetUsd.toFixed(2)})`;
+  }
+
+  /**
+   * Handle tool_audit event.
+   * Updates tool call with audit info (duration).
+   */
+  handleToolAudit(event: ToolAuditEvent): void {
+    const { tool_use_id, duration_ms } = event.data;
+
+    // Find the matching tool call and update its duration
+    for (const message of this.store.messages) {
+      if (message.toolCalls) {
+        const toolCall = message.toolCalls.find((tc) => tc.id === tool_use_id);
+        if (toolCall) {
+          toolCall.durationMs = duration_ms ?? undefined;
+          break;
+        }
+      }
+    }
+  }
+
+  /**
    * Handle error event.
-   * Sets error state and resets streaming.
+   * Implements exponential backoff retry for retryable errors (max 3 attempts).
+   * Non-retryable errors reset streaming state immediately.
    */
   handleError(event: ErrorEvent): void {
     const { errorCode, message, retryable, retryAfter } = event.data;
 
+    if (retryable && this._retryCount < MAX_RETRY_ATTEMPTS) {
+      this._retryCount++;
+      // Use server-provided retryAfter or exponential backoff (1s, 2s, 4s)
+      const delaySeconds = retryAfter ?? Math.pow(2, this._retryCount - 1);
+      this.store.error = `[${errorCode}] ${message} — retrying in ${delaySeconds}s (${this._retryCount}/${MAX_RETRY_ATTEMPTS})`;
+
+      this._retryTimer = setTimeout(() => {
+        this._retryTimer = null;
+        // Reconnect: re-consume the current stream if client exists
+        if (this.client) {
+          this.client.connect();
+        }
+      }, delaySeconds * 1000);
+      return;
+    }
+
+    // Non-retryable or max retries exceeded
+    this._retryCount = 0;
     this.store.error = `[${errorCode}] ${message}`;
 
     // Reset streaming state
@@ -561,10 +628,16 @@ export class PilotSpaceStreamHandler {
       streamContent: '',
       currentMessageId: null,
     };
+  }
 
-    // TODO: Implement retry logic if retryable === true
-    if (retryable && retryAfter) {
-      console.log(`Error is retryable. Retry after ${retryAfter}s`);
+  /**
+   * Reset retry state. Call when starting a new stream.
+   */
+  resetRetryState(): void {
+    this._retryCount = 0;
+    if (this._retryTimer) {
+      clearTimeout(this._retryTimer);
+      this._retryTimer = null;
     }
   }
 }

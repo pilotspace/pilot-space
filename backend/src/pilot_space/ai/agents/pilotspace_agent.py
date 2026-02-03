@@ -123,6 +123,19 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
     AGENT_NAME = "pilotspace_agent"
     DEFAULT_MODEL_TIER: ClassVar[ModelTier] = ModelTier.SONNET
 
+    # Base system prompt for SDK-native prompt caching (cache_control: ephemeral).
+    # This stable text is cached across requests, saving ~63% on input tokens.
+    SYSTEM_PROMPT_BASE: ClassVar[str] = (
+        "You are PilotSpace AI, an embedded assistant in a Note-First SDLC platform. "
+        "You help software teams capture ideas in notes, extract issues, review PRs, "
+        "and manage project workflows. You have access to MCP note tools "
+        "(update_note_block, enhance_text, summarize_note, extract_issues, "
+        "create_issue_from_note, link_existing_issues) and can delegate to subagents "
+        "(pr-review, ai-context, doc-generator). Follow the user's workspace context. "
+        "Return operation payloads for mutations; never mutate the database directly. "
+        "For destructive actions, always request human approval."
+    )
+
     # Subagent routing map
     SUBAGENT_MAP: ClassVar[dict[str, str]] = {
         "pr-review": "PRReviewSubagent",
@@ -461,6 +474,7 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
                 },
                 hook_executor=hook_executor,
                 include_partial_messages=True,
+                system_prompt_base=self.SYSTEM_PROMPT_BASE,
             )
 
             # Build SDK options from space config
