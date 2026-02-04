@@ -23,14 +23,16 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from pilot_space.infrastructure.database.base import WorkspaceScopedModel
+from pilot_space.infrastructure.database.types import JSONBCompat
 
 if TYPE_CHECKING:
     from pilot_space.infrastructure.database.models.activity import Activity
     from pilot_space.infrastructure.database.models.ai_context import AIContext
+    from pilot_space.infrastructure.database.models.cycle import Cycle
     from pilot_space.infrastructure.database.models.label import Label
     from pilot_space.infrastructure.database.models.module import Module
     from pilot_space.infrastructure.database.models.note_issue_link import NoteIssueLink
@@ -186,9 +188,9 @@ class Issue(WorkspaceScopedModel):
         default=0,
     )
 
-    # AI metadata (JSONB for flexibility)
+    # AI metadata (JSONBCompat for flexibility)
     ai_metadata: Mapped[dict[str, Any] | None] = mapped_column(
-        JSONB,
+        JSONBCompat,
         nullable=True,
         default=dict,
     )
@@ -229,6 +231,11 @@ class Issue(WorkspaceScopedModel):
         "User",
         foreign_keys=[reporter_id],
         lazy="joined",
+    )
+    cycle: Mapped[Cycle | None] = relationship(
+        "Cycle",
+        back_populates="issues",
+        lazy="selectin",
     )
     module: Mapped[Module | None] = relationship(
         "Module",
@@ -281,7 +288,6 @@ class Issue(WorkspaceScopedModel):
             name="uq_issues_project_sequence",
         ),
         # Common query indexes
-        Index("ix_issues_workspace_id", "workspace_id"),
         Index("ix_issues_project_id", "project_id"),
         Index("ix_issues_state_id", "state_id"),
         Index("ix_issues_assignee_id", "assignee_id"),

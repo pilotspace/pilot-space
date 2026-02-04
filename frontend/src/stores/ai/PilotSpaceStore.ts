@@ -1,0 +1,487 @@
+/**
+ * PilotSpace Store - Unified conversational agent state management.
+ *
+ * Consolidates AI agent interactions with:
+ * - Conversational chat with streaming SSE
+ * - Multi-turn session management
+ * - Task tracking and progress updates
+ * - Approval flow per DD-003 (human-in-the-loop)
+ * - Context-aware execution (note, issue, project)
+ *
+ * Stream handling delegated to PilotSpaceStreamHandler.
+ * User-facing async actions delegated to PilotSpaceActions.
+ *
+ * @module stores/ai/PilotSpaceStore
+ * @see specs/005-conversational-agent-arch/plan.md (T042-T049)
+ */
+import { makeAutoObservable, runInAction, computed } from 'mobx';
+import type { AIStore } from './AIStore';
+import type {
+  ChatMessage,
+  ToolCall,
+  StreamingState,
+  ConversationContext,
+  MessageMetadata,
+} from './types/conversation';
+import type { MemoryUpdateEvent } from './types/events';
+import type { ContentUpdateEvent, AgentQuestion, TaskStatus } from './types/events';
+import type { SkillDefinition, ConfidenceTag } from './types/skills';
+import { PilotSpaceStreamHandler } from './PilotSpaceStreamHandler';
+import { PilotSpaceActions } from './PilotSpaceActions';
+
+/**
+ * Task state for long-running operations.
+ */
+export interface TaskState {
+  id: string;
+  subject: string;
+  status: TaskStatus;
+  progress: number;
+  description?: string;
+  currentStep?: string;
+  totalSteps?: number;
+  estimatedSecondsRemaining?: number;
+  /** Subagent name executing this task */
+  agentName?: string;
+  /** AI model used by this subagent */
+  model?: string;
+  /** Creation timestamp */
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/**
+ * Approval request state per DD-003.
+ */
+export interface ApprovalRequest {
+  requestId: string;
+  actionType: string;
+  description: string;
+  consequences?: string;
+  affectedEntities: Array<{
+    type: string;
+    id: string;
+    name: string;
+    preview?: unknown;
+  }>;
+  urgency: 'low' | 'medium' | 'high';
+  proposedContent?: unknown;
+  expiresAt: Date;
+  confidenceTag?: ConfidenceTag;
+  createdAt: Date;
+}
+
+export interface NoteContext {
+  noteId: string;
+  selectedText?: string;
+  selectedBlockIds?: string[];
+  noteTitle?: string;
+}
+
+export interface IssueContext {
+  issueId: string;
+  issueTitle?: string;
+  issueStatus?: string;
+}
+
+/**
+ * PilotSpace Store - Unified conversational agent state.
+ */
+export class PilotSpaceStore {
+  // ========================================
+  // Observable State
+  // ========================================
+
+  messages: ChatMessage[] = [];
+  streamingState: StreamingState = {
+    isStreaming: false,
+    streamContent: '',
+    currentMessageId: null,
+    thinkingContent: '',
+    isThinking: false,
+    thinkingStartedAt: null,
+  };
+  sessionId: string | null = null;
+
+  /** Session ID to fork from (set by prepareFork, consumed on next sendMessage) */
+  forkSessionId: string | null = null;
+
+  /** Long-running tasks */
+  tasks = new Map<string, TaskState>();
+  pendingApprovals: ApprovalRequest[] = [];
+  pendingContentUpdates: ContentUpdateEvent['data'][] = [];
+  noteContext: NoteContext | null = null;
+  issueContext: IssueContext | null = null;
+
+  /** Current project context */
+  projectContext: { projectId: string; name?: string; slug?: string } | null = null;
+
+  /** Active skill for invocation (consumed on next sendMessage) */
+  activeSkill: { name: string; args?: string } | null = null;
+
+  /** Mentioned agents in current input (consumed on next sendMessage) */
+  mentionedAgents: string[] = [];
+
+  /** Current workspace ID */
+  workspaceId: string | null = null;
+  error: string | null = null;
+
+  /** Pending structured result (set by structured_result event, consumed by message_stop) */
+  private pendingStructuredResult: { schemaType: string; data: Record<string, unknown> } | null =
+    null;
+
+  /** Pending tool calls buffered during streaming (T63 — consumed by message_stop) */
+  private _pendingToolCalls: ToolCall[] = [];
+
+  /** Pending citations buffered during streaming (T64 — consumed by message_stop) */
+  private _pendingCitations: ChatMessage['citations'] = [];
+
+  /** Last memory update from cross-session memory tool (T73) */
+  lastMemoryUpdate: MemoryUpdateEvent['data'] | null = null;
+
+  /** Pending question from agent (requires user response before agent can continue) */
+  pendingQuestion: {
+    questionId: string;
+    questions: AgentQuestion[];
+    resolvedAnswer?: string;
+  } | null = null;
+
+  /** Available skills registry */
+  skills: SkillDefinition[] = [];
+
+  // ========================================
+  // Delegates
+  // ========================================
+
+  private readonly streamHandler: PilotSpaceStreamHandler;
+  private readonly actions: PilotSpaceActions;
+
+  constructor(_rootStore: AIStore) {
+    this.streamHandler = new PilotSpaceStreamHandler(this);
+    this.actions = new PilotSpaceActions(this, this.streamHandler);
+
+    makeAutoObservable(this, {
+      activeTasks: computed,
+      completedTasks: computed,
+      conversationContext: computed,
+    });
+  }
+
+  // ========================================
+  // Computed Properties
+  // ========================================
+
+  get isStreaming(): boolean {
+    return this.streamingState.isStreaming;
+  }
+
+  get streamContent(): string {
+    return this.streamingState.streamContent;
+  }
+
+  get hasUnresolvedApprovals(): boolean {
+    return this.pendingApprovals.length > 0;
+  }
+
+  get activeTasks(): TaskState[] {
+    return Array.from(this.tasks.values()).filter(
+      (task) => task.status === 'pending' || task.status === 'in_progress'
+    );
+  }
+
+  get completedTasks(): TaskState[] {
+    return Array.from(this.tasks.values()).filter((task) => task.status === 'completed');
+  }
+
+  get conversationContext(): ConversationContext {
+    if (!this.workspaceId) {
+      throw new Error('Cannot create conversation context: workspaceId not set');
+    }
+    return {
+      workspaceId: this.workspaceId,
+      noteId: this.noteContext?.noteId ?? null,
+      issueId: this.issueContext?.issueId ?? null,
+      projectId: this.projectContext?.projectId ?? null,
+      selectedText: this.noteContext?.selectedText ?? null,
+      selectedBlockIds: this.noteContext?.selectedBlockIds ?? [],
+    };
+  }
+
+  // ========================================
+  // Actions - Message Management
+  // ========================================
+
+  addMessage(message: ChatMessage): void {
+    this.messages.push(message);
+  }
+
+  updateStreamingState(state: Partial<StreamingState>): void {
+    this.streamingState = { ...this.streamingState, ...state };
+  }
+
+  setSessionId(sessionId: string | null): void {
+    this.sessionId = sessionId;
+  }
+
+  /**
+   * Set fork session ID for "what-if" exploration.
+   * The next sendMessage will include this in the request body.
+   * @param forkSessionId - Source session to fork from
+   */
+  setForkSessionId(forkSessionId: string | null): void {
+    this.forkSessionId = forkSessionId;
+  }
+
+  // ========================================
+  // Actions - Task Management (delegated)
+  // ========================================
+
+  addTask(taskId: string, update: Partial<Omit<TaskState, 'id'>>): void {
+    const existing = this.tasks.get(taskId);
+    const now = new Date();
+
+    if (existing) {
+      this.tasks.set(taskId, {
+        ...existing,
+        ...update,
+        updatedAt: now,
+      });
+    } else {
+      this.tasks.set(taskId, {
+        id: taskId,
+        subject: update.subject ?? 'Task',
+        status: update.status ?? 'pending',
+        progress: update.progress ?? 0,
+        description: update.description,
+        currentStep: update.currentStep,
+        totalSteps: update.totalSteps,
+        estimatedSecondsRemaining: update.estimatedSecondsRemaining,
+        agentName: update.agentName,
+        model: update.model,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+  }
+
+  updateTaskStatus(taskId: string, status: TaskStatus): void {
+    this.approvalsHandler.updateTaskStatus(taskId, status);
+  }
+
+  removeTask(taskId: string): void {
+    this.approvalsHandler.removeTask(taskId);
+  }
+
+  // ========================================
+  // Actions - Approval Management (DD-003, delegated)
+  // ========================================
+
+  addApproval(request: ApprovalRequest): void {
+    this.pendingApprovals.push(request);
+  }
+
+  async approveRequest(requestId: string): Promise<void> {
+    return this.actions.approveRequest(requestId);
+  }
+
+  async rejectRequest(requestId: string, reason?: string): Promise<void> {
+    return this.actions.rejectRequest(requestId, reason);
+  }
+
+  /**
+   * Alias methods to match IPilotSpaceStore interface
+   */
+  async approveAction(id: string, modifications?: Record<string, unknown>): Promise<void> {
+    return this.actions.approveAction(id, modifications);
+  }
+
+  async rejectAction(id: string, reason: string): Promise<void> {
+    return this.actions.rejectAction(id, reason);
+  }
+
+  clearConversation(): void {
+    this.clear();
+  }
+
+  // ========================================
+  // Actions - Structured Result Management
+  // ========================================
+
+  /**
+   * Set pending structured result (called by stream handler).
+   * @param result - Structured result data
+   */
+  setPendingStructuredResult(
+    result: { schemaType: string; data: Record<string, unknown> } | null
+  ): void {
+    this.pendingStructuredResult = result;
+  }
+
+  /**
+   * Consume pending structured result (called by stream handler on message_stop).
+   * Returns and clears the pending result.
+   */
+  consumePendingStructuredResult():
+    | { schemaType: string; data: Record<string, unknown> }
+    | undefined {
+    const result = this.pendingStructuredResult ?? undefined;
+    this.pendingStructuredResult = null;
+    return result;
+  }
+
+  // ========================================
+  // Actions - Pending Tool Call Buffer (T63)
+  // ========================================
+
+  /**
+   * Buffer a tool call during streaming.
+   * Tool calls arrive before message_stop, so they must be buffered
+   * and attached to the assistant message on finalization.
+   */
+  addPendingToolCall(tc: ToolCall): void {
+    this._pendingToolCalls.push(tc);
+  }
+
+  /**
+   * Find a pending tool call by ID (for tool_input_delta and tool_result during streaming).
+   */
+  findPendingToolCall(toolUseId: string): ToolCall | undefined {
+    return this._pendingToolCalls.find((tc) => tc.id === toolUseId);
+  }
+
+  /**
+   * Consume and clear all pending tool calls (called on message_stop).
+   */
+  consumePendingToolCalls(): ToolCall[] | undefined {
+    if (this._pendingToolCalls.length === 0) return undefined;
+    const calls = [...this._pendingToolCalls];
+    this._pendingToolCalls = [];
+    return calls;
+  }
+
+  // ========================================
+  // Actions - Pending Citation Buffer (T64)
+  // ========================================
+
+  /**
+   * Buffer citations during streaming.
+   * Citation events arrive before message_stop.
+   */
+  addPendingCitations(citations: NonNullable<ChatMessage['citations']>): void {
+    this._pendingCitations = [...(this._pendingCitations ?? []), ...citations];
+  }
+
+  /**
+   * Consume and clear all pending citations (called on message_stop).
+   */
+  consumePendingCitations(): ChatMessage['citations'] | undefined {
+    if (!this._pendingCitations || this._pendingCitations.length === 0) return undefined;
+    const citations = this._pendingCitations;
+    this._pendingCitations = [];
+    return citations;
+  }
+
+  // ========================================
+  // Actions - Content Update Management
+  // ========================================
+
+  handleContentUpdate(event: ContentUpdateEvent): void {
+    runInAction(() => {
+      if (this.pendingContentUpdates.length >= 100) {
+        this.pendingContentUpdates.shift();
+      }
+      this.pendingContentUpdates.push(event.data);
+    });
+  }
+
+  consumeContentUpdate(noteId: string): ContentUpdateEvent['data'] | undefined {
+    return runInAction(() => {
+      const idx = this.pendingContentUpdates.findIndex((u) => u.noteId === noteId);
+      if (idx >= 0) {
+        return this.pendingContentUpdates.splice(idx, 1)[0];
+      }
+      return undefined;
+    });
+  }
+
+  // ========================================
+  // Actions - Context Management
+  // ========================================
+
+  setWorkspaceId(workspaceId: string | null): void {
+    this.workspaceId = workspaceId;
+  }
+
+  setNoteContext(context: NoteContext | null): void {
+    this.noteContext = context;
+  }
+
+  setIssueContext(context: IssueContext | null): void {
+    this.issueContext = context;
+  }
+
+  clearContext(): void {
+    this.noteContext = null;
+    this.issueContext = null;
+    this.projectContext = null;
+    this.activeSkill = null;
+    this.mentionedAgents = [];
+  }
+
+  /**
+   * Set project context for AI operations.
+   * @param context - Project context state
+   */
+  setProjectContext(context: { projectId: string; name?: string; slug?: string } | null): void {
+    this.projectContext = context;
+  }
+
+  setActiveSkill(skill: string, args?: string): void {
+    this.activeSkill = { name: skill, args };
+  }
+
+  addMentionedAgent(agent: string): void {
+    if (!this.mentionedAgents.includes(agent)) {
+      this.mentionedAgents.push(agent);
+    }
+  }
+
+  // ========================================
+  // Delegated Actions (Message Sending + Lifecycle)
+  // ========================================
+
+  /**
+   * Send message to AI and stream response via SSE.
+   *
+   * @param content - User message content
+   * @param metadata - Optional message metadata (skill invocation, agent mention)
+   */
+  async sendMessage(content: string, metadata?: Partial<MessageMetadata>): Promise<void> {
+    return this.actions.sendMessage(content, metadata);
+  }
+
+  /**
+   * Submit an answer to a pending agent question.
+   *
+   * @param questionId - Question identifier (tool call ID)
+   * @param answer - User's answer text
+   */
+  async submitQuestionAnswer(questionId: string, answer: string): Promise<void> {
+    return this.actions.submitQuestionAnswer(questionId, answer);
+  }
+
+  /**
+   * Abort current streaming response.
+   */
+  abort(): void {
+    this.actions.abort();
+  }
+
+  clear(): void {
+    this.actions.clear();
+  }
+
+  reset(): void {
+    this.actions.reset();
+  }
+}

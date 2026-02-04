@@ -14,9 +14,11 @@ import {
   User,
   Calendar,
   Sparkles,
+  ExternalLink,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { Issue, IssuePriority, IssueType } from '@/types';
@@ -24,6 +26,8 @@ import type { Issue, IssuePriority, IssueType } from '@/types';
 export interface IssueCardProps {
   issue: Issue;
   onClick?: (issue: Issue) => void;
+  /** Navigate to issue detail page */
+  onOpenIssue?: (issue: Issue) => void;
   onDragStart?: (e: React.DragEvent, issue: Issue) => void;
   isDragging?: boolean;
   compact?: boolean;
@@ -99,13 +103,15 @@ function formatRelativeDate(dateStr: string): string {
 export const IssueCard = observer(function IssueCard({
   issue,
   onClick,
+  onOpenIssue,
   onDragStart,
   isDragging = false,
   compact = false,
   className,
 }: IssueCardProps) {
   const PriorityIcon = priorityConfig[issue.priority].icon;
-  const TypeIcon = typeConfig[issue.type].icon;
+  const issueType = issue.type ?? 'task';
+  const TypeIcon = typeConfig[issueType].icon;
 
   const handleClick = () => {
     onClick?.(issue);
@@ -146,17 +152,31 @@ export const IssueCard = observer(function IssueCard({
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <span className={cn('flex items-center', typeConfig[issue.type].className)}>
+                <span className={cn('flex items-center', typeConfig[issueType].className)}>
                   <TypeIcon className="size-4" />
                 </span>
               </TooltipTrigger>
-              <TooltipContent>{typeConfig[issue.type].label}</TooltipContent>
+              <TooltipContent>{typeConfig[issueType].label}</TooltipContent>
             </Tooltip>
           </TooltipProvider>
           <span className="text-xs font-medium text-muted-foreground">{issue.identifier}</span>
         </div>
 
         <div className="flex items-center gap-1">
+          {onOpenIssue && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="size-6 opacity-0 group-hover:opacity-100 transition-opacity"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenIssue(issue);
+              }}
+              aria-label={`Open issue ${issue.identifier}`}
+            >
+              <ExternalLink className="size-3.5" />
+            </Button>
+          )}
           {issue.aiGenerated && (
             <TooltipProvider>
               <Tooltip>
@@ -223,13 +243,15 @@ export const IssueCard = observer(function IssueCard({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Avatar className="size-5">
-                    <AvatarImage src={issue.assignee.avatarUrl} alt={issue.assignee.name} />
+                    <AvatarImage src="" alt={issue.assignee.displayName ?? issue.assignee.email} />
                     <AvatarFallback className="text-[10px]">
-                      {getInitials(issue.assignee.name)}
+                      {getInitials(issue.assignee.displayName ?? issue.assignee.email)}
                     </AvatarFallback>
                   </Avatar>
                 </TooltipTrigger>
-                <TooltipContent>Assigned to {issue.assignee.name}</TooltipContent>
+                <TooltipContent>
+                  Assigned to {issue.assignee.displayName ?? issue.assignee.email}
+                </TooltipContent>
               </Tooltip>
             </TooltipProvider>
           ) : (
@@ -245,19 +267,21 @@ export const IssueCard = observer(function IssueCard({
             </TooltipProvider>
           )}
 
-          {issue.dueDate && (
+          {issue.targetDate && (
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span className="flex items-center gap-1">
                     <Calendar className="size-3" />
-                    {new Date(issue.dueDate).toLocaleDateString('en-US', {
+                    {new Date(issue.targetDate).toLocaleDateString('en-US', {
                       month: 'short',
                       day: 'numeric',
                     })}
                   </span>
                 </TooltipTrigger>
-                <TooltipContent>Due {new Date(issue.dueDate).toLocaleDateString()}</TooltipContent>
+                <TooltipContent>
+                  Due {new Date(issue.targetDate).toLocaleDateString()}
+                </TooltipContent>
               </Tooltip>
             </TooltipProvider>
           )}

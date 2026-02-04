@@ -19,10 +19,11 @@ from sqlalchemy import (
     Text,
     text,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from pilot_space.infrastructure.database.base import WorkspaceScopedModel
+from pilot_space.infrastructure.database.types import JSONBCompat
 
 if TYPE_CHECKING:
     from pilot_space.infrastructure.database.models.note import Note
@@ -34,12 +35,18 @@ class AnnotationType(str, Enum):
     Different types affect rendering and user interaction:
     - suggestion: AI suggestion for improvement
     - warning: Potential issue or concern
+    - question: Clarification needed
+    - insight: Additional context
+    - reference: Related content link
     - issue_candidate: Content that could become an Issue
     - info: Informational note from AI
     """
 
     SUGGESTION = "suggestion"
     WARNING = "warning"
+    QUESTION = "question"
+    INSIGHT = "insight"
+    REFERENCE = "reference"
     ISSUE_CANDIDATE = "issue_candidate"
     INFO = "info"
 
@@ -93,7 +100,12 @@ class NoteAnnotation(WorkspaceScopedModel):
 
     # Annotation type and content
     type: Mapped[AnnotationType] = mapped_column(
-        SQLEnum(AnnotationType, name="annotation_type", create_type=False),
+        SQLEnum(
+            AnnotationType,
+            name="annotation_type",
+            create_type=False,
+            values_callable=lambda obj: [e.value for e in obj],
+        ),
         nullable=False,
         default=AnnotationType.SUGGESTION,
     )
@@ -112,14 +124,19 @@ class NoteAnnotation(WorkspaceScopedModel):
 
     # Status tracking
     status: Mapped[AnnotationStatus] = mapped_column(
-        SQLEnum(AnnotationStatus, name="annotation_status", create_type=False),
+        SQLEnum(
+            AnnotationStatus,
+            name="annotation_status",
+            create_type=False,
+            values_callable=lambda obj: [e.value for e in obj],
+        ),
         nullable=False,
         default=AnnotationStatus.PENDING,
     )
 
     # AI metadata (model used, reasoning chain, context used, etc.)
     ai_metadata: Mapped[dict[str, Any] | None] = mapped_column(
-        JSONB,
+        JSONBCompat,
         nullable=True,
         default=dict,
     )
@@ -133,7 +150,6 @@ class NoteAnnotation(WorkspaceScopedModel):
 
     # Indexes and constraints
     __table_args__ = (
-        Index("ix_note_annotations_workspace_id", "workspace_id"),
         Index("ix_note_annotations_note_id", "note_id"),
         Index("ix_note_annotations_block_id", "block_id"),
         Index("ix_note_annotations_type", "type"),

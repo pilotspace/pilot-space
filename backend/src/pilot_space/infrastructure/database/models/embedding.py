@@ -20,10 +20,11 @@ from sqlalchemy import (
     String,
     Text,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from pilot_space.infrastructure.database.base import WorkspaceScopedModel
+from pilot_space.infrastructure.database.types import JSONBCompat
 
 
 class EmbeddingType(str, Enum):
@@ -115,7 +116,7 @@ class Embedding(WorkspaceScopedModel):
     # Additional metadata (renamed to avoid conflict with SQLAlchemy's metadata)
     embedding_metadata: Mapped[dict[str, Any] | None] = mapped_column(
         "metadata",  # Column name in DB
-        JSONB,
+        JSONBCompat,
         nullable=True,
         default=dict,
     )
@@ -130,7 +131,6 @@ class Embedding(WorkspaceScopedModel):
 
     # Indexes
     __table_args__ = (
-        Index("ix_embeddings_workspace_id", "workspace_id"),
         Index("ix_embeddings_content_type", "content_type"),
         Index("ix_embeddings_content_id", "content_id"),
         Index("ix_embeddings_content_hash", "content_hash"),

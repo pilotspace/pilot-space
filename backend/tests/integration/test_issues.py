@@ -11,15 +11,15 @@ from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from httpx import AsyncClient
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from pilot_space.domain.models import Issue, Label
-from pilot_space.infrastructure.database.models import ActivityModel, IssueModel
+from pilot_space.domain.models import Activity, Issue, Label
 
 if TYPE_CHECKING:
-    from pilot_space.domain.models import Project, User, Workspace
+    from httpx import AsyncClient
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from pilot_space.domain.models import Project, User
 
 
 pytestmark = pytest.mark.asyncio
@@ -28,12 +28,11 @@ pytestmark = pytest.mark.asyncio
 class TestIssueCRUD:
     """Test issue CRUD operations."""
 
+    @pytest.mark.usefixtures("_db_session", "_test_workspace")
     async def test_create_issue_success(
         self,
         client: AsyncClient,
-        db_session: AsyncSession,
         authenticated_user: User,
-        test_workspace: Workspace,
         test_project: Project,
         auth_headers: dict[str, str],
     ) -> None:
@@ -145,7 +144,7 @@ class TestIssueCRUD:
         assert response.status_code == 204
 
         # Verify soft deleted
-        stmt = select(IssueModel).where(IssueModel.id == test_issue.id)
+        stmt = select(Issue).where(Issue.id == test_issue.id)
         result = await db_session.execute(stmt)
         issue = result.scalar_one_or_none()
         assert issue is not None
@@ -156,7 +155,7 @@ class TestIssueStateMachine:
     """Test issue state machine transitions."""
 
     @pytest.mark.parametrize(
-        "from_state,to_state,expected_success",
+        ("from_state", "to_state", "expected_success"),
         [
             ("backlog", "todo", True),
             ("todo", "in_progress", True),
@@ -209,9 +208,9 @@ class TestIssueStateMachine:
         assert response.status_code == 200
 
         # Check activity was created
-        stmt = select(ActivityModel).where(
-            ActivityModel.entity_id == test_issue.id,
-            ActivityModel.action == "state_changed",
+        stmt = select(Activity).where(
+            Activity.entity_id == test_issue.id,
+            Activity.action == "state_changed",
         )
         result = await db_session.execute(stmt)
         activity = result.scalar_one_or_none()
@@ -367,9 +366,9 @@ class TestIssueActivityLogging:
         issue_id = response.json()["id"]
 
         # Check activity log
-        stmt = select(ActivityModel).where(
-            ActivityModel.entity_id == uuid.UUID(issue_id),
-            ActivityModel.action == "created",
+        stmt = select(Activity).where(
+            Activity.entity_id == uuid.UUID(issue_id),
+            Activity.action == "created",
         )
         result = await db_session.execute(stmt)
         activity = result.scalar_one_or_none()
@@ -391,11 +390,11 @@ class TestIssueActivityLogging:
         data = response.json()
         assert isinstance(data, list)
 
+    @pytest.mark.usefixtures("authenticated_user")
     async def test_activity_includes_user_info(
         self,
         client: AsyncClient,
         test_issue: Issue,
-        authenticated_user: User,
         auth_headers: dict[str, str],
     ) -> None:
         """Test that activity includes user information."""
@@ -420,11 +419,11 @@ class TestIssueActivityLogging:
 class TestIssueFilteringAndPagination:
     """Test issue filtering and pagination."""
 
+    @pytest.mark.usefixtures("test_issue")
     async def test_list_issues_by_project(
         self,
         client: AsyncClient,
         test_project: Project,
-        test_issue: Issue,
         auth_headers: dict[str, str],
     ) -> None:
         """Test filtering issues by project."""
@@ -437,10 +436,10 @@ class TestIssueFilteringAndPagination:
         data = response.json()
         assert "items" in data or isinstance(data, list)
 
+    @pytest.mark.usefixtures("test_issue")
     async def test_list_issues_by_state(
         self,
         client: AsyncClient,
-        test_issue: Issue,
         auth_headers: dict[str, str],
     ) -> None:
         """Test filtering issues by state."""

@@ -8,49 +8,77 @@ export type IssueType = 'bug' | 'feature' | 'improvement' | 'task';
 export interface Issue {
   id: string;
   identifier: string;
-  title: string;
+  name: string;
+  /** @deprecated Use `name` instead. Present for backward compatibility. */
+  title?: string;
   description?: string;
-  state: IssueState;
+  descriptionHtml?: string;
+  state: StateBrief;
   priority: IssuePriority;
-  type: IssueType;
+  type?: IssueType;
   projectId: string;
+  workspaceId: string;
+  sequenceId: number;
+  sortOrder: number;
   assigneeId?: string;
-  assignee?: User;
+  assignee?: UserBrief | null;
   reporterId: string;
-  reporter?: User;
-  labels: Label[];
-  dueDate?: string;
-  estimatedHours?: number;
-  aiGenerated: boolean;
-  sourceNoteId?: string;
+  reporter: UserBrief;
+  labels: LabelBrief[];
+  estimatePoints?: number;
+  startDate?: string;
+  targetDate?: string;
+  cycleId?: string;
+  parentId?: string;
+  subIssueCount: number;
+  project: ProjectBrief;
+  aiGenerated?: boolean;
+  hasAiEnhancements: boolean;
+  aiMetadata?: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface CreateIssueData {
-  title: string;
+  name: string;
   description?: string;
-  projectId: string;
-  state?: IssueState;
+  descriptionHtml?: string;
+  projectId?: string;
+  stateId?: string;
   priority?: IssuePriority;
   type?: IssueType;
   assigneeId?: string;
-  labels?: string[];
-  dueDate?: string;
-  estimatedHours?: number;
-  sourceNoteId?: string;
+  labelIds?: string[];
+  estimatePoints?: number;
+  startDate?: string;
+  targetDate?: string;
+  cycleId?: string;
+  moduleId?: string;
+  parentId?: string;
 }
 
 export interface UpdateIssueData {
-  title?: string;
+  name?: string;
   description?: string;
-  state?: IssueState;
+  descriptionHtml?: string;
   priority?: IssuePriority;
-  type?: IssueType;
+  stateId?: string;
   assigneeId?: string;
-  labels?: string[];
-  dueDate?: string;
-  estimatedHours?: number;
+  cycleId?: string;
+  moduleId?: string;
+  parentId?: string;
+  estimatePoints?: number;
+  startDate?: string;
+  targetDate?: string;
+  sortOrder?: number;
+  labelIds?: string[];
+  clearAssignee?: boolean;
+  clearCycle?: boolean;
+  clearModule?: boolean;
+  clearParent?: boolean;
+  clearEstimate?: boolean;
+  clearStartDate?: boolean;
+  clearTargetDate?: boolean;
 }
 
 // Note Types
@@ -113,12 +141,29 @@ export interface NoteBlock {
 /**
  * Annotation type for AI-generated suggestions
  */
-export type AnnotationType = 'suggestion' | 'warning' | 'issue_candidate' | 'info';
+export type AnnotationType =
+  | 'suggestion'
+  | 'warning'
+  | 'issue_candidate'
+  | 'info'
+  | 'question'
+  | 'insight'
+  | 'reference';
 
 /**
  * Annotation status for tracking user actions
  */
 export type AnnotationStatus = 'pending' | 'accepted' | 'rejected' | 'dismissed';
+
+/**
+ * AI annotation metadata
+ */
+export interface AnnotationMetadata {
+  title?: string;
+  summary?: string;
+  suggestedText?: string;
+  references?: Array<{ title: string; url: string }>;
+}
 
 /**
  * AI annotation on a note block
@@ -131,7 +176,7 @@ export interface NoteAnnotation {
   type: AnnotationType;
   confidence: number;
   status: AnnotationStatus;
-  aiMetadata?: Record<string, unknown>;
+  aiMetadata?: AnnotationMetadata;
   createdAt: string;
   updatedAt?: string;
   /** @deprecated Use status instead */
@@ -199,6 +244,70 @@ export interface Label {
   name: string;
   color: string;
   projectId: string;
+}
+
+// State Brief (matches backend StateBriefSchema)
+export type StateGroup = 'backlog' | 'unstarted' | 'started' | 'completed' | 'cancelled';
+
+export interface StateBrief {
+  id: string;
+  name: string;
+  color: string;
+  group: StateGroup;
+}
+
+// User Brief (matches backend UserBriefSchema)
+export interface UserBrief {
+  id: string;
+  email: string;
+  displayName: string | null;
+}
+
+// Label Brief (matches backend LabelBriefSchema)
+export interface LabelBrief {
+  id: string;
+  name: string;
+  color: string;
+}
+
+// Activity (matches backend ActivityResponse)
+export interface Activity {
+  id: string;
+  activityType: string;
+  field: string | null;
+  oldValue: string | null;
+  newValue: string | null;
+  comment: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+  actor: UserBrief | null;
+}
+
+// Activity Timeline Response (matches backend ActivityTimelineResponse)
+export interface ActivityTimelineResponse {
+  activities: Activity[];
+  total: number;
+}
+
+// Integration Link (frontend-only, for future backend support)
+export interface IntegrationLink {
+  id: string;
+  issueId: string;
+  integrationType: 'github_pr' | 'github_issue' | 'slack';
+  externalId: string;
+  externalUrl: string;
+  prNumber?: number;
+  prTitle?: string;
+  prStatus?: 'open' | 'merged' | 'closed';
+}
+
+// Note Issue Link (frontend-only, for future backend support)
+export interface NoteIssueLink {
+  id: string;
+  noteId: string;
+  issueId: string;
+  linkType: 'CREATED' | 'EXTRACTED' | 'REFERENCED';
+  noteTitle: string;
 }
 
 // AI Types
@@ -313,8 +422,8 @@ export interface IssueBrief {
   identifier: string;
   name: string;
   priority: IssuePriority;
-  state?: unknown;
-  assignee?: User;
+  state?: StateBrief;
+  assignee?: UserBrief;
 }
 
 // Burndown Chart Types

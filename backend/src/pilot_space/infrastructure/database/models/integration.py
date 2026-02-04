@@ -22,10 +22,11 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from pilot_space.infrastructure.database.base import WorkspaceScopedModel
+from pilot_space.infrastructure.database.types import JSONBCompat
 
 if TYPE_CHECKING:
     from pilot_space.infrastructure.database.models.issue import Issue
@@ -66,7 +67,7 @@ class Integration(WorkspaceScopedModel):
         token_expires_at: Token expiration timestamp (ISO 8601 string).
         external_account_id: External service account/org ID.
         external_account_name: External service account/org name.
-        settings: Provider-specific configuration (JSONB).
+        settings: Provider-specific configuration (JSONBCompat).
         is_active: Whether integration is currently active.
         installed_by_id: User who installed the integration.
     """
@@ -105,7 +106,7 @@ class Integration(WorkspaceScopedModel):
 
     # Provider-specific settings
     settings: Mapped[dict[str, Any] | None] = mapped_column(
-        JSONB,
+        JSONBCompat,
         nullable=True,
         default=dict,
     )
@@ -157,7 +158,6 @@ class Integration(WorkspaceScopedModel):
             "provider",
             name="uq_integrations_workspace_provider",
         ),
-        Index("ix_integrations_workspace_id", "workspace_id"),
         Index("ix_integrations_provider", "provider"),
         Index("ix_integrations_is_active", "is_active"),
         Index("ix_integrations_is_deleted", "is_deleted"),
@@ -208,7 +208,7 @@ class IntegrationLink(WorkspaceScopedModel):
         title: Title/message of external resource.
         author_name: Author of the commit/PR.
         author_avatar_url: Avatar URL of author.
-        metadata: Additional data from external system (JSONB).
+        metadata: Additional data from external system (JSONBCompat).
     """
 
     __tablename__ = "integration_links"  # type: ignore[assignment]
@@ -255,7 +255,7 @@ class IntegrationLink(WorkspaceScopedModel):
 
     # Additional metadata from external system
     link_metadata: Mapped[dict[str, Any] | None] = mapped_column(
-        JSONB,
+        JSONBCompat,
         nullable=True,
         default=dict,
     )
@@ -315,7 +315,6 @@ class IntegrationLink(WorkspaceScopedModel):
             "external_id",
             name="uq_integration_links_unique_link",
         ),
-        Index("ix_integration_links_workspace_id", "workspace_id"),
         Index("ix_integration_links_integration_id", "integration_id"),
         Index("ix_integration_links_issue_id", "issue_id"),
         Index("ix_integration_links_link_type", "link_type"),

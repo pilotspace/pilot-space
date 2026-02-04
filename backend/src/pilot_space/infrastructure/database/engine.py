@@ -6,7 +6,7 @@ Uses connection pooling for efficient resource utilization.
 
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Self
 
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -52,7 +52,7 @@ class EngineManager:
     _instance: "EngineManager | None" = None
     _engine: AsyncEngine | None = None
 
-    def __new__(cls) -> "EngineManager":
+    def __new__(cls) -> Self:
         """Create singleton instance."""
         if cls._instance is None:
             cls._instance = super().__new__(cls)

@@ -52,6 +52,14 @@ from .factories import (
     create_default_states,
     create_test_scenario,
 )
+from .fixtures.anthropic_mock import (
+    MOCK_CHAT_RESPONSES,
+    MOCK_STREAMING_CHUNKS,
+    mock_anthropic_api,
+    mock_anthropic_skill_responses,
+    mock_anthropic_streaming,
+    mock_claude_sdk_demo_mode,
+)
 
 # Initialize faker for generating test data
 fake = Faker()
@@ -91,11 +99,12 @@ def test_database_url() -> str:
     )
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 async def test_engine(test_database_url: str) -> AsyncGenerator[AsyncEngine, None]:
     """Create async engine for tests.
 
     Creates tables on startup and drops them on teardown.
+    Changed from session to function scope to work with pytest-asyncio.
 
     Args:
         test_database_url: Database URL for tests.
@@ -154,12 +163,10 @@ async def db_session(
         autoflush=False,
     )
 
-    async with session_factory() as session:
-        # Start a savepoint for rollback
-        async with session.begin():
-            # Yield session for test
-            yield session
-            # Rollback on completion (automatic with context manager)
+    async with session_factory() as session, session.begin():
+        # Yield session for test with automatic rollback
+        yield session
+        # Rollback on completion (automatic with context manager)
 
 
 @pytest.fixture
@@ -554,15 +561,43 @@ def test_scenario() -> dict[str, Any]:
 
 
 @pytest.fixture
-async def app() -> AsyncGenerator[Any, None]:
-    """Create FastAPI test application.
+async def app(redis_cache: dict[str, Any]) -> AsyncGenerator[Any, None]:
+    """Create FastAPI test application with mocked Redis.
+
+    Args:
+        redis_cache: In-memory cache dict for Redis mock.
 
     Yields:
-        FastAPI application instance.
+        FastAPI application instance with Redis mocked.
     """
+    # Override Redis client with mock
+    # This ensures SessionManager and other Redis-dependent services use mock
+    from unittest.mock import MagicMock
+
+    from pilot_space.container import Container
     from pilot_space.main import app
 
-    return app
+    mock_redis_client = MagicMock()
+    mock_redis_client.get = AsyncMock(side_effect=lambda key: redis_cache.get(key))
+
+    def mock_set(key: str, value: Any, **_kwargs: Any) -> bool:
+        redis_cache[key] = value
+        return True
+
+    mock_redis_client.set = AsyncMock(side_effect=mock_set)
+    mock_redis_client.delete = AsyncMock(
+        side_effect=lambda key: redis_cache.pop(key, None) is not None
+    )
+    mock_redis_client.expire = AsyncMock(return_value=True)
+
+    # Override the container's redis_client provider
+    Container.redis_client.override(mock_redis_client)
+
+    try:
+        yield app
+    finally:
+        # Reset override after test
+        Container.redis_client.reset_override()
 
 
 @pytest.fixture
@@ -791,19 +826,126 @@ def guest_user(sample_workspace: Workspace) -> tuple[User, WorkspaceMember]:
     return user, membership
 
 
+# ============================================================================
+# E2E Test Fixtures
+# ============================================================================
+
+
+@pytest.fixture
+def test_api_key() -> str:
+    """Generate test API key for E2E tests.
+
+    Returns:
+        API key string.
+    """
+    return "test-api-key-12345"
+
+
+@pytest.fixture
+def auth_headers(test_api_key: str, test_workspace_id: UUID) -> dict[str, str]:
+    """Create authentication headers for E2E tests.
+
+    Args:
+        test_api_key: API key for authentication.
+        test_workspace_id: Workspace UUID.
+
+    Returns:
+        Dictionary with Authorization and X-Workspace-ID headers.
+    """
+    return {
+        "Authorization": f"Bearer {test_api_key}",
+        "X-Workspace-ID": str(test_workspace_id),
+        "X-API-Key": test_api_key,
+    }
+
+
+@pytest.fixture
+async def e2e_client(
+    app: Any,
+    auth_headers: dict[str, str],
+) -> AsyncGenerator[AsyncClient, None]:
+    """Create E2E test client with authentication.
+
+    Args:
+        app: FastAPI application.
+        auth_headers: Authentication headers.
+
+    Yields:
+        AsyncClient configured for E2E testing.
+    """
+    transport = ASGITransport(app=app)
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers=auth_headers,
+    ) as ac:
+        yield ac
+
+
+@pytest.fixture
+async def test_workspace(
+    db_session: AsyncSession,
+    sample_workspace: Workspace,
+) -> Workspace:
+    """Create test workspace in database for E2E tests.
+
+    Args:
+        db_session: Database session.
+        sample_workspace: Workspace factory instance.
+
+    Returns:
+        Persisted workspace instance.
+    """
+    db_session.add(sample_workspace)
+    await db_session.commit()
+    await db_session.refresh(sample_workspace)
+    return sample_workspace
+
+
+@pytest.fixture
+async def test_issue(
+    db_session: AsyncSession,
+    sample_issue: Issue,
+    test_workspace: Workspace,
+) -> Issue:
+    """Create test issue in database for E2E tests.
+
+    Args:
+        db_session: Database session.
+        sample_issue: Issue factory instance.
+        test_workspace: Workspace for issue.
+
+    Returns:
+        Persisted issue instance.
+    """
+    sample_issue.workspace_id = test_workspace.id
+    db_session.add(sample_issue)
+    await db_session.commit()
+    await db_session.refresh(sample_issue)
+    return sample_issue
+
+
 __all__ = [
+    "MOCK_CHAT_RESPONSES",
+    "MOCK_STREAMING_CHUNKS",
     "app",
+    "auth_headers",
     "authenticated_client",
     "authenticated_user",
     "client",
     "client_with_workspace",
     "db_session",
     "db_session_committed",
+    "e2e_client",
     "event_loop",
     "faker_instance",
     "issue_factory",
     "mock_ai_client",
+    "mock_anthropic_api",
+    "mock_anthropic_skill_responses",
+    "mock_anthropic_streaming",
     "mock_auth",
+    "mock_claude_sdk_demo_mode",
     "mock_duplicate_detector",
     "mock_redis",
     "mock_token_payload",
@@ -818,11 +960,14 @@ __all__ = [
     "sample_user",
     "sample_workspace",
     "state_factory",
+    "test_api_key",
     "test_database_url",
     "test_engine",
+    "test_issue",
     "test_scenario",
     "test_user_email",
     "test_user_id",
+    "test_workspace",
     "test_workspace_id",
     "user_factory",
     "workspace_factory",

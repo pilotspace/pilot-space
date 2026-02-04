@@ -1,582 +1,71 @@
 """AI API router.
 
-Endpoints for AI-powered features:
-- Ghost text generation (SSE streaming)
-- Note analysis and margin annotations
-- Issue extraction from notes
-- AI conversation
+Main router that aggregates AI-powered feature endpoints:
+- Ghost text suggestions for notes (notes_ai.py)
+- Cost tracking and analytics (ai_costs.py)
+- Approval queue management (ai_approvals.py)
+- Note analysis and margin annotations (ai_annotations.py)
+- Issue extraction from notes (ai_extraction.py)
+- PR review streaming with aspect progress (ai_pr_review.py)
+- PR review status (legacy polling endpoint)
 
 T096: AI router implementation.
+T113: Ghost text SSE endpoint.
+T091-T094: Cost tracking endpoints.
+T069: Margin annotations.
+T058-T059: Issue extraction and approval.
+T073-T075: Approval queue endpoints.
+T202: PR review SSE streaming.
 """
 
 from __future__ import annotations
 
-import logging
-import time
-import uuid
 from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, Path, Query, Request, status
+from fastapi import APIRouter, HTTPException, Path, status
 from pydantic import BaseModel, Field
 
-from pilot_space.ai.agents.base import Provider
-from pilot_space.ai.agents.conversation_agent import (
-    ConversationInput,
-    ConversationMessage,
-    MessageRole,
-)
-from pilot_space.ai.agents.ghost_text_agent import GhostTextInput
-from pilot_space.ai.agents.issue_extractor_agent import IssueExtractionInput
-from pilot_space.ai.exceptions import AIConfigurationError, AIError, RateLimitError
-from pilot_space.ai.orchestrator import WorkspaceAIConfig, get_orchestrator
-from pilot_space.api.utils.sse import SSEResponse, SSEStreamBuilder
-from pilot_space.api.v1.schemas.annotation import (
-    AnalyzeNoteRequest,
-    AnalyzeNoteResponse,
-)
-from pilot_space.api.v1.schemas.note import extract_text_from_tiptap
-from pilot_space.dependencies import CurrentUserIdOrDemo, DbSession
-
-logger = logging.getLogger(__name__)
+from pilot_space.api.v1.routers.ai_annotations import router as annotations_router
+from pilot_space.api.v1.routers.ai_approvals import router as approvals_router
+from pilot_space.api.v1.routers.ai_chat import router as chat_router
+from pilot_space.api.v1.routers.ai_costs import router as costs_router
+from pilot_space.api.v1.routers.ai_extraction import router as extraction_router
+from pilot_space.api.v1.routers.ai_pr_review import router as pr_review_router
+from pilot_space.api.v1.routers.notes_ai import router as notes_ai_router
 
 router = APIRouter(prefix="/ai", tags=["AI"])
 
-
-# Request/Response Schemas
-
-
-class GhostTextRequest(BaseModel):
-    """Request for ghost text generation."""
-
-    current_text: str = Field(
-        min_length=1,
-        max_length=10000,
-        description="Text being typed",
-    )
-    cursor_position: int = Field(
-        ge=0,
-        description="Cursor position in text",
-    )
-    context: str | None = Field(
-        default=None,
-        max_length=5000,
-        description="Previous paragraphs for context",
-    )
-    language: str | None = Field(
-        default=None,
-        max_length=50,
-        description="Programming language (for code)",
-    )
-    is_code: bool = Field(
-        default=False,
-        description="Whether content is code-related",
-    )
+# Include sub-routers
+router.include_router(chat_router)
+router.include_router(notes_ai_router)
+router.include_router(costs_router)
+router.include_router(approvals_router)
+router.include_router(annotations_router)
+router.include_router(extraction_router)
+router.include_router(pr_review_router)
 
 
-class GhostTextResponse(BaseModel):
-    """Response for ghost text generation."""
-
-    suggestion: str = Field(description="Completion suggestion")
-    cursor_offset: int = Field(description="Cursor offset after accepting")
-    is_empty: bool = Field(description="Whether suggestion is empty")
-    degraded: bool = Field(
-        default=False,
-        description="Whether fallback was used",
-    )
-
-
-class ExtractIssuesRequest(BaseModel):
-    """Request for issue extraction."""
-
-    note_id: str = Field(description="Note ID")
-    note_title: str = Field(
-        max_length=255,
-        description="Note title",
-    )
-    note_content: dict[str, Any] = Field(description="TipTap JSON content")
-    project_context: str | None = Field(
-        default=None,
-        max_length=2000,
-        description="Project description for context",
-    )
-    selected_text: str | None = Field(
-        default=None,
-        max_length=5000,
-        description="User-selected text to focus on",
-    )
-    available_labels: list[str] | None = Field(
-        default=None,
-        description="Labels available in the project",
-    )
-
-
-class ExtractedIssueResponse(BaseModel):
-    """Single extracted issue."""
-
-    title: str = Field(description="Issue title")
-    description: str = Field(description="Issue description")
-    priority: str = Field(description="Suggested priority")
-    labels: list[str] = Field(description="Suggested labels")
-    confidence: float = Field(description="Confidence score")
-    confidence_tag: str = Field(description="Confidence category")
-    source_text: str = Field(default="", description="Source text")
-
-
-class ExtractIssuesResponse(BaseModel):
-    """Response for issue extraction."""
-
-    issues: list[ExtractedIssueResponse] = Field(description="Extracted issues")
-    recommended_count: int = Field(description="High confidence issues")
-    total_count: int = Field(description="Total issues")
-    processing_time_ms: float = Field(description="Processing time")
+# Shared schemas for deprecated endpoints
 
 
 class ChatRequest(BaseModel):
-    """Request for AI chat."""
+    """DEPRECATED: Chat request schema."""
 
-    message: str = Field(
-        min_length=1,
-        max_length=5000,
-        description="User message",
-    )
-    history: list[dict[str, str]] | None = Field(
-        default=None,
-        description="Previous conversation history",
-    )
-    system_context: str | None = Field(
-        default=None,
-        max_length=2000,
-        description="Additional context",
-    )
+    message: str = Field(description="User message")
+    context: dict[str, Any] | None = Field(default=None, description="Optional context")
 
 
 class ChatResponse(BaseModel):
-    """Response for AI chat."""
+    """DEPRECATED: Chat response schema."""
 
     response: str = Field(description="AI response")
-    truncated: bool = Field(
-        default=False,
-        description="Whether history was truncated",
-    )
 
 
 class HealthResponse(BaseModel):
-    """AI health check response."""
+    """DEPRECATED: Health check response schema."""
 
     status: str = Field(description="Overall status")
-    providers: dict[str, Any] = Field(description="Provider health")
-
-
-# Helper to get correlation ID
-
-
-def get_correlation_id(request: Request) -> str:
-    """Get or generate correlation ID for request."""
-    correlation_id = request.headers.get("X-Correlation-ID")
-    if not correlation_id:
-        correlation_id = str(uuid.uuid4())
-    return correlation_id
-
-
-# Demo workspace UUID for slug-based workspace IDs
-DEMO_WORKSPACE_UUID = uuid.UUID("00000000-0000-0000-0000-000000000002")
-DEMO_WORKSPACE_SLUGS = {"pilot-space-demo", "demo", "test"}
-
-
-def get_workspace_id(request: Request) -> uuid.UUID:
-    """Get workspace ID from request headers.
-
-    Supports both UUID and slug-based demo workspace IDs.
-    """
-    workspace_id_str = request.headers.get("X-Workspace-ID") or request.headers.get(
-        "X-Workspace-Id"
-    )
-    if not workspace_id_str:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="X-Workspace-ID header required",
-        )
-
-    # Check for demo workspace slugs
-    if workspace_id_str.lower() in DEMO_WORKSPACE_SLUGS:
-        return DEMO_WORKSPACE_UUID
-
-    # Try to parse as UUID
-    try:
-        return uuid.UUID(workspace_id_str)
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid workspace ID format: {workspace_id_str}",
-        ) from e
-
-
-# Ghost Text Endpoint
-
-
-@router.post(
-    "/ghost-text",
-    summary="Generate ghost text suggestion",
-    description="Generate inline text completion. Returns SSE stream or JSON.",
-    response_model=None,
-)
-async def generate_ghost_text(
-    request: Request,
-    ghost_request: GhostTextRequest,
-    current_user_id: CurrentUserIdOrDemo,
-    stream: Annotated[bool, Query(description="Enable SSE streaming")] = False,
-) -> GhostTextResponse | SSEResponse:
-    """Generate ghost text suggestion.
-
-    Rate limit: 10 requests/minute per user.
-
-    Args:
-        request: FastAPI request.
-        ghost_request: Ghost text request data.
-        current_user_id: Current user ID.
-        stream: Whether to stream response via SSE.
-
-    Returns:
-        Ghost text suggestion or SSE stream.
-    """
-    correlation_id = get_correlation_id(request)
-    workspace_id = get_workspace_id(request)
-
-    orchestrator = get_orchestrator()
-
-    # Ensure workspace is configured (for demo, auto-configure)
-    if not orchestrator.get_workspace_config(workspace_id):
-        # In production, this would come from database
-        orchestrator.configure_workspace(
-            WorkspaceAIConfig(
-                workspace_id=workspace_id,
-                api_keys={
-                    Provider.GEMINI: request.headers.get("X-Google-API-Key", ""),
-                    Provider.CLAUDE: request.headers.get("X-Anthropic-API-Key", ""),
-                    Provider.OPENAI: request.headers.get("X-OpenAI-API-Key", ""),
-                },
-            )
-        )
-
-    input_data = GhostTextInput(
-        current_text=ghost_request.current_text,
-        cursor_position=ghost_request.cursor_position,
-        context=ghost_request.context,
-        language=ghost_request.language,
-        is_code=ghost_request.is_code,
-    )
-
-    try:
-        if stream:
-            # SSE streaming response
-            async def stream_generator():
-                builder = SSEStreamBuilder()
-                try:
-                    async for token in orchestrator.stream_ghost_text(
-                        input_data,
-                        workspace_id,
-                        current_user_id,
-                        correlation_id,
-                    ):
-                        yield builder.event("token", {"text": token})
-                    yield builder.done()
-                except AIError as e:
-                    yield builder.error(str(e), e.code)
-
-            return SSEResponse(stream_generator())
-
-        # Regular JSON response
-        result = await orchestrator.generate_ghost_text(
-            input_data,
-            workspace_id,
-            current_user_id,
-            correlation_id,
-        )
-
-        return GhostTextResponse(
-            suggestion=result.output.suggestion,
-            cursor_offset=result.output.cursor_offset,
-            is_empty=result.output.is_empty,
-            degraded=False,
-        )
-
-    except RateLimitError as e:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=str(e),
-            headers={"Retry-After": str(e.retry_after_seconds)},
-        ) from e
-
-    except AIConfigurationError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
-        ) from e
-
-
-# Note Analysis Endpoint
-
-
-@router.post(
-    "/analyze-note",
-    response_model=AnalyzeNoteResponse,
-    summary="Analyze note for annotations",
-    description="Generate AI margin annotations for a note.",
-)
-async def analyze_note(
-    request: Request,
-    analyze_request: AnalyzeNoteRequest,
-    current_user_id: CurrentUserIdOrDemo,
-    session: DbSession,
-) -> AnalyzeNoteResponse:
-    """Analyze note and generate margin annotations.
-
-    Rate limit: 5 requests/minute per user.
-
-    Args:
-        request: FastAPI request.
-        analyze_request: Analysis request.
-        current_user_id: Current user ID.
-        session: Database session.
-
-    Returns:
-        Generated annotations.
-    """
-    get_correlation_id(request)
-    get_workspace_id(request)  # Validate workspace ID
-    time.time()
-
-    # TODO: Fetch note from database
-    # For now, return placeholder
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Note analysis requires database integration",
-    )
-
-
-# Issue Extraction Endpoint
-
-
-@router.post(
-    "/extract-issues",
-    response_model=ExtractIssuesResponse,
-    summary="Extract issues from note",
-    description="Extract structured issues from note content.",
-)
-async def extract_issues(
-    request: Request,
-    extract_request: ExtractIssuesRequest,
-    current_user_id: CurrentUserIdOrDemo,
-) -> ExtractIssuesResponse:
-    """Extract issues from note content.
-
-    Rate limit: 5 requests/minute per user.
-
-    Args:
-        request: FastAPI request.
-        extract_request: Extraction request.
-        current_user_id: Current user ID.
-
-    Returns:
-        Extracted issues with confidence scores.
-    """
-    correlation_id = get_correlation_id(request)
-    workspace_id = get_workspace_id(request)
-    start_time = time.time()
-
-    orchestrator = get_orchestrator()
-
-    # Configure workspace if needed
-    if not orchestrator.get_workspace_config(workspace_id):
-        orchestrator.configure_workspace(
-            WorkspaceAIConfig(
-                workspace_id=workspace_id,
-                api_keys={
-                    Provider.CLAUDE: request.headers.get("X-Anthropic-API-Key", ""),
-                },
-            )
-        )
-
-    # Extract text from TipTap content
-    note_content = extract_text_from_tiptap(extract_request.note_content)
-
-    input_data = IssueExtractionInput(
-        note_title=extract_request.note_title,
-        note_content=note_content,
-        project_context=extract_request.project_context,
-        selected_text=extract_request.selected_text,
-        available_labels=extract_request.available_labels,
-    )
-
-    try:
-        result = await orchestrator.extract_issues(
-            input_data,
-            workspace_id,
-            current_user_id,
-            correlation_id,
-        )
-
-        processing_time = (time.time() - start_time) * 1000
-
-        return ExtractIssuesResponse(
-            issues=[
-                ExtractedIssueResponse(
-                    title=issue.title,
-                    description=issue.description,
-                    priority=issue.priority.value,
-                    labels=issue.labels,
-                    confidence=issue.confidence,
-                    confidence_tag=issue.confidence_tag.value,
-                    source_text=issue.source_text,
-                )
-                for issue in result.output.issues
-            ],
-            recommended_count=result.output.recommended_count,
-            total_count=result.output.total_count,
-            processing_time_ms=processing_time,
-        )
-
-    except RateLimitError as e:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=str(e),
-            headers={"Retry-After": str(e.retry_after_seconds)},
-        ) from e
-
-    except AIConfigurationError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
-        ) from e
-
-
-# Chat Endpoint
-
-
-@router.post(
-    "/chat",
-    summary="AI chat",
-    description="Multi-turn conversation with AI assistant.",
-    response_model=None,
-)
-async def ai_chat(
-    request: Request,
-    chat_request: ChatRequest,
-    current_user_id: CurrentUserIdOrDemo,
-    stream: Annotated[bool, Query(description="Enable SSE streaming")] = False,
-) -> ChatResponse | SSEResponse:
-    """AI chat conversation.
-
-    Rate limit: 20 requests/minute per user.
-
-    Args:
-        request: FastAPI request.
-        chat_request: Chat request.
-        current_user_id: Current user ID.
-        stream: Whether to stream response.
-
-    Returns:
-        AI response or SSE stream.
-    """
-    correlation_id = get_correlation_id(request)
-    workspace_id = get_workspace_id(request)
-
-    orchestrator = get_orchestrator()
-
-    # Configure workspace if needed
-    if not orchestrator.get_workspace_config(workspace_id):
-        orchestrator.configure_workspace(
-            WorkspaceAIConfig(
-                workspace_id=workspace_id,
-                api_keys={
-                    Provider.CLAUDE: request.headers.get("X-Anthropic-API-Key", ""),
-                },
-            )
-        )
-
-    # Build conversation history
-    history: list[ConversationMessage] = []
-    if chat_request.history:
-        for msg in chat_request.history:
-            role = MessageRole.USER if msg.get("role") == "user" else MessageRole.ASSISTANT
-            history.append(ConversationMessage(role=role, content=msg.get("content", "")))
-
-    input_data = ConversationInput(
-        message=chat_request.message,
-        history=history,
-        system_context=chat_request.system_context,
-    )
-
-    try:
-        if stream:
-
-            async def stream_generator():
-                builder = SSEStreamBuilder()
-                try:
-                    async for chunk in orchestrator.stream_chat(
-                        input_data,
-                        workspace_id,
-                        current_user_id,
-                        correlation_id,
-                    ):
-                        yield builder.event("chunk", {"text": chunk})
-                    yield builder.done()
-                except AIError as e:
-                    yield builder.error(str(e), e.code)
-
-            return SSEResponse(stream_generator())
-
-        result = await orchestrator.chat(
-            input_data,
-            workspace_id,
-            current_user_id,
-            correlation_id,
-        )
-
-        return ChatResponse(
-            response=result.output.response,
-            truncated=result.output.truncated,
-        )
-
-    except RateLimitError as e:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=str(e),
-            headers={"Retry-After": str(e.retry_after_seconds)},
-        ) from e
-
-    except AIConfigurationError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
-        ) from e
-
-
-# Health Check
-
-
-@router.get(
-    "/health",
-    response_model=HealthResponse,
-    summary="AI health check",
-    description="Check AI provider health and circuit breaker status.",
-)
-async def ai_health() -> HealthResponse:
-    """Check AI provider health.
-
-    Returns:
-        Provider health status.
-    """
-    orchestrator = get_orchestrator()
-    providers = orchestrator.get_provider_health()
-
-    # Determine overall status
-    all_healthy = all(p.get("status") == "healthy" for p in providers.values())
-
-    return HealthResponse(
-        status="healthy" if all_healthy else "degraded",
-        providers=providers,
-    )
+    providers: dict[str, Any] = Field(description="Provider status details")
 
 
 # PR Review Status (T199)

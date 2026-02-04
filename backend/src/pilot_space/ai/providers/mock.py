@@ -18,7 +18,6 @@ Usage:
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import time
 from collections.abc import AsyncIterator, Callable
@@ -28,7 +27,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, TypeVar
 from pilot_space.config import get_settings
 
 if TYPE_CHECKING:
-    from pilot_space.ai.agents.base import AgentContext, AgentResult, BaseAgent
+    from pilot_space.ai.agents.agent_base import AgentContext, AgentResult, SDKBaseAgent
 
 logger = logging.getLogger(__name__)
 
@@ -210,7 +209,7 @@ class MockProvider:
 
     async def execute(
         self,
-        agent: BaseAgent[InputT, OutputT],
+        agent: SDKBaseAgent[InputT, OutputT],
         input_data: InputT,
         context: AgentContext,
     ) -> AgentResult[OutputT]:
@@ -227,7 +226,7 @@ class MockProvider:
         Raises:
             ValueError: If no generator registered for agent.
         """
-        from pilot_space.ai.agents.base import AgentResult
+        from pilot_space.ai.agents.agent_base import AgentResult
 
         agent_name = agent.__class__.__name__
         settings = get_settings()
@@ -236,7 +235,7 @@ class MockProvider:
             "MockProvider executing agent",
             extra={
                 "agent": agent_name,
-                "correlation_id": context.correlation_id,
+                "workspace_id": str(context.workspace_id),
                 "latency_ms": settings.ai_fake_latency_ms,
             },
         )
@@ -272,14 +271,15 @@ class MockProvider:
         input_tokens = max(1, len(str(input_data)) // 4)
         output_tokens = max(1, len(str(output)) // 4)
 
+        # Calculate mock cost (very low for mock mode)
+        cost_usd = (input_tokens * 0.00001) + (output_tokens * 0.00002)
+
         return AgentResult(
+            success=True,
             output=output,
+            cost_usd=cost_usd,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
-            model="mock-model-v1",
-            provider=agent.provider,
-            cached=False,
-            metadata={"mock_mode": True, "agent": agent_name},
         )
 
 
@@ -288,10 +288,11 @@ async def stream_mock_response(
     chunk_size: int = 15,
     delay_ms: int | None = None,
 ) -> AsyncIterator[str]:
-    """Stream mock response in SSE format.
+    """Stream mock response as plain text chunks.
 
     Simulates streaming LLM output by chunking content
-    and yielding with delays.
+    and yielding with delays. SSE formatting is handled by
+    the streaming utilities (sse_stream_generator).
 
     Args:
         content: Full content to stream.
@@ -299,7 +300,7 @@ async def stream_mock_response(
         delay_ms: Delay between chunks (uses settings if None).
 
     Yields:
-        SSE-formatted chunks.
+        Plain text chunks (not SSE-formatted).
     """
     if delay_ms is None:
         settings = get_settings()
@@ -307,11 +308,9 @@ async def stream_mock_response(
 
     for i in range(0, len(content), chunk_size):
         chunk = content[i : i + chunk_size]
-        yield f"data: {json.dumps({'chunk': chunk, 'done': False})}\n\n"
+        yield chunk
         if delay_ms > 0:
             await asyncio.sleep(delay_ms / 1000)
-
-    yield f"data: {json.dumps({'chunk': '', 'done': True})}\n\n"
 
 
 __all__ = [

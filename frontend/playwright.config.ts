@@ -1,5 +1,9 @@
 import { defineConfig, devices } from '@playwright/test';
 import path from 'path';
+import { config } from 'dotenv';
+
+// Load environment variables from .env.local
+config({ path: path.join(__dirname, '.env.local') });
 
 const AUTH_STATE_PATH = path.join(__dirname, 'e2e/.auth/user.json');
 
@@ -19,8 +23,8 @@ export default defineConfig({
   /* Retry on CI only */
   retries: process.env.CI ? 2 : 0,
 
-  /* Opt out of parallel tests on CI. */
-  workers: process.env.CI ? 1 : undefined,
+  /* Opt out of parallel tests on CI. Limit to 10 workers locally. */
+  workers: process.env.CI ? 1 : 10,
 
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
   reporter: process.env.CI
@@ -43,6 +47,9 @@ export default defineConfig({
 
     /* Record video on failure */
     video: 'on-first-retry',
+
+    /* Run with visible browser for debugging */
+    headless: process.env.CI ? true : false,
   },
 
   /* Configure projects for major browsers */
@@ -108,12 +115,20 @@ export default defineConfig({
   ],
 
   /* Run your local dev server before starting the tests */
-  webServer: {
-    command: 'pnpm dev',
-    url: 'http://localhost:3000',
-    reuseExistingServer: !process.env.CI,
-    timeout: 120 * 1000,
-  },
+  webServer: [
+    {
+      command: 'cd ../backend && uv run uvicorn pilot_space.main:app --port 8000',
+      url: 'http://localhost:8000/health',
+      reuseExistingServer: !process.env.CI,
+      timeout: 120 * 1000,
+    },
+    {
+      command: 'pnpm dev',
+      url: 'http://localhost:3000',
+      reuseExistingServer: !process.env.CI,
+      timeout: 120 * 1000,
+    },
+  ],
 
   /* Global timeout for each test */
   timeout: 30 * 1000,

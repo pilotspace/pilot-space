@@ -2,7 +2,7 @@
 
 Architecture decision record optimized for AI context retrieval. Full rationale in expandable sections.
 
-**Document Version**: 3.2 | **Last Updated**: 2026-01-23 | **Decisions**: 85
+**Document Version**: 3.3 | **Last Updated**: 2026-01-28 | **Decisions**: 88
 
 ---
 
@@ -42,6 +42,9 @@ Architecture decision record optimized for AI context retrieval. Full rationale 
 | DD-069 | Background Job Configuration | Accepted | Infra |
 | DD-070 | Embedding & Search Configuration | Accepted | AI |
 | DD-071–085 | User Story Clarifications | Accepted | Features |
+| DD-086 | Conversational Agent Architecture | Accepted | AI |
+| DD-087 | Skill System Design | Accepted | AI |
+| DD-088 | MCP Tool Registry | Accepted | AI |
 
 ---
 
@@ -916,5 +919,286 @@ Stack: Graphology (data) + Sigma.js (render) + @react-sigma/core + layout-force 
 
 ---
 
-*Document Version: 3.2 | Migrated: 2026-01-23 | Decisions: 58 original + 27 clarifications = 85 total*
-*Source: spec.md clarification sessions (2026-01-20, 2026-01-21, 2026-01-22)*
+---
+
+## Wave 8: Conversational Agent Architecture (DD-086–088)
+
+### DD-086: Conversational Agent Architecture
+
+**Decision**: Implement multi-turn conversational agents using Claude Agent SDK with session management and SSE streaming.
+
+**Status**: Accepted | **Date**: 2026-01-28 | **Impact**: AI Architecture
+
+#### Architecture
+
+```
+ConversationalAgent (SDK-based)
+├── Session Management (Redis, 30min TTL)
+├── SSE Streaming (event: token, done, error)
+├── Token Budget (8000 tokens max per session)
+├── Message History (truncated sliding window)
+└── Multi-Turn Support (conversation context preserved)
+
+Subagents (Streaming SDK Base)
+├── PRReviewSubagent (architecture, security, quality, performance)
+├── AIContextSubagent (notes, code, tasks, similar issues)
+└── DocGeneratorSubagent (api_reference, architecture, user_guide)
+```
+
+#### Rationale
+
+- **Multi-turn capability**: Users need to ask follow-up questions and refine AI responses
+- **Streaming UX**: Real-time feedback improves perceived latency and user engagement
+- **Session persistence**: Maintain context across requests for coherent conversations
+- **Token budget**: Prevent runaway costs while preserving relevant context
+
+#### Implementation
+
+**Session Structure**:
+```python
+@dataclass
+class ConversationSession:
+    session_id: UUID
+    workspace_id: UUID
+    user_id: UUID
+    agent_name: str
+    messages: list[ConversationMessage]
+    total_tokens: int
+    created_at: datetime
+    updated_at: datetime
+    ttl: timedelta = timedelta(minutes=30)
+```
+
+**SSE Event Types**:
+- `token`: Streaming response chunks
+- `done`: Completion with metadata (tokens, cost)
+- `error`: Error occurred during generation
+- `finding`: PR review findings
+- `related_note`: AI context discoveries
+- `section`: Documentation sections
+
+#### Trade-offs
+
+| Aspect | Chosen | Alternative | Rationale |
+|--------|--------|-------------|-----------|
+| Storage | Redis | PostgreSQL | Ephemeral data, TTL support, fast access |
+| Protocol | SSE | WebSocket | Simpler client, HTTP-based, works with CDN |
+| Session TTL | 30 minutes | 1 hour | Balance between UX and cost |
+| Token budget | 8000 | 32000 | Cost control, force context summarization |
+
+#### References
+
+- **API Documentation**: `docs/api/ai-chat-api.md`
+- **Implementation**: `backend/src/pilot_space/ai/agents/conversation_agent_sdk.py`
+- **E2E Tests**: `backend/tests/e2e/test_chat_flow.py`
+
+---
+
+### DD-087: Skill System Design
+
+**Decision**: Implement filesystem-based skill registry with SKILL.md format and auto-discovery.
+
+**Status**: Accepted | **Date**: 2026-01-28 | **Impact**: AI Architecture
+
+#### Skill Characteristics
+
+- **One-shot execution**: Complete in single request/response
+- **Structured output**: JSON conforming to defined schema
+- **Confidence tagging**: DD-048 compliance (RECOMMENDED/DEFAULT/CURRENT/ALTERNATIVE)
+- **Auto-discovered**: Scanned from `backend/.claude/skills/*/SKILL.md`
+
+#### SKILL.md Format
+
+```markdown
+---
+name: skill-name
+description: Brief description
+version: 1.0
+tags: [category1, category2]
+---
+
+## Quick Start
+Brief usage guide
+
+## When to Use
+- Use when <scenario>
+- Don't use when <anti-pattern>
+
+## Workflow
+1. **Step 1**: Description
+2. **Step 2**: Description
+
+## Input Format / Output Format
+JSON schemas
+
+## Examples
+Input/output pairs
+
+## Integration Points
+Agent, Endpoint, UI references
+
+## Confidence Tagging
+Criteria for each confidence level
+```
+
+#### Available Skills (8)
+
+1. **extract-issues**: Extract actionable issues from notes
+2. **enhance-issue**: Improve issue metadata (labels, priority, assignee)
+3. **recommend-assignee**: Suggest assignee based on expertise and workload
+4. **find-duplicates**: Semantic search for similar issues
+5. **decompose-tasks**: Break issues into subtasks with dependencies
+6. **generate-diagram**: Create Mermaid diagrams from descriptions
+7. **improve-writing**: Enhance text clarity and style
+8. **summarize**: Condense content (bullets, brief, detailed)
+
+#### Skill Registry
+
+```python
+class SkillRegistry:
+    """Auto-discover and cache skill definitions."""
+
+    def __init__(self, skills_dir: Path):
+        self.skills_dir = skills_dir  # backend/.claude/skills
+        self._cache: dict[str, SkillDefinition] = {}
+
+    def _discover_skills(self) -> None:
+        """Scan filesystem for SKILL.md files."""
+        for skill_folder in self.skills_dir.iterdir():
+            skill_file = skill_folder / "SKILL.md"
+            if skill_file.exists():
+                skill_def = self._parse_skill_file(skill_file)
+                self._cache[skill_def.name] = skill_def
+
+    def get_skill(self, name: str) -> SkillDefinition | None:
+        """Get skill by name."""
+        return self._cache.get(name)
+```
+
+#### Rationale
+
+- **Filesystem-based**: Easy to version control, edit, and review
+- **Markdown format**: Human-readable, supports code examples
+- **Auto-discovery**: No manual registration, zero-config
+- **Standardized structure**: Consistent across all skills
+
+#### References
+
+- **Skills Reference**: `docs/ai/skills-reference.md`
+- **Implementation**: `backend/src/pilot_space/ai/sdk/skill_registry.py`
+- **E2E Tests**: `backend/tests/e2e/test_skill_invocation.py`
+
+---
+
+### DD-088: MCP Tool Registry
+
+**Decision**: Implement Model Context Protocol (MCP) tool registry for agent tool access with RLS enforcement.
+
+**Status**: Accepted | **Date**: 2026-01-28 | **Impact**: AI Architecture
+
+#### MCP Tool Categories
+
+```python
+_TOOL_CATEGORIES = {
+    "database": [
+        "get_issue_by_id",
+        "create_issue_in_db",
+        "update_issue_in_db",
+        "search_issues",
+        "get_related_notes",
+        "create_annotation_in_db",
+        "get_workspace_members",
+    ],
+    "github": [
+        "get_pr_diff",
+        "get_pr_files",
+        "link_commit_to_issue",
+    ],
+    "search": [
+        "semantic_search",
+        "search_codebase",
+    ],
+}
+```
+
+#### Tool Registration
+
+```python
+@register_tool("database")
+async def get_issue_by_id(
+    issue_id: UUID,
+    workspace_id: UUID,
+    db_session: AsyncSession,
+) -> dict[str, Any]:
+    """Get issue by ID with RLS enforcement."""
+    # RLS handled by database session
+    issue = await issue_repo.get_by_id(issue_id)
+    if not issue:
+        raise NotFoundError(f"Issue {issue_id} not found")
+    return issue.to_dict()
+
+@register_tool("github")
+async def get_pr_diff(
+    repository_id: UUID,
+    pr_number: int,
+    github_client: GitHubClient,
+) -> dict[str, Any]:
+    """Get PR diff from GitHub API."""
+    diff = await github_client.get_pr_diff(repository_id, pr_number)
+    return {"diff": diff}
+```
+
+#### Tool Context
+
+```python
+@dataclass
+class ToolContext:
+    """Context passed to tools during execution."""
+    db_session: AsyncSession
+    workspace_id: str
+    user_id: str | None = None
+    extra: dict[str, Any] = field(default_factory=dict)
+```
+
+#### Permission Enforcement
+
+All database tools enforce:
+- **RLS policies**: Workspace isolation via Supabase RLS
+- **Action classification**: Approval flow per DD-003
+- **Write tools**: Trigger approval for DEFAULT/CRITICAL actions
+- **Read tools**: Auto-execute immediately
+
+#### Rationale
+
+- **Standardized interface**: Consistent tool signature across agents
+- **Category grouping**: Agents request tools by category (database, github, search)
+- **RLS enforcement**: Security at database level, not agent level
+- **Decorator-based**: Simple registration with `@register_tool(category)`
+
+#### Tool Execution Flow
+
+```mermaid
+sequenceDiagram
+    Agent->>ToolRegistry: get_tools(categories=["database"])
+    ToolRegistry-->>Agent: [tool_functions]
+    Agent->>ClaudeSDK: messages + tools
+    ClaudeSDK->>Agent: tool_call: get_issue_by_id
+    Agent->>ToolRegistry: execute("get_issue_by_id", params)
+    ToolRegistry->>PermissionHandler: check_permission()
+    PermissionHandler-->>ToolRegistry: allowed
+    ToolRegistry->>Database: query_with_rls()
+    Database-->>ToolRegistry: result
+    ToolRegistry-->>Agent: tool_result
+```
+
+#### References
+
+- **Implementation**: `backend/src/pilot_space/ai/tools/mcp_server.py`
+- **Database Tools**: `backend/src/pilot_space/ai/tools/database_tools.py`
+- **GitHub Tools**: `backend/src/pilot_space/ai/tools/github_tools.py`
+- **E2E Tests**: `backend/tests/e2e/test_mcp_tools.py`
+
+---
+
+*Document Version: 3.3 | Last Updated: 2026-01-28 | Decisions: 88 total*
+*Latest additions: DD-086 (Conversational Architecture), DD-087 (Skill System), DD-088 (MCP Tools)*

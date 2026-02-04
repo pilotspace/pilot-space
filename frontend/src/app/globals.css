@@ -564,11 +564,11 @@
   background: var(--background);
 }
 
-/* Block content typography - UI Spec v3.3: line-height 1.75 */
+/* Block content typography - compact line-height */
 .prose p,
 .prose li,
 .prose blockquote {
-  line-height: 1.75;
+  line-height: 1.5;
 }
 
 /* =============================================================================
@@ -682,25 +682,46 @@
    ============================================================================= */
 
 .issue-box {
+  position: relative;
+  isolation: isolate;
   display: inline-flex;
   align-items: center;
   gap: 8px;
   padding: 6px 12px;
   margin: 4px 0;
-  background-image:
-    linear-gradient(var(--background), var(--background)),
-    linear-gradient(90deg, var(--primary), var(--ai), var(--state-in-progress));
-  background-origin: border-box;
-  background-clip: padding-box, border-box;
-  border: 2px solid transparent;
+  background: var(--background);
+  border: 2px solid var(--border-subtle);
   border-radius: var(--radius);
   font-size: 0.875rem;
   transition: all var(--duration-normal) var(--ease-out);
 }
 
+.issue-box::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: calc(var(--radius) + 2px);
+  background: linear-gradient(
+    90deg,
+    var(--primary) 0%,
+    var(--ai) 25%,
+    #9b59b6 50%,
+    #e74c8c 75%,
+    var(--primary) 100%
+  );
+  z-index: -1;
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
 .issue-box:hover {
   transform: scale(1.02);
   box-shadow: var(--shadow-warm-md);
+  border-color: transparent;
+}
+
+.issue-box:hover::before {
+  opacity: 1;
 }
 
 .issue-box:focus-visible {
@@ -731,39 +752,57 @@
   text-overflow: ellipsis;
 }
 
-/* New issue - rainbow animation */
+/* New issue - rainbow ::before with hue-rotate animation */
 .issue-box-new {
-  animation: rainbow-shift 2.5s linear forwards;
-  box-shadow:
-    0 0 0 2px var(--primary),
-    0 0 12px 2px hsl(168 60% 45% / 0.4);
+  border-color: transparent;
 }
 
-@keyframes rainbow-shift {
-  0% {
+.issue-box-new::before {
+  opacity: 1;
+  animation: issue-box-rainbow 2.5s ease-in-out infinite;
+}
+
+@keyframes issue-box-rainbow {
+  0%,
+  100% {
     filter: hue-rotate(0deg);
-    box-shadow:
-      0 0 0 2px var(--primary),
-      0 0 15px 3px hsl(168 60% 45% / 0.5);
   }
   50% {
-    filter: hue-rotate(180deg);
-    box-shadow:
-      0 0 0 2px var(--ai),
-      0 0 15px 3px hsl(210 40% 55% / 0.5);
-  }
-  100% {
-    filter: hue-rotate(360deg);
-    box-shadow: var(--shadow-warm-sm);
+    filter: hue-rotate(30deg);
   }
 }
 
-/* Completed issue */
+/* Issue type variants - warm thematic gradients via ::before */
+.issue-box.type-bug {
+  border-color: transparent;
+}
+.issue-box.type-bug::before {
+  opacity: 1;
+  background: linear-gradient(90deg, #d9534f 0%, #d9853f 40%, #c4a035 100%);
+}
+
+.issue-box.type-improvement {
+  border-color: transparent;
+}
+.issue-box.type-improvement::before {
+  opacity: 1;
+  background: linear-gradient(90deg, #29a386 0%, #3cb8a0 40%, #5bb8d0 100%);
+}
+
+.issue-box.type-feature {
+  border-color: transparent;
+}
+.issue-box.type-feature::before {
+  opacity: 1;
+  background: linear-gradient(90deg, #6b5b95 0%, #6b8fad 40%, #4a7fb5 100%);
+}
+
+/* Completed issue - solid green border */
 .issue-box-completed {
-  background-image:
-    linear-gradient(var(--background), var(--background)),
-    linear-gradient(90deg, var(--state-done), var(--state-done));
-  animation: none;
+  border-color: var(--state-done);
+}
+.issue-box-completed::before {
+  display: none;
 }
 
 .issue-box-completed .issue-box-title {
@@ -782,10 +821,12 @@
 /* =============================================================================
    RAINBOW GRADIENT BORDER - Inline Issue Extraction
    Per UI Spec v3.3 Section 7: Issue Box with rainbow pulse
+   Uses ::before pseudo-element for gradient borders with rounded corners
    ============================================================================= */
 .issue-rainbow-border {
   position: relative;
-  background: var(--background);
+  isolation: isolate;
+  border: 2px solid transparent;
   border-radius: var(--radius-md);
 }
 
@@ -810,18 +851,18 @@
   0%,
   100% {
     filter: hue-rotate(0deg);
-    opacity: 1;
   }
   50% {
     filter: hue-rotate(30deg);
-    opacity: 0.9;
   }
 }
 
 /* Done state - solid green border instead of rainbow */
+.issue-done-border {
+  border-color: var(--state-done);
+}
 .issue-done-border::before {
-  background: var(--state-done);
-  animation: none;
+  display: none;
 }
 
 /* =============================================================================
@@ -936,8 +977,11 @@
 
 /* =============================================================================
    INLINE ISSUE NODE - TipTap NodeView styling
+   Uses border-image for gradient borders (no pseudo-element conflicts)
    ============================================================================= */
 .inline-issue-node {
+  position: relative;
+  isolation: isolate;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -947,13 +991,13 @@
   font-size: 0.875rem;
   cursor: pointer;
   vertical-align: middle;
-  position: relative;
   background: var(--background);
-  border: 1px solid var(--border-subtle);
-  transition: border-color var(--duration-fast) var(--ease-out);
+  border: 2px solid var(--border-subtle);
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    filter var(--duration-fast) var(--ease-out);
 }
 
-/* Rainbow border pseudo-element (hidden by default) */
 .inline-issue-node::before {
   content: '';
   position: absolute;
@@ -972,17 +1016,16 @@
   transition: opacity var(--duration-fast) var(--ease-out);
 }
 
-/* Hover: show animated rainbow border */
+/* Hover: show rainbow gradient */
 .inline-issue-node:hover {
   border-color: transparent;
 }
 
 .inline-issue-node:hover::before {
   opacity: 1;
-  animation: issue-border-pulse 2s ease-in-out infinite;
 }
 
-/* New issues show rainbow border immediately */
+/* New issues show rainbow gradient with hue-rotate animation */
 .inline-issue-node.issue-rainbow-border {
   border-color: transparent;
 }
@@ -1024,42 +1067,39 @@
   text-overflow: ellipsis;
 }
 
-/* Issue type variants */
+/* Issue type variants - warm thematic gradients via ::before */
 .inline-issue-node.type-bug {
-  background:
-    linear-gradient(var(--background), var(--background)),
-    linear-gradient(90deg, var(--destructive), var(--priority-high));
-  background-origin: border-box;
-  background-clip: padding-box, border-box;
-  border: 2px solid transparent;
+  border-color: transparent;
+}
+.inline-issue-node.type-bug::before {
+  opacity: 1;
+  background: linear-gradient(90deg, #d9534f 0%, #d9853f 40%, #c4a035 100%);
 }
 
 .inline-issue-node.type-improvement {
-  background:
-    linear-gradient(var(--background), var(--background)),
-    linear-gradient(90deg, var(--primary), var(--ai));
-  background-origin: border-box;
-  background-clip: padding-box, border-box;
-  border: 2px solid transparent;
+  border-color: transparent;
+}
+.inline-issue-node.type-improvement::before {
+  opacity: 1;
+  background: linear-gradient(90deg, #29a386 0%, #3cb8a0 40%, #5bb8d0 100%);
 }
 
 .inline-issue-node.type-feature {
-  background:
-    linear-gradient(var(--background), var(--background)),
-    linear-gradient(90deg, var(--state-in-review), var(--ai));
-  background-origin: border-box;
-  background-clip: padding-box, border-box;
-  border: 2px solid transparent;
+  border-color: transparent;
+}
+.inline-issue-node.type-feature::before {
+  opacity: 1;
+  background: linear-gradient(90deg, #6b5b95 0%, #6b8fad 40%, #4a7fb5 100%);
 }
 
+/* .type-task uses default rainbow gradient */
+
+/* Done state - solid green border */
 .inline-issue-node.state-done {
-  background: var(--state-done);
-  background:
-    linear-gradient(var(--background), var(--background)),
-    linear-gradient(90deg, var(--state-done), var(--state-done));
-  background-origin: border-box;
-  background-clip: padding-box, border-box;
-  border: 2px solid transparent;
+  border-color: var(--state-done);
+}
+.inline-issue-node.state-done::before {
+  display: none;
 }
 
 .inline-issue-node.state-done .issue-title {
@@ -1080,6 +1120,145 @@
 }
 
 /* =============================================================================
+   LINE GUTTER - Line numbers and fold widgets (VS Code style)
+   Line numbers via decoration widgets (clickable to select block).
+   Fold widgets positioned by ProseMirror decoration widgets.
+   ============================================================================= */
+.document-canvas .ProseMirror {
+  padding-left: 48px;
+}
+
+.document-canvas .ProseMirror > [data-blockid] {
+  position: relative;
+}
+
+/* Line number widgets (injected by LineGutterExtension) */
+.line-gutter-number {
+  position: absolute;
+  left: -44px;
+  top: 0;
+  width: 32px;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  line-height: 1.5;
+  color: var(--foreground-muted);
+  opacity: 0.35;
+  user-select: none;
+  cursor: pointer;
+  padding: 0;
+  border: none;
+  background: transparent;
+  transition:
+    opacity 150ms ease,
+    color 150ms ease;
+}
+
+.line-gutter-number:hover {
+  opacity: 0.8;
+  color: var(--primary);
+}
+
+.line-gutter-number:focus-visible {
+  opacity: 0.8;
+  color: var(--primary);
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+  border-radius: 2px;
+}
+
+/* Selected line highlight (VS Code-style current line) — one-line height only */
+.document-canvas .ProseMirror > [data-blockid].line-gutter-selected {
+  isolation: isolate;
+}
+
+.document-canvas .ProseMirror > [data-blockid].line-gutter-selected::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -4px;
+  right: -4px;
+  height: 1.5em;
+  background: rgba(41, 163, 134, 0.08);
+  border-left: 3px solid var(--primary);
+  border-radius: 4px;
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* Fold widgets (injected by LineGutterExtension decoration) */
+.line-gutter-fold-widget {
+  position: absolute;
+  left: -48px;
+  top: 2px;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--foreground-muted);
+  font-size: 0.625rem;
+  line-height: 16px;
+  text-align: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 150ms ease;
+  z-index: 2;
+}
+
+.document-canvas .ProseMirror > [data-blockid]:hover .line-gutter-fold-widget,
+.line-gutter-fold-widget:focus-visible {
+  opacity: 0.7;
+}
+
+.line-gutter-fold-widget:hover {
+  opacity: 1;
+  color: var(--primary);
+}
+
+.line-gutter-fold-widget:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+  border-radius: 2px;
+}
+
+/* Hidden blocks (collapsed sections) */
+.line-gutter-hidden {
+  display: none !important;
+}
+
+/* =============================================================================
+   AI BLOCK PROCESSING INDICATOR
+   Pulsing left-border when AI is working on a note block
+   ============================================================================= */
+[data-block-id].ai-block-processing {
+  position: relative;
+}
+
+[data-block-id].ai-block-processing::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -4px;
+  width: 2px;
+  background: var(--ai);
+  border-radius: 2px;
+  animation: ai-block-pulse 1.2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes ai-block-pulse {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+/* =============================================================================
    REDUCED MOTION
    ============================================================================= */
 @media (prefers-reduced-motion: reduce) {
@@ -1092,7 +1271,10 @@
     scroll-behavior: auto !important;
   }
 
-  .issue-rainbow-border::before {
-    animation: none;
+  .issue-rainbow-border::before,
+  .inline-issue-node.issue-rainbow-border::before,
+  .issue-box-new::before,
+  [data-block-id].ai-block-processing::after {
+    animation: none !important;
   }
 }

@@ -31,7 +31,6 @@ from pilot_space.ai.exceptions import (
     RateLimitError,
     TokenLimitExceededError,
 )
-from pilot_space.ai.orchestrator import AIOrchestrator, WorkspaceAIConfig, get_orchestrator
 from pilot_space.ai.telemetry import AIMetrics, AIOperation, AIProvider
 
 __all__ = [
@@ -41,8 +40,6 @@ __all__ = [
     # Telemetry
     "AIMetrics",
     "AIOperation",
-    # Orchestrator
-    "AIOrchestrator",
     "AIProvider",
     "AITimeoutError",
     "AgentExecutionError",
@@ -59,6 +56,4 @@ __all__ = [
     "ProviderUnavailableError",
     "RateLimitError",
     "TokenLimitExceededError",
-    "WorkspaceAIConfig",
-    "get_orchestrator",
 ]

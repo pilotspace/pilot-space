@@ -16,12 +16,15 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { IssueCard } from './IssueCard';
 import type { Issue, IssueState } from '@/types';
+import { stateNameToKey } from '@/lib/issue-helpers';
 
 export interface IssueBoardProps {
   /** Issues grouped by state */
   issuesByState: Record<IssueState, Issue[]>;
   /** Called when an issue is clicked */
   onIssueClick?: (issue: Issue) => void;
+  /** Called to navigate to issue detail page */
+  onOpenIssue?: (issue: Issue) => void;
   /** Called when an issue is dropped on a column */
   onIssueDrop?: (issueId: string, newState: IssueState) => void;
   /** Called when creating a new issue in a column */
@@ -100,6 +103,7 @@ const columns: ColumnConfig[] = [
 export const IssueBoard = observer(function IssueBoard({
   issuesByState,
   onIssueClick,
+  onOpenIssue,
   onIssueDrop,
   onCreateIssue,
   isLoading = false,
@@ -129,7 +133,7 @@ export const IssueBoard = observer(function IssueBoard({
   const handleDrop = (e: React.DragEvent, state: IssueState) => {
     e.preventDefault();
     const issueId = e.dataTransfer.getData('text/plain');
-    if (issueId && onIssueDrop && draggedIssue?.state !== state) {
+    if (issueId && onIssueDrop && stateNameToKey(draggedIssue?.state?.name ?? '') !== state) {
       onIssueDrop(issueId, state);
     }
     setDraggedIssue(null);
@@ -142,7 +146,8 @@ export const IssueBoard = observer(function IssueBoard({
         const Icon = column.icon;
         const issues = issuesByState[column.state] || [];
         const isDropTarget = dropTarget === column.state;
-        const canDrop = draggedIssue && draggedIssue.state !== column.state;
+        const canDrop =
+          draggedIssue && stateNameToKey(draggedIssue.state?.name ?? '') !== column.state;
 
         return (
           <div
@@ -191,6 +196,7 @@ export const IssueBoard = observer(function IssueBoard({
                       key={issue.id}
                       issue={issue}
                       onClick={onIssueClick}
+                      onOpenIssue={onOpenIssue}
                       onDragStart={handleDragStart}
                       isDragging={draggedIssue?.id === issue.id}
                       compact

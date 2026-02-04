@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { observer } from 'mobx-react-lite';
-import { Sparkles, Loader2 } from 'lucide-react';
+import { Sparkles, Loader2, CheckCircle2, ExternalLink } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import {
@@ -27,14 +27,15 @@ import type {
   IssueState,
   IssuePriority,
   IssueType,
-  Label,
-  User,
+  LabelBrief,
+  UserBrief,
 } from '@/types';
 import type {
   EnhancementSuggestion,
   DuplicateCheckResult,
   AssigneeRecommendation,
 } from '@/stores/features/issues/IssueStore';
+import { stateNameToKey } from '@/lib/issue-helpers';
 
 export interface IssueModalProps {
   /** Whether modal is open */
@@ -46,9 +47,9 @@ export interface IssueModalProps {
   /** Default state for new issues */
   defaultState?: IssueState;
   /** Available labels */
-  availableLabels: Label[];
+  availableLabels: LabelBrief[];
   /** Team members for assignment */
-  teamMembers: User[];
+  teamMembers: UserBrief[];
   /** Current project ID */
   projectId: string;
   /** AI enhancement suggestion */
@@ -70,9 +71,11 @@ export interface IssueModalProps {
   /** Called when saving the issue */
   onSave: (data: CreateIssueData | UpdateIssueData) => Promise<Issue | null>;
   /** Called when creating a new label */
-  onCreateLabel?: (name: string) => Promise<Label>;
+  onCreateLabel?: (name: string) => Promise<LabelBrief>;
   /** Called when viewing a duplicate issue */
   onViewDuplicate?: (issueId: string) => void;
+  /** Called to navigate to the created/edited issue detail page */
+  onOpenIssue?: (issue: Issue) => void;
   /** Called to record AI suggestion decision */
   onRecordDecision?: (
     suggestionType: 'label' | 'priority' | 'assignee' | 'title' | 'description',
@@ -104,20 +107,24 @@ export const IssueModal = observer(function IssueModal({
   onSave,
   onCreateLabel,
   onViewDuplicate,
+  onOpenIssue,
   onRecordDecision,
 }: IssueModalProps) {
   const isEditing = !!issue;
 
   // Form state
-  const [title, setTitle] = React.useState(issue?.title ?? '');
+  const [title, setTitle] = React.useState(issue?.name ?? '');
   const [description, setDescription] = React.useState(issue?.description ?? '');
-  const [state, setState] = React.useState<IssueState>(issue?.state ?? defaultState);
+  const [state, setState] = React.useState<IssueState>(
+    issue?.state ? stateNameToKey(issue.state.name) : defaultState
+  );
   const [priority, setPriority] = React.useState<IssuePriority>(issue?.priority ?? 'none');
   // Type selector to be added in future iteration
   const [type, _setType] = React.useState<IssueType>(issue?.type ?? 'task');
-  const [selectedLabels, setSelectedLabels] = React.useState<Label[]>(issue?.labels ?? []);
-  const [assignee, setAssignee] = React.useState<User | null>(issue?.assignee ?? null);
+  const [selectedLabels, setSelectedLabels] = React.useState<LabelBrief[]>(issue?.labels ?? []);
+  const [assignee, setAssignee] = React.useState<UserBrief | null>(issue?.assignee ?? null);
   const [isSaving, setIsSaving] = React.useState(false);
+  const [createdIssue, setCreatedIssue] = React.useState<Issue | null>(null);
   const [dismissedDuplicates, setDismissedDuplicates] = React.useState(false);
 
   // Debounce timer for AI suggestions
@@ -126,13 +133,14 @@ export const IssueModal = observer(function IssueModal({
   // Reset form when issue changes
   React.useEffect(() => {
     if (open) {
-      setTitle(issue?.title ?? '');
+      setTitle(issue?.name ?? '');
       setDescription(issue?.description ?? '');
-      setState(issue?.state ?? defaultState);
+      setState(issue?.state ? stateNameToKey(issue.state.name) : defaultState);
       setPriority(issue?.priority ?? 'none');
       _setType(issue?.type ?? 'task');
       setSelectedLabels(issue?.labels ?? []);
       setAssignee(issue?.assignee ?? null);
+      setCreatedIssue(null);
       setDismissedDuplicates(false);
     }
   }, [open, issue, defaultState]);
@@ -175,19 +183,23 @@ export const IssueModal = observer(function IssueModal({
     setIsSaving(true);
     try {
       const data: CreateIssueData | UpdateIssueData = {
-        title: title.trim(),
+        name: title.trim(),
         description: description.trim() || undefined,
-        state,
+        stateId: state,
         priority,
         type,
-        labels: selectedLabels.map((l) => l.id),
+        labelIds: selectedLabels.map((l) => l.id),
         assigneeId: assignee?.id,
         projectId,
       };
 
       const result = await onSave(data);
       if (result) {
-        onOpenChange(false);
+        if (isEditing) {
+          onOpenChange(false);
+        } else {
+          setCreatedIssue(result);
+        }
       }
     } finally {
       setIsSaving(false);
@@ -210,6 +222,25 @@ export const IssueModal = observer(function IssueModal({
 
   const handlePriorityChange = (newPriority: IssuePriority) => {
     setPriority(newPriority);
+  };
+
+  const handleOpenCreatedIssue = () => {
+    if (createdIssue && onOpenIssue) {
+      onOpenIssue(createdIssue);
+    }
+    onOpenChange(false);
+  };
+
+  const handleCreateAnother = () => {
+    setCreatedIssue(null);
+    setTitle('');
+    setDescription('');
+    setState(defaultState);
+    setPriority('none');
+    _setType('task');
+    setSelectedLabels([]);
+    setAssignee(null);
+    setDismissedDuplicates(false);
   };
 
   const showDuplicateWarning =
@@ -370,21 +401,39 @@ export const IssueModal = observer(function IssueModal({
         </div>
 
         <DialogFooter className="mt-6">
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>
-            Cancel
-          </Button>
-          <Button onClick={handleSave} disabled={!title.trim() || isSaving}>
-            {isSaving ? (
-              <>
-                <Loader2 className="mr-2 size-4 animate-spin" />
-                Saving...
-              </>
-            ) : isEditing ? (
-              'Save Changes'
-            ) : (
-              'Create Issue'
-            )}
-          </Button>
+          {createdIssue ? (
+            <>
+              <div className="flex items-center gap-2 mr-auto text-sm text-primary">
+                <CheckCircle2 className="size-4" />
+                <span>Issue created: {createdIssue.identifier ?? createdIssue.name}</span>
+              </div>
+              <Button variant="outline" onClick={handleCreateAnother}>
+                Create Another
+              </Button>
+              <Button onClick={handleOpenCreatedIssue}>
+                <ExternalLink className="mr-2 size-4" />
+                Open Issue
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>
+                Cancel
+              </Button>
+              <Button onClick={handleSave} disabled={!title.trim() || isSaving}>
+                {isSaving ? (
+                  <>
+                    <Loader2 className="mr-2 size-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : isEditing ? (
+                  'Save Changes'
+                ) : (
+                  'Create Issue'
+                )}
+              </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

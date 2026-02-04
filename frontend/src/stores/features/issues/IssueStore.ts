@@ -8,6 +8,8 @@ import type {
   UpdateIssueData,
   AIContext,
 } from '@/types';
+
+import { stateNameToKey } from '@/lib/issue-helpers';
 import { issuesApi } from '@/services/api';
 
 // AI Suggestion types
@@ -93,11 +95,30 @@ export class IssueStore {
   // View state
   viewMode: 'board' | 'list' | 'table' = 'board';
 
+  // Per-field save status for inline editing (T014)
+  saveStatus: Map<string, 'idle' | 'saving' | 'saved' | 'error'> = new Map();
+  /** @internal Not observable — cleanup timers only. */
+  private _saveStatusTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
+
   constructor() {
-    makeAutoObservable(this);
+    makeAutoObservable<IssueStore, '_saveStatusTimers'>(this, {
+      _saveStatusTimers: false,
+    });
   }
 
   // Computed
+
+  /** Aggregate save status across all fields: saving > error > saved > idle. */
+  get aggregateSaveStatus(): 'idle' | 'saving' | 'saved' | 'error' {
+    let hasSaved = false;
+    for (const status of this.saveStatus.values()) {
+      if (status === 'saving') return 'saving';
+      if (status === 'error') return 'error';
+      if (status === 'saved') hasSaved = true;
+    }
+    return hasSaved ? 'saved' : 'idle';
+  }
+
   get currentIssue(): Issue | null {
     return this.currentIssueId ? (this.issues.get(this.currentIssueId) ?? null) : null;
   }
@@ -111,7 +132,7 @@ export class IssueStore {
 
     // Apply filters
     if (this.filters.state && this.filters.state !== 'all') {
-      issues = issues.filter((i) => i.state === this.filters.state);
+      issues = issues.filter((i) => stateNameToKey(i.state.name) === this.filters.state);
     }
     if (this.filters.priority && this.filters.priority !== 'all') {
       issues = issues.filter((i) => i.priority === this.filters.priority);
@@ -131,7 +152,7 @@ export class IssueStore {
       const query = this.searchQuery.toLowerCase();
       issues = issues.filter(
         (i) =>
-          i.title.toLowerCase().includes(query) ||
+          (i.title ?? i.name).toLowerCase().includes(query) ||
           i.identifier.toLowerCase().includes(query) ||
           i.description?.toLowerCase().includes(query)
       );
@@ -155,7 +176,7 @@ export class IssueStore {
     const grouped: Record<IssueState, Issue[]> = {} as Record<IssueState, Issue[]>;
 
     states.forEach((state) => {
-      grouped[state] = this.filteredIssues.filter((i) => i.state === state);
+      grouped[state] = this.filteredIssues.filter((i) => stateNameToKey(i.state.name) === state);
     });
 
     return grouped;
@@ -173,15 +194,17 @@ export class IssueStore {
   }
 
   get backlogIssues(): Issue[] {
-    return this.filteredIssues.filter((i) => i.state === 'backlog');
+    return this.filteredIssues.filter((i) => i.state.group === 'backlog');
   }
 
   get inProgressIssues(): Issue[] {
-    return this.filteredIssues.filter((i) => i.state === 'in_progress');
+    return this.filteredIssues.filter((i) => i.state.group === 'started');
   }
 
   get completedIssues(): Issue[] {
-    return this.filteredIssues.filter((i) => i.state === 'done' || i.state === 'cancelled');
+    return this.filteredIssues.filter(
+      (i) => i.state.group === 'completed' || i.state.group === 'cancelled'
+    );
   }
 
   // Helper
@@ -208,7 +231,7 @@ export class IssueStore {
           comparison = priorityOrder[a.priority] - priorityOrder[b.priority];
           break;
         case 'title':
-          comparison = a.title.localeCompare(b.title);
+          comparison = (a.title ?? a.name).localeCompare(b.title ?? b.name);
           break;
       }
 
@@ -251,10 +274,15 @@ export class IssueStore {
   }
 
   // Optimistic update for drag and drop
-  optimisticUpdateState(issueId: string, newState: IssueState) {
+  optimisticUpdateState(issueId: string, newState: string) {
     const issue = this.issues.get(issueId);
     if (issue) {
-      this.issues.set(issueId, { ...issue, state: newState });
+      // Partial optimistic update: set state name for instant UI feedback;
+      // the full StateBrief is corrected when the API response arrives.
+      this.issues.set(issueId, {
+        ...issue,
+        state: { ...issue.state, name: newState },
+      });
     }
   }
 
@@ -339,7 +367,7 @@ export class IssueStore {
     }
   }
 
-  async updateIssueState(workspaceId: string, issueId: string, state: IssueState) {
+  async updateIssueState(workspaceId: string, issueId: string, state: string) {
     // Optimistic update
     this.optimisticUpdateState(issueId, state);
 
@@ -527,6 +555,42 @@ export class IssueStore {
     this.assigneeRecommendations = [];
   }
 
+  // ============================================================================
+  // Per-field Save Status Methods (T014)
+  // ============================================================================
+
+  /**
+   * Set save status for a specific field. Auto-clears to 'idle' after 2s when 'saved'.
+   */
+  setSaveStatus(field: string, status: 'idle' | 'saving' | 'saved' | 'error') {
+    this.saveStatus.set(field, status);
+
+    // Clear any existing auto-reset timer for this field
+    const existing = this._saveStatusTimers.get(field);
+    if (existing) {
+      clearTimeout(existing);
+      this._saveStatusTimers.delete(field);
+    }
+
+    // Auto-clear to 'idle' after 2s when status is 'saved'
+    if (status === 'saved') {
+      const timer = setTimeout(() => {
+        runInAction(() => {
+          this.saveStatus.set(field, 'idle');
+        });
+        this._saveStatusTimers.delete(field);
+      }, 2000);
+      this._saveStatusTimers.set(field, timer);
+    }
+  }
+
+  /**
+   * Get save status for a specific field. Defaults to 'idle' if not tracked.
+   */
+  getSaveStatus(field: string): 'idle' | 'saving' | 'saved' | 'error' {
+    return this.saveStatus.get(field) ?? 'idle';
+  }
+
   // Reset
   reset() {
     this.issues.clear();
@@ -549,6 +613,10 @@ export class IssueStore {
     this.isCheckingDuplicates = false;
     this.assigneeRecommendations = [];
     this.isLoadingRecommendations = false;
+    // Save status (T014)
+    this.saveStatus.clear();
+    this._saveStatusTimers.forEach((timer) => clearTimeout(timer));
+    this._saveStatusTimers.clear();
   }
 }
 
