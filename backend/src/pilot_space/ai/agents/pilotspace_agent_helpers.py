@@ -20,6 +20,7 @@ from pilot_space.ai.agents.pilotspace_note_helpers import (
     transform_todo_to_task_progress,
     validate_structured_output,
 )
+from pilot_space.ai.agents.stream_event_transformer import transform_stream_event
 
 if TYPE_CHECKING:
     from claude_agent_sdk import Message
@@ -127,7 +128,7 @@ def build_contextual_message(input_data: ChatInput) -> str:
 
 def transform_sdk_message(  # noqa: PLR0911
     message: Message,
-    current_message_id_holder: dict[str, str | None],
+    current_message_id_holder: dict[str, Any],
 ) -> str | None:
     """Transform Claude SDK message to frontend SSE event.
 
@@ -152,6 +153,15 @@ def transform_sdk_message(  # noqa: PLR0911
     """
     msg_type = type(message).__name__
 
+    if msg_type == "StreamEvent":
+        event_data = getattr(message, "event", {})
+        parent_tool_use_id = getattr(message, "parent_tool_use_id", None)
+        return transform_stream_event(
+            event_data,
+            parent_tool_use_id,
+            current_message_id_holder,
+        )
+
     if msg_type in ("ToolResultMessage", "ToolResult"):
         return transform_tool_result(message)
 
@@ -162,6 +172,9 @@ def transform_sdk_message(  # noqa: PLR0911
             if subtype == "init":
                 session_id = raw_data.get("session_id", "")
                 current_message_id_holder["_current_message_id"] = str(uuid4())
+                # Reset stale dedup state from previous request (prevents session leak)
+                current_message_id_holder.pop("_stream_events_sent", None)
+                current_message_id_holder.pop("_streamed_block_indices", None)
                 data: dict[str, Any] = {
                     "messageId": current_message_id_holder["_current_message_id"],
                     "sessionId": str(session_id),
@@ -190,6 +203,11 @@ def transform_sdk_message(  # noqa: PLR0911
         message_id_value = current_message_id_holder.get("_current_message_id")
         message_id = message_id_value if message_id_value else str(uuid4())
 
+        # Dedup: check if stream events already forwarded these blocks
+        stream_events_sent = bool(current_message_id_holder.pop("_stream_events_sent", False))
+        raw_indices = current_message_id_holder.pop("_streamed_block_indices", None)
+        streamed_indices: set[int] = raw_indices if isinstance(raw_indices, set) else set()
+
         if isinstance(content, list):
             events: list[str] = []
             text_parts: list[str] = []
@@ -199,6 +217,9 @@ def transform_sdk_message(  # noqa: PLR0911
             citation_parts: list[dict[str, Any]] = []
 
             for block_idx, block in enumerate(content):
+                # Skip blocks already forwarded via StreamEvent
+                if stream_events_sent and block_idx in streamed_indices:
+                    continue
                 block_type = _get_block_type(block)
 
                 # Emit content_block_start for each block (G-01: include thinking type)
@@ -635,10 +656,19 @@ def transform_tool_result(message: Message) -> str | None:
         }
 
         handler = operation_handlers.get(operation)
-        if handler:
-            return handler(result_data, note_id)
-
-        return None
+        content_update_event = handler(result_data, note_id) if handler else None
+        if not content_update_event:
+            return None
+        # Also emit tool_result so frontend ToolCallCard shows completion
+        tool_result_event = f"event: tool_result\ndata: {
+            json.dumps(
+                {
+                    'toolCallId': str(tool_use_id) if tool_use_id else str(uuid4()),
+                    'status': 'completed',
+                }
+            )
+        }\n\n"
+        return f"{content_update_event}{tool_result_event}"
 
     # Map TodoWrite results to task_progress SSE events (T6/G-07)
     tool_name = getattr(message, "name", "") or getattr(message, "tool_name", "")

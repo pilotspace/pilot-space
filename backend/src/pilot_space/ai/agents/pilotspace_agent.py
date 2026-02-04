@@ -149,7 +149,7 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
         self._space_manager = space_manager
         self._subagents = subagents or {}
         self._key_storage = key_storage
-        self._message_id_holder: dict[str, str | None] = {"_current_message_id": None}
+        self._message_id_holder: dict[str, Any] = {"_current_message_id": None}
         # Track active SDK clients by session ID for interrupt support
         self._active_clients: dict[str, ClaudeSDKClient] = {}
 
