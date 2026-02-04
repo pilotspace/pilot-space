@@ -79,9 +79,13 @@ export const MessageList = observer<MessageListProps>(
       setShowScrollButton(!bottom);
     }, []);
 
+    // Note: messages.length in deps ensures recompute on MobX in-place push.
+    // MobX observer tracks the array but useMemo's shallow ref check on
+    // [messages] alone won't detect in-place mutations.
     const messageGroups = useMemo(
       () => groupMessagesByRole(messages),
-      [messages]
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      [messages, messages.length]
     );
 
     // Total items: message groups + optional streaming footer
