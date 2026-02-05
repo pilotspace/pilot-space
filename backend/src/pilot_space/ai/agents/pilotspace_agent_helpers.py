@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     from claude_agent_sdk import Message
 
     from pilot_space.ai.agents.pilotspace_agent import ChatInput
+    from pilot_space.ai.agents.sse_delta_buffer import DeltaBuffer
 
 logger = logging.getLogger(__name__)
 
@@ -130,6 +131,7 @@ def build_contextual_message(input_data: ChatInput) -> str:
 def transform_sdk_message(  # noqa: PLR0911
     message: Message,
     current_message_id_holder: dict[str, Any],
+    delta_buffer: DeltaBuffer | None = None,
 ) -> str | None:
     """Transform Claude SDK message to frontend SSE event.
 
@@ -148,6 +150,7 @@ def transform_sdk_message(  # noqa: PLR0911
     Args:
         message: SDK message object
         current_message_id_holder: Mutable dict with "_current_message_id" key for state
+        delta_buffer: Optional buffer for batching delta events (water pumping)
 
     Returns:
         SSE-formatted string or None if message should be ignored
@@ -161,6 +164,7 @@ def transform_sdk_message(  # noqa: PLR0911
             event_data,
             parent_tool_use_id,
             current_message_id_holder,
+            delta_buffer,
         )
 
     # Handle SDK ToolResultMessage (legacy compat) and ToolResult

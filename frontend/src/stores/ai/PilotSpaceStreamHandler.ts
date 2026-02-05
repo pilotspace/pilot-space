@@ -419,6 +419,11 @@ export class PilotSpaceStreamHandler {
   handleThinkingDelta(event: ThinkingDeltaEvent): void {
     const { delta, signature, redacted } = event.data;
 
+    // Filter noise text (same pattern as handleTextDelta)
+    if (this.isNoiseDelta(delta)) {
+      return;
+    }
+
     // Start thinking timer on first delta
     if (!this.store.streamingState.isThinking) {
       this.store.streamingState.isThinking = true;
@@ -861,15 +866,24 @@ export class PilotSpaceStreamHandler {
   }
 
   /**
-   * Check if a text delta is noise content produced by some models
+   * Check if a delta is noise content produced by some models
    * between thinking/tool blocks (e.g., literal "(no content)").
    * Newline-only deltas (\n, \n\n) are NOT noise — they are critical
    * for markdown list formatting and paragraph breaks.
+   * Used by both handleTextDelta and handleThinkingDelta.
    */
-  private isNoiseTextDelta(delta: string): boolean {
+  private isNoiseDelta(delta: string): boolean {
     if (delta.length === 0) return true;
     if (delta.trim() === '(no content)') return true;
     return false;
+  }
+
+  /**
+   * Alias for backward compatibility.
+   * @deprecated Use isNoiseDelta instead
+   */
+  private isNoiseTextDelta(delta: string): boolean {
+    return this.isNoiseDelta(delta);
   }
 
   /**
