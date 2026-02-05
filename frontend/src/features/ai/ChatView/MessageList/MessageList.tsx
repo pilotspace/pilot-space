@@ -229,8 +229,8 @@ export const MessageList = observer<MessageListProps>(
             atBottomThreshold={100}
             startReached={handleStartReached}
             components={{
-                Header: () =>
-                  isLoadingMoreMessages ? (
+              Header: () =>
+                isLoadingMoreMessages ? (
                   <div className="flex justify-center py-3">
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                       <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50 animate-pulse" />

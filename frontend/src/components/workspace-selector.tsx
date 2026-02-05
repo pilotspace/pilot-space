@@ -3,14 +3,7 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'motion/react';
-import {
-  Building2,
-  ArrowRight,
-  Plus,
-  Clock,
-  Trash2,
-  Check,
-} from 'lucide-react';
+import { Building2, ArrowRight, Plus, Clock, Trash2, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -160,11 +153,7 @@ export function WorkspaceSelector({ onSelect }: WorkspaceSelectorProps) {
     <div className="w-full max-w-md">
       {/* Recent Workspaces */}
       {hasRecentWorkspaces && !showInput && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="mb-6"
-        >
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mb-6">
           <div className="mb-3 flex items-center gap-2 px-1">
             <Clock className="h-3.5 w-3.5 text-muted-foreground" />
             <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
@@ -196,9 +185,7 @@ export function WorkspaceSelector({ onSelect }: WorkspaceSelectorProps) {
                         <Building2 className="h-5 w-5 text-primary" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-foreground truncate">
-                          {workspace.slug}
-                        </p>
+                        <p className="font-medium text-foreground truncate">{workspace.slug}</p>
                         <p className="text-xs text-muted-foreground">
                           {formatRelativeTime(workspace.lastVisited)}
                         </p>
@@ -226,13 +213,7 @@ export function WorkspaceSelector({ onSelect }: WorkspaceSelectorProps) {
       {/* New Workspace Input */}
       <AnimatePresence mode="wait">
         {(showInput || !hasRecentWorkspaces) && (
-          <motion.div
-            key="input"
-            variants={fadeUp}
-            initial="initial"
-            animate="animate"
-            exit="exit"
-          >
+          <motion.div key="input" variants={fadeUp} initial="initial" animate="animate" exit="exit">
             <Card className="border-border/50 bg-card/80 shadow-warm">
               <CardContent className="p-4">
                 <div className="flex flex-col gap-3">

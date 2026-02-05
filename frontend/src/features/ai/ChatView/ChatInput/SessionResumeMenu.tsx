@@ -80,7 +80,9 @@ function groupSessionsByDate(sessions: SessionSummary[]): Map<string, SessionSum
     } else if (sessionDate.getTime() === yesterday.getTime()) {
       label = 'Yesterday';
     } else {
-      const daysDiff = Math.floor((today.getTime() - sessionDate.getTime()) / (24 * 60 * 60 * 1000));
+      const daysDiff = Math.floor(
+        (today.getTime() - sessionDate.getTime()) / (24 * 60 * 60 * 1000)
+      );
       if (daysDiff < 7) {
         label = weekdays[sessionDate.getDay()] ?? 'Unknown';
       } else {
@@ -134,7 +136,9 @@ function formatTimeAgo(date: Date): string {
 /**
  * Get unique context types from context history
  */
-function getContextBadges(contextHistory?: ContextEntry[]): Array<{ type: 'note' | 'issue'; title?: string }> {
+function getContextBadges(
+  contextHistory?: ContextEntry[]
+): Array<{ type: 'note' | 'issue'; title?: string }> {
   if (!contextHistory || contextHistory.length === 0) return [];
 
   const badges: Array<{ type: 'note' | 'issue'; title?: string }> = [];
@@ -171,17 +175,14 @@ export const SessionResumeMenu = observer<SessionResumeMenuProps>(
       <Popover open={open} onOpenChange={onOpenChange}>
         <PopoverTrigger asChild>{children}</PopoverTrigger>
         <PopoverContent
-          className={cn("p-0 w-auto")}
+          className={cn('p-0 w-auto')}
           align="start"
           side="top"
           sideOffset={8}
           style={{ width: popoverWidth ?? 450 }}
         >
           <Command shouldFilter={false}>
-            <CommandInput
-              placeholder="Search sessions..."
-              onValueChange={onSearch}
-            />
+            <CommandInput placeholder="Search sessions..." onValueChange={onSearch} />
             <CommandList className="max-h-[350px]">
               {isLoading ? (
                 <div className="p-2 space-y-3">

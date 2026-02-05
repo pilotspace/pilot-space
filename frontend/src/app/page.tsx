@@ -90,10 +90,7 @@ export default function HomePage() {
           Welcome to Pilot Space
         </motion.h1>
 
-        <motion.p
-          variants={fadeUp}
-          className="mb-8 text-center text-muted-foreground"
-        >
+        <motion.p variants={fadeUp} className="mb-8 text-center text-muted-foreground">
           Select a workspace to get started
         </motion.p>
 

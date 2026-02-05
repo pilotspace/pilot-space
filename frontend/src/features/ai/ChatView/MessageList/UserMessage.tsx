@@ -14,29 +14,27 @@ interface UserMessageProps {
   className?: string;
 }
 
-export const UserMessage = memo<UserMessageProps>(
-  ({ message, userName = 'You', className }) => {
-    return (
-      <div
-        className={cn('px-4 py-3 bg-muted/100 text-primary', className)}
-        data-testid="message-user"
-      >
-        <div className="flex items-baseline gap-2 mb-1.5">
-          <span className="text-sm font-semibold text-primary">{userName}</span>
-          <time className="text-xs text-muted-foreground">
-            {message.timestamp.toLocaleTimeString([], {
-              hour: '2-digit',
-              minute: '2-digit',
-            })}
-          </time>
-        </div>
-
-        <div className="prose prose-sm max-w-none text-foreground dark:prose-invert leading-relaxed">
-          {message.content}
-        </div>
+export const UserMessage = memo<UserMessageProps>(({ message, userName = 'You', className }) => {
+  return (
+    <div
+      className={cn('px-4 py-3 bg-muted/100 text-primary', className)}
+      data-testid="message-user"
+    >
+      <div className="flex items-baseline gap-2 mb-1.5">
+        <span className="text-sm font-semibold text-primary">{userName}</span>
+        <time className="text-xs text-muted-foreground">
+          {message.timestamp.toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit',
+          })}
+        </time>
       </div>
-    );
-  }
-);
+
+      <div className="prose prose-sm max-w-none text-foreground dark:prose-invert leading-relaxed">
+        {message.content}
+      </div>
+    </div>
+  );
+});
 
 UserMessage.displayName = 'UserMessage';

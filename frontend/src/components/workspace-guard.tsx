@@ -48,9 +48,7 @@ type GuardState =
  * - Validates workspace exists and user has access
  * - Provides workspace context to children
  */
-export const WorkspaceGuard = observer(function WorkspaceGuard({
-  children,
-}: WorkspaceGuardProps) {
+export const WorkspaceGuard = observer(function WorkspaceGuard({ children }: WorkspaceGuardProps) {
   const params = useParams();
   const router = useRouter();
   const authStore = useAuthStore();
@@ -146,16 +144,9 @@ export const WorkspaceGuard = observer(function WorkspaceGuard({
               <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
                 <LogIn className="h-7 w-7 text-primary" />
               </div>
-              <h2 className="mb-2 text-xl font-semibold text-foreground">
-                Sign in required
-              </h2>
-              <p className="mb-6 text-muted-foreground">
-                Please sign in to access this workspace.
-              </p>
-              <Button
-                onClick={() => router.push('/login')}
-                className="w-full gap-2"
-              >
+              <h2 className="mb-2 text-xl font-semibold text-foreground">Sign in required</h2>
+              <p className="mb-6 text-muted-foreground">Please sign in to access this workspace.</p>
+              <Button onClick={() => router.push('/login')} className="w-full gap-2">
                 <LogIn className="h-4 w-4" />
                 Sign in
               </Button>
@@ -180,22 +171,16 @@ export const WorkspaceGuard = observer(function WorkspaceGuard({
               <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-destructive/10">
                 <Building2 className="h-7 w-7 text-destructive" />
               </div>
-              <h2 className="mb-2 text-xl font-semibold text-foreground">
-                Workspace not found
-              </h2>
+              <h2 className="mb-2 text-xl font-semibold text-foreground">Workspace not found</h2>
               <p className="mb-6 text-muted-foreground">
-                The workspace <span className="font-medium">&ldquo;{state.slug}&rdquo;</span> doesn&apos;t exist
-                or you don&apos;t have access.
+                The workspace <span className="font-medium">&ldquo;{state.slug}&rdquo;</span>{' '}
+                doesn&apos;t exist or you don&apos;t have access.
               </p>
               <div className="flex w-full flex-col gap-2">
                 <Button onClick={() => router.push('/')} className="w-full">
                   Go to workspace selector
                 </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => router.back()}
-                  className="w-full"
-                >
+                <Button variant="outline" onClick={() => router.back()} className="w-full">
                   Go back
                 </Button>
               </div>
@@ -220,22 +205,13 @@ export const WorkspaceGuard = observer(function WorkspaceGuard({
               <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-destructive/10">
                 <AlertCircle className="h-7 w-7 text-destructive" />
               </div>
-              <h2 className="mb-2 text-xl font-semibold text-foreground">
-                Something went wrong
-              </h2>
+              <h2 className="mb-2 text-xl font-semibold text-foreground">Something went wrong</h2>
               <p className="mb-6 text-muted-foreground">{state.message}</p>
               <div className="flex w-full flex-col gap-2">
-                <Button
-                  onClick={() => window.location.reload()}
-                  className="w-full"
-                >
+                <Button onClick={() => window.location.reload()} className="w-full">
                   Try again
                 </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => router.push('/')}
-                  className="w-full"
-                >
+                <Button variant="outline" onClick={() => router.push('/')} className="w-full">
                   Go to workspace selector
                 </Button>
               </div>
@@ -248,9 +224,7 @@ export const WorkspaceGuard = observer(function WorkspaceGuard({
 
   // Ready state - render children with workspace context
   return (
-    <WorkspaceContext.Provider
-      value={{ workspace: state.workspace, workspaceSlug }}
-    >
+    <WorkspaceContext.Provider value={{ workspace: state.workspace, workspaceSlug }}>
       {children}
     </WorkspaceContext.Provider>
   );

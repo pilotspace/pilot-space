@@ -731,10 +731,7 @@ def _build_structured_content(
     )
 
     # Check if we have only text content
-    has_non_text = any(
-        b["type"] in ("thinking", "tool_use", "tool_result")
-        for b in sorted_blocks
-    )
+    has_non_text = any(b["type"] in ("thinking", "tool_use", "tool_result") for b in sorted_blocks)
 
     if not has_non_text:
         # Return plain text for backward compatibility

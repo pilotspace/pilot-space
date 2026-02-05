@@ -1313,10 +1313,18 @@
   margin-bottom: 0.75rem;
 }
 
-.chat-markdown h1 { font-size: 1.25rem; }
-.chat-markdown h2 { font-size: 1.125rem; }
-.chat-markdown h3 { font-size: 1rem; }
-.chat-markdown h4 { font-size: 0.875rem; }
+.chat-markdown h1 {
+  font-size: 1.25rem;
+}
+.chat-markdown h2 {
+  font-size: 1.125rem;
+}
+.chat-markdown h3 {
+  font-size: 1rem;
+}
+.chat-markdown h4 {
+  font-size: 0.875rem;
+}
 
 /* Paragraphs */
 .chat-markdown p {
@@ -1339,8 +1347,12 @@
   line-height: 1.6;
 }
 
-.chat-markdown ul { list-style-type: disc; }
-.chat-markdown ol { list-style-type: decimal; }
+.chat-markdown ul {
+  list-style-type: disc;
+}
+.chat-markdown ol {
+  list-style-type: decimal;
+}
 
 .chat-markdown li > ul,
 .chat-markdown li > ol {
@@ -1455,11 +1467,15 @@
 }
 
 /* Strong and emphasis */
-.chat-markdown strong { font-weight: 600; }
-.chat-markdown em { font-style: italic; }
+.chat-markdown strong {
+  font-weight: 600;
+}
+.chat-markdown em {
+  font-style: italic;
+}
 
 /* Task lists (GFM) */
-.chat-markdown input[type="checkbox"] {
+.chat-markdown input[type='checkbox'] {
   margin-right: 0.5rem;
 }
 

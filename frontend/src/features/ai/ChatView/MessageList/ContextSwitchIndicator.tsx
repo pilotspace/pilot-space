@@ -50,12 +50,7 @@ export function ContextSwitchIndicator({
       <ArrowRight className="h-3.5 w-3.5 text-ai shrink-0" />
       <span className="text-xs text-muted-foreground">Context switched to</span>
       <span className="flex items-center gap-1.5 text-xs font-medium text-foreground">
-        <Icon
-          className={cn(
-            'h-3.5 w-3.5',
-            isNote ? 'text-blue-500' : 'text-purple-500'
-          )}
-        />
+        <Icon className={cn('h-3.5 w-3.5', isNote ? 'text-blue-500' : 'text-purple-500')} />
         <span className="truncate max-w-[200px]">{title}</span>
       </span>
     </div>

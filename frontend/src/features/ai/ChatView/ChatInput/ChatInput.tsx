@@ -192,7 +192,13 @@ export const ChatInput = observer<ChatInputProps>(
 
     const handleKeyDown = useCallback(
       (e: KeyboardEvent<HTMLTextAreaElement>) => {
-        if (e.key === 'Enter' && !e.shiftKey && !skillMenuOpen && !agentMenuOpen && !resumeMenuOpen) {
+        if (
+          e.key === 'Enter' &&
+          !e.shiftKey &&
+          !skillMenuOpen &&
+          !agentMenuOpen &&
+          !resumeMenuOpen
+        ) {
           e.preventDefault();
           if (value.trim() && !isStreaming && !isDisabled) {
             onSubmit();

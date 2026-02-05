@@ -130,11 +130,7 @@ export function StreamingBanner({
       data-testid="streaming-banner"
       role="status"
       aria-live="polite"
-      className={cn(
-        'h-9 flex items-center justify-between px-3',
-        'glass-subtle',
-        className
-      )}
+      className={cn('h-9 flex items-center justify-between px-3', 'glass-subtle', className)}
     >
       <AnimatePresence mode="wait">
         <motion.div

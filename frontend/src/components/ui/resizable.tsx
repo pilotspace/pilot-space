@@ -22,16 +22,11 @@ import { cn } from '@/lib/utils';
 const ResizablePanel = Panel;
 
 // Wrap Group with styling
-const ResizablePanelGroup = React.forwardRef<
-  HTMLDivElement,
-  React.ComponentProps<typeof Group>
->(({ className, ...props }, ref) => (
-  <Group
-    className={cn('flex h-full w-full', className)}
-    {...props}
-    elementRef={ref}
-  />
-));
+const ResizablePanelGroup = React.forwardRef<HTMLDivElement, React.ComponentProps<typeof Group>>(
+  ({ className, ...props }, ref) => (
+    <Group className={cn('flex h-full w-full', className)} {...props} elementRef={ref} />
+  )
+);
 ResizablePanelGroup.displayName = 'ResizablePanelGroup';
 
 // Wrap Separator with styling and optional handle
@@ -79,7 +74,9 @@ const ResizableHandle = React.forwardRef<HTMLDivElement, ResizableHandleProps>(
             'focus:outline-none focus:ring-2 focus:ring-primary/50'
           )}
           title={toggleState === 'min' ? 'Expand panel' : 'Collapse panel'}
-          aria-label={toggleState === 'min' ? 'Expand panel to maximum' : 'Collapse panel to minimum'}
+          aria-label={
+            toggleState === 'min' ? 'Expand panel to maximum' : 'Collapse panel to minimum'
+          }
         >
           <EllipsisVertical className="h-3.5 w-3.5 text-muted-foreground" />
         </button>

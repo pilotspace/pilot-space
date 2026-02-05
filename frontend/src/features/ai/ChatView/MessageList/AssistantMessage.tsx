@@ -42,7 +42,6 @@ export const AssistantMessage = memo<AssistantMessageProps>(({ message, classNam
       </div>
 
       <div className="space-y-3 overflow-hidden">
-
         {/* Ordered content blocks: render in server-received order when available */}
         {message.contentBlocks ? (
           <>

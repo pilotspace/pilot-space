@@ -140,9 +140,7 @@ export const Sidebar = observer(function Sidebar() {
         {navigation.map((item) => {
           // Use startsWith for non-home routes to highlight parent nav when on nested routes
           // e.g., /workspace/notes/123 should highlight "Notes" nav item
-          const isActive = item.path
-            ? pathname.startsWith(item.href)
-            : pathname === item.href;
+          const isActive = item.path ? pathname.startsWith(item.href) : pathname === item.href;
           return (
             <Tooltip key={item.name} delayDuration={collapsed ? 0 : 1000}>
               <TooltipTrigger asChild>

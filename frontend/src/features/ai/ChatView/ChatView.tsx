@@ -63,13 +63,38 @@ export function isDestructiveAction(actionType: string): boolean {
 function ConversationLoadingSkeleton() {
   const messageSkeletons = [
     // User message
-    { align: 'end', items: [{ h: 4, w: 48 }, { h: 12, w: 64 }] },
+    {
+      align: 'end',
+      items: [
+        { h: 4, w: 48 },
+        { h: 12, w: 64 },
+      ],
+    },
     // Assistant message
-    { align: 'start', items: [{ h: 4, w: 32 }, { h: 20, w: 80 }, { h: 16, w: 72 }] },
+    {
+      align: 'start',
+      items: [
+        { h: 4, w: 32 },
+        { h: 20, w: 80 },
+        { h: 16, w: 72 },
+      ],
+    },
     // User message
-    { align: 'end', items: [{ h: 4, w: 40 }, { h: 10, w: 56 }] },
+    {
+      align: 'end',
+      items: [
+        { h: 4, w: 40 },
+        { h: 10, w: 56 },
+      ],
+    },
     // Assistant message
-    { align: 'start', items: [{ h: 4, w: 36 }, { h: 24, w: 96 }] },
+    {
+      align: 'start',
+      items: [
+        { h: 4, w: 36 },
+        { h: 24, w: 96 },
+      ],
+    },
   ];
 
   return (

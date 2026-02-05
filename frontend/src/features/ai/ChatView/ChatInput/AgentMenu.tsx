@@ -34,74 +34,76 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   BookOpen,
 };
 
-export const AgentMenu = memo<AgentMenuProps>(({ open, onOpenChange, onSelect, children, popoverWidth }) => {
-  const handleSelect = useCallback(
-    (agentName: string) => {
-      const agent = AGENTS.find((a) => a.name === agentName);
-      if (agent) {
-        onSelect(agent);
-        onOpenChange(false);
-      }
-    },
-    [onSelect, onOpenChange]
-  );
+export const AgentMenu = memo<AgentMenuProps>(
+  ({ open, onOpenChange, onSelect, children, popoverWidth }) => {
+    const handleSelect = useCallback(
+      (agentName: string) => {
+        const agent = AGENTS.find((a) => a.name === agentName);
+        if (agent) {
+          onSelect(agent);
+          onOpenChange(false);
+        }
+      },
+      [onSelect, onOpenChange]
+    );
 
-  return (
-    <Popover open={open} onOpenChange={onOpenChange}>
-      <PopoverTrigger asChild>{children}</PopoverTrigger>
-      <PopoverContent
-        className={cn("p-0 w-auto")}
-        align="start"
-        side="top"
-        sideOffset={8}
-        style={{ width: popoverWidth ?? 450 }}
-      >
-        <Command>
-          <CommandInput placeholder="Search agents..." />
-          <CommandList>
-            <CommandEmpty>No agents found.</CommandEmpty>
+    return (
+      <Popover open={open} onOpenChange={onOpenChange}>
+        <PopoverTrigger asChild>{children}</PopoverTrigger>
+        <PopoverContent
+          className={cn('p-0 w-auto')}
+          align="start"
+          side="top"
+          sideOffset={8}
+          style={{ width: popoverWidth ?? 450 }}
+        >
+          <Command>
+            <CommandInput placeholder="Search agents..." />
+            <CommandList>
+              <CommandEmpty>No agents found.</CommandEmpty>
 
-            <CommandGroup heading="Specialized Agents">
-              {AGENTS.map((agent) => {
-                const AgentIcon = ICON_MAP[agent.icon] || Brain;
+              <CommandGroup heading="Specialized Agents">
+                {AGENTS.map((agent) => {
+                  const AgentIcon = ICON_MAP[agent.icon] || Brain;
 
-                return (
-                  <CommandItem
-                    key={agent.name}
-                    value={agent.name}
-                    onSelect={handleSelect}
-                    className="flex items-start gap-3 py-3"
-                  >
-                    <AgentIcon className="h-5 w-5 shrink-0 mt-0.5 text-primary" />
+                  return (
+                    <CommandItem
+                      key={agent.name}
+                      value={agent.name}
+                      onSelect={handleSelect}
+                      className="flex items-start gap-3 py-3"
+                    >
+                      <AgentIcon className="h-5 w-5 shrink-0 mt-0.5 text-primary" />
 
-                    <div className="flex-1 space-y-2">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-sm font-medium">@{agent.name}</span>
+                      <div className="flex-1 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-sm font-medium">@{agent.name}</span>
+                        </div>
+
+                        <p className="text-xs text-muted-foreground">{agent.description}</p>
+
+                        <div className="flex flex-wrap gap-1">
+                          {agent.capabilities.map((capability) => (
+                            <Badge
+                              key={capability}
+                              variant="secondary"
+                              className="text-xs font-normal"
+                            >
+                              {capability}
+                            </Badge>
+                          ))}
+                        </div>
                       </div>
-
-                      <p className="text-xs text-muted-foreground">{agent.description}</p>
-
-                      <div className="flex flex-wrap gap-1">
-                        {agent.capabilities.map((capability) => (
-                          <Badge
-                            key={capability}
-                            variant="secondary"
-                            className="text-xs font-normal"
-                          >
-                            {capability}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  </CommandItem>
-                );
-              })}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
-  );
-});
+                    </CommandItem>
+                  );
+                })}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+    );
+  }
+);
 
 AgentMenu.displayName = 'AgentMenu';

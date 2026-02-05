@@ -29,11 +29,7 @@ import { ChatView } from '@/features/ai/ChatView/ChatView';
 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  ResizablePanelGroup,
-  ResizablePanel,
-  ResizableHandle,
-} from '@/components/ui/resizable';
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { usePanelRef } from 'react-resizable-panels';
 import { cn } from '@/lib/utils';
 import { createEditorExtensions } from '@/features/notes/editor/extensions';
@@ -521,19 +517,16 @@ export const NoteCanvas = observer(function NoteCanvas({
   }, [chatPanelState, chatPanelRef]);
 
   // Update panel state when resized manually
-  const handleChatPanelResize = useCallback(
-    (size: { asPercentage: number; inPixels: number }) => {
-      const pct = size.asPercentage;
-      if (pct <= 39) {
-        setChatPanelState('min');
-      } else if (pct >= 49) {
-        setChatPanelState('max');
-      } else {
-        setChatPanelState('mid');
-      }
-    },
-    []
-  );
+  const handleChatPanelResize = useCallback((size: { asPercentage: number; inPixels: number }) => {
+    const pct = size.asPercentage;
+    if (pct <= 39) {
+      setChatPanelState('min');
+    } else if (pct >= 49) {
+      setChatPanelState('max');
+    } else {
+      setChatPanelState('mid');
+    }
+  }, []);
 
   // Retry on error
   const handleRetry = useCallback(() => {
@@ -634,12 +627,7 @@ export const NoteCanvas = observer(function NoteCanvas({
               id="note-editor-layout"
             >
               {/* Editor Panel - min 50% (when ChatView at max), default 62% */}
-              <ResizablePanel
-                id="editor-panel"
-                defaultSize="62%"
-                minSize="50%"
-                className="min-w-0"
-              >
+              <ResizablePanel id="editor-panel" defaultSize="62%" minSize="50%" className="min-w-0">
                 {editorContent}
               </ResizablePanel>
 

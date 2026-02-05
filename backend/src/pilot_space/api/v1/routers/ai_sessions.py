@@ -169,23 +169,29 @@ def _parse_message_content(content: str) -> dict[str, Any]:
 
         elif block_type == "thinking":
             thinking = block.get("thinking", "")
-            thinking_blocks.append({
-                "content": thinking,
-                "blockIndex": idx,
-                "redacted": False,
-            })
-            content_blocks.append({
-                "type": "thinking",
-                "blockIndex": idx,
-                "content": thinking,
-            })
+            thinking_blocks.append(
+                {
+                    "content": thinking,
+                    "blockIndex": idx,
+                    "redacted": False,
+                }
+            )
+            content_blocks.append(
+                {
+                    "type": "thinking",
+                    "blockIndex": idx,
+                    "content": thinking,
+                }
+            )
 
         elif block_type == "tool_use":
             tool_id = block.get("id", "")
-            content_blocks.append({
-                "type": "tool_call",
-                "toolCallId": tool_id,
-            })
+            content_blocks.append(
+                {
+                    "type": "tool_call",
+                    "toolCallId": tool_id,
+                }
+            )
 
     return {
         "content": "".join(text_parts),
@@ -252,9 +258,7 @@ async def list_sessions(
             agent_name=s["agent_name"],
             context_id=UUID(s["context_id"]) if s["context_id"] else None,
             title=s.get("title"),
-            context_history=[
-                ContextHistoryEntry(**ctx) for ctx in s.get("context_history", [])
-            ],
+            context_history=[ContextHistoryEntry(**ctx) for ctx in s.get("context_history", [])],
             turn_count=s["turn_count"],
             total_cost_usd=s["total_cost_usd"],
             created_at=s["created_at"],
@@ -311,7 +315,17 @@ def _group_sessions_by_date(sessions: list[SessionListItem]) -> list[SessionGrou
         groups_dict[label].append(session)
 
     # Preserve order: Today, Yesterday, weekdays, then older dates
-    order = ["Today", "Yesterday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    order = [
+        "Today",
+        "Yesterday",
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+        "Sunday",
+    ]
     result: list[SessionGroup] = []
 
     # Add known labels in order

@@ -188,16 +188,20 @@ async def chat(
             # Build initial context_history entry if context is provided
             initial_context_history: list[dict[str, Any]] = []
             if ctx_note_id or ctx_issue_id:
-                initial_context_history.append({
-                    "turn": 0,
-                    "note_id": str(ctx_note_id) if ctx_note_id else None,
-                    "issue_id": str(ctx_issue_id) if ctx_issue_id else None,
-                    "selected_text": ctx_selected_text,
-                    "selected_block_ids": ctx_selected_block_ids,
-                    "timestamp": datetime.now(UTC).isoformat(),
-                })
+                initial_context_history.append(
+                    {
+                        "turn": 0,
+                        "note_id": str(ctx_note_id) if ctx_note_id else None,
+                        "issue_id": str(ctx_issue_id) if ctx_issue_id else None,
+                        "selected_text": ctx_selected_text,
+                        "selected_block_ids": ctx_selected_block_ids,
+                        "timestamp": datetime.now(UTC).isoformat(),
+                    }
+                )
 
-            logger.info("Creating new session with initial context_history: %s", initial_context_history)
+            logger.info(
+                "Creating new session with initial context_history: %s", initial_context_history
+            )
             conv_session = await session_handler.create_session(
                 workspace_id=ctx_workspace_id,
                 user_id=user_id,
@@ -205,7 +209,9 @@ async def chat(
                 context_id=context_id,  # Still set for initial context reference
                 metadata={"context_history": initial_context_history},
             )
-            logger.info("New session created: %s", conv_session.session_id if conv_session else None)
+            logger.info(
+                "New session created: %s", conv_session.session_id if conv_session else None
+            )
 
     logger.info(
         "Session resolved: id=%s, existing=%s, context_id=%s, requested=%s",
