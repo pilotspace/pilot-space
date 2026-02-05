@@ -23,6 +23,7 @@ from pilot_space.ai.agents.pilotspace_agent_helpers import (
     build_subagent_definitions,
     transform_sdk_message as transform_sdk_message_helper,
 )
+from pilot_space.ai.agents.sse_delta_buffer import DeltaBuffer
 from pilot_space.ai.context import clear_context, set_workspace_context
 from pilot_space.ai.mcp.note_server import (
     SERVER_NAME as NOTE_SERVER_NAME,
@@ -189,9 +190,14 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
         self,
         message: Message,
         context: AgentContext,
+        delta_buffer: DeltaBuffer | None = None,
     ) -> str | None:
         """Transform SDK message to SSE event string, or None to skip."""
-        return transform_sdk_message_helper(message, self._message_id_holder)
+        return transform_sdk_message_helper(
+            message,
+            self._message_id_holder,
+            delta_buffer,
+        )
 
     async def _sync_note_if_present(
         self,
@@ -384,6 +390,10 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
             query_session_id = session_id_str or "default"
             stream_completed = False
             response_chunks: list[str] = []
+
+            # Initialize delta buffer for water pumping (SSE event reduction)
+            delta_buffer = DeltaBuffer()
+
             try:
                 await client.connect()
 
@@ -404,7 +414,11 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
 
                 async for message in client.receive_response():
                     sdk_event_count += 1
-                    sse_event = self.transform_sdk_message(message, context)
+                    sse_event = self.transform_sdk_message(
+                        message,
+                        context,
+                        delta_buffer,
+                    )
                     if sse_event:
                         transformed_count += 1
                         yield sse_event
@@ -419,12 +433,47 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
                                     except (json.JSONDecodeError, TypeError):
                                         pass
 
+                    # Time-based flush check for buffered deltas
+                    if delta_buffer.should_flush():
+                        flush_event = delta_buffer.flush()
+                        if flush_event:
+                            transformed_count += 1
+                            yield flush_event
+                            # Capture text deltas from flushed events
+                            if "event: text_delta\n" in flush_event:
+                                for line in flush_event.split("\n"):
+                                    if line.startswith("data: "):
+                                        try:
+                                            parsed = json.loads(line[6:])
+                                            delta = parsed.get("delta", "")
+                                            if delta:
+                                                response_chunks.append(delta)
+                                        except (json.JSONDecodeError, TypeError):
+                                            pass
+
                     try:
                         while True:
                             yield tool_event_queue.get_nowait()
                             tool_event_count += 1
                     except asyncio.QueueEmpty:
                         pass
+
+                # Final flush of any remaining buffered deltas
+                final_flush = delta_buffer.flush()
+                if final_flush:
+                    transformed_count += 1
+                    yield final_flush
+                    # Capture text deltas from final flush
+                    if "event: text_delta\n" in final_flush:
+                        for line in final_flush.split("\n"):
+                            if line.startswith("data: "):
+                                try:
+                                    parsed = json.loads(line[6:])
+                                    delta = parsed.get("delta", "")
+                                    if delta:
+                                        response_chunks.append(delta)
+                                except (json.JSONDecodeError, TypeError):
+                                    pass
 
                 try:
                     while True:
