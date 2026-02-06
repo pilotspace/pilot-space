@@ -33,11 +33,13 @@ SERVER_NAME = "pilot-notes"
 TOOL_NAMES = [
     f"mcp__{SERVER_NAME}__update_note_block",
     f"mcp__{SERVER_NAME}__enhance_text",
-    f"mcp__{SERVER_NAME}__summarize_note",
     f"mcp__{SERVER_NAME}__extract_issues",
     f"mcp__{SERVER_NAME}__create_issue_from_note",
     f"mcp__{SERVER_NAME}__link_existing_issues",
     f"mcp__{SERVER_NAME}__write_to_note",
+    f"mcp__{SERVER_NAME}__search_notes",
+    f"mcp__{SERVER_NAME}__create_note",
+    f"mcp__{SERVER_NAME}__update_note",
 ]
 
 
@@ -50,8 +52,9 @@ def create_note_tools_server(
     event_queue: asyncio.Queue[str],
     *,
     context_note_id: str | None = None,
+    tool_context: Any | None = None,
 ) -> McpSdkServerConfig:
-    """Create an in-process SDK MCP server with 7 note tools.
+    """Create an in-process SDK MCP server with 10 note tools.
 
     Each tool handler pushes content_update SSE events to event_queue
     and returns a success message for the model to continue with.
@@ -61,6 +64,7 @@ def create_note_tools_server(
         context_note_id: The actual note_id from the chat context.
             Overrides model-provided note_id in all events to prevent
             UUID corruption by the LLM.
+        tool_context: ToolContext for database access and RLS enforcement.
 
     Returns:
         McpSdkServerConfig ready for ClaudeAgentOptions.mcp_servers.
@@ -138,27 +142,6 @@ def create_note_tools_server(
         await event_queue.put(_sse_event("content_update", event_data))
         logger.info("[NoteTools] enhance_text: block=%s", args["block_id"])
         return _text_result(f"Enhanced text in block {args['block_id']}.")
-
-    @tool(
-        "summarize_note",
-        "Read the full content of a note as markdown. "
-        "Always call this first before making changes.",
-        {
-            "type": "object",
-            "properties": {
-                "note_id": {"type": "string", "description": "UUID of the note to read"},
-            },
-            "required": ["note_id"],
-        },
-    )
-    async def summarize_note(args: dict[str, Any]) -> dict[str, Any]:
-        # This is a read operation — the note content is already in the
-        # context message (via _build_contextual_message). Return a hint.
-        logger.info("[NoteTools] summarize_note: note=%s", _resolve_note_id(args))
-        return _text_result(
-            "Note content is available in the <note_context> block above. "
-            "Use that content to answer the user's question."
-        )
 
     @tool(
         "write_to_note",
@@ -331,17 +314,190 @@ def create_note_tools_server(
             "Please search manually in the issues list."
         )
 
+    @tool(
+        "search_notes",
+        "Search for notes by title in the workspace. Returns matching notes with metadata.",
+        {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Search query for note title"},
+                "project_id": {
+                    "type": "string",
+                    "description": "Optional project UUID to filter by",
+                },
+                "limit": {
+                    "type": "integer",
+                    "default": 20,
+                    "description": "Maximum number of results (max 100)",
+                },
+                "include_content": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Include content preview in results",
+                },
+            },
+            "required": ["query"],
+        },
+    )
+    async def search_notes(args: dict[str, Any]) -> dict[str, Any]:
+        if not tool_context:
+            return _text_result("Error: tool_context not available for search_notes")
+
+        from uuid import UUID
+
+        from pilot_space.infrastructure.database.repositories.note_repository import (
+            NoteRepository,
+        )
+
+        try:
+            workspace_id = UUID(tool_context.workspace_id)
+            query = args["query"]
+            project_id_str = args.get("project_id")
+            project_id = UUID(project_id_str) if project_id_str else None
+            limit = min(args.get("limit", 20), 100)
+            include_content = args.get("include_content", False)
+
+            repo = NoteRepository(tool_context.db_session)
+            notes = await repo.search_by_title(
+                workspace_id=workspace_id,
+                search_term=query,
+                project_id=project_id,
+                limit=limit,
+            )
+
+            results = []
+            for note in notes:
+                result_item = {
+                    "id": str(note.id),
+                    "title": note.title,
+                    "project_id": str(note.project_id) if note.project_id else None,
+                    "created_at": note.created_at.isoformat(),
+                }
+                if include_content:
+                    content = note.content or {}
+                    blocks = content.get("content", [])
+                    preview_text = ""
+                    for block in blocks[:3]:
+                        if block.get("type") == "paragraph":
+                            for node in block.get("content", []):
+                                if node.get("type") == "text":
+                                    preview_text += node.get("text", "")
+                        if len(preview_text) > 200:
+                            break
+                    result_item["content_preview"] = preview_text[:200]
+                results.append(result_item)
+
+            logger.info("[NoteTools] search_notes: query='%s', found=%d", query, len(results))
+            return _text_result(
+                f"Found {len(results)} note(s) matching '{query}':\n"
+                + "\n".join(f"- {r['title']} ({r['id']})" for r in results)
+            )
+        except Exception as e:
+            logger.exception("[NoteTools] search_notes failed")
+            return _text_result(f"Error searching notes: {e!s}")
+
+    @tool(
+        "create_note",
+        "Create a new note in the workspace.",
+        {
+            "type": "object",
+            "properties": {
+                "title": {
+                    "type": "string",
+                    "description": "Note title (1-255 characters)",
+                },
+                "content_markdown": {
+                    "type": "string",
+                    "description": "Optional markdown content for the note",
+                },
+                "project_id": {
+                    "type": "string",
+                    "description": "Optional project UUID to associate with",
+                },
+            },
+            "required": ["title"],
+        },
+    )
+    async def create_note(args: dict[str, Any]) -> dict[str, Any]:
+        title = args.get("title", "").strip()
+        if not title or len(title) > 255:
+            return _text_result("Error: title must be 1-255 characters")
+
+        payload: dict[str, Any] = {"title": title}
+        if "content_markdown" in args:
+            payload["content_markdown"] = args["content_markdown"]
+        if "project_id" in args:
+            payload["project_id"] = args["project_id"]
+
+        logger.info("[NoteTools] create_note: title='%s'", title)
+        return {
+            "status": "approval_required",
+            "operation": "create_note",
+            "payload": payload,
+        }
+
+    @tool(
+        "update_note",
+        "Update note metadata (title, pinned status, project association).",
+        {
+            "type": "object",
+            "properties": {
+                "note_id": {"type": "string", "description": "UUID of the note to update"},
+                "title": {
+                    "type": "string",
+                    "description": "New title (1-255 characters)",
+                },
+                "is_pinned": {
+                    "type": "boolean",
+                    "description": "Pin or unpin the note",
+                },
+                "project_id": {
+                    "type": ["string", "null"],
+                    "description": "Project UUID to associate, or null to unlink",
+                },
+            },
+            "required": ["note_id"],
+        },
+    )
+    async def update_note(args: dict[str, Any]) -> dict[str, Any]:
+        note_id = args.get("note_id")
+        if not note_id:
+            return _text_result("Error: note_id is required")
+
+        changes: dict[str, Any] = {}
+        if "title" in args:
+            title = args["title"].strip()
+            if not title or len(title) > 255:
+                return _text_result("Error: title must be 1-255 characters")
+            changes["title"] = title
+        if "is_pinned" in args:
+            changes["is_pinned"] = bool(args["is_pinned"])
+        if "project_id" in args:
+            changes["project_id"] = args["project_id"]
+
+        if not changes:
+            return _text_result("Error: no changes specified")
+
+        logger.info("[NoteTools] update_note: note_id=%s, changes=%s", note_id, changes)
+        return {
+            "status": "approval_required",
+            "operation": "update_note",
+            "payload": {"note_id": note_id, "changes": changes},
+        }
+
     return create_sdk_mcp_server(
         name=SERVER_NAME,
         version="1.0.0",
         tools=[
             update_note_block,
             enhance_text,
-            summarize_note,
             write_to_note,
             extract_issues,
             create_issue_from_note,
             link_existing_issues,
+            search_notes,
+            create_note,
+            update_note,
         ],
     )
 

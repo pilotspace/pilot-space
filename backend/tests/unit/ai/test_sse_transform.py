@@ -257,18 +257,18 @@ class TestIssueOperationsTransform:
 class TestNonContentUpdateOperations:
     """Test operations that should NOT emit content_update events."""
 
-    def test_summarize_note_does_not_emit_content_update(
+    def test_search_notes_does_not_emit_content_update(
         self, agent: PilotSpaceAgent, context: AgentContext
     ) -> None:
-        """Verify summarize_note (read_content) does not emit content_update."""
+        """Verify search_notes (read operation) does not emit content_update."""
         # Arrange
         tool_result = {
-            "tool": "summarize_note",
-            "note_id": str(uuid4()),
-            "operation": "read_content",
-            "status": "pending_apply",
+            "tool": "search_notes",
+            "query": "test",
+            "operation": "search",
+            "status": "executed",
         }
-        message = MockToolResultMessage("summarize_note", tool_result)
+        message = MockToolResultMessage("search_notes", tool_result)
 
         # Act
         result = agent.transform_sdk_message(message, context)

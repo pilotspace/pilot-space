@@ -34,6 +34,9 @@ from pilot_space.infrastructure.database.repositories.integration_repository imp
 from pilot_space.infrastructure.database.repositories.invitation_repository import (
     InvitationRepository,
 )
+from pilot_space.infrastructure.database.repositories.issue_link_repository import (
+    IssueLinkRepository,
+)
 from pilot_space.infrastructure.database.repositories.issue_repository import (
     IssueFilters,
     IssueRepository,
@@ -75,6 +78,7 @@ __all__ = [
     "IntegrationRepository",
     "InvitationRepository",
     "IssueFilters",
+    "IssueLinkRepository",
     "IssueRepository",
     "LabelRepository",
     "NoteAnnotationRepository",

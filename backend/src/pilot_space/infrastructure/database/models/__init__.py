@@ -50,6 +50,7 @@ from pilot_space.infrastructure.database.models.integration import (
 )
 from pilot_space.infrastructure.database.models.issue import Issue, IssuePriority
 from pilot_space.infrastructure.database.models.issue_label import issue_labels
+from pilot_space.infrastructure.database.models.issue_link import IssueLink, IssueLinkType
 from pilot_space.infrastructure.database.models.label import Label
 from pilot_space.infrastructure.database.models.module import Module, ModuleStatus
 from pilot_space.infrastructure.database.models.note import Note
@@ -115,6 +116,8 @@ __all__ = [
     "IntegrationProvider",
     "InvitationStatus",
     "Issue",
+    "IssueLink",
+    "IssueLinkType",
     "IssuePriority",
     "LLMProvider",
     "Label",

@@ -81,6 +81,18 @@ class ThreadedDiscussion(WorkspaceScopedModel):
         default=DiscussionStatus.OPEN,
     )
 
+    # Generic target reference (AD-001: support issue/note discussions)
+    target_type: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="note",
+        server_default="note",
+    )
+    target_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+
     # Resolution tracking
     resolved_by_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),

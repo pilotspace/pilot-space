@@ -11,12 +11,12 @@ import json
 from typing import Any
 from uuid import uuid4
 
-from pilot_space.ai.agents.pilotspace_agent import _classify_effort
 from pilot_space.ai.agents.pilotspace_agent_helpers import (
     _transform_todo_to_task_progress,
     _validate_structured_output,
     transform_sdk_message,
 )
+from pilot_space.ai.agents.pilotspace_stream_utils import classify_effort as _classify_effort
 
 # ========================================
 # G-07: Effort classification

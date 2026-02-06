@@ -154,9 +154,9 @@ class TestToolNamesConstant:
         expected = f"mcp__{SERVER_NAME}__write_to_note"
         assert expected in TOOL_NAMES
 
-    def test_has_seven_tools(self) -> None:
-        """TOOL_NAMES has 7 entries (6 original + write_to_note)."""
-        assert len(TOOL_NAMES) == 7
+    def test_has_nine_tools(self) -> None:
+        """TOOL_NAMES has 9 entries (original - summarize_note + CRUD tools)."""
+        assert len(TOOL_NAMES) == 9
 
     def test_all_tools_have_server_prefix(self) -> None:
         """All tool names follow the mcp__{SERVER_NAME}__<tool> pattern."""

@@ -111,6 +111,100 @@ def emit_issue_creation_events(result_data: dict[str, Any], note_id: str) -> str
     return "".join(events)
 
 
+def emit_insert_blocks_event(result_data: dict[str, Any], note_id: str) -> str:
+    """Emit content_update SSE event for insert_blocks operation.
+
+    Args:
+        result_data: Tool result data
+        note_id: Note ID
+
+    Returns:
+        SSE-formatted content_update event
+    """
+    event_data = {
+        "noteId": note_id,
+        "operation": "insert_blocks",
+        "blockId": result_data.get("block_id"),
+        "markdown": result_data.get("markdown") or result_data.get("content_markdown"),
+        "content": None,
+        "issueData": None,
+        "afterBlockId": result_data.get("after_block_id"),
+        "beforeBlockId": result_data.get("before_block_id"),
+    }
+    return f"event: content_update\ndata: {json.dumps(event_data)}\n\n"
+
+
+def emit_remove_block_event(result_data: dict[str, Any], note_id: str) -> str:
+    """Emit content_update SSE event for remove_block operation.
+
+    Args:
+        result_data: Tool result data
+        note_id: Note ID
+
+    Returns:
+        SSE-formatted content_update event
+    """
+    event_data = {
+        "noteId": note_id,
+        "operation": "remove_block",
+        "blockId": result_data.get("block_id"),
+        "markdown": None,
+        "content": None,
+        "issueData": None,
+        "afterBlockId": None,
+    }
+    return f"event: content_update\ndata: {json.dumps(event_data)}\n\n"
+
+
+def emit_remove_content_event(result_data: dict[str, Any], note_id: str) -> str:
+    """Emit content_update SSE event for remove_content operation.
+
+    Args:
+        result_data: Tool result data
+        note_id: Note ID
+
+    Returns:
+        SSE-formatted content_update event
+    """
+    event_data = {
+        "noteId": note_id,
+        "operation": "remove_content",
+        "blockId": None,
+        "markdown": None,
+        "content": None,
+        "issueData": None,
+        "afterBlockId": None,
+        "pattern": result_data.get("pattern"),
+        "blockIds": result_data.get("block_ids", []),
+    }
+    return f"event: content_update\ndata: {json.dumps(event_data)}\n\n"
+
+
+def emit_replace_content_event(result_data: dict[str, Any], note_id: str) -> str:
+    """Emit content_update SSE event for replace_content operation.
+
+    Args:
+        result_data: Tool result data
+        note_id: Note ID
+
+    Returns:
+        SSE-formatted content_update event
+    """
+    event_data = {
+        "noteId": note_id,
+        "operation": "replace_content",
+        "blockId": None,
+        "markdown": None,
+        "content": None,
+        "issueData": None,
+        "afterBlockId": None,
+        "oldPattern": result_data.get("old_pattern"),
+        "newContent": result_data.get("new_content"),
+        "blockIds": result_data.get("block_ids", []),
+    }
+    return f"event: content_update\ndata: {json.dumps(event_data)}\n\n"
+
+
 def transform_todo_to_task_progress(
     tool_name: str, result_data: Any, tool_use_id: Any
 ) -> str | None:
@@ -241,6 +335,10 @@ def transform_user_message_tool_results(message: Any) -> str | None:
                     "append_blocks": emit_append_blocks_event,
                     "create_issues": emit_issue_creation_events,
                     "create_single_issue": emit_issue_creation_events,
+                    "insert_blocks": emit_insert_blocks_event,
+                    "remove_block": emit_remove_block_event,
+                    "remove_content": emit_remove_content_event,
+                    "replace_content": emit_replace_content_event,
                 }
                 handler = operation_handlers.get(operation)
                 content_update_event = handler(result_data, note_id) if handler else None

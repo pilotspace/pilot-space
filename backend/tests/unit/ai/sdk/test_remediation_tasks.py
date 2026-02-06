@@ -12,13 +12,13 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from pilot_space.ai.agents.pilotspace_agent import (
-    _classify_effort,
-    _detect_skill_from_message,
-)
 from pilot_space.ai.agents.pilotspace_agent_helpers import (
     _map_todo_status,
     _transform_todo_to_task_progress,
+)
+from pilot_space.ai.agents.pilotspace_stream_utils import (
+    classify_effort as _classify_effort,
+    detect_skill_from_message as _detect_skill_from_message,
 )
 from pilot_space.ai.sdk.output_schemas import get_skill_output_format
 
