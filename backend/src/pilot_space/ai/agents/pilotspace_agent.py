@@ -6,29 +6,58 @@ import asyncio
 import json
 import logging
 import os
-import re
 import shutil
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 from uuid import UUID
 
 from claude_agent_sdk import AgentDefinition, ClaudeAgentOptions, ClaudeSDKClient, Message
 
 from pilot_space.ai.agents.agent_base import AgentContext, StreamingSDKBaseAgent
-from pilot_space.ai.agents.note_space_sync import NoteSpaceSync
 from pilot_space.ai.agents.pilotspace_agent_helpers import (
     build_contextual_message,
     build_subagent_definitions,
     transform_sdk_message as transform_sdk_message_helper,
 )
+from pilot_space.ai.agents.pilotspace_stream_utils import (
+    build_structured_content,
+    capture_content_from_sse,
+    classify_effort,
+    detect_skill_from_message,
+    estimate_tokens,
+)
 from pilot_space.ai.agents.sse_delta_buffer import DeltaBuffer
 from pilot_space.ai.context import clear_context, set_workspace_context
+from pilot_space.ai.mcp.comment_server import (
+    SERVER_NAME as COMMENT_SERVER_NAME,
+    TOOL_NAMES as COMMENT_TOOL_NAMES,
+    create_comment_tools_server,
+)
+from pilot_space.ai.mcp.issue_relation_server import (
+    SERVER_NAME as ISSUE_REL_SERVER_NAME,
+    TOOL_NAMES as ISSUE_REL_TOOL_NAMES,
+    create_issue_relation_tools_server,
+)
+from pilot_space.ai.mcp.issue_server import (
+    SERVER_NAME as ISSUE_SERVER_NAME,
+    TOOL_NAMES as ISSUE_TOOL_NAMES,
+    create_issue_tools_server,
+)
+from pilot_space.ai.mcp.note_content_server import (
+    SERVER_NAME as NOTE_CONTENT_SERVER_NAME,
+    TOOL_NAMES as NOTE_CONTENT_TOOL_NAMES,
+    create_note_content_server,
+)
 from pilot_space.ai.mcp.note_server import (
     SERVER_NAME as NOTE_SERVER_NAME,
     TOOL_NAMES as NOTE_TOOL_NAMES,
     create_note_tools_server,
+)
+from pilot_space.ai.mcp.project_server import (
+    SERVER_NAME as PROJECT_SERVER_NAME,
+    TOOL_NAMES as PROJECT_TOOL_NAMES,
+    create_project_tools_server,
 )
 from pilot_space.ai.sdk.sandbox_config import ModelTier, configure_sdk_for_space
 from pilot_space.spaces.manager import SpaceManager
@@ -45,6 +74,16 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
+
+# Aggregated tool names across all MCP servers (27 tools total)
+ALL_TOOL_NAMES: list[str] = [
+    *NOTE_TOOL_NAMES,
+    *NOTE_CONTENT_TOOL_NAMES,
+    *ISSUE_TOOL_NAMES,
+    *ISSUE_REL_TOOL_NAMES,
+    *PROJECT_TOOL_NAMES,
+    *COMMENT_TOOL_NAMES,
+]
 
 
 @dataclass
@@ -83,12 +122,20 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
         "- <note_context> present + user asks to write/draft/document/add content → "
         "use `write_to_note`, then summarize in chat.\n"
         "- Questions, analysis, or conversation → respond in chat only.\n\n"
-        "## MCP note tools\n"
-        "- `write_to_note`: Append markdown to end of note (no block_id needed).\n"
-        "- `update_note_block`: Replace/append at a specific block (requires block_id).\n"
-        "- `enhance_text`: Improve block clarity (requires block_id).\n"
-        "- `summarize_note`: Read note (already in <note_context>).\n"
-        "- `extract_issues`, `create_issue_from_note`, `link_existing_issues`: Issue tools.\n\n"
+        "## Tool categories\n"
+        "**Notes** (10 tools): write_to_note, update_note_block, enhance_text, summarize_note, "
+        "extract_issues, create_issue_from_note, link_existing_issues, search_notes, create_note, update_note.\n"
+        "**Note content** (5 tools): search_note_content, insert_block, remove_block, remove_content, replace_content.\n"
+        "**Issues** (4 CRUD + 6 relations): get_issue, search_issues, create_issue, update_issue, "
+        "link_issue_to_note, unlink_issue_from_note, link_issues, unlink_issues, add_sub_issue, transition_issue_state.\n"
+        "**Projects** (5 tools): get_project, search_projects, create_project, update_project, update_project_settings.\n"
+        "**Comments** (4 tools): create_comment, update_comment, search_comments, get_comments.\n\n"
+        "## Entity resolution\n"
+        "Issue/project tools accept UUID or human-readable identifiers (e.g., PILOT-123, PILOT).\n\n"
+        "## Approval tiers\n"
+        "- Auto-execute: search/get tools (read-only).\n"
+        "- Require approval: create/update/link tools.\n"
+        "- Always require: unlink tools (destructive).\n\n"
         "Subagents: pr-review, ai-context, doc-generator.\n"
         "Return operation payloads; never mutate DB directly. "
         "Destructive actions always require human approval."
@@ -201,45 +248,6 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
             app_session_id=session_id,
         )
 
-    async def _sync_note_if_present(
-        self,
-        input_data: ChatInput,
-        space_path: Path,
-    ) -> None:
-        """Sync note content from DB to workspace file if note context is present."""
-        note = input_data.context.get("note")
-        if note is None:
-            return
-
-        note_id = getattr(note, "id", None)
-        if note_id is None:
-            logger.warning("[NoteSync] Note object missing 'id' attribute, skipping sync")
-            return
-
-        try:
-            from pilot_space.infrastructure.database import get_db_session
-
-            sync_service = NoteSpaceSync()
-            async with get_db_session() as session:
-                file_path = await sync_service.sync_note_to_space(
-                    space_path=space_path,
-                    note_id=note_id,
-                    session=session,
-                )
-                logger.info(
-                    "[NoteSync] Synced note %s to workspace: %s",
-                    note_id,
-                    file_path,
-                )
-
-        except Exception as e:
-            logger.error(
-                "[NoteSync] Failed to sync note %s to workspace: %s",
-                note_id,
-                str(e),
-                exc_info=True,
-            )
-
     async def stream(
         self,
         input_data: ChatInput,
@@ -319,24 +327,62 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
                 event_queue=tool_event_queue,
             )
 
+            # Build ToolContext for MCP servers that need DB access
+            from pilot_space.ai.tools.mcp_server import ToolContext
+            from pilot_space.infrastructure.database import get_db_session
+
+            tool_context: ToolContext | None = None
+            db_session_cm = get_db_session()
+            db_session = await db_session_cm.__aenter__()
+            try:
+                tool_context = ToolContext(
+                    db_session=db_session,
+                    workspace_id=str(context.workspace_id),
+                    user_id=str(context.user_id) if context.user_id else None,
+                )
+            except Exception:
+                await db_session_cm.__aexit__(None, None, None)
+                raise
+
             context_note_id = input_data.context.get("note_id")
             note_tools_server = create_note_tools_server(
                 tool_event_queue,
                 context_note_id=str(context_note_id) if context_note_id else None,
+                tool_context=tool_context,
+            )
+            note_content_server = create_note_content_server(
+                tool_event_queue,
+                tool_context=tool_context,
+            )
+            issue_tools_server = create_issue_tools_server(
+                tool_event_queue,
+                tool_context=tool_context,
+            )
+            issue_rel_server = create_issue_relation_tools_server(
+                tool_event_queue,
+                tool_context=tool_context,
+            )
+            project_tools_server = create_project_tools_server(
+                event_queue=tool_event_queue,
+                tool_context=tool_context,
+            )
+            comment_tools_server = create_comment_tools_server(
+                tool_event_queue,
+                tool_context=tool_context,
             )
 
             from pilot_space.ai.sdk.output_schemas import get_skill_output_format
 
-            skill_name = _detect_skill_from_message(input_data.message)
+            skill_name = detect_skill_from_message(input_data.message)
             output_format = get_skill_output_format(skill_name) if skill_name else None
-            effort = _classify_effort(input_data.message)
-            streaming_input = _estimate_tokens(input_data) > 30_000
+            effort = classify_effort(input_data.message)
+            streaming_input = estimate_tokens(input_data) > 30_000
 
             sdk_config = configure_sdk_for_space(
                 space_context,
                 permission_mode="default",
                 model=self.DEFAULT_MODEL_TIER,
-                additional_tools=NOTE_TOOL_NAMES,
+                additional_tools=ALL_TOOL_NAMES,
                 additional_env={
                     "ANTHROPIC_API_KEY": api_key,
                 },
@@ -361,7 +407,14 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
                 cwd=sdk_params.get("cwd"),
                 setting_sources=sdk_params.get("setting_sources", ["project"]),
                 allowed_tools=sdk_params.get("allowed_tools", []),
-                mcp_servers={NOTE_SERVER_NAME: note_tools_server},
+                mcp_servers={
+                    NOTE_SERVER_NAME: note_tools_server,
+                    NOTE_CONTENT_SERVER_NAME: note_content_server,
+                    ISSUE_SERVER_NAME: issue_tools_server,
+                    ISSUE_REL_SERVER_NAME: issue_rel_server,
+                    PROJECT_SERVER_NAME: project_tools_server,
+                    COMMENT_SERVER_NAME: comment_tools_server,
+                },
                 sandbox=sdk_params.get("sandbox"),
                 permission_mode=sdk_params.get("permission_mode", "default"),
                 env=sdk_env,
@@ -381,11 +434,6 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
                 sdk_params.get("cwd"),
                 list(sdk_env.keys()),
                 shutil.which("claude"),
-            )
-
-            await self._sync_note_if_present(
-                input_data=input_data,
-                space_path=space_context.path,
             )
 
             client = ClaudeSDKClient(sdk_options)
@@ -428,7 +476,7 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
                     if sse_event:
                         transformed_count += 1
                         yield sse_event
-                        _capture_content_from_sse(sse_event, content_blocks)
+                        capture_content_from_sse(sse_event, content_blocks)
 
                     # Time-based flush check for buffered deltas
                     if delta_buffer.should_flush():
@@ -436,7 +484,7 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
                         if flush_event:
                             transformed_count += 1
                             yield flush_event
-                            _capture_content_from_sse(flush_event, content_blocks)
+                            capture_content_from_sse(flush_event, content_blocks)
 
                     try:
                         while True:
@@ -450,7 +498,7 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
                 if final_flush:
                     transformed_count += 1
                     yield final_flush
-                    _capture_content_from_sse(final_flush, content_blocks)
+                    capture_content_from_sse(final_flush, content_blocks)
 
                 try:
                     while True:
@@ -488,7 +536,7 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
                             content=input_data.message,
                         )
                         # Build structured content from captured blocks
-                        structured_content = _build_structured_content(content_blocks)
+                        structured_content = build_structured_content(content_blocks)
                         if structured_content:
                             await self._session_handler.add_message(
                                 session_id=input_data.session_id,
@@ -508,6 +556,9 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
 
                 await client.disconnect()
                 clear_context()
+
+                # Clean up tool context db session
+                await db_session_cm.__aexit__(None, None, None)
 
     async def create_client(
         self,
@@ -582,167 +633,3 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
                 "model": self.DEFAULT_MODEL_TIER.model_id,
             },
         )
-
-
-_SIMPLE_PATTERNS = [
-    re.compile(r"^(hi|hello|hey|thanks|thank you|ok|okay)\b"),
-    re.compile(r"^what (can you|do you) do"),
-    re.compile(r"^help\b"),
-    re.compile(r"^(yes|no|sure|yep|nope)\b"),
-]
-_COMPLEX_PATTERNS = [
-    re.compile(r"\b(analy[sz]e|audit|review|refactor|architect)\b"),
-    re.compile(r"\b(compare|contrast|evaluate|assess)\b"),
-    re.compile(r"\b(explain.{0,20}(in detail|thoroughly|step by step))\b"),
-    re.compile(r"\b(design|implement|migrate|optimize)\b"),
-    re.compile(r"\b(security|vulnerability|performance)\s+(review|audit|check)\b"),
-]
-
-
-def _classify_effort(message: str) -> str | None:
-    """Return 'low' for greetings, 'high' for complex queries, None for default."""
-    msg_lower = message.strip().lower()
-    if len(msg_lower) < 50:
-        for p in _SIMPLE_PATTERNS:
-            if p.match(msg_lower):
-                return "low"
-    if len(msg_lower) > 200:
-        return "high"
-    for p in _COMPLEX_PATTERNS:
-        if p.search(msg_lower):
-            return "high"
-    return None
-
-
-def _detect_skill_from_message(message: str) -> str | None:
-    """Detect slash-command skill invocation, returning skill name or None."""
-    msg_stripped = message.strip()
-    if msg_stripped.startswith("/"):
-        parts = msg_stripped[1:].split(None, 1)
-        return parts[0] if parts else None
-    return None
-
-
-def _estimate_tokens(input_data: ChatInput) -> int:
-    """Rough token estimate (~4 chars/token) for context size detection (T62)."""
-    total_chars = len(input_data.message)
-    total_chars += sum(len(str(v)) for v in input_data.context.values())
-    return total_chars // 4
-
-
-def _capture_content_from_sse(
-    sse_event: str,
-    content_blocks: dict[str, dict[str, Any]],
-) -> None:
-    """Capture structured content from SSE events for session persistence.
-
-    Extracts text_delta, thinking_delta, tool_use, and tool_result events
-    and accumulates them into content_blocks dictionary.
-
-    Args:
-        sse_event: SSE-formatted event string (may contain multiple events)
-        content_blocks: Mutable dict to accumulate content by block key
-    """
-    for event_line in sse_event.split("\n\n"):
-        if not event_line.strip():
-            continue
-
-        lines = event_line.split("\n")
-        event_type = ""
-        data_str = ""
-
-        for line in lines:
-            if line.startswith("event: "):
-                event_type = line[7:].strip()
-            elif line.startswith("data: "):
-                data_str = line[6:]
-
-        if not event_type or not data_str:
-            continue
-
-        try:
-            data = json.loads(data_str)
-        except (json.JSONDecodeError, TypeError):
-            continue
-
-        block_idx = data.get("blockIndex", 0)
-
-        if event_type == "text_delta":
-            key = f"text_{block_idx}"
-            if key not in content_blocks:
-                content_blocks[key] = {"type": "text", "text": "", "index": block_idx}
-            content_blocks[key]["text"] += data.get("delta", "")
-
-        elif event_type == "thinking_delta":
-            key = f"thinking_{block_idx}"
-            if key not in content_blocks:
-                content_blocks[key] = {"type": "thinking", "thinking": "", "index": block_idx}
-            content_blocks[key]["thinking"] += data.get("delta", "")
-            # Capture signature if present
-            if "signature" in data:
-                content_blocks[key]["signature"] = data["signature"]
-
-        elif event_type == "tool_use":
-            tool_id = data.get("toolCallId", "")
-            if tool_id:
-                key = f"tool_use_{tool_id}"
-                content_blocks[key] = {
-                    "type": "tool_use",
-                    "id": tool_id,
-                    "name": data.get("toolName", ""),
-                    "input": data.get("toolInput", {}),
-                    "index": len(content_blocks),  # Preserve order
-                }
-
-        elif event_type == "tool_result":
-            tool_id = data.get("toolCallId", "")
-            if tool_id:
-                key = f"tool_result_{tool_id}"
-                content_blocks[key] = {
-                    "type": "tool_result",
-                    "tool_use_id": tool_id,
-                    "content": data.get("output", data.get("errorMessage", "")),
-                    "is_error": data.get("status") == "failed",
-                    "index": len(content_blocks),
-                }
-
-
-def _build_structured_content(
-    content_blocks: dict[str, dict[str, Any]],
-) -> list[dict[str, Any]] | str:
-    """Build structured content list from captured blocks.
-
-    Sorts blocks by their index and returns as a list of content blocks
-    in Claude message format. Falls back to plain text if only text content.
-
-    Args:
-        content_blocks: Dict of captured content blocks
-
-    Returns:
-        List of content block dicts, or plain text string if only text
-    """
-    if not content_blocks:
-        return ""
-
-    # Sort by index to preserve order
-    sorted_blocks = sorted(
-        content_blocks.values(),
-        key=lambda b: b.get("index", 0),
-    )
-
-    # Check if we have only text content
-    has_non_text = any(b["type"] in ("thinking", "tool_use", "tool_result") for b in sorted_blocks)
-
-    if not has_non_text:
-        # Return plain text for backward compatibility
-        text_parts = [b.get("text", "") for b in sorted_blocks if b["type"] == "text"]
-        return "".join(text_parts)
-
-    # Return structured content
-    result: list[dict[str, Any]] = []
-    for block in sorted_blocks:
-        # Remove internal index field used for ordering
-        clean_block = {k: v for k, v in block.items() if k != "index"}
-        result.append(clean_block)
-
-    return result

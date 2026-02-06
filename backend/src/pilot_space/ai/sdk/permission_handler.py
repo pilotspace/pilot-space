@@ -170,11 +170,45 @@ class PermissionHandler:
         "assignee_recommend": ActionClassification.AUTO_EXECUTE,
         "doc_generate": ActionClassification.AUTO_EXECUTE,
         "diagram_generate": ActionClassification.AUTO_EXECUTE,
-        # Default require approval (creates/modifies entities)
+        # Note tools — read (AUTO_EXECUTE)
+        "search_notes": ActionClassification.AUTO_EXECUTE,
+        "search_note_content": ActionClassification.AUTO_EXECUTE,
+        # Note tools — write (REQUIRE_APPROVAL)
+        "create_note": ActionClassification.DEFAULT_REQUIRE_APPROVAL,
+        "update_note": ActionClassification.DEFAULT_REQUIRE_APPROVAL,
+        "insert_block": ActionClassification.DEFAULT_REQUIRE_APPROVAL,
+        "remove_block": ActionClassification.DEFAULT_REQUIRE_APPROVAL,
+        "remove_content": ActionClassification.DEFAULT_REQUIRE_APPROVAL,
+        "replace_content": ActionClassification.DEFAULT_REQUIRE_APPROVAL,
+        # Issue tools — read (AUTO_EXECUTE)
+        "get_issue": ActionClassification.AUTO_EXECUTE,
+        "search_issues": ActionClassification.AUTO_EXECUTE,
+        # Issue tools — write (REQUIRE_APPROVAL)
         "create_issue": ActionClassification.DEFAULT_REQUIRE_APPROVAL,
+        "update_issue": ActionClassification.DEFAULT_REQUIRE_APPROVAL,
+        "link_issue_to_note": ActionClassification.DEFAULT_REQUIRE_APPROVAL,
+        "link_issues": ActionClassification.DEFAULT_REQUIRE_APPROVAL,
+        "add_sub_issue": ActionClassification.DEFAULT_REQUIRE_APPROVAL,
+        "transition_issue_state": ActionClassification.DEFAULT_REQUIRE_APPROVAL,
+        # Issue tools — destructive (CRITICAL)
+        "unlink_issue_from_note": ActionClassification.CRITICAL_REQUIRE_APPROVAL,
+        "unlink_issues": ActionClassification.CRITICAL_REQUIRE_APPROVAL,
+        # Project tools — read (AUTO_EXECUTE)
+        "get_project": ActionClassification.AUTO_EXECUTE,
+        "search_projects": ActionClassification.AUTO_EXECUTE,
+        # Project tools — write (REQUIRE_APPROVAL)
+        "create_project": ActionClassification.DEFAULT_REQUIRE_APPROVAL,
+        "update_project": ActionClassification.DEFAULT_REQUIRE_APPROVAL,
+        "update_project_settings": ActionClassification.DEFAULT_REQUIRE_APPROVAL,
+        # Comment tools — read (AUTO_EXECUTE)
+        "search_comments": ActionClassification.AUTO_EXECUTE,
+        "get_comments": ActionClassification.AUTO_EXECUTE,
+        # Comment tools — write
+        "create_comment": ActionClassification.AUTO_EXECUTE,
+        "update_comment": ActionClassification.DEFAULT_REQUIRE_APPROVAL,
+        # Legacy actions
         "create_annotation": ActionClassification.DEFAULT_REQUIRE_APPROVAL,
         "link_commit": ActionClassification.DEFAULT_REQUIRE_APPROVAL,
-        "update_issue": ActionClassification.DEFAULT_REQUIRE_APPROVAL,
         "decompose_tasks": ActionClassification.DEFAULT_REQUIRE_APPROVAL,
         # Critical require approval (destructive)
         "delete_issue": ActionClassification.CRITICAL_REQUIRE_APPROVAL,

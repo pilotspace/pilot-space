@@ -2,7 +2,6 @@
 
 Tests for:
 - T022: get_workspace_members
-- T023: get_page_content
 - T024: get_cycle_context
 """
 
@@ -17,7 +16,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from pilot_space.ai.tools.database_tools import (
     get_cycle_context,
-    get_page_content,
     get_workspace_members,
 )
 from pilot_space.ai.tools.mcp_server import ToolContext
@@ -163,26 +161,6 @@ class TestGetWorkspaceMembers:
         # Assert
         assert result["count"] == 1
         assert result["members"][0]["skills"] == ["Python", "FastAPI"]
-
-
-class TestGetPageContent:
-    """Test suite for get_page_content tool."""
-
-    @pytest.mark.asyncio
-    async def test_get_page_content_not_implemented(
-        self,
-        tool_context: ToolContext,
-    ) -> None:
-        """Test that page content returns not implemented message."""
-        # Act
-        result = await get_page_content(
-            page_id=str(uuid4()),
-            ctx=tool_context,
-        )
-
-        # Assert
-        assert result["found"] is False
-        assert "not yet implemented" in result["error"]
 
 
 class TestGetCycleContext:

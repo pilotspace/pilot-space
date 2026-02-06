@@ -13,7 +13,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pilot_space.ai.agents.pilotspace_agent import ChatInput, _estimate_tokens
+from pilot_space.ai.agents.pilotspace_agent import ChatInput
+from pilot_space.ai.agents.pilotspace_stream_utils import estimate_tokens as _estimate_tokens
 from pilot_space.ai.sdk.sandbox_config import configure_sdk_for_space
 from pilot_space.spaces.base import SpaceContext
 

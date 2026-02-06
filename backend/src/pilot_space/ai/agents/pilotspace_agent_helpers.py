@@ -15,8 +15,12 @@ from claude_agent_sdk import AgentDefinition
 
 from pilot_space.ai.agents.pilotspace_note_helpers import (
     emit_append_blocks_event,
+    emit_insert_blocks_event,
     emit_issue_creation_events,
+    emit_remove_block_event,
+    emit_remove_content_event,
     emit_replace_block_event,
+    emit_replace_content_event,
     transform_todo_to_task_progress,
     transform_user_message_tool_results,
     validate_structured_output,
@@ -657,6 +661,10 @@ def transform_tool_result(message: Message) -> str | None:
             "append_blocks": emit_append_blocks_event,
             "create_issues": emit_issue_creation_events,
             "create_single_issue": emit_issue_creation_events,
+            "insert_blocks": emit_insert_blocks_event,
+            "remove_block": emit_remove_block_event,
+            "remove_content": emit_remove_content_event,
+            "replace_content": emit_replace_content_event,
         }
 
         handler = operation_handlers.get(operation)
