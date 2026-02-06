@@ -47,11 +47,6 @@ TOOL_NAMES = [
 ]
 
 
-def _sse_event(event_type: str, data: dict[str, Any]) -> str:
-    """Format an SSE event string."""
-    return f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
-
-
 def _text_result(text: str) -> dict[str, Any]:
     """Create a standard MCP tool text result."""
     return {"content": [{"type": "text", "text": text}]}
@@ -324,22 +319,6 @@ def create_issue_relation_tools_server(
         if ws_err:
             return _text_result(f"Error: {ws_err}")
 
-        # Push SSE approval_request event
-        approval_data = {
-            "tool": "unlink_issue_from_note",
-            "operation": "unlink_issue_from_note",
-            "approval_level": "always_require",
-            "payload": {
-                "issue_id": str(issue_uuid),
-                "note_id": str(note_uuid),
-            },
-            "preview": {
-                "issue_id": args["issue_id"],
-                "note_id": args["note_id"],
-            },
-        }
-        await event_queue.put(_sse_event("approval_request", approval_data))
-
         logger.info(
             "[IssueRelationTools] unlink_issue_from_note: %s ← %s (approval required)",
             args["issue_id"],
@@ -394,7 +373,14 @@ def create_issue_relation_tools_server(
             resolved[key] = uid
         source_uuid, target_uuid = resolved["source_issue_id"], resolved["target_issue_id"]
 
-        # Validate link_type and self-link before DB calls
+        # Verify workspace ownership before revealing validation details
+        repo = IssueRepository(tool_context.db_session)
+        for uid in [source_uuid, target_uuid]:
+            ws_err = await _verify_issue_workspace(repo, uid, tool_context.workspace_id)  # type: ignore[arg-type]
+            if ws_err:
+                return _text_result(f"Error: {ws_err}")
+
+        # Validate link_type and self-link
         try:
             link_type = IssueLinkType(args["link_type"])
         except ValueError:
@@ -404,13 +390,6 @@ def create_issue_relation_tools_server(
             )
         if source_uuid == target_uuid:
             return _text_result("Cannot link an issue to itself")
-
-        # Verify workspace ownership
-        repo = IssueRepository(tool_context.db_session)
-        for uid in [source_uuid, target_uuid]:
-            ws_err = await _verify_issue_workspace(repo, uid, tool_context.workspace_id)  # type: ignore[arg-type]
-            if ws_err:
-                return _text_result(f"Error: {ws_err}")
 
         # Build operation payload
         payload = {
@@ -493,23 +472,6 @@ def create_issue_relation_tools_server(
             ws_err = await _verify_issue_workspace(repo, uid, tool_context.workspace_id)  # type: ignore[arg-type]
             if ws_err:
                 return _text_result(f"Error: {ws_err}")
-
-        # Push SSE approval_request event
-        approval_data = {
-            "tool": "unlink_issues",
-            "operation": "unlink_issues",
-            "approval_level": "always_require",
-            "payload": {
-                "source_issue_id": str(source_uuid),
-                "target_issue_id": str(target_uuid),
-            },
-            "preview": {
-                "source_issue_id": args["source_issue_id"],
-                "target_issue_id": args["target_issue_id"],
-                "note": "Inverse links will also be removed",
-            },
-        }
-        await event_queue.put(_sse_event("approval_request", approval_data))
 
         logger.info(
             "[IssueRelationTools] unlink_issues: %s ← → %s (approval required)",

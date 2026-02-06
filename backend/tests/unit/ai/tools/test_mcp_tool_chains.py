@@ -712,13 +712,10 @@ class TestSSEEventPropagation:
                 }
             )
 
-        # Verify both SSE events are in queue
-        assert event_queue.qsize() == 2
+        # Comment creation pushes SSE; unlink returns payload only (no duplicate SSE)
+        assert event_queue.qsize() == 1
 
         event1 = await event_queue.get()
         assert "event: content_update" in event1
         event1_data = json.loads(event1.split("data: ")[1].strip())
         assert event1_data["operation"] == "comment_created"
-
-        event2 = await event_queue.get()
-        assert "event: approval_request" in event2

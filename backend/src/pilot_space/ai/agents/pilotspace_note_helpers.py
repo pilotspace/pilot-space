@@ -395,3 +395,39 @@ def _map_todo_status(status: str) -> str:
         "completed": "completed",
         "done": "completed",
     }.get(status, "pending")
+
+
+def extract_citation(block: Any) -> dict[str, Any] | None:
+    """Extract citation data from SDK citation block (T58).
+
+    Citation blocks reference source documents used in the response.
+    """
+    if isinstance(block, dict):
+        source = block.get("source", {})
+        cited_text = block.get("cited_text", block.get("text", ""))
+    else:
+        source = getattr(block, "source", {})
+        cited_text = getattr(block, "cited_text", getattr(block, "text", ""))
+
+    if not source and not cited_text:
+        return None
+
+    if source and not isinstance(source, dict):
+        logger.warning("Citation source is not a dict: %s (type=%s)", source, type(source).__name__)
+        source = {}
+
+    source_dict: dict[str, Any] = source if isinstance(source, dict) else {}
+    result: dict[str, Any] = {
+        "sourceType": source_dict.get("type", "document"),
+        "sourceId": source_dict.get("id", ""),
+        "sourceTitle": source_dict.get("title", ""),
+        "citedText": str(cited_text),
+    }
+    # Only include index fields when present (T70 — reduce JSON noise)
+    start_idx = source_dict.get("start_index")
+    end_idx = source_dict.get("end_index")
+    if start_idx is not None:
+        result["startIndex"] = start_idx
+    if end_idx is not None:
+        result["endIndex"] = end_idx
+    return result

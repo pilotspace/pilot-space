@@ -484,7 +484,7 @@ class TestUnlinkIssueFromNote:
         assert TOOL_APPROVAL_MAP["unlink_issue_from_note"] == ToolApprovalLevel.ALWAYS_REQUIRE
 
     @pytest.mark.asyncio
-    async def test_pushes_sse_event(self, mock_tool_context: ToolContext) -> None:
+    async def test_returns_approval_payload(self, mock_tool_context: ToolContext) -> None:
         queue: asyncio.Queue[str] = asyncio.Queue()
         tools = _capture_relation_tools(queue, mock_tool_context)
         issue_uuid, note_uuid = uuid4(), uuid4()
@@ -515,8 +515,8 @@ class TestUnlinkIssueFromNote:
         data = json.loads(result["content"][0]["text"])
         assert data["status"] == "approval_required"
         assert data["operation"] == "unlink_issue_from_note"
-        assert not queue.empty()
-        assert "approval_request" in await queue.get()
+        # No duplicate SSE event — approval conveyed via operation payload only
+        assert queue.empty()
 
 
 class TestLinkIssues:
@@ -559,9 +559,16 @@ class TestLinkIssues:
         tools = _capture_relation_tools(asyncio.Queue(), mock_tool_context)
         same = uuid4()
 
-        with patch(
-            "pilot_space.ai.mcp.issue_relation_server.resolve_entity_id",
-            side_effect=[(same, None), (same, None)],
+        with (
+            patch(
+                "pilot_space.ai.mcp.issue_relation_server.resolve_entity_id",
+                side_effect=[(same, None), (same, None)],
+            ),
+            patch(
+                "pilot_space.ai.mcp.issue_relation_server._verify_issue_workspace",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
         ):
             result = await tools["link_issues"].handler(
                 {
@@ -577,9 +584,16 @@ class TestLinkIssues:
         tools = _capture_relation_tools(asyncio.Queue(), mock_tool_context)
         src, tgt = uuid4(), uuid4()
 
-        with patch(
-            "pilot_space.ai.mcp.issue_relation_server.resolve_entity_id",
-            side_effect=[(src, None), (tgt, None)],
+        with (
+            patch(
+                "pilot_space.ai.mcp.issue_relation_server.resolve_entity_id",
+                side_effect=[(src, None), (tgt, None)],
+            ),
+            patch(
+                "pilot_space.ai.mcp.issue_relation_server._verify_issue_workspace",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
         ):
             result = await tools["link_issues"].handler(
                 {
@@ -598,7 +612,7 @@ class TestUnlinkIssues:
         assert TOOL_APPROVAL_MAP["unlink_issues"] == ToolApprovalLevel.ALWAYS_REQUIRE
 
     @pytest.mark.asyncio
-    async def test_pushes_sse_event(self, mock_tool_context: ToolContext) -> None:
+    async def test_returns_approval_payload(self, mock_tool_context: ToolContext) -> None:
         queue: asyncio.Queue[str] = asyncio.Queue()
         tools = _capture_relation_tools(queue, mock_tool_context)
         src, tgt = uuid4(), uuid4()
@@ -623,8 +637,8 @@ class TestUnlinkIssues:
 
         data = json.loads(result["content"][0]["text"])
         assert data["status"] == "approval_required"
-        assert not queue.empty()
-        assert "approval_request" in await queue.get()
+        # No duplicate SSE event — approval conveyed via operation payload only
+        assert queue.empty()
 
 
 class TestAddSubIssue:

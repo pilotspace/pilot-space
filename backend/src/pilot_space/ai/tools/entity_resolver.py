@@ -71,8 +71,14 @@ async def _resolve_issue_identifier(
     ctx: ToolContext,
 ) -> tuple[uuid.UUID | None, str | None]:
     """Resolve issue identifier like PILOT-123 to UUID."""
-    match = _ISSUE_IDENTIFIER_PATTERN.match(identifier.upper())
+    match = _ISSUE_IDENTIFIER_PATTERN.match(identifier)
     if not match:
+        # Hint if uppercased version would match
+        if _ISSUE_IDENTIFIER_PATTERN.match(identifier.upper()):
+            return None, (
+                f"Invalid issue identifier: '{identifier}'. "
+                "Identifier must be uppercase (e.g., PILOT-123)"
+            )
         return None, (
             f"Invalid issue identifier: '{identifier}'. Expected UUID or format like PILOT-123"
         )
@@ -92,7 +98,7 @@ async def _resolve_issue_identifier(
         sequence_id=sequence_id,
     )
     if not issue:
-        return None, f"Issue {identifier.upper()} not found in this workspace"
+        return None, f"Issue {identifier} not found in this workspace"
 
     return issue.id, None
 
@@ -102,8 +108,12 @@ async def _resolve_project_identifier(
     ctx: ToolContext,
 ) -> tuple[uuid.UUID | None, str | None]:
     """Resolve project identifier like PILOT to UUID."""
-    upper_id = identifier.upper()
-    if not _PROJECT_IDENTIFIER_PATTERN.match(upper_id):
+    if not _PROJECT_IDENTIFIER_PATTERN.match(identifier):
+        if _PROJECT_IDENTIFIER_PATTERN.match(identifier.upper()):
+            return None, (
+                f"Invalid project identifier: '{identifier}'. "
+                "Identifier must be uppercase (e.g., PILOT)"
+            )
         return None, (
             f"Invalid project identifier: '{identifier}'. "
             "Expected UUID or 2-10 uppercase letters (e.g., PILOT)"
@@ -118,9 +128,9 @@ async def _resolve_project_identifier(
     repo = ProjectRepository(ctx.db_session)
     project = await repo.get_by_identifier(
         workspace_id=workspace_id,
-        identifier=upper_id,
+        identifier=identifier,
     )
     if not project:
-        return None, f"Project '{upper_id}' not found in this workspace"
+        return None, f"Project '{identifier}' not found in this workspace"
 
     return project.id, None

@@ -80,12 +80,12 @@ class IssueLink(WorkspaceScopedModel):
     source_issue: Mapped[Issue] = relationship(
         "Issue",
         foreign_keys=[source_issue_id],
-        lazy="joined",
+        lazy="selectin",
     )
     target_issue: Mapped[Issue] = relationship(
         "Issue",
         foreign_keys=[target_issue_id],
-        lazy="joined",
+        lazy="selectin",
     )
 
     __table_args__ = (
@@ -101,6 +101,7 @@ class IssueLink(WorkspaceScopedModel):
         ),
         Index("ix_issue_links_source", "source_issue_id"),
         Index("ix_issue_links_target", "target_issue_id"),
+        Index("ix_issue_links_workspace_id", "workspace_id"),
         Index("ix_issue_links_workspace_type", "workspace_id", "link_type"),
     )
 

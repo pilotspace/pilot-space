@@ -91,22 +91,13 @@ class TestIssueIdentifierResolution:
         assert "not found" in error.lower()
 
     @pytest.mark.asyncio
-    async def test_lowercase_identifier_normalized(self) -> None:
-        expected_id = uuid.uuid4()
-        mock_issue = MagicMock()
-        mock_issue.id = expected_id
-
+    async def test_lowercase_identifier_rejected(self) -> None:
         ctx = _make_ctx()
-        with patch(
-            "pilot_space.infrastructure.database.repositories.issue_repository.IssueRepository"
-        ) as MockRepo:
-            mock_repo = MockRepo.return_value
-            mock_repo.get_by_identifier = AsyncMock(return_value=mock_issue)
+        resolved, error = await resolve_entity_id("issue", "pilot-42", ctx)
 
-            resolved, error = await resolve_entity_id("issue", "pilot-42", ctx)
-
-        assert resolved == expected_id
-        assert error is None
+        assert resolved is None
+        assert error is not None
+        assert "uppercase" in error.lower()
 
     @pytest.mark.asyncio
     async def test_invalid_format(self) -> None:

@@ -21,6 +21,7 @@ from pilot_space.ai.agents.pilotspace_note_helpers import (
     emit_remove_content_event,
     emit_replace_block_event,
     emit_replace_content_event,
+    extract_citation,
     transform_todo_to_task_progress,
     transform_user_message_tool_results,
     validate_structured_output,
@@ -312,7 +313,7 @@ def transform_sdk_message(  # noqa: PLR0911
                         events.append(search_event)
                 elif block_type == "citation":
                     # T58: Extract citation blocks for source attribution
-                    citation_data = _extract_citation(block)
+                    citation_data = extract_citation(block)
                     if citation_data:
                         citation_parts.append(citation_data)
                 else:
@@ -327,7 +328,7 @@ def transform_sdk_message(  # noqa: PLR0911
                     )
                     if inline_citations:
                         for cite in inline_citations:
-                            citation_data = _extract_citation(cite)
+                            citation_data = extract_citation(cite)
                             if citation_data:
                                 citation_parts.append(citation_data)
 
@@ -599,42 +600,6 @@ def _get_block_text(block: Any, attr: str = "text") -> str:
     if isinstance(block, dict):
         return str(block.get(attr, block.get("text", "")))
     return str(getattr(block, attr, getattr(block, "text", "")))
-
-
-def _extract_citation(block: Any) -> dict[str, Any] | None:
-    """Extract citation data from SDK citation block (T58).
-
-    Citation blocks reference source documents used in the response.
-    """
-    if isinstance(block, dict):
-        source = block.get("source", {})
-        cited_text = block.get("cited_text", block.get("text", ""))
-    else:
-        source = getattr(block, "source", {})
-        cited_text = getattr(block, "cited_text", getattr(block, "text", ""))
-
-    if not source and not cited_text:
-        return None
-
-    if source and not isinstance(source, dict):
-        logger.warning("Citation source is not a dict: %s (type=%s)", source, type(source).__name__)
-        source = {}
-
-    source_dict: dict[str, Any] = source if isinstance(source, dict) else {}
-    result: dict[str, Any] = {
-        "sourceType": source_dict.get("type", "document"),
-        "sourceId": source_dict.get("id", ""),
-        "sourceTitle": source_dict.get("title", ""),
-        "citedText": str(cited_text),
-    }
-    # Only include index fields when present (T70 — reduce JSON noise)
-    start_idx = source_dict.get("start_index")
-    end_idx = source_dict.get("end_index")
-    if start_idx is not None:
-        result["startIndex"] = start_idx
-    if end_idx is not None:
-        result["endIndex"] = end_idx
-    return result
 
 
 def transform_tool_result(message: Message) -> str | None:

@@ -23,7 +23,7 @@ from typing import Any
 
 from claude_agent_sdk import McpSdkServerConfig, create_sdk_mcp_server, tool
 
-from pilot_space.ai.tools.mcp_server import ToolContext
+from pilot_space.ai.tools.mcp_server import ToolContext, get_tool_approval_level
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +48,14 @@ def _sse_event(event_type: str, data: dict[str, Any]) -> str:
 def _text_result(text: str) -> dict[str, Any]:
     """Create a standard MCP tool text result."""
     return {"content": [{"type": "text", "text": text}]}
+
+
+def _compile_search_regex(pattern: str, *, case_sensitive: bool) -> re.Pattern[str]:
+    """Compile regex with ReDoS prevention. Raises re.error on invalid patterns."""
+    if len(pattern) > 500:
+        raise re.error("pattern exceeds maximum length of 500 characters")
+    flags = 0 if case_sensitive else re.IGNORECASE
+    return re.compile(pattern, flags)
 
 
 def _extract_block_text(block: dict[str, Any]) -> str:
@@ -149,27 +157,31 @@ def create_note_content_server(
             blocks = content.get("content", [])
             matches: list[dict[str, Any]] = []
 
+            # ReDoS prevention: validate length + pre-compile regex
+            compiled_regex: re.Pattern[str] | None = None
+            if use_regex:
+                try:
+                    compiled_regex = _compile_search_regex(pattern, case_sensitive=case_sensitive)
+                except re.error as e:
+                    return _text_result(f"Error: Invalid regex pattern: {e}")
+
             for line_num, block in enumerate(blocks, start=1):
                 block_id = block.get("attrs", {}).get("id")
                 block_text = _extract_block_text(block)
                 if not block_text:
                     continue
 
-                if use_regex:
-                    flags = 0 if case_sensitive else re.IGNORECASE
-                    try:
-                        if re.search(pattern, block_text, flags):
-                            context_preview = block_text[:100]
-                            matches.append(
-                                {
-                                    "block_id": block_id,
-                                    "text": block_text,
-                                    "line_number": line_num,
-                                    "context": context_preview,
-                                }
-                            )
-                    except re.error as e:
-                        return _text_result(f"Error: Invalid regex pattern: {e}")
+                if compiled_regex is not None:
+                    if compiled_regex.search(block_text):
+                        context_preview = block_text[:100]
+                        matches.append(
+                            {
+                                "block_id": block_id,
+                                "text": block_text,
+                                "line_number": line_num,
+                                "context": context_preview,
+                            }
+                        )
                 else:
                     search_pattern = pattern if case_sensitive else pattern.lower()
                     search_text = block_text if case_sensitive else block_text.lower()
@@ -266,10 +278,12 @@ def create_note_content_server(
             note_id,
             position,
         )
+        approval_level = get_tool_approval_level("insert_block")
+        status = "approval_required" if approval_level.value != "auto_execute" else "pending_apply"
         return _text_result(
             json.dumps(
                 {
-                    "status": "approval_required",
+                    "status": status,
                     "operation": "insert_block",
                     "payload": {
                         "note_id": note_id,
@@ -316,10 +330,12 @@ def create_note_content_server(
         await event_queue.put(_sse_event("content_update", event_data))
 
         logger.info("[NoteContentTools] remove_block: note=%s, block=%s", note_id, block_id)
+        approval_level = get_tool_approval_level("remove_block")
+        status = "approval_required" if approval_level.value != "auto_execute" else "pending_apply"
         return _text_result(
             json.dumps(
                 {
-                    "status": "approval_required",
+                    "status": status,
                     "operation": "remove_block",
                     "payload": {"note_id": note_id, "block_id": block_id},
                 }
@@ -367,10 +383,12 @@ def create_note_content_server(
             pattern,
             block_ids,
         )
+        approval_level = get_tool_approval_level("remove_content")
+        status = "approval_required" if approval_level.value != "auto_execute" else "pending_apply"
         return _text_result(
             json.dumps(
                 {
-                    "status": "approval_required",
+                    "status": status,
                     "operation": "remove_content",
                     "payload": {
                         "note_id": note_id,
@@ -441,10 +459,12 @@ def create_note_content_server(
             new_content,
             block_ids,
         )
+        approval_level = get_tool_approval_level("replace_content")
+        status = "approval_required" if approval_level.value != "auto_execute" else "pending_apply"
         return _text_result(
             json.dumps(
                 {
-                    "status": "approval_required",
+                    "status": status,
                     "operation": "replace_content",
                     "payload": {
                         "note_id": note_id,
