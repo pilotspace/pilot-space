@@ -187,10 +187,10 @@ class TestNoteToIssueWorkflow:
         )
 
         # Verify note creation returns approval_required
-        # Note: create_note returns dict directly (not wrapped in {"content": [...]})
-        assert note_result["status"] == "approval_required"
-        assert note_result["operation"] == "create_note"
-        assert note_result["payload"]["title"] == "Meeting Notes"
+        note_data = json.loads(note_result["content"][0]["text"])
+        assert note_data["status"] == "approval_required"
+        assert note_data["operation"] == "create_note"
+        assert note_data["payload"]["title"] == "Meeting Notes"
 
         # Simulate note creation in DB (mock the note_id)
         note_id = uuid4()
@@ -523,8 +523,8 @@ class TestMultiServerToolChain:
             }
         )
 
-        # Note: create_note returns dict directly
-        assert note_result["status"] == "approval_required"
+        note_data = json.loads(note_result["content"][0]["text"])
+        assert note_data["status"] == "approval_required"
 
         # Simulate note creation
         note_id = uuid4()

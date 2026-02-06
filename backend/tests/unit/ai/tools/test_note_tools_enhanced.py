@@ -110,10 +110,11 @@ class TestCreateNote:
             }
         )
 
-        assert result["status"] == "approval_required"
-        assert result["operation"] == "create_note"
-        assert result["payload"]["title"] == "New Note"
-        assert "content_markdown" in result["payload"]
+        data = json.loads(result["content"][0]["text"])
+        assert data["status"] == "approval_required"
+        assert data["operation"] == "create_note"
+        assert data["payload"]["title"] == "New Note"
+        assert "content_markdown" in data["payload"]
 
     @pytest.mark.asyncio
     async def test_create_note_without_content(self) -> None:
@@ -124,9 +125,10 @@ class TestCreateNote:
 
         result = await create_tool.handler({"title": "Empty Note"})
 
-        assert result["status"] == "approval_required"
-        assert result["payload"]["title"] == "Empty Note"
-        assert "content_markdown" not in result["payload"]
+        data = json.loads(result["content"][0]["text"])
+        assert data["status"] == "approval_required"
+        assert data["payload"]["title"] == "Empty Note"
+        assert "content_markdown" not in data["payload"]
 
     @pytest.mark.asyncio
     async def test_create_note_title_validation(self) -> None:
@@ -164,11 +166,12 @@ class TestUpdateNote:
             }
         )
 
-        assert result["status"] == "approval_required"
-        assert result["operation"] == "update_note"
-        assert result["payload"]["note_id"] == note_id
-        assert "title" in result["payload"]["changes"]
-        assert "is_pinned" not in result["payload"]["changes"]
+        data = json.loads(result["content"][0]["text"])
+        assert data["status"] == "approval_required"
+        assert data["operation"] == "update_note"
+        assert data["payload"]["note_id"] == note_id
+        assert "title" in data["payload"]["changes"]
+        assert "is_pinned" not in data["payload"]["changes"]
 
     @pytest.mark.asyncio
     async def test_update_note_pin_toggle(self) -> None:
@@ -184,7 +187,8 @@ class TestUpdateNote:
             }
         )
 
-        assert result["payload"]["changes"]["is_pinned"] is True
+        data = json.loads(result["content"][0]["text"])
+        assert data["payload"]["changes"]["is_pinned"] is True
 
     @pytest.mark.asyncio
     async def test_update_note_project_association(self) -> None:
@@ -200,7 +204,8 @@ class TestUpdateNote:
             }
         )
 
-        assert result["payload"]["changes"]["project_id"] is None
+        data = json.loads(result["content"][0]["text"])
+        assert data["payload"]["changes"]["project_id"] is None
 
 
 class TestSearchNoteContent:

@@ -171,7 +171,7 @@ class TestApprovalLevels:
     def test_create_comment_approval(self) -> None:
         from pilot_space.ai.tools.mcp_server import TOOL_APPROVAL_MAP, ToolApprovalLevel
 
-        assert TOOL_APPROVAL_MAP["create_comment"] == ToolApprovalLevel.AUTO_EXECUTE
+        assert TOOL_APPROVAL_MAP["create_comment"] == ToolApprovalLevel.REQUIRE_APPROVAL
 
     def test_update_comment_approval(self) -> None:
         from pilot_space.ai.tools.mcp_server import TOOL_APPROVAL_MAP, ToolApprovalLevel
@@ -692,12 +692,12 @@ class TestToolCategoryRegistration:
     def test_all_comment_tools_in_approval_map(self) -> None:
         from pilot_space.ai.tools.mcp_server import TOOL_APPROVAL_MAP, ToolApprovalLevel
 
-        auto_execute_tools = ["create_comment", "search_comments", "get_comments"]
+        auto_execute_tools = ["search_comments", "get_comments"]
         for tool_name in auto_execute_tools:
             assert tool_name in TOOL_APPROVAL_MAP
             assert TOOL_APPROVAL_MAP[tool_name] == ToolApprovalLevel.AUTO_EXECUTE
 
-        require_approval_tools = ["update_comment"]
+        require_approval_tools = ["create_comment", "update_comment"]
         for tool_name in require_approval_tools:
             assert tool_name in TOOL_APPROVAL_MAP
             assert TOOL_APPROVAL_MAP[tool_name] == ToolApprovalLevel.REQUIRE_APPROVAL

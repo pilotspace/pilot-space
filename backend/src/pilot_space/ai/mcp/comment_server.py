@@ -379,7 +379,10 @@ def create_comment_tools_server(
         if target_id_str:
             try:
                 target_id = uuid.UUID(target_id_str)
-                stmt = stmt.where(ThreadedDiscussion.target_id == target_id)
+                if target_type == "note":
+                    stmt = stmt.where(ThreadedDiscussion.note_id == target_id)
+                else:
+                    stmt = stmt.where(ThreadedDiscussion.target_id == target_id)
             except ValueError:
                 return _text_result(f"Error: invalid target_id UUID: {target_id_str}")
 
@@ -484,10 +487,17 @@ def create_comment_tools_server(
         session = tool_context.db_session
 
         # Find discussions for target
-        if target_type in ("note", "issue"):
+        if target_type == "note":
             disc_query = select(ThreadedDiscussion).where(
                 ThreadedDiscussion.workspace_id == workspace_id,
-                ThreadedDiscussion.target_type == target_type,
+                ThreadedDiscussion.target_type == "note",
+                ThreadedDiscussion.note_id == target_id,
+                ThreadedDiscussion.is_deleted == False,  # noqa: E712
+            )
+        elif target_type == "issue":
+            disc_query = select(ThreadedDiscussion).where(
+                ThreadedDiscussion.workspace_id == workspace_id,
+                ThreadedDiscussion.target_type == "issue",
                 ThreadedDiscussion.target_id == target_id,
                 ThreadedDiscussion.is_deleted == False,  # noqa: E712
             )

@@ -430,11 +430,13 @@ def create_note_tools_server(
             payload["project_id"] = args["project_id"]
 
         logger.info("[NoteTools] create_note: title='%s'", title)
-        return {
-            "status": "approval_required",
-            "operation": "create_note",
-            "payload": payload,
-        }
+        return _text_result(
+            json.dumps({
+                "status": "approval_required",
+                "operation": "create_note",
+                "payload": payload,
+            })
+        )
 
     @tool(
         "update_note",
@@ -479,11 +481,13 @@ def create_note_tools_server(
             return _text_result("Error: no changes specified")
 
         logger.info("[NoteTools] update_note: note_id=%s, changes=%s", note_id, changes)
-        return {
-            "status": "approval_required",
-            "operation": "update_note",
-            "payload": {"note_id": note_id, "changes": changes},
-        }
+        return _text_result(
+            json.dumps({
+                "status": "approval_required",
+                "operation": "update_note",
+                "payload": {"note_id": note_id, "changes": changes},
+            })
+        )
 
     return create_sdk_mcp_server(
         name=SERVER_NAME,

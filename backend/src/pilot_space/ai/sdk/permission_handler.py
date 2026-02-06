@@ -203,8 +203,8 @@ class PermissionHandler:
         # Comment tools — read (AUTO_EXECUTE)
         "search_comments": ActionClassification.AUTO_EXECUTE,
         "get_comments": ActionClassification.AUTO_EXECUTE,
-        # Comment tools — write
-        "create_comment": ActionClassification.AUTO_EXECUTE,
+        # Comment tools — write (DD-003: content creation requires approval)
+        "create_comment": ActionClassification.DEFAULT_REQUIRE_APPROVAL,
         "update_comment": ActionClassification.DEFAULT_REQUIRE_APPROVAL,
         # Legacy actions
         "create_annotation": ActionClassification.DEFAULT_REQUIRE_APPROVAL,

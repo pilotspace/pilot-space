@@ -96,8 +96,8 @@ TOOL_APPROVAL_MAP: dict[str, ToolApprovalLevel] = {
     "create_project": ToolApprovalLevel.REQUIRE_APPROVAL,
     "update_project": ToolApprovalLevel.REQUIRE_APPROVAL,
     "update_project_settings": ToolApprovalLevel.REQUIRE_APPROVAL,
-    # Comment tools - AUTO_EXECUTE (non-destructive additions + reads)
-    "create_comment": ToolApprovalLevel.AUTO_EXECUTE,
+    # Comment tools - reads are AUTO_EXECUTE, creation requires approval (DD-003)
+    "create_comment": ToolApprovalLevel.REQUIRE_APPROVAL,
     "search_comments": ToolApprovalLevel.AUTO_EXECUTE,
     "get_comments": ToolApprovalLevel.AUTO_EXECUTE,
     # Comment tools - REQUIRE_APPROVAL (content modification)

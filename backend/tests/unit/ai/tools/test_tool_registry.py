@@ -75,7 +75,6 @@ class TestToolApprovalMap:
             "search_issues",
             "get_project",
             "search_projects",
-            "create_comment",
             "search_comments",
             "get_comments",
         ]
@@ -101,6 +100,7 @@ class TestToolApprovalMap:
             "create_project",
             "update_project",
             "update_project_settings",
+            "create_comment",
             "update_comment",
         ]
         for tool_name in require_tools:
@@ -121,8 +121,8 @@ class TestToolApprovalMap:
             1 for v in TOOL_APPROVAL_MAP.values() if v == ToolApprovalLevel.REQUIRE_APPROVAL
         )
         always = sum(1 for v in TOOL_APPROVAL_MAP.values() if v == ToolApprovalLevel.ALWAYS_REQUIRE)
-        assert auto == 9
-        assert require == 16
+        assert auto == 8
+        assert require == 17
         assert always == 2
 
 
