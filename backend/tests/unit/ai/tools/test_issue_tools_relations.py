@@ -19,6 +19,8 @@ from uuid import UUID, uuid4
 
 import pytest
 
+from pilot_space.ai.tools.entity_resolver import EntityResolutionError
+
 if TYPE_CHECKING:
     from pilot_space.ai.tools.mcp_server import ToolContext
 
@@ -117,8 +119,8 @@ class TestLinkIssueToNote:
 
         with (
             patch(
-                "pilot_space.ai.mcp.issue_relation_server.resolve_entity_id",
-                side_effect=[(issue_uuid, None), (note_uuid, None)],
+                "pilot_space.ai.mcp.issue_relation_server.resolve_entity_id_strict",
+                side_effect=[issue_uuid, note_uuid],
             ),
             patch(
                 "pilot_space.ai.mcp.issue_relation_server._verify_issue_workspace",
@@ -161,8 +163,8 @@ class TestUnlinkIssueFromNote:
 
         with (
             patch(
-                "pilot_space.ai.mcp.issue_relation_server.resolve_entity_id",
-                side_effect=[(issue_uuid, None), (note_uuid, None)],
+                "pilot_space.ai.mcp.issue_relation_server.resolve_entity_id_strict",
+                side_effect=[issue_uuid, note_uuid],
             ),
             patch(
                 "pilot_space.ai.mcp.issue_relation_server._verify_issue_workspace",
@@ -202,8 +204,8 @@ class TestLinkIssues:
 
         with (
             patch(
-                "pilot_space.ai.mcp.issue_relation_server.resolve_entity_id",
-                side_effect=[(src, None), (tgt, None)],
+                "pilot_space.ai.mcp.issue_relation_server.resolve_entity_id_strict",
+                side_effect=[src, tgt],
             ),
             patch(
                 "pilot_space.ai.mcp.issue_relation_server._verify_issue_workspace",
@@ -231,8 +233,8 @@ class TestLinkIssues:
 
         with (
             patch(
-                "pilot_space.ai.mcp.issue_relation_server.resolve_entity_id",
-                side_effect=[(same, None), (same, None)],
+                "pilot_space.ai.mcp.issue_relation_server.resolve_entity_id_strict",
+                side_effect=[same, same],
             ),
             patch(
                 "pilot_space.ai.mcp.issue_relation_server._verify_issue_workspace",
@@ -256,8 +258,8 @@ class TestLinkIssues:
 
         with (
             patch(
-                "pilot_space.ai.mcp.issue_relation_server.resolve_entity_id",
-                side_effect=[(src, None), (tgt, None)],
+                "pilot_space.ai.mcp.issue_relation_server.resolve_entity_id_strict",
+                side_effect=[src, tgt],
             ),
             patch(
                 "pilot_space.ai.mcp.issue_relation_server._verify_issue_workspace",
@@ -289,8 +291,8 @@ class TestUnlinkIssues:
 
         with (
             patch(
-                "pilot_space.ai.mcp.issue_relation_server.resolve_entity_id",
-                side_effect=[(src, None), (tgt, None)],
+                "pilot_space.ai.mcp.issue_relation_server.resolve_entity_id_strict",
+                side_effect=[src, tgt],
             ),
             patch(
                 "pilot_space.ai.mcp.issue_relation_server._verify_issue_workspace",
@@ -327,8 +329,8 @@ class TestAddSubIssue:
 
         with (
             patch(
-                "pilot_space.ai.mcp.issue_relation_server.resolve_entity_id",
-                side_effect=[(parent, None), (child, None)],
+                "pilot_space.ai.mcp.issue_relation_server.resolve_entity_id_strict",
+                side_effect=[parent, child],
             ),
             patch("pilot_space.ai.mcp.issue_relation_server.IssueRepository", return_value=repo),
             patch(
@@ -355,19 +357,22 @@ class TestAddSubIssue:
         tools = _capture_relation_tools(asyncio.Queue(), mock_tool_context)
         parent, child = uuid4(), uuid4()
 
-        mock_parent_issue = MagicMock()
-        mock_parent_issue.parent_id = child  # circular: parent's parent is the child
-        mock_parent_issue.workspace_id = UUID(mock_tool_context.workspace_id)
-
-        repo = AsyncMock()
-        repo.get_by_id.return_value = mock_parent_issue
-
+        # Mock the _check_circular_parent function to return circular dependency
         with (
             patch(
-                "pilot_space.ai.mcp.issue_relation_server.resolve_entity_id",
-                side_effect=[(parent, None), (child, None)],
+                "pilot_space.ai.mcp.issue_relation_server.resolve_entity_id_strict",
+                side_effect=[parent, child],
             ),
-            patch("pilot_space.ai.mcp.issue_relation_server.IssueRepository", return_value=repo),
+            patch(
+                "pilot_space.ai.mcp.issue_relation_server._verify_issue_workspace",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
+                "pilot_space.ai.mcp.issue_relation_server._check_circular_parent",
+                new_callable=AsyncMock,
+                return_value=(True, "Circular parent relationship detected"),
+            ),
         ):
             result = await tools["add_sub_issue"].handler(
                 {
@@ -391,8 +396,8 @@ class TestTransitionIssueState:
 
         with (
             patch(
-                "pilot_space.ai.mcp.issue_relation_server.resolve_entity_id",
-                return_value=(issue_uuid, None),
+                "pilot_space.ai.mcp.issue_relation_server.resolve_entity_id_strict",
+                return_value=issue_uuid,
             ),
             patch(
                 "pilot_space.ai.mcp.issue_relation_server._verify_issue_workspace",
@@ -421,8 +426,8 @@ class TestTransitionIssueState:
 
         with (
             patch(
-                "pilot_space.ai.mcp.issue_relation_server.resolve_entity_id",
-                return_value=(issue_uuid, None),
+                "pilot_space.ai.mcp.issue_relation_server.resolve_entity_id_strict",
+                return_value=issue_uuid,
             ),
             patch(
                 "pilot_space.ai.mcp.issue_relation_server._verify_issue_workspace",

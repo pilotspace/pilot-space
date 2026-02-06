@@ -24,7 +24,10 @@ from uuid import UUID
 
 from claude_agent_sdk import McpSdkServerConfig, create_sdk_mcp_server, tool
 
-from pilot_space.ai.tools.entity_resolver import resolve_entity_id
+from pilot_space.ai.tools.entity_resolver import (
+    EntityResolutionError,
+    resolve_entity_id_strict,
+)
 from pilot_space.ai.tools.mcp_server import ToolContext, get_tool_approval_level
 from pilot_space.infrastructure.database.models.issue_link import IssueLinkType
 from pilot_space.infrastructure.database.repositories.issue_repository import (
@@ -111,19 +114,19 @@ async def _check_circular_parent(
     parent_id: UUID,
     workspace_id: UUID,
     *,
-    max_depth: int = 10,
+    max_depth: int = 50,
 ) -> tuple[bool, str | None]:
     """Check if setting parent_id would create a circular dependency.
 
-    Traverses up the parent chain from parent_id to ensure child_id
-    doesn't appear in the ancestry.
+    Fetches all workspace issues with their parent_id in a single query,
+    then traverses the parent chain in-memory to detect cycles.
 
     Args:
         repo: IssueRepository instance.
         child_id: Child issue UUID.
         parent_id: Proposed parent issue UUID.
         workspace_id: Workspace UUID for RLS.
-        max_depth: Maximum traversal depth to prevent infinite loops.
+        max_depth: Maximum traversal depth to prevent runaway chains.
 
     Returns:
         (is_circular, error_message) tuple.
@@ -131,23 +134,38 @@ async def _check_circular_parent(
     if child_id == parent_id:
         return True, "Cannot set an issue as its own parent"
 
-    current_id = parent_id
+    # Single query: fetch parent_id mapping for all workspace issues
+    from sqlalchemy import select
+
+    from pilot_space.infrastructure.database.models import Issue
+
+    stmt = (
+        select(Issue.id, Issue.parent_id)
+        .where(
+            Issue.workspace_id == workspace_id,
+            Issue.is_deleted == False,  # noqa: E712
+        )
+    )
+    result = await repo.session.execute(stmt)
+    parent_map: dict[UUID, UUID | None] = {row.id: row.parent_id for row in result}
+
+    # Traverse parent chain in-memory
+    current_id: UUID | None = parent_id
     depth = 0
 
-    while current_id and depth < max_depth:
-        parent_issue = await repo.get_by_id(current_id)
-        if not parent_issue:
+    while current_id is not None and depth < max_depth:
+        if current_id not in parent_map:
             break
 
-        # Verify workspace ownership for RLS defense-in-depth
-        if parent_issue.workspace_id != workspace_id:
-            break
-
-        if parent_issue.parent_id == child_id:
+        next_parent = parent_map[current_id]
+        if next_parent == child_id:
             return True, "Circular parent relationship detected"
 
-        current_id = parent_issue.parent_id
+        current_id = next_parent
         depth += 1
+
+    if depth >= max_depth:
+        return True, f"Parent chain exceeds maximum depth of {max_depth}"
 
     return False, None
 
@@ -212,30 +230,18 @@ def create_issue_relation_tools_server(
         if not tool_context:
             return _text_result("Error: Tool context not available")
 
-        # Resolve issue_id
-        issue_uuid, error = await resolve_entity_id(
-            "issue",
-            args["issue_id"],
-            tool_context,
-        )
-        if error:
-            return _text_result(f"Error: {error}")
-
-        # Resolve note_id
-        note_uuid, error = await resolve_entity_id(
-            "note",
-            args["note_id"],
-            tool_context,
-        )
-        if error:
-            return _text_result(f"Error: {error}")
+        try:
+            issue_uuid = await resolve_entity_id_strict("issue", args["issue_id"], tool_context)
+            note_uuid = await resolve_entity_id_strict("note", args["note_id"], tool_context)
+        except EntityResolutionError as e:
+            return _text_result(f"Error: {e}")
 
         # Verify workspace ownership
         repo = IssueRepository(tool_context.db_session)
-        ws_err = await _verify_issue_workspace(repo, issue_uuid, tool_context.workspace_id)  # type: ignore[arg-type]
+        ws_err = await _verify_issue_workspace(repo, issue_uuid, tool_context.workspace_id)
         if ws_err:
             return _text_result(f"Error: {ws_err}")
-        ws_err = await _verify_note_workspace(note_uuid, tool_context)  # type: ignore[arg-type]
+        ws_err = await _verify_note_workspace(note_uuid, tool_context)
         if ws_err:
             return _text_result(f"Error: {ws_err}")
 
@@ -292,30 +298,18 @@ def create_issue_relation_tools_server(
         if not tool_context:
             return _text_result("Error: Tool context not available")
 
-        # Resolve issue_id
-        issue_uuid, error = await resolve_entity_id(
-            "issue",
-            args["issue_id"],
-            tool_context,
-        )
-        if error:
-            return _text_result(f"Error: {error}")
-
-        # Resolve note_id
-        note_uuid, error = await resolve_entity_id(
-            "note",
-            args["note_id"],
-            tool_context,
-        )
-        if error:
-            return _text_result(f"Error: {error}")
+        try:
+            issue_uuid = await resolve_entity_id_strict("issue", args["issue_id"], tool_context)
+            note_uuid = await resolve_entity_id_strict("note", args["note_id"], tool_context)
+        except EntityResolutionError as e:
+            return _text_result(f"Error: {e}")
 
         # Verify workspace ownership
         repo = IssueRepository(tool_context.db_session)
-        ws_err = await _verify_issue_workspace(repo, issue_uuid, tool_context.workspace_id)  # type: ignore[arg-type]
+        ws_err = await _verify_issue_workspace(repo, issue_uuid, tool_context.workspace_id)
         if ws_err:
             return _text_result(f"Error: {ws_err}")
-        ws_err = await _verify_note_workspace(note_uuid, tool_context)  # type: ignore[arg-type]
+        ws_err = await _verify_note_workspace(note_uuid, tool_context)
         if ws_err:
             return _text_result(f"Error: {ws_err}")
 
@@ -365,18 +359,16 @@ def create_issue_relation_tools_server(
             return _text_result("Error: Tool context not available")
 
         # Resolve both issue IDs
-        resolved: dict[str, Any] = {}
-        for key in ["source_issue_id", "target_issue_id"]:
-            uid, error = await resolve_entity_id("issue", args[key], tool_context)
-            if error:
-                return _text_result(f"Error resolving {key}: {error}")
-            resolved[key] = uid
-        source_uuid, target_uuid = resolved["source_issue_id"], resolved["target_issue_id"]
+        try:
+            source_uuid = await resolve_entity_id_strict("issue", args["source_issue_id"], tool_context)
+            target_uuid = await resolve_entity_id_strict("issue", args["target_issue_id"], tool_context)
+        except EntityResolutionError as e:
+            return _text_result(f"Error: {e}")
 
         # Verify workspace ownership before revealing validation details
         repo = IssueRepository(tool_context.db_session)
         for uid in [source_uuid, target_uuid]:
-            ws_err = await _verify_issue_workspace(repo, uid, tool_context.workspace_id)  # type: ignore[arg-type]
+            ws_err = await _verify_issue_workspace(repo, uid, tool_context.workspace_id)
             if ws_err:
                 return _text_result(f"Error: {ws_err}")
 
@@ -448,28 +440,16 @@ def create_issue_relation_tools_server(
         if not tool_context:
             return _text_result("Error: Tool context not available")
 
-        # Resolve source_issue_id
-        source_uuid, error = await resolve_entity_id(
-            "issue",
-            args["source_issue_id"],
-            tool_context,
-        )
-        if error:
-            return _text_result(f"Error resolving source issue: {error}")
-
-        # Resolve target_issue_id
-        target_uuid, error = await resolve_entity_id(
-            "issue",
-            args["target_issue_id"],
-            tool_context,
-        )
-        if error:
-            return _text_result(f"Error resolving target issue: {error}")
+        try:
+            source_uuid = await resolve_entity_id_strict("issue", args["source_issue_id"], tool_context)
+            target_uuid = await resolve_entity_id_strict("issue", args["target_issue_id"], tool_context)
+        except EntityResolutionError as e:
+            return _text_result(f"Error: {e}")
 
         # Verify workspace ownership
         repo = IssueRepository(tool_context.db_session)
         for uid in [source_uuid, target_uuid]:
-            ws_err = await _verify_issue_workspace(repo, uid, tool_context.workspace_id)  # type: ignore[arg-type]
+            ws_err = await _verify_issue_workspace(repo, uid, tool_context.workspace_id)
             if ws_err:
                 return _text_result(f"Error: {ws_err}")
 
@@ -516,36 +496,24 @@ def create_issue_relation_tools_server(
         if not tool_context:
             return _text_result("Error: Tool context not available")
 
-        # Resolve parent_issue_id
-        parent_uuid, error = await resolve_entity_id(
-            "issue",
-            args["parent_issue_id"],
-            tool_context,
-        )
-        if error:
-            return _text_result(f"Error resolving parent issue: {error}")
-
-        # Resolve child_issue_id
-        child_uuid, error = await resolve_entity_id(
-            "issue",
-            args["child_issue_id"],
-            tool_context,
-        )
-        if error:
-            return _text_result(f"Error resolving child issue: {error}")
+        try:
+            parent_uuid = await resolve_entity_id_strict("issue", args["parent_issue_id"], tool_context)
+            child_uuid = await resolve_entity_id_strict("issue", args["child_issue_id"], tool_context)
+        except EntityResolutionError as e:
+            return _text_result(f"Error: {e}")
 
         # Verify workspace ownership
         repo = IssueRepository(tool_context.db_session)
         for uid in [parent_uuid, child_uuid]:
-            ws_err = await _verify_issue_workspace(repo, uid, tool_context.workspace_id)  # type: ignore[arg-type]
+            ws_err = await _verify_issue_workspace(repo, uid, tool_context.workspace_id)
             if ws_err:
                 return _text_result(f"Error: {ws_err}")
 
-        # Check for circular dependency (traverse up to depth=3)
+        # Check for circular dependency
         is_circular, circular_error = await _check_circular_parent(
             repo,
-            child_uuid,  # type: ignore[arg-type]
-            parent_uuid,  # type: ignore[arg-type]
+            child_uuid,
+            parent_uuid,
             UUID(tool_context.workspace_id),
         )
 
@@ -605,18 +573,14 @@ def create_issue_relation_tools_server(
         if not tool_context:
             return _text_result("Error: Tool context not available")
 
-        # Resolve issue_id
-        issue_uuid, error = await resolve_entity_id(
-            "issue",
-            args["issue_id"],
-            tool_context,
-        )
-        if error:
-            return _text_result(f"Error: {error}")
+        try:
+            issue_uuid = await resolve_entity_id_strict("issue", args["issue_id"], tool_context)
+        except EntityResolutionError as e:
+            return _text_result(f"Error: {e}")
 
         # Verify workspace ownership
         repo = IssueRepository(tool_context.db_session)
-        ws_err = await _verify_issue_workspace(repo, issue_uuid, tool_context.workspace_id)  # type: ignore[arg-type]
+        ws_err = await _verify_issue_workspace(repo, issue_uuid, tool_context.workspace_id)
         if ws_err:
             return _text_result(f"Error: {ws_err}")
 

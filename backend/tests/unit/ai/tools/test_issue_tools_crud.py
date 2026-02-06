@@ -18,6 +18,8 @@ from uuid import UUID, uuid4
 
 import pytest
 
+from pilot_space.ai.tools.entity_resolver import EntityResolutionError
+
 if TYPE_CHECKING:
     from pilot_space.ai.tools.mcp_server import ToolContext
 
@@ -140,7 +142,7 @@ class TestGetIssueTool:
 
         with (
             patch(
-                "pilot_space.ai.mcp.issue_server.resolve_entity_id", return_value=(issue_id, None)
+                "pilot_space.ai.mcp.issue_server.resolve_entity_id_strict", return_value=issue_id
             ),
             patch("pilot_space.ai.mcp.issue_server.IssueRepository", return_value=repo),
         ):
@@ -159,7 +161,7 @@ class TestGetIssueTool:
 
         with (
             patch(
-                "pilot_space.ai.mcp.issue_server.resolve_entity_id", return_value=(uuid4(), None)
+                "pilot_space.ai.mcp.issue_server.resolve_entity_id_strict", return_value=uuid4()
             ),
             patch("pilot_space.ai.mcp.issue_server.IssueRepository", return_value=repo),
         ):
@@ -171,8 +173,8 @@ class TestGetIssueTool:
     async def test_invalid_identifier(self, mock_tool_context: ToolContext) -> None:
         tools = _capture_issue_tools(asyncio.Queue(), mock_tool_context)
         with patch(
-            "pilot_space.ai.mcp.issue_server.resolve_entity_id",
-            return_value=(None, "Invalid issue identifier"),
+            "pilot_space.ai.mcp.issue_server.resolve_entity_id_strict",
+            side_effect=EntityResolutionError("Invalid issue identifier"),
         ):
             result = await tools["get_issue"].handler({"issue_id": "INVALID"})
         assert "error" in result["content"][0]["text"].lower()
@@ -229,8 +231,8 @@ class TestCreateIssueTool:
         project_uuid = uuid4()
 
         with patch(
-            "pilot_space.ai.mcp.issue_server.resolve_entity_id",
-            return_value=(project_uuid, None),
+            "pilot_space.ai.mcp.issue_server.resolve_entity_id_strict",
+            return_value=project_uuid,
         ):
             result = await tools["create_issue"].handler(
                 {
@@ -253,8 +255,8 @@ class TestCreateIssueTool:
         project_uuid = uuid4()
 
         with patch(
-            "pilot_space.ai.mcp.issue_server.resolve_entity_id",
-            return_value=(project_uuid, None),
+            "pilot_space.ai.mcp.issue_server.resolve_entity_id_strict",
+            return_value=project_uuid,
         ):
             result = await tools["create_issue"].handler(
                 {
@@ -274,8 +276,8 @@ class TestCreateIssueTool:
     async def test_invalid_project(self, mock_tool_context: ToolContext) -> None:
         tools = _capture_issue_tools(asyncio.Queue(), mock_tool_context)
         with patch(
-            "pilot_space.ai.mcp.issue_server.resolve_entity_id",
-            return_value=(None, "Project 'INVALID' not found"),
+            "pilot_space.ai.mcp.issue_server.resolve_entity_id_strict",
+            side_effect=EntityResolutionError("Project 'INVALID' not found"),
         ):
             result = await tools["create_issue"].handler({"project_id": "INVALID", "title": "X"})
         assert "error" in result["content"][0]["text"].lower()
@@ -299,8 +301,8 @@ class TestUpdateIssueTool:
 
         with (
             patch(
-                "pilot_space.ai.mcp.issue_server.resolve_entity_id",
-                return_value=(issue_uuid, None),
+                "pilot_space.ai.mcp.issue_server.resolve_entity_id_strict",
+                return_value=issue_uuid,
             ),
             patch("pilot_space.ai.mcp.issue_server.IssueRepository", return_value=repo),
         ):
@@ -329,8 +331,8 @@ class TestUpdateIssueTool:
 
         with (
             patch(
-                "pilot_space.ai.mcp.issue_server.resolve_entity_id",
-                return_value=(issue_uuid, None),
+                "pilot_space.ai.mcp.issue_server.resolve_entity_id_strict",
+                return_value=issue_uuid,
             ),
             patch("pilot_space.ai.mcp.issue_server.IssueRepository", return_value=repo),
         ):
@@ -360,8 +362,8 @@ class TestUpdateIssueTool:
 
         with (
             patch(
-                "pilot_space.ai.mcp.issue_server.resolve_entity_id",
-                return_value=(issue_uuid, None),
+                "pilot_space.ai.mcp.issue_server.resolve_entity_id_strict",
+                return_value=issue_uuid,
             ),
             patch("pilot_space.ai.mcp.issue_server.IssueRepository", return_value=repo),
         ):

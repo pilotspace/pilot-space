@@ -13,6 +13,10 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pilot_space.ai.tools.mcp_server import ToolContext
 
+
+class EntityResolutionError(Exception):
+    """Raised when an entity identifier cannot be resolved to a UUID."""
+
 # UUID v4 pattern
 _UUID_PATTERN = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
@@ -134,3 +138,31 @@ async def _resolve_project_identifier(
         return None, f"Project '{identifier}' not found in this workspace"
 
     return project.id, None
+
+
+async def resolve_entity_id_strict(
+    entity_type: str,
+    id_or_identifier: str,
+    ctx: ToolContext,
+) -> uuid.UUID:
+    """Resolve entity identifier to UUID, raising on failure.
+
+    Wrapper around resolve_entity_id that raises EntityResolutionError
+    instead of returning (None, error). Enables proper type narrowing
+    at call sites without type: ignore suppressions.
+
+    Args:
+        entity_type: One of "issue", "project", or "note".
+        id_or_identifier: UUID string or human-readable identifier.
+        ctx: Tool context with db_session and workspace_id.
+
+    Returns:
+        Resolved UUID.
+
+    Raises:
+        EntityResolutionError: If resolution fails.
+    """
+    resolved_uuid, error = await resolve_entity_id(entity_type, id_or_identifier, ctx)
+    if error or resolved_uuid is None:
+        raise EntityResolutionError(error or f"Failed to resolve {entity_type}: {id_or_identifier}")
+    return resolved_uuid

@@ -24,7 +24,10 @@ from uuid import UUID
 
 from claude_agent_sdk import McpSdkServerConfig, create_sdk_mcp_server, tool
 
-from pilot_space.ai.tools.entity_resolver import resolve_entity_id
+from pilot_space.ai.tools.entity_resolver import (
+    EntityResolutionError,
+    resolve_entity_id_strict,
+)
 from pilot_space.ai.tools.mcp_server import ToolContext, get_tool_approval_level
 from pilot_space.infrastructure.database.repositories.issue_link_repository import (
     IssueLinkRepository,
@@ -158,19 +161,14 @@ def create_issue_tools_server(
             return _text_result("Error: Tool context not available")
 
         # Resolve entity ID (UUID or identifier like PILOT-123)
-        issue_uuid, error = await resolve_entity_id(
-            "issue",
-            args["issue_id"],
-            tool_context,
-        )
-        if error:
-            return _text_result(f"Error: {error}")
+        try:
+            issue_uuid = await resolve_entity_id_strict("issue", args["issue_id"], tool_context)
+        except EntityResolutionError as e:
+            return _text_result(f"Error: {e}")
 
         # Get issue with relations
         repo = IssueRepository(tool_context.db_session)
-        issue = await repo.get_by_id_with_relations(
-            issue_uuid,  # type: ignore[arg-type]
-        )
+        issue = await repo.get_by_id_with_relations(issue_uuid)
 
         if not issue or str(issue.workspace_id) != tool_context.workspace_id:
             return _text_result(f"Issue {args['issue_id']} not found")
@@ -309,14 +307,12 @@ def create_issue_tools_server(
 
         # Resolve project_id if provided
         if args.get("project_id"):
-            project_uuid, error = await resolve_entity_id(
-                "project",
-                args["project_id"],
-                tool_context,
-            )
-            if error:
-                return _text_result(f"Error: {error}")
-            filters.project_id = project_uuid  # type: ignore[assignment]
+            try:
+                filters.project_id = await resolve_entity_id_strict(
+                    "project", args["project_id"], tool_context,
+                )
+            except EntityResolutionError as e:
+                return _text_result(f"Error: {e}")
 
         # Apply other filters
         if args.get("state_group"):
@@ -425,13 +421,10 @@ def create_issue_tools_server(
             return _text_result("Error: Tool context not available")
 
         # Resolve project_id
-        project_uuid, error = await resolve_entity_id(
-            "project",
-            args["project_id"],
-            tool_context,
-        )
-        if error:
-            return _text_result(f"Error: {error}")
+        try:
+            project_uuid = await resolve_entity_id_strict("project", args["project_id"], tool_context)
+        except EntityResolutionError as e:
+            return _text_result(f"Error: {e}")
 
         # Build operation payload
         payload = {
@@ -525,17 +518,14 @@ def create_issue_tools_server(
             return _text_result("Error: Tool context not available")
 
         # Resolve issue_id
-        issue_uuid, error = await resolve_entity_id(
-            "issue",
-            args["issue_id"],
-            tool_context,
-        )
-        if error:
-            return _text_result(f"Error: {error}")
+        try:
+            issue_uuid = await resolve_entity_id_strict("issue", args["issue_id"], tool_context)
+        except EntityResolutionError as e:
+            return _text_result(f"Error: {e}")
 
         # Verify workspace ownership before allowing update
         repo = IssueRepository(tool_context.db_session)
-        issue = await repo.get_by_id(issue_uuid)  # type: ignore[arg-type]
+        issue = await repo.get_by_id(issue_uuid)
         if not issue or str(issue.workspace_id) != tool_context.workspace_id:
             return _text_result(f"Issue {args['issue_id']} not found")
 

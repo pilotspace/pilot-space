@@ -16,6 +16,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
+from pilot_space.ai.tools.entity_resolver import EntityResolutionError
 from pilot_space.ai.tools.mcp_server import ToolContext
 
 # ---------------------------------------------------------------------------
@@ -206,10 +207,10 @@ class TestToolErrorHandling:
 
         note_id = uuid4()
 
-        # Mock resolve_entity_id returning error for invalid issue
+        # Mock resolve_entity_id_strict raising error for invalid issue
         with patch(
-            "pilot_space.ai.mcp.issue_relation_server.resolve_entity_id",
-            return_value=(None, "Issue 'INVALID-999' not found"),
+            "pilot_space.ai.mcp.issue_relation_server.resolve_entity_id_strict",
+            side_effect=EntityResolutionError("Issue 'INVALID-999' not found"),
         ):
             result = await link_tool.handler(
                 {
@@ -236,22 +237,21 @@ class TestToolErrorHandling:
         parent_id = uuid4()
         child_id = uuid4()
 
-        # Mock parent issue where parent's parent is the child (circular)
-        mock_parent_issue = MagicMock()
-        mock_parent_issue.parent_id = child_id
-        mock_parent_issue.workspace_id = UUID(mock_tool_context.workspace_id)
-
-        repo = AsyncMock()
-        repo.get_by_id.return_value = mock_parent_issue
-
+        # Mock the _check_circular_parent function to return circular dependency
         with (
             patch(
-                "pilot_space.ai.mcp.issue_relation_server.resolve_entity_id",
-                side_effect=[(parent_id, None), (child_id, None)],
+                "pilot_space.ai.mcp.issue_relation_server.resolve_entity_id_strict",
+                side_effect=[parent_id, child_id],
             ),
             patch(
-                "pilot_space.ai.mcp.issue_relation_server.IssueRepository",
-                return_value=repo,
+                "pilot_space.ai.mcp.issue_relation_server._verify_issue_workspace",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
+                "pilot_space.ai.mcp.issue_relation_server._check_circular_parent",
+                new_callable=AsyncMock,
+                return_value=(True, "Circular parent relationship detected"),
             ),
         ):
             result = await add_sub_issue_tool.handler(
@@ -300,8 +300,8 @@ class TestSSEEventPropagation:
 
         with (
             patch(
-                "pilot_space.ai.mcp.issue_relation_server.resolve_entity_id",
-                side_effect=[(issue_id, None), (note_id, None)],
+                "pilot_space.ai.mcp.issue_relation_server.resolve_entity_id_strict",
+                side_effect=[issue_id, note_id],
             ),
             patch(
                 "pilot_space.ai.mcp.issue_relation_server._verify_issue_workspace",

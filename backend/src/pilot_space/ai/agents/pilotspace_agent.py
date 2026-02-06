@@ -331,123 +331,121 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
             from pilot_space.ai.tools.mcp_server import ToolContext
             from pilot_space.infrastructure.database import get_db_session
 
-            tool_context: ToolContext | None = None
             db_session_cm = get_db_session()
             db_session = await db_session_cm.__aenter__()
+
+            # Single try/finally guards the entire DB session lifetime.
+            # All MCP server creation, SDK config, and streaming happen inside
+            # so the session is always closed — even if setup code throws.
+            client: ClaudeSDKClient | None = None
+            query_session_id = session_id_str or "default"
+            stream_completed = False
+            content_blocks: dict[str, dict[str, Any]] = {}
+
             try:
                 tool_context = ToolContext(
                     db_session=db_session,
                     workspace_id=str(context.workspace_id),
                     user_id=str(context.user_id) if context.user_id else None,
                 )
-            except Exception:
-                await db_session_cm.__aexit__(None, None, None)
-                raise
 
-            context_note_id = input_data.context.get("note_id")
-            note_tools_server = create_note_tools_server(
-                tool_event_queue,
-                context_note_id=str(context_note_id) if context_note_id else None,
-                tool_context=tool_context,
-            )
-            note_content_server = create_note_content_server(
-                tool_event_queue,
-                tool_context=tool_context,
-            )
-            issue_tools_server = create_issue_tools_server(
-                tool_event_queue,
-                tool_context=tool_context,
-            )
-            issue_rel_server = create_issue_relation_tools_server(
-                tool_event_queue,
-                tool_context=tool_context,
-            )
-            project_tools_server = create_project_tools_server(
-                event_queue=tool_event_queue,
-                tool_context=tool_context,
-            )
-            comment_tools_server = create_comment_tools_server(
-                tool_event_queue,
-                tool_context=tool_context,
-            )
+                context_note_id = input_data.context.get("note_id")
+                note_tools_server = create_note_tools_server(
+                    tool_event_queue,
+                    context_note_id=str(context_note_id) if context_note_id else None,
+                    tool_context=tool_context,
+                )
+                note_content_server = create_note_content_server(
+                    tool_event_queue,
+                    tool_context=tool_context,
+                )
+                issue_tools_server = create_issue_tools_server(
+                    tool_event_queue,
+                    tool_context=tool_context,
+                )
+                issue_rel_server = create_issue_relation_tools_server(
+                    tool_event_queue,
+                    tool_context=tool_context,
+                )
+                project_tools_server = create_project_tools_server(
+                    event_queue=tool_event_queue,
+                    tool_context=tool_context,
+                )
+                comment_tools_server = create_comment_tools_server(
+                    tool_event_queue,
+                    tool_context=tool_context,
+                )
 
-            from pilot_space.ai.sdk.output_schemas import get_skill_output_format
+                from pilot_space.ai.sdk.output_schemas import get_skill_output_format
 
-            skill_name = detect_skill_from_message(input_data.message)
-            output_format = get_skill_output_format(skill_name) if skill_name else None
-            effort = classify_effort(input_data.message)
-            streaming_input = estimate_tokens(input_data) > 30_000
+                skill_name = detect_skill_from_message(input_data.message)
+                output_format = get_skill_output_format(skill_name) if skill_name else None
+                effort = classify_effort(input_data.message)
+                streaming_input = estimate_tokens(input_data) > 30_000
 
-            sdk_config = configure_sdk_for_space(
-                space_context,
-                permission_mode="default",
-                model=self.DEFAULT_MODEL_TIER,
-                additional_tools=ALL_TOOL_NAMES,
-                additional_env={
-                    "ANTHROPIC_API_KEY": api_key,
-                },
-                hook_executor=hook_executor,
-                include_partial_messages=True,
-                memory_enabled=True,
-                citations_enabled=True,
-                system_prompt_base=self.SYSTEM_PROMPT_BASE,
-                output_format=output_format,
-                enable_file_checkpointing=True,
-                effort=effort,
-                streaming_input_mode=streaming_input,
-            )
+                sdk_config = configure_sdk_for_space(
+                    space_context,
+                    permission_mode="default",
+                    model=self.DEFAULT_MODEL_TIER,
+                    additional_tools=ALL_TOOL_NAMES,
+                    additional_env={
+                        "ANTHROPIC_API_KEY": api_key,
+                    },
+                    hook_executor=hook_executor,
+                    include_partial_messages=True,
+                    memory_enabled=True,
+                    citations_enabled=True,
+                    system_prompt_base=self.SYSTEM_PROMPT_BASE,
+                    output_format=output_format,
+                    enable_file_checkpointing=True,
+                    effort=effort,
+                    streaming_input_mode=streaming_input,
+                )
 
-            sdk_params = sdk_config.to_sdk_params()
-            sdk_env = sdk_params.get("env", {})
-            if "PATH" not in sdk_env:
-                sdk_env["PATH"] = os.environ.get("PATH", "")
+                sdk_params = sdk_config.to_sdk_params()
+                sdk_env = sdk_params.get("env", {})
+                if "PATH" not in sdk_env:
+                    sdk_env["PATH"] = os.environ.get("PATH", "")
 
-            sdk_options = ClaudeAgentOptions(
-                model=sdk_params.get("model", self.DEFAULT_MODEL_TIER.model_id),
-                cwd=sdk_params.get("cwd"),
-                setting_sources=sdk_params.get("setting_sources", ["project"]),
-                allowed_tools=sdk_params.get("allowed_tools", []),
-                mcp_servers={
-                    NOTE_SERVER_NAME: note_tools_server,
-                    NOTE_CONTENT_SERVER_NAME: note_content_server,
-                    ISSUE_SERVER_NAME: issue_tools_server,
-                    ISSUE_REL_SERVER_NAME: issue_rel_server,
-                    PROJECT_SERVER_NAME: project_tools_server,
-                    COMMENT_SERVER_NAME: comment_tools_server,
-                },
-                sandbox=sdk_params.get("sandbox"),
-                permission_mode=sdk_params.get("permission_mode", "default"),
-                env=sdk_env,
-                hooks=sdk_params.get("hooks"),
-                agents=subagent_definitions,
-                resume=resume_id,
-                continue_conversation=resume_id is not None,
-                include_partial_messages=sdk_params.get(
-                    "include_partial_messages",
-                    True,
-                ),
-            )
+                sdk_options = ClaudeAgentOptions(
+                    model=sdk_params.get("model", self.DEFAULT_MODEL_TIER.model_id),
+                    cwd=sdk_params.get("cwd"),
+                    setting_sources=sdk_params.get("setting_sources", ["project"]),
+                    allowed_tools=sdk_params.get("allowed_tools", []),
+                    mcp_servers={
+                        NOTE_SERVER_NAME: note_tools_server,
+                        NOTE_CONTENT_SERVER_NAME: note_content_server,
+                        ISSUE_SERVER_NAME: issue_tools_server,
+                        ISSUE_REL_SERVER_NAME: issue_rel_server,
+                        PROJECT_SERVER_NAME: project_tools_server,
+                        COMMENT_SERVER_NAME: comment_tools_server,
+                    },
+                    sandbox=sdk_params.get("sandbox"),
+                    permission_mode=sdk_params.get("permission_mode", "default"),
+                    env=sdk_env,
+                    hooks=sdk_params.get("hooks"),
+                    agents=subagent_definitions,
+                    resume=resume_id,
+                    continue_conversation=resume_id is not None,
+                    include_partial_messages=sdk_params.get(
+                        "include_partial_messages",
+                        True,
+                    ),
+                )
 
-            set_workspace_context(context.workspace_id, context.user_id)
-            logger.info(
-                "[SDK/Space] Config: cwd=%s, env_keys=%s, claude_bin=%s",
-                sdk_params.get("cwd"),
-                list(sdk_env.keys()),
-                shutil.which("claude"),
-            )
+                set_workspace_context(context.workspace_id, context.user_id)
+                logger.info(
+                    "[SDK/Space] Config: cwd=%s, env_keys=%s, claude_bin=%s",
+                    sdk_params.get("cwd"),
+                    list(sdk_env.keys()),
+                    shutil.which("claude"),
+                )
 
-            client = ClaudeSDKClient(sdk_options)
-            query_session_id = session_id_str or "default"
-            stream_completed = False
+                client = ClaudeSDKClient(sdk_options)
 
-            # Structured content accumulation for session persistence
-            # Keys: "text_{idx}", "thinking_{idx}", "tool_use_{id}", "tool_result_{id}"
-            content_blocks: dict[str, dict[str, Any]] = {}
+                # Initialize delta buffer for water pumping (SSE event reduction)
+                delta_buffer = DeltaBuffer()
 
-            # Initialize delta buffer for water pumping (SSE event reduction)
-            delta_buffer = DeltaBuffer()
-
-            try:
                 await client.connect()
 
                 logger.info(
@@ -518,46 +516,45 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
             finally:
                 self._active_clients.pop(query_session_id, None)
 
-                if not stream_completed:
-                    try:
-                        await asyncio.wait_for(client.interrupt(), timeout=2.0)
-                        logger.info(
-                            "[SDK/Space] Sent interrupt to Claude process (session=%s)",
-                            query_session_id,
-                        )
-                    except (TimeoutError, Exception) as e:
-                        logger.debug("[SDK/Space] Interrupt during cleanup failed: %s", e)
+                if client is not None:
+                    if not stream_completed:
+                        try:
+                            await asyncio.wait_for(client.interrupt(), timeout=2.0)
+                            logger.info(
+                                "[SDK/Space] Sent interrupt to Claude process (session=%s)",
+                                query_session_id,
+                            )
+                        except (TimeoutError, Exception) as e:
+                            logger.debug("[SDK/Space] Interrupt during cleanup failed: %s", e)
 
-                if stream_completed and self._session_handler and input_data.session_id:
-                    try:
-                        await self._session_handler.add_message(
-                            session_id=input_data.session_id,
-                            role="user",
-                            content=input_data.message,
-                        )
-                        # Build structured content from captured blocks
-                        structured_content = build_structured_content(content_blocks)
-                        if structured_content:
+                    if stream_completed and self._session_handler and input_data.session_id:
+                        try:
                             await self._session_handler.add_message(
                                 session_id=input_data.session_id,
-                                role="assistant",
-                                content=structured_content,
+                                role="user",
+                                content=input_data.message,
                             )
-                        logger.debug(
-                            "[SDK/Space] Persisted messages to session %s (%d blocks)",
-                            input_data.session_id,
-                            len(content_blocks),
-                        )
-                    except Exception as e:
-                        logger.warning(
-                            "[SDK/Space] Failed to persist session messages: %s",
-                            e,
-                        )
+                            structured_content = build_structured_content(content_blocks)
+                            if structured_content:
+                                await self._session_handler.add_message(
+                                    session_id=input_data.session_id,
+                                    role="assistant",
+                                    content=structured_content,
+                                )
+                            logger.debug(
+                                "[SDK/Space] Persisted messages to session %s (%d blocks)",
+                                input_data.session_id,
+                                len(content_blocks),
+                            )
+                        except Exception as e:
+                            logger.warning(
+                                "[SDK/Space] Failed to persist session messages: %s",
+                                e,
+                            )
 
-                await client.disconnect()
+                    await client.disconnect()
+
                 clear_context()
-
-                # Clean up tool context db session
                 await db_session_cm.__aexit__(None, None, None)
 
     async def create_client(

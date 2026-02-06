@@ -201,8 +201,8 @@ class TestNoteToIssueWorkflow:
 
         project_uuid = uuid4()
         with patch(
-            "pilot_space.ai.mcp.issue_server.resolve_entity_id",
-            return_value=(project_uuid, None),
+            "pilot_space.ai.mcp.issue_server.resolve_entity_id_strict",
+            return_value=project_uuid,
         ):
             issue_result = await create_issue_tool.handler(
                 {
@@ -228,8 +228,8 @@ class TestNoteToIssueWorkflow:
 
         with (
             patch(
-                "pilot_space.ai.mcp.issue_relation_server.resolve_entity_id",
-                side_effect=[(issue_id, None), (note_id, None)],
+                "pilot_space.ai.mcp.issue_relation_server.resolve_entity_id_strict",
+                side_effect=[issue_id, note_id],
             ),
             patch(
                 "pilot_space.ai.mcp.issue_relation_server._verify_issue_workspace",
@@ -318,8 +318,8 @@ class TestIssueRelationChain:
 
         with (
             patch(
-                "pilot_space.ai.mcp.issue_relation_server.resolve_entity_id",
-                side_effect=[(issue1_id, None), (issue2_id, None)],
+                "pilot_space.ai.mcp.issue_relation_server.resolve_entity_id_strict",
+                side_effect=[issue1_id, issue2_id],
             ),
             patch(
                 "pilot_space.ai.mcp.issue_relation_server._verify_issue_workspace",

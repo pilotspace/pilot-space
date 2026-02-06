@@ -6,6 +6,7 @@ Provides methods for creating, querying, and traversing issue link graphs.
 from __future__ import annotations
 
 from collections import deque
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import and_, or_, select
@@ -17,7 +18,6 @@ from pilot_space.infrastructure.database.models.issue_link import (
 from pilot_space.infrastructure.database.repositories.base import BaseRepository
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
     from uuid import UUID
 
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -164,10 +164,10 @@ class IssueLinkRepository(BaseRepository[IssueLink]):
         *,
         max_depth: int = 10,
     ) -> list[dict[str, Any]]:
-        """Traverse dependency chain using BFS.
+        """Traverse dependency chain using BFS with a single batch query.
 
-        Follows BLOCKS/BLOCKED_BY links to build a dependency graph
-        starting from the given issue.
+        Fetches all BLOCKS/BLOCKED_BY links in the workspace upfront,
+        then traverses the adjacency graph in-memory to avoid N+1 queries.
 
         Args:
             issue_id: Starting issue UUID.
@@ -175,46 +175,55 @@ class IssueLinkRepository(BaseRepository[IssueLink]):
             max_depth: Maximum traversal depth to prevent infinite loops.
 
         Returns:
-            List of dicts with issue_id, link_type, and depth for each node.
+            List of dicts with issue_id, link_type, direction, and depth.
         """
+        # Single query: fetch all dependency links in workspace
+        dep_types = (IssueLinkType.BLOCKS, IssueLinkType.BLOCKED_BY)
+        query = select(IssueLink).where(
+            and_(
+                IssueLink.workspace_id == workspace_id,
+                IssueLink.is_deleted == False,  # noqa: E712
+                IssueLink.link_type.in_(dep_types),
+            )
+        )
+        result = await self.session.execute(query)
+        all_links: Sequence[IssueLink] = result.scalars().all()
+
+        # Build bidirectional adjacency map in-memory
+        adjacency: dict[UUID, list[tuple[UUID, str, str]]] = {}
+        for link in all_links:
+            # source → target (outgoing)
+            adjacency.setdefault(link.source_issue_id, []).append(
+                (link.target_issue_id, link.link_type.value, "outgoing")
+            )
+            # target → source (incoming)
+            adjacency.setdefault(link.target_issue_id, []).append(
+                (link.source_issue_id, link.link_type.value, "incoming")
+            )
+
+        # BFS traversal using in-memory adjacency map
         visited: set[UUID] = {issue_id}
-        queue: deque[tuple[UUID, int]] = deque([(issue_id, 0)])
+        bfs_queue: deque[tuple[UUID, int]] = deque([(issue_id, 0)])
         chain: list[dict[str, Any]] = []
 
-        while queue:
-            current_id, depth = queue.popleft()
+        while bfs_queue:
+            current_id, depth = bfs_queue.popleft()
             if depth >= max_depth:
                 continue
 
-            links = await self.find_all_for_issue(current_id, workspace_id)
-            for link in links:
-                # Determine the "other" issue in this link
-                if link.source_issue_id == current_id:
-                    other_id = link.target_issue_id
-                    direction = "outgoing"
-                else:
-                    other_id = link.source_issue_id
-                    direction = "incoming"
-
+            for other_id, link_type_val, direction in adjacency.get(current_id, []):
                 if other_id in visited:
-                    continue
-
-                # Only follow blocks/blocked_by for dependency chains
-                if link.link_type not in (
-                    IssueLinkType.BLOCKS,
-                    IssueLinkType.BLOCKED_BY,
-                ):
                     continue
 
                 visited.add(other_id)
                 chain.append(
                     {
                         "issue_id": str(other_id),
-                        "link_type": link.link_type.value,
+                        "link_type": link_type_val,
                         "direction": direction,
                         "depth": depth + 1,
                     }
                 )
-                queue.append((other_id, depth + 1))
+                bfs_queue.append((other_id, depth + 1))
 
         return chain
