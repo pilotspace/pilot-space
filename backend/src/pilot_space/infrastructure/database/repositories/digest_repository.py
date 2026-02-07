@@ -17,6 +17,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import and_, delete, desc, func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from pilot_space.infrastructure.database.models.digest_dismissal import DigestDismissal
 from pilot_space.infrastructure.database.models.workspace_digest import WorkspaceDigest
@@ -181,7 +182,11 @@ class DismissalRepository(BaseRepository[DigestDismissal]):
         self,
         dismissal: DigestDismissal,
     ) -> DigestDismissal:
-        """Persist a new dismissal.
+        """Persist a new dismissal, ignoring duplicates.
+
+        Uses ON CONFLICT DO NOTHING on the unique constraint
+        (workspace_id, user_id, entity_id, suggestion_category)
+        to handle concurrent duplicate requests gracefully.
 
         Args:
             dismissal: The DigestDismissal entity to save.
@@ -189,7 +194,25 @@ class DismissalRepository(BaseRepository[DigestDismissal]):
         Returns:
             The saved dismissal with generated ID.
         """
-        return await self.create(dismissal)
+        stmt = (
+            pg_insert(DigestDismissal)
+            .values(
+                workspace_id=dismissal.workspace_id,
+                user_id=dismissal.user_id,
+                suggestion_category=dismissal.suggestion_category,
+                entity_id=dismissal.entity_id,
+                entity_type=dismissal.entity_type,
+            )
+            .on_conflict_do_nothing(
+                constraint="uq_digest_dismissals_user_suggestion",
+            )
+            .returning(DigestDismissal)
+        )
+        result = await self.session.execute(stmt)
+        row = result.scalar_one_or_none()
+        if row is not None:
+            return row
+        return dismissal
 
     async def remove_dismissal(
         self,

@@ -66,9 +66,15 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Remove digest cron job and function."""
-    # Unschedule the cron job
+    # Unschedule the cron job (wrapped in exception handler for envs without pg_cron)
     op.execute("""
-        SELECT cron.unschedule('hourly_workspace_digests');
+        DO $$
+        BEGIN
+            PERFORM cron.unschedule('hourly_workspace_digests');
+        EXCEPTION WHEN undefined_table OR undefined_function THEN
+            -- pg_cron not available, nothing to unschedule
+            NULL;
+        END $$;
     """)
 
     # Drop the function

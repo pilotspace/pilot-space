@@ -37,6 +37,8 @@ export const DigestPanel = observer(function DigestPanel({
     data: digest,
     isLoading,
     isRefetching,
+    isError,
+    refetch,
   } = useWorkspaceDigest({
     workspaceId,
     enabled: aiConfigured && !!workspaceId,
@@ -68,12 +70,17 @@ export const DigestPanel = observer(function DigestPanel({
 
   const handleRefresh = useCallback(async () => {
     if (!workspaceId) return;
-    await homepageApi.refreshDigest(workspaceId);
-    // Invalidate after a short delay to allow background job to start
-    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
-    refreshTimerRef.current = setTimeout(() => {
+    try {
+      await homepageApi.refreshDigest(workspaceId);
+      // Invalidate after a short delay to allow background job to start
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+      refreshTimerRef.current = setTimeout(() => {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.homepage.digest(workspaceId) });
+      }, 2000);
+    } catch {
+      // Trigger refetch to show error state
       void queryClient.invalidateQueries({ queryKey: queryKeys.homepage.digest(workspaceId) });
-    }, 2000);
+    }
   }, [workspaceId, queryClient]);
 
   // No AI provider configured
@@ -124,16 +131,20 @@ export const DigestPanel = observer(function DigestPanel({
       <div className="p-3">
         {isLoading ? (
           <DigestSkeleton />
+        ) : isError ? (
+          <div className="flex flex-col items-center gap-3 py-6 text-center">
+            <p className="text-sm text-muted-foreground">Failed to load AI insights</p>
+            <Button variant="outline" size="sm" onClick={() => refetch()}>
+              Retry
+            </Button>
+          </div>
         ) : suggestions.length === 0 ? (
           <DigestEmptyState variant="no-suggestions" />
         ) : (
           <div className="space-y-2" role="list" aria-label="AI suggestions">
             {suggestions.map((suggestion) => (
               <div key={suggestion.id} role="listitem">
-                <DigestSuggestionCard
-                  suggestion={suggestion}
-                  onDismiss={handleDismiss}
-                />
+                <DigestSuggestionCard suggestion={suggestion} onDismiss={handleDismiss} />
               </div>
             ))}
           </div>

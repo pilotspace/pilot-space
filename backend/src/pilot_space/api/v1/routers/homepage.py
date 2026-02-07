@@ -39,7 +39,7 @@ from pilot_space.api.v1.schemas.homepage import (
     ProjectBrief,
     StateBrief,
 )
-from pilot_space.dependencies import DbSession, QueueClientDep, SyncedUserId
+from pilot_space.dependencies import DbSession, QueueClientDep, WorkspaceMemberId
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +55,7 @@ router = APIRouter(prefix="/workspaces/{workspace_id}/homepage", tags=["homepage
 async def get_activity(
     workspace_id: UUID,
     session: DbSession,
-    _user_id: SyncedUserId,
+    _member_id: WorkspaceMemberId,
     cursor: str | None = None,
     limit: int = Query(default=20, ge=1, le=50),
 ) -> HomepageActivityResponse:
@@ -64,7 +64,7 @@ async def get_activity(
     Args:
         workspace_id: Workspace UUID.
         session: Database session.
-        _user_id: Authenticated user (workspace membership enforced by RLS).
+        _member_id: Authenticated user with workspace membership verified.
         cursor: Pagination cursor.
         limit: Items per page (default 20, max 50).
 
@@ -181,14 +181,14 @@ async def get_activity(
 async def get_digest(
     workspace_id: UUID,
     session: DbSession,
-    user_id: SyncedUserId,
+    user_id: WorkspaceMemberId,
 ) -> DigestResponse:
     """Get latest AI digest for workspace.
 
     Args:
         workspace_id: Workspace UUID.
         session: Database session.
-        user_id: Authenticated user.
+        user_id: Authenticated user with workspace membership verified.
 
     Returns:
         DigestResponse with filtered suggestions.
@@ -241,7 +241,7 @@ async def get_digest(
 async def refresh_digest(
     workspace_id: UUID,
     session: DbSession,
-    _user_id: SyncedUserId,
+    _member_id: WorkspaceMemberId,
     queue_client: QueueClientDep,
 ) -> DigestRefreshResponse:
     """Trigger on-demand digest generation.
@@ -252,7 +252,7 @@ async def refresh_digest(
     Args:
         workspace_id: Workspace UUID.
         session: Database session.
-        _user_id: Authenticated user.
+        _member_id: Authenticated user with workspace membership verified.
         queue_client: Queue client for enqueuing jobs.
 
     Returns:
@@ -311,7 +311,7 @@ async def dismiss_suggestion(
     workspace_id: UUID,
     payload: DigestDismissPayload,
     session: DbSession,
-    user_id: SyncedUserId,
+    user_id: WorkspaceMemberId,
 ) -> None:
     """Dismiss a digest suggestion.
 
@@ -319,7 +319,7 @@ async def dismiss_suggestion(
         workspace_id: Workspace UUID.
         payload: Dismissal details.
         session: Database session.
-        user_id: Authenticated user.
+        user_id: Authenticated user with workspace membership verified.
     """
     from pilot_space.application.services.homepage import (
         DismissSuggestionPayload,
@@ -360,7 +360,7 @@ async def create_note_from_chat(
     workspace_id: UUID,
     payload: CreateNoteFromChatPayload,
     session: DbSession,
-    user_id: SyncedUserId,
+    user_id: WorkspaceMemberId,
 ) -> CreateNoteFromChatResponse:
     """Create a note from a homepage chat session.
 
@@ -371,7 +371,7 @@ async def create_note_from_chat(
         workspace_id: Workspace UUID.
         payload: Chat-to-note creation details.
         session: Database session.
-        user_id: Authenticated user.
+        user_id: Authenticated user with workspace membership verified.
 
     Returns:
         CreateNoteFromChatResponse with created note metadata.

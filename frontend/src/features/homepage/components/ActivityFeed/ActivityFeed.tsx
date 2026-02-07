@@ -6,6 +6,7 @@
  */
 
 import { useEffect, useMemo, useRef } from 'react';
+import { observer } from 'mobx-react-lite';
 import { FileText, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useWorkspaceStore } from '@/stores/RootStore';
@@ -28,7 +29,7 @@ function renderCard(card: ActivityCard, workspaceSlug: string) {
   return <IssueActivityCard key={card.id} card={card} workspaceSlug={workspaceSlug} />;
 }
 
-export function ActivityFeed({ workspaceSlug }: ActivityFeedProps) {
+export const ActivityFeed = observer(function ActivityFeed({ workspaceSlug }: ActivityFeedProps) {
   const sentinelRef = useRef<HTMLDivElement>(null);
   const workspaceStore = useWorkspaceStore();
   const workspaceId = workspaceStore.currentWorkspace?.id ?? '';
@@ -130,4 +131,4 @@ export function ActivityFeed({ workspaceSlug }: ActivityFeedProps) {
       )}
     </div>
   );
-}
+});

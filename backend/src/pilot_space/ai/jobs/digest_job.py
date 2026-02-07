@@ -14,6 +14,7 @@ References:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import uuid
@@ -69,6 +70,21 @@ class DigestJobHandler:
             "Starting digest generation",
             extra={"workspace_id": str(workspace_id), "trigger": trigger},
         )
+
+        # Step 0: Acquire advisory lock to prevent concurrent generation
+        from sqlalchemy import text
+
+        lock_key = int.from_bytes(workspace_id.bytes[:8], byteorder="big") & 0x7FFFFFFFFFFFFFFF
+        lock_result = await self._session.execute(
+            text("SELECT pg_try_advisory_xact_lock(:key)"),
+            {"key": lock_key},
+        )
+        if not lock_result.scalar():
+            logger.info(
+                "Skipping digest generation: concurrent job in progress",
+                extra={"workspace_id": str(workspace_id)},
+            )
+            return {"status": "skipped", "reason": "concurrent_lock"}
 
         # Step 1: Deduplication check
         if await self._recently_generated(workspace_id):
@@ -146,7 +162,7 @@ class DigestJobHandler:
         prompt = self._build_prompt(context_text)
 
         try:
-            from anthropic import AsyncAnthropic
+            from anthropic import APIConnectionError, AsyncAnthropic, RateLimitError
 
             from pilot_space.ai.infrastructure.key_storage import SecureKeyStorage
             from pilot_space.ai.sdk.config import MODEL_SONNET
@@ -168,21 +184,48 @@ class DigestJobHandler:
                 return self._fallback_suggestions()
 
             client = AsyncAnthropic(api_key=api_key)
-            response = await client.messages.create(
-                model=MODEL_SONNET,
-                max_tokens=2000,
-                messages=[{"role": "user", "content": prompt}],
-                timeout=LLM_TIMEOUT_SECONDS,
+
+            # Retry up to 3 times for transient failures
+            max_retries = 3
+            last_exc: Exception | None = None
+            for attempt in range(max_retries):
+                try:
+                    response = await asyncio.wait_for(
+                        client.messages.create(
+                            model=MODEL_SONNET,
+                            max_tokens=2000,
+                            messages=[{"role": "user", "content": prompt}],
+                            timeout=LLM_TIMEOUT_SECONDS,
+                        ),
+                        timeout=LLM_TIMEOUT_SECONDS,
+                    )
+
+                    # Extract text content from response
+                    content = ""
+                    for block in response.content:
+                        if block.type == "text":
+                            content = block.text
+                            break
+
+                    return self._parse_suggestions(content)
+
+                except (RateLimitError, APIConnectionError, TimeoutError) as exc:
+                    last_exc = exc
+                    if attempt < max_retries - 1:
+                        delay = (2**attempt) + 1  # 1s, 3s, 5s
+                        logger.warning(
+                            "Transient LLM error (attempt %d/%d), retrying in %ds",
+                            attempt + 1,
+                            max_retries,
+                            delay,
+                            exc_info=True,
+                        )
+                        await asyncio.sleep(delay)
+
+            logger.exception(
+                "Digest LLM call failed after %d attempts", max_retries, exc_info=last_exc
             )
-
-            # Extract text content from response
-            content = ""
-            for block in response.content:
-                if block.type == "text":
-                    content = block.text
-                    break
-
-            return self._parse_suggestions(content)
+            return self._fallback_suggestions()
 
         except Exception:
             logger.exception("Digest LLM call failed, using fallback")
