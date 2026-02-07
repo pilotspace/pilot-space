@@ -9,6 +9,7 @@ import os
 import shutil
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 from uuid import UUID
 
@@ -85,6 +86,21 @@ ALL_TOOL_NAMES: list[str] = [
     *PROJECT_TOOL_NAMES,
     *COMMENT_TOOL_NAMES,
 ]
+
+
+def _has_skill_files(skills_dir: Path) -> bool:
+    """Check if any SKILL.md files exist under skills_dir subdirectories.
+
+    Scans one level deep: ``skills_dir/<subdir>/SKILL.md``.  Returns True
+    on the first match so the check is fast for large directories.
+    """
+    if not skills_dir.is_dir():
+        return False
+    return any(
+        (entry / "SKILL.md").is_file()
+        for entry in skills_dir.iterdir()
+        if entry.is_dir()
+    )
 
 
 @dataclass
@@ -286,8 +302,12 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
                 yield chunk
 
         except Exception as e:
-            error_data = {"type": "error", "error_type": "sdk_error", "message": str(e)}
-            yield f"data: {json.dumps(error_data)}\n\n"
+            error_data = {
+                "errorCode": "sdk_error",
+                "message": str(e),
+                "retryable": False,
+            }
+            yield f"event: error\ndata: {json.dumps(error_data)}\n\n"
 
     async def _stream_with_space(
         self,
@@ -346,12 +366,20 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
             try:
                 # Materialize user's role skills into space's .claude/skills/
                 # directory so the SDK auto-discovers them (FR-006/FR-007).
-                await materialize_role_skills(
+                skill_count = await materialize_role_skills(
                     db_session=db_session,
                     user_id=context.user_id,
                     workspace_id=context.workspace_id,
                     skills_dir=space_context.skills_dir,
                 )
+
+                # Detect whether any skill files exist (role or system) so
+                # the Skill tool is only exposed when the SDK can resolve it.
+                # Prevents "No such tool available: skill" when no skills exist.
+                has_skills = skill_count > 0 or await asyncio.to_thread(
+                    _has_skill_files, space_context.skills_dir,
+                )
+
                 tool_context = ToolContext(
                     db_session=db_session,
                     workspace_id=str(context.workspace_id),
@@ -409,6 +437,7 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
                     enable_file_checkpointing=True,
                     effort=effort,
                     streaming_input_mode=streaming_input,
+                    skills_available=has_skills,
                 )
 
                 sdk_params = sdk_config.to_sdk_params()
@@ -440,14 +469,30 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
                         "include_partial_messages",
                         True,
                     ),
+                    # Parameters previously dropped from sdk_params (Bug fix):
+                    # Without system_prompt, the model lacks tool descriptions and
+                    # approval tier guidance. Without max_thinking_tokens, the SDK
+                    # subprocess mishandles thinking block signatures during tool use,
+                    # causing "Missing required field: 'signature'" API errors.
+                    system_prompt=sdk_config.system_prompt_base,
+                    max_thinking_tokens=sdk_config.max_thinking_tokens,
+                    max_budget_usd=sdk_config.max_budget_usd,
+                    max_turns=sdk_config.max_turns,
+                    fallback_model=sdk_config.fallback_model,
+                    output_format=sdk_config.output_format,
+                    enable_file_checkpointing=sdk_config.enable_file_checkpointing,
                 )
 
                 set_workspace_context(context.workspace_id, context.user_id)
                 logger.info(
-                    "[SDK/Space] Config: cwd=%s, env_keys=%s, claude_bin=%s",
+                    "[SDK/Space] Config: cwd=%s, env_keys=%s, claude_bin=%s, "
+                    "thinking_tokens=%s, system_prompt=%s, budget=%.2f",
                     sdk_params.get("cwd"),
                     list(sdk_env.keys()),
                     shutil.which("claude"),
+                    sdk_config.max_thinking_tokens,
+                    bool(sdk_config.system_prompt_base),
+                    sdk_config.max_budget_usd or 0,
                 )
 
                 client = ClaudeSDKClient(sdk_options)
@@ -472,26 +517,58 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
                 transformed_count = 0
                 tool_event_count = 0
 
-                async for message in client.receive_response():
-                    sdk_event_count += 1
-                    sse_event = self.transform_sdk_message(
-                        message,
-                        context,
-                        delta_buffer,
-                        session_id=session_id_str,  # Pass app session_id to frontend
-                    )
-                    if sse_event:
-                        transformed_count += 1
-                        yield sse_event
-                        capture_content_from_sse(sse_event, content_blocks)
-
-                    # Time-based flush check for buffered deltas
-                    if delta_buffer.should_flush():
-                        flush_event = delta_buffer.flush()
-                        if flush_event:
+                try:
+                    async for message in client.receive_response():
+                        sdk_event_count += 1
+                        sse_event = self.transform_sdk_message(
+                            message,
+                            context,
+                            delta_buffer,
+                            session_id=session_id_str,
+                        )
+                        if sse_event:
                             transformed_count += 1
-                            yield flush_event
-                            capture_content_from_sse(flush_event, content_blocks)
+                            yield sse_event
+                            capture_content_from_sse(sse_event, content_blocks)
+
+                        # Time-based flush check for buffered deltas
+                        if delta_buffer.should_flush():
+                            flush_event = delta_buffer.flush()
+                            if flush_event:
+                                transformed_count += 1
+                                yield flush_event
+                                capture_content_from_sse(flush_event, content_blocks)
+
+                        try:
+                            while True:
+                                yield tool_event_queue.get_nowait()
+                                tool_event_count += 1
+                        except asyncio.QueueEmpty:
+                            pass
+                except Exception as stream_err:
+                    # Flush partial buffered content before yielding error
+                    partial_flush = delta_buffer.flush()
+                    if partial_flush:
+                        yield partial_flush
+                    logger.error(
+                        "[SDK/Space] Stream error (session=%s): %s",
+                        query_session_id,
+                        stream_err,
+                        exc_info=True,
+                    )
+                    err_data = {
+                        "errorCode": "stream_error",
+                        "message": str(stream_err),
+                        "retryable": False,
+                    }
+                    yield f"event: error\ndata: {json.dumps(err_data)}\n\n"
+                else:
+                    # Final flush of any remaining buffered deltas
+                    final_flush = delta_buffer.flush()
+                    if final_flush:
+                        transformed_count += 1
+                        yield final_flush
+                        capture_content_from_sse(final_flush, content_blocks)
 
                     try:
                         while True:
@@ -500,27 +577,13 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
                     except asyncio.QueueEmpty:
                         pass
 
-                # Final flush of any remaining buffered deltas
-                final_flush = delta_buffer.flush()
-                if final_flush:
-                    transformed_count += 1
-                    yield final_flush
-                    capture_content_from_sse(final_flush, content_blocks)
-
-                try:
-                    while True:
-                        yield tool_event_queue.get_nowait()
-                        tool_event_count += 1
-                except asyncio.QueueEmpty:
-                    pass
-
-                stream_completed = True
-                logger.info(
-                    "[SDK/Space] Query finished: %d sdk_events, %d transformed, %d tool_events",
-                    sdk_event_count,
-                    transformed_count,
-                    tool_event_count,
-                )
+                    stream_completed = True
+                    logger.info(
+                        "[SDK/Space] Query finished: %d sdk_events, %d transformed, %d tool_events",
+                        sdk_event_count,
+                        transformed_count,
+                        tool_event_count,
+                    )
 
             finally:
                 self._active_clients.pop(query_session_id, None)
@@ -564,7 +627,10 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
                     await client.disconnect()
 
                 clear_context()
-                await db_session_cm.__aexit__(None, None, None)
+                try:
+                    await db_session_cm.__aexit__(None, None, None)
+                except Exception as db_err:
+                    logger.warning("[SDK/Space] DB session cleanup error: %s", db_err)
 
     async def create_client(
         self,
@@ -612,6 +678,13 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
                 hooks=sdk_params.get("hooks"),
                 agents=subagent_definitions,
                 resume=session_id_str if session_id_str != "default" else None,
+                system_prompt=sdk_config.system_prompt_base,
+                max_thinking_tokens=sdk_config.max_thinking_tokens,
+                max_budget_usd=sdk_config.max_budget_usd,
+                max_turns=sdk_config.max_turns,
+                fallback_model=sdk_config.fallback_model,
+                output_format=sdk_config.output_format,
+                enable_file_checkpointing=sdk_config.enable_file_checkpointing,
             )
 
             return ClaudeSDKClient(sdk_options), session_id_str

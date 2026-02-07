@@ -484,6 +484,63 @@ class TestDedupStateResetOnInit:
         assert "Fresh response" in result
 
 
+class TestSignatureDeltaForwarding:
+    """Test signature_delta forwarding for multi-turn thinking integrity."""
+
+    def test_signature_delta_forwarded_as_thinking_delta(self) -> None:
+        """signature_delta events are forwarded as thinking_delta with signature field."""
+        holder = _make_holder()
+        result = transform_stream_event(
+            event_data={
+                "type": "content_block_delta",
+                "index": 0,
+                "delta": {"type": "signature_delta", "signature": "EqoB_test_sig"},
+            },
+            parent_tool_use_id=None,
+            current_message_id_holder=holder,
+        )
+
+        assert result is not None
+        assert "event: thinking_delta" in result
+        data = json.loads(result.split("data: ")[1].split("\n")[0])
+        assert data["signature"] == "EqoB_test_sig"
+        assert data["blockIndex"] == 0
+        assert data["messageId"] == "msg-123"
+        # Should NOT have a delta text field
+        assert "delta" not in data
+
+    def test_empty_signature_delta_returns_none(self) -> None:
+        """signature_delta with empty signature returns None."""
+        holder = _make_holder()
+        result = transform_stream_event(
+            event_data={
+                "type": "content_block_delta",
+                "index": 0,
+                "delta": {"type": "signature_delta", "signature": ""},
+            },
+            parent_tool_use_id=None,
+            current_message_id_holder=holder,
+        )
+        assert result is None
+
+    def test_signature_delta_preserves_block_index(self) -> None:
+        """signature_delta preserves the correct block index."""
+        holder = _make_holder()
+        result = transform_stream_event(
+            event_data={
+                "type": "content_block_delta",
+                "index": 3,
+                "delta": {"type": "signature_delta", "signature": "sig_at_idx_3"},
+            },
+            parent_tool_use_id=None,
+            current_message_id_holder=holder,
+        )
+
+        assert result is not None
+        data = json.loads(result.split("data: ")[1].split("\n")[0])
+        assert data["blockIndex"] == 3
+
+
 class TestStreamEventTracking:
     """Test that stream event tracking state is managed correctly."""
 

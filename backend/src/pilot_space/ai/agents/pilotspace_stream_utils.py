@@ -168,6 +168,10 @@ def build_structured_content(
     result: list[dict[str, Any]] = []
     for block in sorted_blocks:
         clean_block = {k: v for k, v in block.items() if k != "index"}
+        # Drop thinking blocks without signatures — they cause
+        # "Missing required field: 'signature'" on session resume
+        if clean_block.get("type") == "thinking" and "signature" not in clean_block:
+            continue
         result.append(clean_block)
 
     return result

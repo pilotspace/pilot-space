@@ -1,7 +1,7 @@
 """Add role-based skills tables and columns.
 
 Revision ID: 026_add_role_based_skills
-Revises: 025_issue_links_rls_cross_workspace
+Revises: 025_issue_links_rls
 Create Date: 2026-02-06
 
 Creates role_templates and user_role_skills tables, adds default_sdlc_role
@@ -20,7 +20,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "026_add_role_based_skills"
-down_revision: str = "025_issue_links_rls_cross_workspace"
+down_revision: str = "025_issue_links_rls"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

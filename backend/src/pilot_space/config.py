@@ -10,6 +10,10 @@ from typing import Literal
 from pydantic import DirectoryPath, Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+DEFAULT_FOLDER = "/tmp/pilot-space/spaces"
+
+default_folder_path = Path(DEFAULT_FOLDER)
+default_folder_path.mkdir(parents=True, exist_ok=True)
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables.
@@ -146,7 +150,7 @@ class Settings(BaseSettings):
 
     # Space Configuration (Agent Isolation)
     space_storage_root: DirectoryPath = Field(
-        default=Path("/tmp/pilot-space/spaces"),
+        default=default_folder_path,
         description="Root directory for user workspace storage",
     )
     system_templates_dir: DirectoryPath = Field(

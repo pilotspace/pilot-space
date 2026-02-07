@@ -69,15 +69,15 @@ def upgrade() -> None:
         sa.Column(
             "role",
             postgresql.ENUM(
-                "owner",
-                "admin",
-                "member",
-                "guest",
+                "OWNER",
+                "ADMIN",
+                "MEMBER",
+                "GUEST",
                 name="workspace_role",
                 create_type=False,
             ),
             nullable=False,
-            server_default="member",
+            server_default="MEMBER",
         ),
         sa.Column("invited_by", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column(
@@ -151,7 +151,7 @@ def _create_rls_policies() -> None:
                 SELECT wm.workspace_id
                 FROM workspace_members wm
                 WHERE wm.user_id = current_setting('app.current_user_id', true)::uuid
-                AND wm.role IN ('owner', 'admin')
+                AND wm.role IN ('OWNER', 'ADMIN')
                 AND wm.is_deleted = false
             )
         )
@@ -167,7 +167,7 @@ def _create_rls_policies() -> None:
                 SELECT wm.workspace_id
                 FROM workspace_members wm
                 WHERE wm.user_id = current_setting('app.current_user_id', true)::uuid
-                AND wm.role IN ('owner', 'admin')
+                AND WM.ROLE IN ('OWNER', 'ADMIN')
                 AND wm.is_deleted = false
             )
         )
@@ -176,7 +176,7 @@ def _create_rls_policies() -> None:
                 SELECT wm.workspace_id
                 FROM workspace_members wm
                 WHERE wm.user_id = current_setting('app.current_user_id', true)::uuid
-                AND wm.role IN ('owner', 'admin')
+                AND WM.ROLE IN ('OWNER', 'ADMIN')
                 AND wm.is_deleted = false
             )
         )

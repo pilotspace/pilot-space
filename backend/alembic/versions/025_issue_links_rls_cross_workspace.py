@@ -1,6 +1,6 @@
 """Add WITH CHECK to issue_links RLS policy for cross-workspace validation.
 
-Revision ID: 025_issue_links_rls_cross_workspace
+Revision ID: 025_issue_links_rls
 Revises: 024_enhanced_mcp_models
 Create Date: 2026-02-06
 
@@ -15,7 +15,7 @@ from collections.abc import Sequence
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "025_issue_links_rls_cross_workspace"
+revision: str = "025_issue_links_rls"
 down_revision: str = "024_enhanced_mcp_models"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None

@@ -163,8 +163,20 @@ def _handle_content_block_delta(
 
     mapping = delta_map.get(delta_type)
     if mapping is None:
-        # signature_delta and unknown types are silently ignored
-        if delta_type not in ("signature_delta", ""):
+        # Forward signature_delta for thinking block multi-turn integrity.
+        # The Anthropic API sends thinking signatures as a separate delta
+        # type; without forwarding, persisted sessions lose signatures and
+        # subsequent turns fail with "Missing required field: 'signature'".
+        if delta_type == "signature_delta":
+            sig = delta.get("signature", "")
+            if sig:
+                sig_data: dict[str, Any] = {
+                    "messageId": message_id,
+                    "signature": sig,
+                    "blockIndex": block_index,
+                }
+                return f"event: thinking_delta\ndata: {json.dumps(sig_data)}\n\n"
+        elif delta_type != "":
             logger.debug("Unknown content_block_delta type: %s", delta_type)
         return None
 
@@ -175,15 +187,15 @@ def _handle_content_block_delta(
 
     # If buffer provided, use water pumping (batch deltas)
     if delta_buffer:
-        # Ensure buffer has current message context
         delta_buffer.set_message_context(message_id, parent_tool_use_id)
-
-        if sse_event_name == "thinking_delta":
-            return delta_buffer.add_thinking_delta(block_index, text)
-        if sse_event_name == "text_delta":
-            return delta_buffer.add_text_delta(block_index, text)
-        if sse_event_name == "tool_input_delta":
-            return delta_buffer.add_tool_input_delta(block_index, text)
+        buffer_handlers = {
+            "thinking_delta": delta_buffer.add_thinking_delta,
+            "text_delta": delta_buffer.add_text_delta,
+            "tool_input_delta": delta_buffer.add_tool_input_delta,
+        }
+        handler = buffer_handlers.get(sse_event_name)
+        if handler:
+            return handler(block_index, text)
 
     # Fallback: immediate emit (backward compatible, no buffer)
     data: dict[str, Any] = {
