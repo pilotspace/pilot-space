@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import uuid
+from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -33,6 +34,23 @@ from pilot_space.infrastructure.database.models.state import State
 from pilot_space.infrastructure.database.models.workspace_digest import (
     WorkspaceDigest,
 )
+
+
+@contextmanager
+def _mock_advisory_lock():
+    """Mock pg_try_advisory_xact_lock for SQLite test sessions."""
+    original_execute = AsyncSession.execute
+
+    async def _patched_execute(self, statement, *args, **kwargs):
+        stmt_str = str(statement) if not isinstance(statement, str) else statement
+        if "pg_try_advisory_xact_lock" in stmt_str:
+            mock_result = MagicMock()
+            mock_result.scalar.return_value = True
+            return mock_result
+        return await original_execute(self, statement, *args, **kwargs)
+
+    with patch.object(AsyncSession, "execute", _patched_execute):
+        yield
 
 
 @pytest.mark.asyncio
@@ -186,10 +204,11 @@ class TestDigestJobHandler:
         db_session.add(recent_digest)
         await db_session.flush()
 
-        handler = DigestJobHandler(db_session)
-        payload = {"workspace_id": str(workspace_id), "trigger": "scheduled"}
+        with _mock_advisory_lock():
+            handler = DigestJobHandler(db_session)
+            payload = {"workspace_id": str(workspace_id), "trigger": "scheduled"}
 
-        result = await handler.handle(payload)
+            result = await handler.handle(payload)
 
         assert result["status"] == "skipped"
         assert result["reason"] == "cooldown"
@@ -203,10 +222,11 @@ class TestDigestJobHandler:
         user_id: uuid.UUID,
     ) -> None:
         """Returns 'skipped' with reason 'no_activity' if workspace is empty."""
-        handler = DigestJobHandler(db_session)
-        payload = {"workspace_id": str(workspace_id), "trigger": "scheduled"}
+        with _mock_advisory_lock():
+            handler = DigestJobHandler(db_session)
+            payload = {"workspace_id": str(workspace_id), "trigger": "scheduled"}
 
-        result = await handler.handle(payload)
+            result = await handler.handle(payload)
 
         assert result["status"] == "skipped"
         assert result["reason"] == "no_activity"
@@ -335,10 +355,11 @@ class TestDigestJobHandler:
             )
             mock_settings.return_value = mock_settings_instance
 
-            handler = DigestJobHandler(db_session)
-            payload = {"workspace_id": str(workspace_id), "trigger": "manual"}
+            with _mock_advisory_lock():
+                handler = DigestJobHandler(db_session)
+                payload = {"workspace_id": str(workspace_id), "trigger": "manual"}
 
-            result = await handler.handle(payload)
+                result = await handler.handle(payload)
 
             assert result["status"] == "completed"
             assert result["suggestion_count"] == 1

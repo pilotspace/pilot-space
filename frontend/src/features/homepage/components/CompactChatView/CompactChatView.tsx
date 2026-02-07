@@ -37,7 +37,8 @@ export const CompactChatView = observer(function CompactChatView({
   const [showPanel, setShowPanel] = useState(false);
   const [animating, setAnimating] = useState(false);
 
-  const { messages, isStreaming, streamContent, sendMessage, abort } = useCompactChat(workspaceId);
+  const { messages, isStreaming, streamContent, error, sendMessage, abort } =
+    useCompactChat(workspaceId);
 
   const handleFocus = useCallback(() => {
     homepageStore.expandChat();
@@ -97,15 +98,57 @@ export const CompactChatView = observer(function CompactChatView({
     return () => document.removeEventListener('keydown', handleEscape);
   }, [homepageStore.chatExpanded, homepageStore, chatInputRef]);
 
-  // FE-C2: Lock body scroll when mobile bottom sheet is open
+  // FE-H1: Lock body scroll when mobile bottom sheet is open (iOS Safari compatible)
   useEffect(() => {
     if (!homepageStore.chatExpanded) return;
     const mq = window.matchMedia('(max-width: 767px)');
     if (!mq.matches) return;
+
+    const scrollY = window.scrollY;
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.left = '0';
+    document.body.style.right = '0';
     document.body.style.overflow = 'hidden';
+
     return () => {
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.left = '';
+      document.body.style.right = '';
       document.body.style.overflow = '';
+      window.scrollTo(0, scrollY);
     };
+  }, [homepageStore.chatExpanded]);
+
+  // FE-H2: Trap focus within expanded panel
+  useEffect(() => {
+    if (!homepageStore.chatExpanded || !containerRef.current) return;
+
+    const container = containerRef.current;
+    const handleTabTrap = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return;
+
+      const focusable = container.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), textarea, input, [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusable.length === 0) return;
+
+      const first = focusable[0] as HTMLElement | undefined;
+      const last = focusable[focusable.length - 1] as HTMLElement | undefined;
+      if (!first || !last) return;
+
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
+    container.addEventListener('keydown', handleTabTrap);
+    return () => container.removeEventListener('keydown', handleTabTrap);
   }, [homepageStore.chatExpanded]);
 
   return (
@@ -120,30 +163,31 @@ export const CompactChatView = observer(function CompactChatView({
         <div className="overflow-hidden">
           {showPanel && (
             <>
-            {/* FE-C2: Mobile backdrop */}
-            <div
-              className="fixed inset-0 z-40 bg-black/40 md:hidden"
-              aria-hidden="true"
-              onClick={handleMinimize}
-            />
-            <div
-              className={cn(
-                // H-3: Mobile bottom sheet
-                'md:relative md:rounded-lg',
-                'max-md:fixed max-md:inset-x-0 max-md:bottom-0 max-md:z-50',
-                'max-md:rounded-t-xl max-md:shadow-lg max-md:max-h-[60vh]'
-              )}
-            >
-              <CompactChatPanel
-                messages={messages}
-                isStreaming={isStreaming}
-                streamContent={streamContent}
-                onSendMessage={sendMessage}
-                onAbort={abort}
-                onMinimize={handleMinimize}
-                autoFocus
+              {/* FE-C2: Mobile backdrop */}
+              <div
+                className="fixed inset-0 z-40 bg-black/40 md:hidden"
+                aria-hidden="true"
+                onClick={handleMinimize}
               />
-            </div>
+              <div
+                className={cn(
+                  // H-3: Mobile bottom sheet
+                  'md:relative md:rounded-lg',
+                  'max-md:fixed max-md:inset-x-0 max-md:bottom-0 max-md:z-50',
+                  'max-md:rounded-t-xl max-md:shadow-lg max-md:max-h-[60dvh]'
+                )}
+              >
+                <CompactChatPanel
+                  messages={messages}
+                  isStreaming={isStreaming}
+                  streamContent={streamContent}
+                  error={error}
+                  onSendMessage={sendMessage}
+                  onAbort={abort}
+                  onMinimize={handleMinimize}
+                  autoFocus
+                />
+              </div>
             </>
           )}
         </div>

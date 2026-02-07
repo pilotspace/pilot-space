@@ -11,7 +11,7 @@ import { FileText, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useWorkspaceStore } from '@/stores/RootStore';
 import { useHomepageActivity } from '../../hooks/useHomepageActivity';
-import { DAY_GROUP_ORDER, DAY_GROUP_LABELS } from '../../constants';
+import { DAY_GROUP_ORDER, DAY_GROUP_LABELS, MAX_RENDERED_ACTIVITY_ITEMS } from '../../constants';
 import type { ActivityCard } from '../../types';
 import { DayGroupHeader } from './DayGroupHeader';
 import { NoteActivityCard } from './NoteActivityCard';
@@ -41,19 +41,24 @@ export const ActivityFeed = observer(function ActivityFeed({ workspaceSlug }: Ac
   const dayGroups = useMemo(() => {
     if (!data?.pages) return [];
 
-    // Merge all pages' data buckets
+    // Merge all pages' data buckets (capped at MAX_RENDERED_ACTIVITY_ITEMS)
     const merged: Record<string, ActivityCard[]> = {};
     const seen = new Set<string>();
+    let totalItems = 0;
     for (const page of data.pages) {
       for (const [key, cards] of Object.entries(page.data)) {
         if (!merged[key]) merged[key] = [];
         for (const card of cards) {
+          if (totalItems >= MAX_RENDERED_ACTIVITY_ITEMS) break;
           if (!seen.has(card.id)) {
             seen.add(card.id);
             merged[key].push(card);
+            totalItems++;
           }
         }
+        if (totalItems >= MAX_RENDERED_ACTIVITY_ITEMS) break;
       }
+      if (totalItems >= MAX_RENDERED_ACTIVITY_ITEMS) break;
     }
 
     // Return ordered groups with items

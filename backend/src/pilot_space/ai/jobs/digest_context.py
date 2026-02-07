@@ -12,6 +12,7 @@ References:
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
@@ -28,6 +29,10 @@ logger = logging.getLogger(__name__)
 MAX_CONTEXT_CHARS = 15000
 # Max entities per category to prevent runaway queries
 MAX_ENTITIES = 500
+# Max length for user-supplied text in LLM context (prevents prompt injection)
+MAX_USER_TEXT_LENGTH = 100
+# Pattern matching control characters and common prompt injection markers
+_CONTROL_CHARS_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
 
 @dataclass
@@ -56,6 +61,25 @@ class DigestContext:
         for category, text in self.sections.items():
             parts.append(f"\n## {category}\n{text}")
         return "\n".join(parts)
+
+
+def _sanitize_user_text(text: str, max_length: int = MAX_USER_TEXT_LENGTH) -> str:
+    """Sanitize user-supplied text before including in LLM prompt.
+
+    Strips control characters and truncates to prevent prompt injection.
+
+    Args:
+        text: Raw user text.
+        max_length: Maximum allowed length.
+
+    Returns:
+        Sanitized text safe for LLM prompt inclusion.
+    """
+    cleaned = _CONTROL_CHARS_RE.sub("", text)
+    cleaned = cleaned.strip()
+    if len(cleaned) > max_length:
+        cleaned = cleaned[:max_length] + "..."
+    return cleaned
 
 
 class DigestContextBuilder:
@@ -275,7 +299,7 @@ class DigestContextBuilder:
 
         lines = ["Active cycles:"]
         for c in cycles:
-            name = c.name or "Unnamed"
+            name = _sanitize_user_text(c.name) if c.name else "Unnamed"
             lines.append(f"- {name}: {c.status}")
 
         return "\n".join(lines)

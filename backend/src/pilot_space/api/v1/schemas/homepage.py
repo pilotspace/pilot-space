@@ -65,6 +65,7 @@ class ActivityCardNote(BaseSchema):
     id: UUID
     title: str
     project: ProjectBrief | None = None
+    topics: list[str] = Field(default_factory=list, description="Note topic tags")
     word_count: int = Field(ge=0)
     latest_annotation: AnnotationPreview | None = None
     updated_at: datetime
@@ -130,6 +131,17 @@ class DigestSuggestion(BaseSchema):
     )
     entity_type: str | None = Field(
         default=None, description="Entity type: issue, note, cycle, etc."
+    )
+    entity_identifier: str | None = Field(
+        default=None, description="Human-readable entity identifier (e.g. PS-42)"
+    )
+    project_id: UUID | None = Field(default=None, description="Related project ID")
+    project_name: str | None = Field(default=None, description="Related project name")
+    action_type: str | None = Field(
+        default=None, description="Action type: navigate or quick_action"
+    )
+    action_label: str | None = Field(
+        default=None, description="Button label for the action (default: View)"
     )
     action_url: str | None = Field(default=None, description="Frontend route for quick action")
     relevance_score: float = Field(

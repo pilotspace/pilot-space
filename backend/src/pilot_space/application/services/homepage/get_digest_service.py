@@ -56,6 +56,11 @@ class DigestSuggestionItem:
     description: str
     entity_id: UUID | None = None
     entity_type: str | None = None
+    entity_identifier: str | None = None
+    project_id: UUID | None = None
+    project_name: str | None = None
+    action_type: str | None = None
+    action_label: str | None = None
     action_url: str | None = None
     relevance_score: float = 0.5
 
@@ -167,6 +172,9 @@ class GetDigestService:
             except ValueError:
                 continue
 
+            raw_project_id = s.get("project_id")
+            project_id = UUID(str(raw_project_id)) if raw_project_id else None
+
             result.append(
                 DigestSuggestionItem(
                     id=suggestion_id,
@@ -175,6 +183,11 @@ class GetDigestService:
                     description=s.get("description", ""),
                     entity_id=UUID(entity_id_str) if entity_id_str else None,
                     entity_type=s.get("entity_type"),
+                    entity_identifier=s.get("entity_identifier"),
+                    project_id=project_id,
+                    project_name=s.get("project_name"),
+                    action_type=s.get("action_type"),
+                    action_label=s.get("action_label"),
                     action_url=s.get("action_url"),
                     relevance_score=float(s.get("relevance_score", 0.5)),
                 )

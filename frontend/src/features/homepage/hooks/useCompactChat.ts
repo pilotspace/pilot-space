@@ -12,6 +12,7 @@ export interface UseCompactChatReturn {
   messages: ReturnType<typeof useAIStore>['pilotSpace']['messages'];
   isStreaming: boolean;
   streamContent: string;
+  error: string | null;
   sendMessage: (text: string) => void;
   abort: () => void;
 }
@@ -46,6 +47,7 @@ export function useCompactChat(workspaceId: string): UseCompactChatReturn {
     messages: store.messages,
     isStreaming: store.isStreaming,
     streamContent: store.streamContent,
+    error: store.error ?? null,
     sendMessage,
     abort,
   };

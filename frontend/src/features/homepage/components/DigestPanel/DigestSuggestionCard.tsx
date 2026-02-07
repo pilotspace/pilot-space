@@ -98,7 +98,7 @@ export function DigestSuggestionCard({ suggestion, onDismiss }: DigestSuggestion
             variant="ghost"
             size="sm"
             onClick={handleAction}
-            className="mt-1.5 h-7 px-2 text-xs text-primary"
+            className="mt-1.5 h-7 min-h-[44px] px-2 text-xs text-primary"
           >
             {suggestion.action_label ?? 'View'}
           </Button>

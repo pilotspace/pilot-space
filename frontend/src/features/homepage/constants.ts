@@ -18,6 +18,9 @@ export const ACTIVITY_STALE_TIME = 30_000;
 /** Maximum characters for annotation preview text */
 export const MAX_ANNOTATION_PREVIEW_LENGTH = 80;
 
+/** Maximum number of items to render in the activity feed (performance guard) */
+export const MAX_RENDERED_ACTIVITY_ITEMS = 200;
+
 /** Day group label keys matching backend response buckets */
 export const DAY_GROUP_LABELS = {
   today: 'Today',

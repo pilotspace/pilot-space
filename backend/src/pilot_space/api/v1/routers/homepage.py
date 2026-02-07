@@ -222,6 +222,11 @@ async def get_digest(
                     description=s.description,
                     entity_id=s.entity_id,
                     entity_type=s.entity_type,
+                    entity_identifier=s.entity_identifier,
+                    project_id=s.project_id,
+                    project_name=s.project_name,
+                    action_type=s.action_type,
+                    action_label=s.action_label,
                     action_url=s.action_url,
                     relevance_score=s.relevance_score,
                 )

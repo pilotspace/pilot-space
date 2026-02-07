@@ -6,7 +6,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChevronDown, Send, Square } from 'lucide-react';
+import { AlertCircle, ChevronDown, Send, Square } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import type { ChatMessage } from '@/stores/ai/types/conversation';
@@ -17,6 +17,7 @@ interface CompactChatPanelProps {
   messages: ChatMessage[];
   isStreaming: boolean;
   streamContent: string;
+  error: string | null;
   onSendMessage: (text: string) => void;
   onAbort: () => void;
   onMinimize: () => void;
@@ -28,6 +29,7 @@ export function CompactChatPanel({
   messages,
   isStreaming,
   streamContent,
+  error,
   onSendMessage,
   onAbort,
   onMinimize,
@@ -100,6 +102,17 @@ export function CompactChatPanel({
         isStreaming={isStreaming}
         streamContent={streamContent}
       />
+
+      {/* Error display */}
+      {error && (
+        <div
+          className="flex items-center gap-2 border-t border-destructive/20 bg-destructive/5 px-3 py-2"
+          role="alert"
+        >
+          <AlertCircle className="h-3.5 w-3.5 shrink-0 text-destructive" aria-hidden="true" />
+          <p className="text-xs text-destructive">{error}</p>
+        </div>
+      )}
 
       {/* Input area */}
       <div className="flex items-end gap-2 border-t border-border-subtle p-3">
