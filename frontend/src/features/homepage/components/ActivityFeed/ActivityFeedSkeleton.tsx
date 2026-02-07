@@ -22,7 +22,7 @@ export function ActivityFeedSkeleton({ count = 6 }: ActivityFeedSkeletonProps) {
       {Array.from({ length: count }, (_, i) => (
         <div
           key={i}
-          className={`rounded-md border border-border-subtle p-4 ${i % 2 === 0 ? 'h-[160px]' : 'h-[140px]'}`}
+          className={`flex flex-col rounded-md border border-border-subtle p-4 ${i % 2 === 0 ? 'h-[160px]' : 'h-[140px]'}`}
         >
           {/* Title row */}
           <div className="flex items-center gap-2">

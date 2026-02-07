@@ -6,8 +6,7 @@
  */
 
 import { useEffect, useMemo, useRef } from 'react';
-import { FileText } from 'lucide-react';
-import { Loader2 } from 'lucide-react';
+import { FileText, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useWorkspaceStore } from '@/stores/RootStore';
 import { useHomepageActivity } from '../../hooks/useHomepageActivity';
@@ -43,10 +42,16 @@ export function ActivityFeed({ workspaceSlug }: ActivityFeedProps) {
 
     // Merge all pages' data buckets
     const merged: Record<string, ActivityCard[]> = {};
+    const seen = new Set<string>();
     for (const page of data.pages) {
       for (const [key, cards] of Object.entries(page.data)) {
         if (!merged[key]) merged[key] = [];
-        merged[key].push(...cards);
+        for (const card of cards) {
+          if (!seen.has(card.id)) {
+            seen.add(card.id);
+            merged[key].push(card);
+          }
+        }
       }
     }
 

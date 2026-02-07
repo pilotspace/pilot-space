@@ -97,7 +97,10 @@ export function NoteActivityCard({ card, workspaceSlug }: NoteActivityCardProps)
       {annotation && truncatedAnnotation && AnnotationIcon && (
         <Tooltip>
           <TooltipTrigger asChild>
-            <div className="mt-auto flex items-center gap-1.5 rounded-sm bg-ai-muted px-2 py-1">
+            <div
+              className="mt-auto flex items-center gap-1.5 rounded-sm bg-ai-muted px-2 py-1"
+              onClick={(e) => e.stopPropagation()}
+            >
               <AnnotationIcon className="h-3 w-3 shrink-0 text-ai" aria-hidden="true" />
               <span className="line-clamp-1 text-sm text-ai">{truncatedAnnotation}</span>
             </div>

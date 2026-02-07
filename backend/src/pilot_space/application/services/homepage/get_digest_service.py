@@ -158,9 +158,18 @@ class GetDigestService:
             if (entity_id_str, category) in dismissed:
                 continue
 
+            # Skip suggestions with missing or invalid ID
+            raw_id = s.get("id")
+            if not raw_id:
+                continue
+            try:
+                suggestion_id = UUID(str(raw_id))
+            except ValueError:
+                continue
+
             result.append(
                 DigestSuggestionItem(
-                    id=UUID(str(s["id"])),
+                    id=suggestion_id,
                     category=category,
                     title=s.get("title", ""),
                     description=s.get("description", ""),

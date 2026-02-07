@@ -6,7 +6,6 @@
  */
 
 import { useEffect, useRef } from 'react';
-import { observer } from 'mobx-react-lite';
 import { Bot, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { StreamingContent } from '@/features/ai/ChatView/MessageList/StreamingContent';
@@ -18,7 +17,7 @@ interface CompactMessageListProps {
   streamContent: string;
 }
 
-export const CompactMessageList = observer(function CompactMessageList({
+export function CompactMessageList({
   messages,
   isStreaming,
   streamContent,
@@ -98,4 +97,4 @@ export const CompactMessageList = observer(function CompactMessageList({
       </div>
     </div>
   );
-});
+}
