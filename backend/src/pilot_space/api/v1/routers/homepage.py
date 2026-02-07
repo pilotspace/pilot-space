@@ -17,7 +17,7 @@ import logging
 from collections.abc import Sequence
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Query, status
 
 from pilot_space.api.v1.schemas.homepage import (
     ActivityCardIssue,
@@ -57,7 +57,7 @@ async def get_activity(
     session: DbSession,
     _user_id: SyncedUserId,
     cursor: str | None = None,
-    limit: int = 20,
+    limit: int = Query(default=20, ge=1, le=50),
 ) -> HomepageActivityResponse:
     """Get homepage activity feed.
 

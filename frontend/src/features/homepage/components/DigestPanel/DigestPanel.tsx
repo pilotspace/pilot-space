@@ -6,7 +6,7 @@
  * Provides a refresh button to trigger on-demand digest regeneration.
  */
 
-import { useCallback } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { observer } from 'mobx-react-lite';
 import { useQueryClient } from '@tanstack/react-query';
 import { RefreshCw } from 'lucide-react';
@@ -45,6 +45,14 @@ export const DigestPanel = observer(function DigestPanel({
   const queryClient = useQueryClient();
   const dismissMutation = useDigestDismiss({ workspaceId });
 
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout>>(null);
+
+  useEffect(() => {
+    return () => {
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    };
+  }, []);
+
   const handleDismiss = useCallback(
     (suggestion: DigestSuggestion) => {
       const payload: DismissSuggestionPayload = {
@@ -62,7 +70,8 @@ export const DigestPanel = observer(function DigestPanel({
     if (!workspaceId) return;
     await homepageApi.refreshDigest(workspaceId);
     // Invalidate after a short delay to allow background job to start
-    setTimeout(() => {
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    refreshTimerRef.current = setTimeout(() => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.homepage.digest(workspaceId) });
     }, 2000);
   }, [workspaceId, queryClient]);
@@ -120,11 +129,12 @@ export const DigestPanel = observer(function DigestPanel({
         ) : (
           <div className="space-y-2" role="list" aria-label="AI suggestions">
             {suggestions.map((suggestion) => (
-              <DigestSuggestionCard
-                key={suggestion.id}
-                suggestion={suggestion}
-                onDismiss={handleDismiss}
-              />
+              <div key={suggestion.id} role="listitem">
+                <DigestSuggestionCard
+                  suggestion={suggestion}
+                  onDismiss={handleDismiss}
+                />
+              </div>
             ))}
           </div>
         )}

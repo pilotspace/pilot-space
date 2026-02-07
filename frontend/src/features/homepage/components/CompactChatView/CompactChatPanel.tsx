@@ -6,7 +6,6 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { observer } from 'mobx-react-lite';
 import { ChevronDown, Send, Square } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -25,7 +24,7 @@ interface CompactChatPanelProps {
   autoFocus?: boolean;
 }
 
-export const CompactChatPanel = observer(function CompactChatPanel({
+export function CompactChatPanel({
   messages,
   isStreaming,
   streamContent,
@@ -145,4 +144,4 @@ export const CompactChatPanel = observer(function CompactChatPanel({
       </div>
     </div>
   );
-});
+}

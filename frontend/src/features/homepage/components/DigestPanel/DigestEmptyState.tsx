@@ -5,6 +5,7 @@
  * Two variants: no AI provider configured, or no suggestions available.
  */
 
+import Link from 'next/link';
 import { Lightbulb, Settings } from 'lucide-react';
 import { useWorkspaceStore } from '@/stores/RootStore';
 
@@ -26,12 +27,12 @@ export function DigestEmptyState({ variant }: DigestEmptyStateProps) {
           <p className="text-sm font-medium text-foreground">AI not configured</p>
           <p className="text-xs text-muted-foreground">
             Configure an AI provider in{' '}
-            <a
+            <Link
               href={`/${slug}/settings/ai-providers`}
               className="text-primary underline underline-offset-2"
             >
               Settings
-            </a>{' '}
+            </Link>{' '}
             to enable workspace insights.
           </p>
         </div>

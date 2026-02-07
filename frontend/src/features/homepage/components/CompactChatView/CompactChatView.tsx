@@ -97,6 +97,17 @@ export const CompactChatView = observer(function CompactChatView({
     return () => document.removeEventListener('keydown', handleEscape);
   }, [homepageStore.chatExpanded, homepageStore, chatInputRef]);
 
+  // FE-C2: Lock body scroll when mobile bottom sheet is open
+  useEffect(() => {
+    if (!homepageStore.chatExpanded) return;
+    const mq = window.matchMedia('(max-width: 767px)');
+    if (!mq.matches) return;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [homepageStore.chatExpanded]);
+
   return (
     <div ref={containerRef} className="w-full">
       {/* H-4: Animated height transition wrapper */}
@@ -108,6 +119,13 @@ export const CompactChatView = observer(function CompactChatView({
       >
         <div className="overflow-hidden">
           {showPanel && (
+            <>
+            {/* FE-C2: Mobile backdrop */}
+            <div
+              className="fixed inset-0 z-40 bg-black/40 md:hidden"
+              aria-hidden="true"
+              onClick={handleMinimize}
+            />
             <div
               className={cn(
                 // H-3: Mobile bottom sheet
@@ -126,6 +144,7 @@ export const CompactChatView = observer(function CompactChatView({
                 autoFocus
               />
             </div>
+            </>
           )}
         </div>
       </div>

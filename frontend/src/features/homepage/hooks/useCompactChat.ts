@@ -5,7 +5,7 @@
  * Session persists across expand/collapse cycles within browser session.
  */
 
-import { useEffect, useCallback, useMemo } from 'react';
+import { useEffect, useCallback } from 'react';
 import { useAIStore } from '@/stores/RootStore';
 
 export interface UseCompactChatReturn {
@@ -25,6 +25,9 @@ export function useCompactChat(workspaceId: string): UseCompactChatReturn {
     if (workspaceId) {
       store.setWorkspaceId(workspaceId);
     }
+    return () => {
+      store.abort();
+    };
   }, [workspaceId, store]);
 
   const sendMessage = useCallback(
@@ -39,14 +42,11 @@ export function useCompactChat(workspaceId: string): UseCompactChatReturn {
     store.abort();
   }, [store]);
 
-  return useMemo(
-    () => ({
-      messages: store.messages,
-      isStreaming: store.isStreaming,
-      streamContent: store.streamContent,
-      sendMessage,
-      abort,
-    }),
-    [store.messages, store.isStreaming, store.streamContent, sendMessage, abort]
-  );
+  return {
+    messages: store.messages,
+    isStreaming: store.isStreaming,
+    streamContent: store.streamContent,
+    sendMessage,
+    abort,
+  };
 }

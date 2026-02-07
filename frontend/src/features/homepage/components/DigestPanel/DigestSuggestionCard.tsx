@@ -115,6 +115,7 @@ export function DigestSuggestionCard({ suggestion, onDismiss }: DigestSuggestion
           'min-h-[44px] min-w-[44px] shrink-0 text-muted-foreground opacity-0',
           'group-hover:opacity-100',
           'focus-visible:opacity-100',
+          'max-md:opacity-100',
           'motion-safe:transition-opacity'
         )}
       >

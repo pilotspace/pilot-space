@@ -57,7 +57,12 @@ class DigestJobHandler:
         Returns:
             Result dict with status and suggestion_count.
         """
-        workspace_id = uuid.UUID(payload["workspace_id"])
+        try:
+            workspace_id = uuid.UUID(payload["workspace_id"])
+        except (KeyError, ValueError) as exc:
+            logger.warning("Invalid digest job payload: %s", exc)
+            return {"status": "failed", "reason": "invalid_payload"}
+
         trigger = payload.get("trigger", "scheduled")
 
         logger.info(

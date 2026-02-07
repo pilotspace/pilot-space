@@ -6,6 +6,7 @@
  */
 
 import { forwardRef } from 'react';
+import Link from 'next/link';
 import { Bot } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useWorkspaceStore } from '@/stores/RootStore';
@@ -42,12 +43,12 @@ export const CompactChatInput = forwardRef<HTMLInputElement, CompactChatInputPro
         {disabled ? (
           <span className="flex-1 text-sm text-muted-foreground">
             Configure AI provider in{' '}
-            <a
+            <Link
               href={`/${slug}/settings/ai-providers`}
               className="text-primary underline underline-offset-2"
             >
               Settings
-            </a>
+            </Link>
           </span>
         ) : (
           <input
