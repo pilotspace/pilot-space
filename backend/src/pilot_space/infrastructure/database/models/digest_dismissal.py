@@ -62,14 +62,14 @@ class DigestDismissal(WorkspaceScopedModel):
         nullable=False,
     )
 
-    entity_id: Mapped[uuid.UUID] = mapped_column(
+    entity_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
-        nullable=False,
+        nullable=True,
     )
 
-    entity_type: Mapped[str] = mapped_column(
+    entity_type: Mapped[str | None] = mapped_column(
         String(20),
-        nullable=False,
+        nullable=True,
     )
 
     dismissed_at: Mapped[datetime] = mapped_column(

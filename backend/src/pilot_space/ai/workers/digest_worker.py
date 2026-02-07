@@ -102,24 +102,28 @@ class DigestWorker:
             workspace_id,
         )
 
+        msg_id = message.id  # type: ignore[attr-defined]
         try:
             async with self._session_factory() as session:
                 from pilot_space.ai.jobs.digest_job import DigestJobHandler
 
                 handler = DigestJobHandler(session)
                 result = await handler.handle(payload)
+
+                # Ack BEFORE commit: if commit fails, the advisory lock
+                # + unique partial index prevent duplicate digests on retry.
+                # If ack fails, we haven't committed yet so no data loss.
+                await self.queue.ack(QueueName.AI_LOW, msg_id)
+
                 await session.commit()
 
             logger.info(
                 "Digest job complete: %s",
                 json.dumps(result),
             )
-            msg_id = message.id  # type: ignore[attr-defined]
-            await self.queue.ack(QueueName.AI_LOW, msg_id)
 
         except Exception as e:
             logger.exception("Digest job failed for workspace %s", workspace_id)
-            msg_id = message.id  # type: ignore[attr-defined]
             attempts = getattr(message, "attempts", 0)
             if attempts < 2:
                 await self.queue.nack(QueueName.AI_LOW, msg_id, error=str(e))

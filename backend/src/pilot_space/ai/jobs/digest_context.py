@@ -123,18 +123,23 @@ class DigestContextBuilder:
         from pilot_space.infrastructure.database.models.issue import Issue
         from pilot_space.infrastructure.database.models.state import State
 
-        # Aggregate counts by state group
-        query = (
-            select(
-                State.group.label("state_group"),
-                func.count(Issue.id).label("cnt"),
-            )
-            .outerjoin(State, Issue.state_id == State.id)
+        # Aggregate counts by state group (limited to MAX_ENTITIES for safety)
+        recent_issues = (
+            select(Issue.id, Issue.state_id)
             .where(
                 Issue.workspace_id == workspace_id,
                 Issue.is_deleted == False,  # noqa: E712
                 Issue.updated_at >= since,
             )
+            .limit(MAX_ENTITIES)
+            .subquery()
+        )
+        query = (
+            select(
+                State.group.label("state_group"),
+                func.count(recent_issues.c.id).label("cnt"),
+            )
+            .outerjoin(State, recent_issues.c.state_id == State.id)
             .group_by(State.group)
         )
         result = await self._session.execute(query)
@@ -155,8 +160,8 @@ class DigestContextBuilder:
 
         # Stale issues (in_progress but no update in 3+ days)
         stale_cutoff = datetime.now(tz=UTC) - timedelta(days=3)
-        stale_query = (
-            select(func.count(Issue.id))
+        stale_subq = (
+            select(Issue.id)
             .outerjoin(State, Issue.state_id == State.id)
             .where(
                 Issue.workspace_id == workspace_id,
@@ -164,19 +169,28 @@ class DigestContextBuilder:
                 State.group == "started",
                 Issue.updated_at < stale_cutoff,
             )
+            .limit(MAX_ENTITIES)
+            .subquery()
         )
+        stale_query = select(func.count()).select_from(stale_subq)
         stale_result = await self._session.execute(stale_query)
         stale_count = stale_result.scalar() or 0
         if stale_count > 0:
             lines.append(f"\nStale (in-progress, no update 3+ days): {stale_count}")
 
         # Unassigned high/urgent priority
-        unassigned_query = select(func.count(Issue.id)).where(
-            Issue.workspace_id == workspace_id,
-            Issue.is_deleted == False,  # noqa: E712
-            Issue.assignee_id.is_(None),
-            Issue.priority.in_(["high", "urgent"]),
+        unassigned_subq = (
+            select(Issue.id)
+            .where(
+                Issue.workspace_id == workspace_id,
+                Issue.is_deleted == False,  # noqa: E712
+                Issue.assignee_id.is_(None),
+                Issue.priority.in_(["high", "urgent"]),
+            )
+            .limit(MAX_ENTITIES)
+            .subquery()
         )
+        unassigned_query = select(func.count()).select_from(unassigned_subq)
         unassigned_result = await self._session.execute(unassigned_query)
         unassigned_count = unassigned_result.scalar() or 0
         if unassigned_count > 0:
@@ -213,16 +227,19 @@ class DigestContextBuilder:
 
         lines = [f"Notes updated in last 7 days: {note_count}"]
 
-        # Pending annotations count
-        pending_ann_query = (
-            select(func.count(NoteAnnotation.id))
+        # Pending annotations count (bounded)
+        pending_ann_subq = (
+            select(NoteAnnotation.id)
             .join(Note, NoteAnnotation.note_id == Note.id)
             .where(
                 Note.workspace_id == workspace_id,
                 NoteAnnotation.is_deleted == False,  # noqa: E712
                 NoteAnnotation.status == "pending",
             )
+            .limit(MAX_ENTITIES)
+            .subquery()
         )
+        pending_ann_query = select(func.count()).select_from(pending_ann_subq)
         pending_result = await self._session.execute(pending_ann_query)
         pending_count = pending_result.scalar() or 0
         if pending_count > 0:
