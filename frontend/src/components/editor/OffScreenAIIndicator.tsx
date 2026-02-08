@@ -43,7 +43,10 @@ export const OffScreenAIIndicator = memo<OffScreenAIIndicatorProps>(
             aria-live="polite"
           >
             <div className="flex items-center gap-2 rounded-full bg-warning/10 border border-warning/30 ai-offscreen-indicator px-3 py-1.5 shadow-warm-sm">
-              <Sparkles className="h-3.5 w-3.5 text-warning motion-safe:animate-pulse" aria-hidden="true" />
+              <Sparkles
+                className="h-3.5 w-3.5 text-warning motion-safe:animate-pulse"
+                aria-hidden="true"
+              />
               <button
                 type="button"
                 onClick={onScrollToBlock}

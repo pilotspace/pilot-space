@@ -456,11 +456,8 @@ export const NoteCanvas = observer(function NoteCanvas({
   );
 
   // Auto-scroll to AI-focused blocks
-  const { hasOffScreenUpdate, offScreenDirection, scrollToBlock, dismissIndicator } = useAIAutoScroll(
-    scrollRef,
-    processingBlockIds,
-    userEditingBlockId
-  );
+  const { hasOffScreenUpdate, offScreenDirection, scrollToBlock, dismissIndicator } =
+    useAIAutoScroll(scrollRef, processingBlockIds, userEditingBlockId);
 
   // Update AIBlockProcessingExtension with current processing block IDs
   useEffect(() => {

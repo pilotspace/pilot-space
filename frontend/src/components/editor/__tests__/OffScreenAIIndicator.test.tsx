@@ -46,9 +46,7 @@ describe('OffScreenAIIndicator', () => {
   });
 
   it('renders pill with "AI is editing below" text when isVisible is true', () => {
-    render(
-      <OffScreenAIIndicator isVisible={true} onScrollToBlock={vi.fn()} onDismiss={vi.fn()} />
-    );
+    render(<OffScreenAIIndicator isVisible={true} onScrollToBlock={vi.fn()} onDismiss={vi.fn()} />);
 
     expect(screen.getByText('AI is editing below')).toBeInTheDocument();
   });
@@ -78,9 +76,7 @@ describe('OffScreenAIIndicator', () => {
   });
 
   it('has role="status" and aria-live="polite" for accessibility', () => {
-    render(
-      <OffScreenAIIndicator isVisible={true} onScrollToBlock={vi.fn()} onDismiss={vi.fn()} />
-    );
+    render(<OffScreenAIIndicator isVisible={true} onScrollToBlock={vi.fn()} onDismiss={vi.fn()} />);
 
     const statusRegion = screen.getByRole('status');
     expect(statusRegion).toBeInTheDocument();
@@ -138,11 +134,7 @@ describe('OffScreenAIIndicator', () => {
 
   it('defaults to "AI is editing below" when no direction prop is provided', () => {
     const { container } = render(
-      <OffScreenAIIndicator
-        isVisible={true}
-        onScrollToBlock={vi.fn()}
-        onDismiss={vi.fn()}
-      />
+      <OffScreenAIIndicator isVisible={true} onScrollToBlock={vi.fn()} onDismiss={vi.fn()} />
     );
 
     expect(screen.getByText('AI is editing below')).toBeInTheDocument();

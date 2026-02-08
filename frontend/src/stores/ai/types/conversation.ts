@@ -61,7 +61,14 @@ export interface ThinkingBlockEntry {
  * order they were received from the server, rather than grouped by type.
  */
 export type ContentBlock =
-  | { type: 'thinking'; blockIndex: number; content: string; redacted?: boolean; startedAt?: number; durationMs?: number }
+  | {
+      type: 'thinking';
+      blockIndex: number;
+      content: string;
+      redacted?: boolean;
+      startedAt?: number;
+      durationMs?: number;
+    }
   | { type: 'text'; content: string }
   | { type: 'tool_call'; toolCallId: string };
 

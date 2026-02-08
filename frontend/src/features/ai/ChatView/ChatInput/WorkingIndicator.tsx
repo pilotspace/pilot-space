@@ -43,11 +43,7 @@ export const WorkingIndicator = memo<WorkingIndicatorProps>(({ isVisible }) => {
   if (!isVisible) return null;
 
   return (
-    <div
-      className="flex items-center gap-2 px-3 py-1.5 text-xs"
-      role="status"
-      aria-live="polite"
-    >
+    <div className="flex items-center gap-2 px-3 py-1.5 text-xs" role="status" aria-live="polite">
       <Loader2
         className="h-3 w-3 animate-spin motion-reduce:animate-none"
         style={{ color: '#d9853f' }}
