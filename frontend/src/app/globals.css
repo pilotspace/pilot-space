@@ -1313,8 +1313,13 @@
 }
 
 @keyframes chatCursorBlink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
 }
 
 /* =============================================================================
@@ -1326,7 +1331,8 @@
 }
 
 @keyframes chatInputGlow {
-  0%, 100% {
+  0%,
+  100% {
     box-shadow: 0 0 0 1px rgba(217, 133, 63, 0.3);
   }
   50% {
@@ -1377,8 +1383,12 @@
 }
 
 @keyframes shimmerEdge {
-  from { left: 0; }
-  to { left: 100%; }
+  from {
+    left: 0;
+  }
+  to {
+    left: 100%;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1399,11 +1409,14 @@
    ============================================================================= */
 
 .ai-offscreen-indicator {
-  animation: offscreenPulse 2s ease-in-out infinite, offscreenBlink 3s ease-in-out infinite;
+  animation:
+    offscreenPulse 2s ease-in-out infinite,
+    offscreenBlink 3s ease-in-out infinite;
 }
 
 @keyframes offscreenPulse {
-  0%, 100% {
+  0%,
+  100% {
     box-shadow: 0 2px 8px rgba(217, 133, 63, 0.3);
   }
   50% {
@@ -1412,8 +1425,13 @@
 }
 
 @keyframes offscreenBlink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
 }
 
 /* =============================================================================
@@ -1428,7 +1446,8 @@
 }
 
 @keyframes pendingEditPulse {
-  0%, 100% {
+  0%,
+  100% {
     border-left-color: var(--warning);
     background: rgba(217, 133, 63, 0.08);
   }
@@ -1449,7 +1468,9 @@
   animation: none;
   border-left-color: var(--ai);
   background: rgba(107, 143, 173, 0.06);
-  transition: border-left-color 0.3s ease-out, background 0.3s ease-out;
+  transition:
+    border-left-color 0.3s ease-out,
+    background 0.3s ease-out;
 }
 
 /* =============================================================================

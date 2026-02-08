@@ -56,9 +56,7 @@ export const MarkdownContent = memo<MarkdownContentProps>(({ content, isStreamin
       >
         {content}
       </ReactMarkdown>
-      {isStreaming && (
-        <span className="chat-streaming-cursor" aria-hidden="true" />
-      )}
+      {isStreaming && <span className="chat-streaming-cursor" aria-hidden="true" />}
     </div>
   );
 });

@@ -29,10 +29,7 @@ interface AIAutoScrollResult {
 function isElementInViewport(el: Element, container: Element): boolean {
   const elRect = el.getBoundingClientRect();
   const containerRect = container.getBoundingClientRect();
-  return (
-    elRect.top >= containerRect.top - 50 &&
-    elRect.bottom <= containerRect.bottom + 50
-  );
+  return elRect.top >= containerRect.top - 50 && elRect.bottom <= containerRect.bottom + 50;
 }
 
 /**
@@ -55,10 +52,7 @@ function scrollContainerToElement(container: HTMLElement, target: Element): void
  * Query DOM for a block element by ID, retrying via rAF if not found
  * (handles TipTap BlockIdExtension appendTransaction timing).
  */
-function queryBlockElement(
-  blockId: string,
-  callback: (el: Element | null) => void
-): void {
+function queryBlockElement(blockId: string, callback: (el: Element | null) => void): void {
   const el = document.querySelector(`[data-block-id="${blockId}"]`);
   if (el) {
     callback(el);
@@ -87,13 +81,10 @@ export function useAIAutoScroll(
    * Always scrolls — processingBlockIds only change during AI streaming,
    * so the user expects to see the content being written.
    */
-  const scrollToTarget = useCallback(
-    (targetEl: Element, container: HTMLElement) => {
-      if (isElementInViewport(targetEl, container)) return;
-      scrollContainerToElement(container, targetEl);
-    },
-    []
-  );
+  const scrollToTarget = useCallback((targetEl: Element, container: HTMLElement) => {
+    if (isElementInViewport(targetEl, container)) return;
+    scrollContainerToElement(container, targetEl);
+  }, []);
 
   // Detect new processing blocks (and handle mount with existing blocks)
   useEffect(() => {
@@ -143,5 +134,11 @@ export function useAIAutoScroll(
     setOffScreenBlockId(null);
   }, []);
 
-  return { hasOffScreenUpdate, offScreenBlockId, offScreenDirection, scrollToBlock, dismissIndicator };
+  return {
+    hasOffScreenUpdate,
+    offScreenBlockId,
+    offScreenDirection,
+    scrollToBlock,
+    dismissIndicator,
+  };
 }

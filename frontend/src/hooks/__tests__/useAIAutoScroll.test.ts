@@ -52,9 +52,7 @@ describe('useAIAutoScroll', () => {
   }
 
   it('returns initial state with no off-screen update', () => {
-    const { result } = renderHook(() =>
-      useAIAutoScroll(scrollRef, [], null)
-    );
+    const { result } = renderHook(() => useAIAutoScroll(scrollRef, [], null));
 
     expect(result.current.hasOffScreenUpdate).toBe(false);
     expect(result.current.offScreenBlockId).toBeNull();
@@ -68,10 +66,9 @@ describe('useAIAutoScroll', () => {
     });
     document.body.appendChild(mockEl);
 
-    renderHook(
-      ({ blockIds, editingId }) => useAIAutoScroll(scrollRef, blockIds, editingId),
-      { initialProps: { blockIds: ['block-1'], editingId: null } }
-    );
+    renderHook(({ blockIds, editingId }) => useAIAutoScroll(scrollRef, blockIds, editingId), {
+      initialProps: { blockIds: ['block-1'], editingId: null },
+    });
 
     flushRAF();
 
@@ -132,9 +129,7 @@ describe('useAIAutoScroll', () => {
   });
 
   it('dismissIndicator clears state', () => {
-    const { result } = renderHook(() =>
-      useAIAutoScroll(scrollRef, [], null)
-    );
+    const { result } = renderHook(() => useAIAutoScroll(scrollRef, [], null));
 
     act(() => {
       result.current.dismissIndicator();
@@ -152,10 +147,9 @@ describe('useAIAutoScroll', () => {
     });
     document.body.appendChild(mockEl);
 
-    renderHook(
-      ({ blockIds, editingId }) => useAIAutoScroll(scrollRef, blockIds, editingId),
-      { initialProps: { blockIds: ['block-4'], editingId: null } }
-    );
+    renderHook(({ blockIds, editingId }) => useAIAutoScroll(scrollRef, blockIds, editingId), {
+      initialProps: { blockIds: ['block-4'], editingId: null },
+    });
 
     flushRAF();
 
@@ -194,9 +188,7 @@ describe('useAIAutoScroll', () => {
     });
     document.body.appendChild(mockEl);
 
-    renderHook(() =>
-      useAIAutoScroll(scrollRef, ['block-mount-2'], 'other-block')
-    );
+    renderHook(() => useAIAutoScroll(scrollRef, ['block-mount-2'], 'other-block'));
 
     flushRAF();
 

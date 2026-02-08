@@ -259,7 +259,7 @@ export function useContentUpdates(
             }
             // Clean up processingBlockIds for the failed block
             if (entry.update.blockId) {
-              setProcessingBlockIds(prev => prev.filter(id => id !== entry.update.blockId));
+              setProcessingBlockIds((prev) => prev.filter((id) => id !== entry.update.blockId));
             }
             console.warn(
               `[AI] Max retries reached for update:`,
@@ -342,7 +342,10 @@ export function useContentUpdates(
               // Apply visual highlight after successful operation
               if (update.operation === 'replace_block' && blockId) {
                 highlightBlock(blockId, 'streaming-reveal');
-              } else if (update.operation === 'append_blocks' || update.operation === 'insert_blocks') {
+              } else if (
+                update.operation === 'append_blocks' ||
+                update.operation === 'insert_blocks'
+              ) {
                 // For inserted blocks, highlight the last newly inserted block
                 if (scrollTargetId && scrollTargetId !== blockId) {
                   highlightBlock(scrollTargetId, 'new');
