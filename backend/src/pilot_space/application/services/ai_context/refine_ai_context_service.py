@@ -11,7 +11,7 @@ Handles:
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 from uuid import UUID
@@ -52,7 +52,6 @@ class RefineAIContextPayload:
         user_id: User requesting refinement.
         query: User's refinement query.
         correlation_id: Request correlation ID for tracing.
-        api_keys: Provider API keys from user configuration.
     """
 
     workspace_id: UUID
@@ -60,7 +59,6 @@ class RefineAIContextPayload:
     user_id: UUID
     query: str
     correlation_id: str = ""
-    api_keys: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -221,15 +219,8 @@ class RefineAIContextService:
             metadata={"correlation_id": payload.correlation_id},
         )
 
-        # Extract Anthropic API key for the agent
-        anthropic_key = payload.api_keys.get("anthropic", "")
-        if not anthropic_key:
-            raise ValueError("Anthropic API key is required")
-
-        # Update input with API key
-        agent_input.api_key = anthropic_key
-
         # Execute agent
+        # API key resolved by PilotSpaceAgent._get_api_key() (BYOK vault + env fallback)
         agent = AIContextAgent(
             pilotspace_agent=self._pilotspace_agent,
             tool_registry=self._tool_registry,
@@ -358,16 +349,8 @@ class RefineAIContextService:
             metadata={"correlation_id": payload.correlation_id},
         )
 
-        # Extract Anthropic API key for the agent
-        anthropic_key = payload.api_keys.get("anthropic", "")
-        if not anthropic_key:
-            yield "Error: Anthropic API key is required"
-            return
-
-        # Update input with API key
-        agent_input.api_key = anthropic_key
-
         # Stream from agent
+        # API key resolved by PilotSpaceAgent._get_api_key() (BYOK vault + env fallback)
         agent = AIContextAgent(
             pilotspace_agent=self._pilotspace_agent,
             tool_registry=self._tool_registry,

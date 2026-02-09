@@ -1,20 +1,21 @@
 """Unit tests for AIContextAgent.
 
-Tests the new PilotSpaceAgent-delegating AIContextAgent that replaces
-the standalone AIContextSubagent (DD-086).
+Tests the AIContextAgent that uses claude_agent_sdk.query() for tool-free
+JSON generation and PilotSpaceAgent for refinement streaming.
 
 Covers:
 - Data class construction and serialization
 - Prompt building (generation vs refinement modes)
 - Response parsing into AIContextOutput
 - Error handling
-- SSE text extraction
+- SSE text extraction (for refinement streaming)
+- SDK query() execution
 """
 
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID, uuid4
 
 import pytest
@@ -89,7 +90,6 @@ def sample_input(workspace_id: UUID) -> AIContextInput:
                 relevance="high",
             ),
         ],
-        api_key="test-key-123",
     )
 
 
@@ -98,6 +98,7 @@ def mock_pilotspace_agent() -> MagicMock:
     agent = MagicMock()
     agent.execute = AsyncMock()
     agent.stream = AsyncMock()
+    agent._get_api_key = AsyncMock(return_value="test-api-key")
     return agent
 
 
@@ -185,7 +186,6 @@ class TestAIContextInput:
         assert inp.code_references == []
         assert inp.conversation_history == []
         assert inp.refinement_query is None
-        assert inp.api_key == ""
 
     def test_refinement_mode(self) -> None:
         inp = AIContextInput(
@@ -247,50 +247,52 @@ class TestAIContextOutput:
 class TestPromptBuilding:
     """Test prompt construction for generation and refinement modes."""
 
-    def test_generation_prompt_includes_skill_prefix(
+    def test_generation_prompts_include_system_instructions(
         self, agent: AIContextAgent, sample_input: AIContextInput
     ) -> None:
-        prompt = agent._build_prompt(sample_input)
-        assert prompt.startswith("/ai-context")
+        system_prompt, user_prompt = agent._build_prompts(sample_input)
+        assert "JSON" in system_prompt or "json" in system_prompt
+        assert "software architect" in system_prompt.lower()
 
-    def test_generation_prompt_includes_issue_details(
+    def test_generation_prompts_include_issue_details(
         self, agent: AIContextAgent, sample_input: AIContextInput
     ) -> None:
-        prompt = agent._build_prompt(sample_input)
-        assert "PILOT-42" in prompt
-        assert "Implement rate limiting" in prompt
+        _system, user_prompt = agent._build_prompts(sample_input)
+        assert "PILOT-42" in user_prompt
+        assert "Implement rate limiting" in user_prompt
 
-    def test_generation_prompt_includes_related_issues(
+    def test_generation_prompts_include_related_issues(
         self, agent: AIContextAgent, sample_input: AIContextInput
     ) -> None:
-        prompt = agent._build_prompt(sample_input)
-        assert "PILOT-40" in prompt
-        assert "Add Redis caching" in prompt
+        _system, user_prompt = agent._build_prompts(sample_input)
+        assert "PILOT-40" in user_prompt
+        assert "Add Redis caching" in user_prompt
 
-    def test_generation_prompt_includes_code_files(
+    def test_generation_prompts_include_code_files(
         self, agent: AIContextAgent, sample_input: AIContextInput
     ) -> None:
-        prompt = agent._build_prompt(sample_input)
-        assert "backend/src/middleware/auth.py" in prompt
+        _system, user_prompt = agent._build_prompts(sample_input)
+        assert "backend/src/middleware/auth.py" in user_prompt
 
-    def test_refinement_prompt_uses_query(
+    def test_refinement_prompts_use_query(
         self, agent: AIContextAgent, sample_input: AIContextInput
     ) -> None:
         sample_input.refinement_query = "How long would this take?"
         sample_input.conversation_history = [
             {"role": "assistant", "content": "Previous context generated."},
         ]
-        prompt = agent._build_prompt(sample_input)
-        assert "How long would this take?" in prompt
-        assert "/ai-context" not in prompt  # Refinement doesn't use skill prefix
+        system_prompt, user_prompt = agent._build_prompts(sample_input)
+        assert "How long would this take?" in user_prompt
+        # System prompt should be refinement-specific, not generation
+        assert "refinement" in system_prompt.lower() or "refine" in system_prompt.lower()
 
     def test_refinement_with_empty_history(
         self, agent: AIContextAgent, sample_input: AIContextInput
     ) -> None:
         sample_input.refinement_query = "More details?"
         sample_input.conversation_history = []
-        prompt = agent._build_prompt(sample_input)
-        assert "More details?" in prompt
+        _system, user_prompt = agent._build_prompts(sample_input)
+        assert "More details?" in user_prompt
 
 
 # =============================================================================
@@ -299,7 +301,7 @@ class TestPromptBuilding:
 
 
 class TestResponseParsing:
-    """Test parsing PilotSpaceAgent response into AIContextOutput."""
+    """Test parsing response into AIContextOutput."""
 
     def test_parse_valid_json_response(
         self, agent: AIContextAgent, sample_input: AIContextInput
@@ -353,7 +355,7 @@ class TestResponseParsing:
 
 
 # =============================================================================
-# SSE Text Extraction Tests
+# SSE Text Extraction Tests (for refinement streaming)
 # =============================================================================
 
 
@@ -379,6 +381,107 @@ class TestSSEExtraction:
     def test_extract_empty_chunk(self) -> None:
         assert AIContextAgent._extract_text_from_sse("") is None
 
+    def test_extract_multi_event_chunk(self) -> None:
+        """DeltaBuffer flush can return multiple SSE events concatenated."""
+        chunk = (
+            'event: content_block_start\ndata: {"blockIndex": 0}\n\n'
+            'event: text_delta\ndata: {"delta": "Hello "}\n\n'
+            'event: text_delta\ndata: {"delta": "world"}\n\n'
+        )
+        assert AIContextAgent._extract_text_from_sse(chunk) == "Hello world"
+
+    def test_extract_skips_non_text_in_multi_event(self) -> None:
+        """Non-text events (thinking, tool_input, message_stop) should be skipped."""
+        chunk = (
+            'event: thinking_delta\ndata: {"delta": "thinking..."}\n\n'
+            'event: text_delta\ndata: {"delta": "visible text"}\n\n'
+            'event: tool_input_delta\ndata: {"delta": "partial json"}\n\n'
+            'event: message_stop\ndata: {"stopReason": "end_turn"}\n\n'
+        )
+        assert AIContextAgent._extract_text_from_sse(chunk) == "visible text"
+
+    def test_extract_text_field_variant(self) -> None:
+        """Some events use 'text' instead of 'delta'."""
+        chunk = 'event: text_delta\ndata: {"text": "from text field"}\n\n'
+        assert AIContextAgent._extract_text_from_sse(chunk) == "from text field"
+
+
+# =============================================================================
+# SDK Query Execution Tests
+# =============================================================================
+
+
+class TestExecuteQuery:
+    """Test _execute_query using claude_agent_sdk.query()."""
+
+    @pytest.mark.asyncio
+    async def test_execute_query_extracts_text_blocks(
+        self,
+        agent: AIContextAgent,
+        agent_context: AgentContext,
+    ) -> None:
+        """query() should extract TextBlock content from AssistantMessage."""
+        from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock
+
+        json_text = '{"summary": "Test summary", "analysis": "Analysis", "complexity": "low", "estimated_effort": "S", "tasks": [], "claude_code_sections": {}}'
+
+        assistant_msg = AssistantMessage(
+            content=[TextBlock(text=json_text)],
+            model="claude-sonnet-4-20250514",
+        )
+        result_msg = ResultMessage(
+            subtype="result",
+            duration_ms=1000,
+            duration_api_ms=800,
+            is_error=False,
+            num_turns=1,
+            session_id="test-session",
+            total_cost_usd=0.01,
+        )
+
+        async def mock_query(*, prompt: str, options: Any, **kwargs: Any):  # type: ignore[no-untyped-def]
+            yield assistant_msg
+            yield result_msg
+
+        with patch("claude_agent_sdk.query", side_effect=mock_query):
+            result = await agent._execute_query(
+                "system prompt",
+                "user prompt",
+                agent_context,
+            )
+
+        assert "Test summary" in result
+
+    @pytest.mark.asyncio
+    async def test_execute_query_handles_empty_response(
+        self,
+        agent: AIContextAgent,
+        agent_context: AgentContext,
+    ) -> None:
+        """Empty response from query() should return empty string."""
+        from claude_agent_sdk import ResultMessage
+
+        result_msg = ResultMessage(
+            subtype="result",
+            duration_ms=100,
+            duration_api_ms=50,
+            is_error=False,
+            num_turns=1,
+            session_id="test-session",
+        )
+
+        async def mock_query(*, prompt: str, options: Any, **kwargs: Any):  # type: ignore[no-untyped-def]
+            yield result_msg
+
+        with patch("claude_agent_sdk.query", side_effect=mock_query):
+            result = await agent._execute_query(
+                "system prompt",
+                "user prompt",
+                agent_context,
+            )
+
+        assert result == ""
+
 
 # =============================================================================
 # Agent Run Tests
@@ -386,43 +489,38 @@ class TestSSEExtraction:
 
 
 class TestAgentRun:
-    """Test AIContextAgent.run() integration with PilotSpaceAgent."""
+    """Test AIContextAgent.run() end-to-end."""
 
     @pytest.mark.asyncio
     async def test_run_success(
         self,
         agent: AIContextAgent,
-        mock_pilotspace_agent: MagicMock,
         sample_input: AIContextInput,
         agent_context: AgentContext,
     ) -> None:
-        mock_pilotspace_agent.execute.return_value = MagicMock(
-            response='{"summary": "Test", "analysis": "Analysis", "complexity": "low", "estimated_effort": "S", "tasks": [], "claude_code_sections": {}}',
-            session_id=uuid4(),
-            metadata={"input_tokens": 100, "output_tokens": 200, "cost_usd": 0.01},
-        )
+        json_response = '{"summary": "Test", "analysis": "Analysis", "complexity": "low", "estimated_effort": "S", "tasks": [], "claude_code_sections": {}}'
 
-        result = await agent.run(sample_input, agent_context)
+        with patch.object(agent, "_execute_query", new_callable=AsyncMock) as mock_exec:
+            mock_exec.return_value = json_response
+
+            result = await agent.run(sample_input, agent_context)
 
         assert result.success is True
         assert result.output is not None
         assert result.output.summary == "Test"
         assert result.output.complexity == "low"
-        assert result.input_tokens == 100
-        assert result.output_tokens == 200
-        mock_pilotspace_agent.execute.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_run_failure_returns_error(
         self,
         agent: AIContextAgent,
-        mock_pilotspace_agent: MagicMock,
         sample_input: AIContextInput,
         agent_context: AgentContext,
     ) -> None:
-        mock_pilotspace_agent.execute.side_effect = RuntimeError("SDK connection failed")
+        with patch.object(agent, "_execute_query", new_callable=AsyncMock) as mock_exec:
+            mock_exec.side_effect = RuntimeError("SDK connection failed")
 
-        result = await agent.run(sample_input, agent_context)
+            result = await agent.run(sample_input, agent_context)
 
         assert result.success is False
         assert result.error is not None

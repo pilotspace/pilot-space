@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from sqlalchemy import and_, select
+from sqlalchemy.exc import IntegrityError
 
 from pilot_space.infrastructure.database.models.ai_context import AIContext
 from pilot_space.infrastructure.database.repositories.base import BaseRepository
@@ -75,6 +76,9 @@ class AIContextRepository(BaseRepository[AIContext]):
     ) -> tuple[AIContext, bool]:
         """Get existing AI context or create a new one.
 
+        Uses a savepoint so that a concurrent INSERT (unique constraint
+        violation) does not poison the outer transaction.
+
         Args:
             issue_id: Issue UUID.
             workspace_id: Workspace UUID.
@@ -86,7 +90,9 @@ class AIContextRepository(BaseRepository[AIContext]):
         if existing:
             return existing, False
 
-        # Create new context
+        # Create inside a savepoint — if a concurrent request already
+        # inserted this issue_id, the IntegrityError rolls back only the
+        # savepoint, keeping the outer transaction healthy.
         context = AIContext(
             workspace_id=workspace_id,
             issue_id=issue_id,
@@ -100,8 +106,22 @@ class AIContextRepository(BaseRepository[AIContext]):
             generated_at=datetime.now(tz=UTC),
             version=1,
         )
-        context = await self.create(context)
-        return context, True
+        try:
+            async with self.session.begin_nested():
+                self.session.add(context)
+                await self.session.flush()
+            await self.session.refresh(context)
+            return context, True
+        except IntegrityError:
+            logger.debug(
+                "Concurrent insert for issue %s, fetching existing",
+                issue_id,
+            )
+            # Savepoint rolled back; re-fetch the record created by the other request
+            existing = await self.get_by_issue_id(issue_id)
+            if existing:
+                return existing, False
+            raise
 
     async def is_fresh(
         self,

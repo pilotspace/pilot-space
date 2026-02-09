@@ -24,7 +24,7 @@ from pilot_space.api.v1.schemas.issue import (
 from pilot_space.dependencies import (
     get_activity_service,
     get_create_issue_service,
-    get_current_user,
+    get_current_user_id,
     get_current_workspace_id,
     get_db_session_dep,
     get_get_issue_service,
@@ -82,7 +82,7 @@ and technical considerations.
 async def create_issue(
     request: IssueCreateRequest,
     workspace_id: Annotated[UUID, Depends(get_current_workspace_id)],
-    user_id: Annotated[UUID, Depends(get_current_user)],
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
     create_service: Annotated[..., Depends(get_create_issue_service)],
 ) -> IssueResponse:
     """Create a new issue in the specified project with optional AI enhancement.
@@ -300,7 +300,7 @@ Use `clear_*` flags to explicitly remove optional values.
 async def update_issue(
     issue_id: Annotated[UUID, "Issue UUID to update"],
     request: IssueUpdateRequest,
-    user_id: Annotated[UUID, Depends(get_current_user)],
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
     update_service: Annotated[..., Depends(get_update_issue_service)],
 ) -> IssueResponse:
     """Update an existing issue with partial data.
@@ -376,7 +376,7 @@ Deleted issues can be restored by an administrator if needed.
 )
 async def delete_issue(
     issue_id: Annotated[UUID, "Issue UUID to delete"],
-    user_id: Annotated[UUID, Depends(get_current_user)],
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
     session: Annotated[..., Depends(get_db_session_dep)],
 ) -> None:
     """Soft delete an issue by marking it as deleted."""
@@ -464,7 +464,7 @@ async def add_comment(
     issue_id: UUID,
     request: CommentCreateRequest,
     workspace_id: Annotated[UUID, Depends(get_current_workspace_id)],
-    user_id: Annotated[UUID, Depends(get_current_user)],
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
     activity_service: Annotated[..., Depends(get_activity_service)],
 ) -> ActivityResponse:
     """Add a comment to an issue.

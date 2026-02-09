@@ -23,7 +23,7 @@ from pilot_space.api.v1.schemas.cycle import (
 )
 from pilot_space.api.v1.schemas.issue import IssueBriefResponse
 from pilot_space.dependencies import (
-    get_current_user,
+    get_current_user_id,
     get_current_workspace_id,
     get_session,
 )
@@ -140,7 +140,7 @@ if TYPE_CHECKING:
 async def create_cycle(
     request: CycleCreateRequest,
     workspace_id: Annotated[UUID, Depends(get_current_workspace_id)],
-    user_id: Annotated[UUID, Depends(get_current_user)],
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
     create_service: Annotated[..., Depends(get_create_cycle_service)],
 ) -> CycleResponse:
     """Create a new cycle (sprint).
@@ -327,7 +327,7 @@ async def get_cycle(
 async def update_cycle(
     cycle_id: UUID,
     request: CycleUpdateRequest,
-    user_id: Annotated[UUID, Depends(get_current_user)],
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
     update_service: Annotated[..., Depends(get_update_cycle_service)],
 ) -> CycleResponse:
     """Update a cycle.
@@ -433,7 +433,7 @@ async def add_issue_to_cycle(
     cycle_id: UUID,
     request: AddIssueToCycleRequest,
     workspace_id: Annotated[UUID, Depends(get_current_workspace_id)],
-    user_id: Annotated[UUID, Depends(get_current_user)],
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
     add_service: Annotated[..., Depends(get_add_issue_service)],
 ) -> dict[str, Any]:
     """Add an issue to a cycle.
@@ -478,7 +478,7 @@ async def bulk_add_issues_to_cycle(
     cycle_id: UUID,
     request: BulkAddIssuesToCycleRequest,
     workspace_id: Annotated[UUID, Depends(get_current_workspace_id)],
-    user_id: Annotated[UUID, Depends(get_current_user)],
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
     add_service: Annotated[..., Depends(get_add_issue_service)],
 ) -> dict[str, Any]:
     """Add multiple issues to a cycle.
@@ -517,7 +517,7 @@ async def remove_issue_from_cycle(
     cycle_id: UUID,
     issue_id: UUID,
     workspace_id: Annotated[UUID, Depends(get_current_workspace_id)],
-    user_id: Annotated[UUID, Depends(get_current_user)],
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
     add_service: Annotated[..., Depends(get_add_issue_service)],
 ) -> None:
     """Remove an issue from a cycle.
@@ -561,7 +561,7 @@ async def rollover_cycle(
     cycle_id: UUID,
     request: RolloverCycleRequest,
     workspace_id: Annotated[UUID, Depends(get_current_workspace_id)],
-    user_id: Annotated[UUID, Depends(get_current_user)],
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
     rollover_service: Annotated[..., Depends(get_rollover_service)],
 ) -> RolloverCycleResponse:
     """Rollover incomplete issues from one cycle to another.

@@ -254,7 +254,9 @@ class IntegrationLink(WorkspaceScopedModel):
     )
 
     # Additional metadata from external system
+    # Python attribute is `link_metadata`; DB column is `metadata` (from migration 009).
     link_metadata: Mapped[dict[str, Any] | None] = mapped_column(
+        "metadata",
         JSONBCompat,
         nullable=True,
         default=dict,

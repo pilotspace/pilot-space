@@ -20,12 +20,11 @@ from pilot_space.api.v1.schemas.ai_context import RefineContextRequest
 from pilot_space.api.v1.streaming import format_sse_event
 from pilot_space.dependencies import (
     get_ai_context_service,
-    get_current_user,
+    get_current_user_id,
     get_current_workspace_id,
     get_redis_client,
     get_refine_ai_context_service,
     get_session,
-    get_user_api_keys,
 )
 from pilot_space.infrastructure.cache.redis import RedisClient
 
@@ -271,8 +270,7 @@ async def stream_ai_context_refinement(
     issue_id: UUID,
     request: RefineContextRequest,
     workspace_id: Annotated[UUID, Depends(get_current_workspace_id)],
-    user_id: Annotated[UUID, Depends(get_current_user)],
-    api_keys: Annotated[dict[str, str], Depends(get_user_api_keys)],
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
     session: Annotated[..., Depends(get_session)],
     service: Annotated[..., Depends(get_refine_ai_context_service)],
 ):
@@ -283,7 +281,6 @@ async def stream_ai_context_refinement(
         request: Refinement request with query.
         workspace_id: Current workspace.
         user_id: Current user.
-        api_keys: User's API keys.
         session: Database session.
         service: Refine AI context service.
 
@@ -300,7 +297,6 @@ async def stream_ai_context_refinement(
         user_id=user_id,
         query=request.query,
         correlation_id=str(uuid_module.uuid4()),
-        api_keys=api_keys,
     )
 
     async def event_generator():
@@ -334,8 +330,7 @@ async def stream_ai_context_refinement(
 async def stream_ai_context_generation(
     issue_id: UUID,
     workspace_id: Annotated[UUID, Depends(get_current_workspace_id)],
-    user_id: Annotated[UUID, Depends(get_current_user)],
-    api_keys: Annotated[dict[str, str], Depends(get_user_api_keys)],
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
     session: Annotated[..., Depends(get_session)],
     service: Annotated[..., Depends(get_ai_context_service)],
     redis: Annotated[RedisClient, Depends(get_redis_client)],
@@ -357,7 +352,6 @@ async def stream_ai_context_generation(
         issue_id: Issue UUID.
         workspace_id: Current workspace.
         user_id: Current user.
-        api_keys: User's API keys.
         session: Database session.
         service: AI context service.
 
@@ -402,7 +396,6 @@ async def stream_ai_context_generation(
                 user_id=user_id,
                 force_regenerate=False,
                 correlation_id=str(uuid_module.uuid4()),
-                api_keys=api_keys,
             )
 
             # Emit phase progress sequentially (complete previous before starting next)

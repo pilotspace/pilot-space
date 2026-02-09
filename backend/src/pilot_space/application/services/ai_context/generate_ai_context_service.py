@@ -12,7 +12,7 @@ Handles:
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import UUID
@@ -56,7 +56,6 @@ class GenerateAIContextPayload:
         user_id: User requesting generation.
         force_regenerate: Bypass cache and regenerate.
         correlation_id: Request correlation ID for tracing.
-        api_keys: Provider API keys from user configuration.
     """
 
     workspace_id: UUID
@@ -64,7 +63,6 @@ class GenerateAIContextPayload:
     user_id: UUID
     force_regenerate: bool = False
     correlation_id: str = ""
-    api_keys: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -248,15 +246,8 @@ class GenerateAIContextService:
             metadata={"correlation_id": payload.correlation_id},
         )
 
-        # Extract Anthropic API key for the agent
-        anthropic_key = payload.api_keys.get("anthropic", "")
-        if not anthropic_key:
-            raise ValueError("Anthropic API key is required")
-
-        # Update input with API key
-        agent_input.api_key = anthropic_key
-
         # Execute agent via PilotSpaceAgent delegation
+        # API key resolved by PilotSpaceAgent._get_api_key() (BYOK vault + env fallback)
         agent = AIContextAgent(
             pilotspace_agent=self._pilotspace_agent,
             tool_registry=self._tool_registry,
@@ -340,35 +331,39 @@ class GenerateAIContextService:
         related_issues: list[RelatedItem] = []
 
         try:
-            # Search by title keywords
-            keywords = issue_title.split()[:3]  # First 3 words
-            if keywords:
-                search_term = " ".join(keywords)
-                issues = await self._issue_repo.search(
-                    search_term=search_term,
-                    search_columns=["name", "description"],
-                    limit=limit + 1,  # Get one extra to exclude current
-                )
-
-                for issue_item in issues:
-                    if issue_item.id == issue_id:
-                        continue
-                    if len(related_issues) >= limit:
-                        break
-
-                    related_issues.append(
-                        RelatedItem(
-                            id=str(issue_item.id),
-                            type="issue",
-                            title=issue_item.name,
-                            relevance_score=0.7,  # Placeholder score
-                            excerpt=issue_item.description[:100] if issue_item.description else "",
-                            identifier=issue_item.identifier,
-                            state=issue_item.state.name if issue_item.state else None,
-                        )
+            # Savepoint protects outer transaction if search fails
+            async with self._session.begin_nested():
+                # Search by title keywords
+                keywords = issue_title.split()[:3]  # First 3 words
+                if keywords:
+                    search_term = " ".join(keywords)
+                    issues = await self._issue_repo.search(
+                        search_term=search_term,
+                        search_columns=["name", "description"],
+                        limit=limit + 1,  # Get one extra to exclude current
                     )
+
+                    for issue_item in issues:
+                        if issue_item.id == issue_id:
+                            continue
+                        if len(related_issues) >= limit:
+                            break
+
+                        related_issues.append(
+                            RelatedItem(
+                                id=str(issue_item.id),
+                                type="issue",
+                                title=issue_item.name,
+                                relevance_score=0.7,  # Placeholder score
+                                excerpt=issue_item.description[:100]
+                                if issue_item.description
+                                else "",
+                                identifier=issue_item.identifier,
+                                state=issue_item.state.name if issue_item.state else None,
+                            )
+                        )
         except Exception as e:
-            logger.warning(f"Error finding related issues: {e}")
+            logger.warning("Error finding related issues: %s", e)
 
         return related_issues
 
@@ -394,39 +389,41 @@ class GenerateAIContextService:
         related_notes: list[RelatedItem] = []
 
         try:
-            # Search by title keywords
-            keywords = issue_title.split()[:3]
-            if keywords:
-                search_term = " ".join(keywords)
-                notes = await self._note_repo.search(
-                    search_term=search_term,
-                    search_columns=["title", "content"],
-                    limit=limit,
-                )
-
-                for note in notes:
-                    content_preview = ""
-                    if note.content:
-                        # Extract text from blocks
-                        blocks = note.content.get("blocks", [])
-                        for block in blocks[:2]:
-                            if isinstance(block, dict):
-                                text = block.get("text", "")
-                                if text:
-                                    content_preview += text[:100]
-                                    break
-
-                    related_notes.append(
-                        RelatedItem(
-                            id=str(note.id),
-                            type="note",
-                            title=note.title,
-                            relevance_score=0.6,  # Placeholder score
-                            excerpt=content_preview,
-                        )
+            # Savepoint protects outer transaction if search fails
+            async with self._session.begin_nested():
+                # Search by title keywords
+                keywords = issue_title.split()[:3]
+                if keywords:
+                    search_term = " ".join(keywords)
+                    notes = await self._note_repo.search(
+                        search_term=search_term,
+                        search_columns=["title"],  # content is JSONB, not ILIKE-searchable
+                        limit=limit,
                     )
+
+                    for note in notes:
+                        content_preview = ""
+                        if note.content:
+                            # Extract text from blocks
+                            blocks = note.content.get("blocks", [])
+                            for block in blocks[:2]:
+                                if isinstance(block, dict):
+                                    text = block.get("text", "")
+                                    if text:
+                                        content_preview += text[:100]
+                                        break
+
+                        related_notes.append(
+                            RelatedItem(
+                                id=str(note.id),
+                                type="note",
+                                title=note.title,
+                                relevance_score=0.6,  # Placeholder score
+                                excerpt=content_preview,
+                            )
+                        )
         except Exception as e:
-            logger.warning(f"Error finding related notes: {e}")
+            logger.warning("Error finding related notes: %s", e)
 
         return related_notes
 
@@ -445,35 +442,40 @@ class GenerateAIContextService:
         code_references: list[CodeReference] = []
 
         try:
-            links = await self._link_repo.get_by_issue(issue_id)
+            # Savepoint protects outer transaction if query fails
+            async with self._session.begin_nested():
+                links = await self._link_repo.get_by_issue(issue_id)
 
-            for link in links:
-                if not link.link_metadata:
-                    continue
+                for link in links:
+                    # link_metadata may not exist in DB yet (pending migration).
+                    # Safely access via getattr to avoid AttributeError.
+                    metadata = getattr(link, "link_metadata", None)
+                    if not metadata:
+                        continue
 
-                # Extract file paths from metadata
-                files = link.link_metadata.get("files", [])
-                for file_info in files[:5]:  # Limit per link
-                    if isinstance(file_info, dict):
-                        file_path = file_info.get("filename", "")
-                        if file_path:
+                    # Extract file paths from metadata
+                    files = metadata.get("files", [])
+                    for file_info in files[:5]:  # Limit per link
+                        if isinstance(file_info, dict):
+                            file_path = file_info.get("filename", "")
+                            if file_path:
+                                code_references.append(
+                                    CodeReference(
+                                        file_path=file_path,
+                                        description=f"From {link.link_type.value}: {link.title or 'Untitled'}",
+                                        relevance="medium",
+                                    )
+                                )
+                        elif isinstance(file_info, str):
                             code_references.append(
                                 CodeReference(
-                                    file_path=file_path,
-                                    description=f"From {link.link_type.value}: {link.title or 'Untitled'}",
+                                    file_path=file_info,
+                                    description=f"From {link.link_type.value}",
                                     relevance="medium",
                                 )
                             )
-                    elif isinstance(file_info, str):
-                        code_references.append(
-                            CodeReference(
-                                file_path=file_info,
-                                description=f"From {link.link_type.value}",
-                                relevance="medium",
-                            )
-                        )
         except Exception as e:
-            logger.warning(f"Error extracting code references: {e}")
+            logger.warning("Error extracting code references: %s", e)
 
         return code_references
 

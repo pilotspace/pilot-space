@@ -32,11 +32,10 @@ from pilot_space.api.v1.schemas.ai_context import (
 )
 from pilot_space.dependencies import (
     get_ai_context_service,
-    get_current_user,
+    get_current_user_id,
     get_current_workspace_id,
     get_db_session_dep,
     get_refine_ai_context_service,
-    get_user_api_keys,
 )
 
 logger = logging.getLogger(__name__)
@@ -92,8 +91,7 @@ def _check_rate_limit(user_id: str, limit: int = 5, window_hours: int = 1) -> bo
 async def get_ai_context(
     issue_id: UUID,
     workspace_id: Annotated[UUID, Depends(get_current_workspace_id)],
-    user_id: Annotated[UUID, Depends(get_current_user)],
-    api_keys: Annotated[dict[str, str], Depends(get_user_api_keys)],
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
     session: Annotated[..., Depends(get_db_session_dep)],
     service: Annotated[..., Depends(get_ai_context_service)],
     generate_if_missing: bool = Query(default=True),
@@ -107,7 +105,6 @@ async def get_ai_context(
         issue_id: Issue UUID.
         workspace_id: Current workspace.
         user_id: Current user.
-        api_keys: User's API keys.
         session: Database session.
         service: Generated AI context service.
         generate_if_missing: Generate if no context exists.
@@ -153,7 +150,6 @@ async def get_ai_context(
         user_id=user_id,
         force_regenerate=False,
         correlation_id=str(uuid_module.uuid4()),
-        api_keys=api_keys,
     )
 
     try:
@@ -189,8 +185,7 @@ async def get_ai_context(
 async def regenerate_ai_context(
     issue_id: UUID,
     workspace_id: Annotated[UUID, Depends(get_current_workspace_id)],
-    user_id: Annotated[UUID, Depends(get_current_user)],
-    api_keys: Annotated[dict[str, str], Depends(get_user_api_keys)],
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
     session: Annotated[..., Depends(get_db_session_dep)],
     service: Annotated[..., Depends(get_ai_context_service)],
 ) -> GenerateContextResponse:
@@ -202,7 +197,6 @@ async def regenerate_ai_context(
         issue_id: Issue UUID.
         workspace_id: Current workspace.
         user_id: Current user.
-        api_keys: User's API keys.
         session: Database session.
         service: Generated AI context service.
 
@@ -226,7 +220,6 @@ async def regenerate_ai_context(
         user_id=user_id,
         force_regenerate=True,
         correlation_id=str(uuid_module.uuid4()),
-        api_keys=api_keys,
     )
 
     try:
@@ -266,8 +259,7 @@ async def refine_ai_context(
     issue_id: UUID,
     request: RefineContextRequest,
     workspace_id: Annotated[UUID, Depends(get_current_workspace_id)],
-    user_id: Annotated[UUID, Depends(get_current_user)],
-    api_keys: Annotated[dict[str, str], Depends(get_user_api_keys)],
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
     session: Annotated[..., Depends(get_db_session_dep)],
     service: Annotated[..., Depends(get_refine_ai_context_service)],
 ) -> RefineContextResponse:
@@ -280,7 +272,6 @@ async def refine_ai_context(
         request: Refinement request with query.
         workspace_id: Current workspace.
         user_id: Current user.
-        api_keys: User's API keys.
         session: Database session.
         service: Refine AI context service.
 
@@ -297,7 +288,6 @@ async def refine_ai_context(
         user_id=user_id,
         query=request.query,
         correlation_id=str(uuid_module.uuid4()),
-        api_keys=api_keys,
     )
 
     try:
@@ -331,7 +321,7 @@ async def refine_ai_context(
 async def export_ai_context(
     issue_id: UUID,
     workspace_id: Annotated[UUID, Depends(get_current_workspace_id)],
-    user_id: Annotated[UUID, Depends(get_current_user)],
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
     session: Annotated[..., Depends(get_db_session_dep)],
     format: str = Query(default="markdown", pattern="^(markdown|json)$"),
     include_conversation: bool = Query(default=False),

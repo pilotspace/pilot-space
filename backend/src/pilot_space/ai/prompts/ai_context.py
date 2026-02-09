@@ -67,13 +67,14 @@ Respond with valid JSON containing the following structure:
 }}
 ```
 
-## Guidelines
+## Critical Rules
 
+- **DO NOT use any tools.** All context you need is provided below.
+- **Respond ONLY with a single JSON code block.** No markdown, no prose, no explanations outside the JSON.
 - Be specific and actionable in your recommendations
 - Consider edge cases and error handling
 - Think about testing requirements
 - Account for code quality and maintainability
-- Reference existing patterns in the codebase when available
 - Keep tasks small enough to be completed in a few hours
 
 {additional_context}"""

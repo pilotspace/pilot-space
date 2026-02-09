@@ -1,13 +1,12 @@
-"""AI Context Agent — delegates to PilotSpaceAgent with ai-context skill.
+"""AI Context Agent — uses Claude Agent SDK query() for tool-free generation.
 
-Replaces the standalone AIContextSubagent (DD-086) by routing context
-generation through the centralized PilotSpaceAgent orchestrator, which
-has access to 33 MCP tools across 6 servers (notes, issues, projects,
-comments, etc.) instead of the 4 inline tools the old subagent had.
+Uses claude_agent_sdk.query() for initial context generation (one-shot,
+no tools, JSON output) and PilotSpaceAgent.stream() for multi-turn
+refinement conversations.
 
 Services (GenerateAIContextService, RefineAIContextService) call this
 module's AIContextAgent class, which builds an enriched prompt and
-delegates to PilotSpaceAgent.execute() or PilotSpaceAgent.stream().
+delegates accordingly.
 
 Data classes (AIContextInput, AIContextOutput, RelatedItem, CodeReference)
 are the stable interface consumed by the service layer.
@@ -83,7 +82,6 @@ class AIContextInput:
         code_references: Pre-extracted code file references.
         conversation_history: Previous refinement messages.
         refinement_query: User's refinement question (None for initial generation).
-        api_key: Anthropic API key (BYOK).
     """
 
     issue_id: str
@@ -97,7 +95,6 @@ class AIContextInput:
     code_references: list[CodeReference] = field(default_factory=list)
     conversation_history: list[dict[str, Any]] = field(default_factory=list)
     refinement_query: str | None = None
-    api_key: str = ""
 
 
 @dataclass
@@ -130,16 +127,15 @@ class AIContextOutput:
 
 
 # =============================================================================
-# AIContextAgent — delegates to PilotSpaceAgent
+# AIContextAgent — SDK query() for generation, PilotSpaceAgent for refinement
 # =============================================================================
 
 
 class AIContextAgent:
-    """AI context generation agent that delegates to PilotSpaceAgent.
+    """AI context generation agent.
 
-    Instead of spawning a separate Claude SDK subprocess with limited tools,
-    this routes through the centralized PilotSpaceAgent which has access to
-    all MCP tool servers (notes, issues, projects, comments, etc.).
+    Uses claude_agent_sdk.query() for initial generation (one-shot, tool-free)
+    and PilotSpaceAgent.stream() for multi-turn refinement conversations.
 
     Usage from service layer (unchanged):
         agent = AIContextAgent(
@@ -171,7 +167,7 @@ class AIContextAgent:
         input_data: AIContextInput,
         context: AgentContext,
     ) -> AgentResult[AIContextOutput]:
-        """Generate or refine AI context via PilotSpaceAgent.
+        """Generate or refine AI context.
 
         Args:
             input_data: Issue context + related items.
@@ -181,16 +177,15 @@ class AIContextAgent:
             AgentResult with AIContextOutput on success.
         """
         try:
-            prompt = self._build_prompt(input_data)
-            chat_output = await self._execute_agent(prompt, input_data, context)
-            output = self._parse_response(chat_output.response, input_data)
-
-            return AgentResult.ok(
-                output,
-                input_tokens=chat_output.metadata.get("input_tokens", 0),
-                output_tokens=chat_output.metadata.get("output_tokens", 0),
-                cost_usd=chat_output.metadata.get("cost_usd", 0.0),
+            system_prompt, user_prompt = self._build_prompts(input_data)
+            response_text = await self._execute_query(
+                system_prompt,
+                user_prompt,
+                context,
             )
+            output = self._parse_response(response_text, input_data)
+
+            return AgentResult.ok(output)
         except Exception as e:
             logger.exception(
                 "AI context generation failed",
@@ -217,9 +212,9 @@ class AIContextAgent:
         """
         from pilot_space.ai.agents.pilotspace_agent import ChatInput
 
-        prompt = self._build_prompt(input_data)
+        _, user_prompt = self._build_prompts(input_data)
         chat_input = ChatInput(
-            message=prompt,
+            message=user_prompt,
             session_id=None,
             context={"source": "ai_context_refinement", "issue_id": input_data.issue_id},
             user_id=context.user_id,
@@ -227,7 +222,6 @@ class AIContextAgent:
         )
 
         async for chunk in self._agent.stream(chat_input, context):
-            # Extract text content from SSE events
             text = self._extract_text_from_sse(chunk)
             if text:
                 yield text
@@ -236,8 +230,12 @@ class AIContextAgent:
     # Private helpers
     # -------------------------------------------------------------------------
 
-    def _build_prompt(self, input_data: AIContextInput) -> str:
-        """Build prompt from input data using prompt templates."""
+    def _build_prompts(self, input_data: AIContextInput) -> tuple[str, str]:
+        """Build system and user prompts from input data.
+
+        Returns:
+            Tuple of (system_prompt, user_prompt).
+        """
         if input_data.refinement_query:
             # Refinement mode: use existing context + query
             context_summary = (
@@ -250,11 +248,11 @@ class AIContextAgent:
                 refinement_query=input_data.refinement_query,
                 conversation_history=input_data.conversation_history,
             )
-            # Combine into single prompt for PilotSpaceAgent
-            parts = [f"[System context]: {system_prompt}\n"]
+            # Combine messages into single user prompt
+            parts = []
             for msg in messages:
-                parts.append(f"[{msg['role']}]: {msg['content']}\n")
-            return "".join(parts)
+                parts.append(f"[{msg['role']}]: {msg['content']}")
+            return system_prompt, "\n".join(parts)
 
         # Generation mode: build full context prompt
         related_issues_dicts = [
@@ -270,7 +268,7 @@ class AIContextAgent:
         ]
         code_files = [ref.file_path for ref in input_data.code_references]
 
-        _system_prompt, user_prompt = build_context_generation_prompt(
+        system_prompt, user_prompt = build_context_generation_prompt(
             issue_title=input_data.issue_title,
             issue_description=input_data.issue_description,
             issue_identifier=input_data.issue_identifier,
@@ -280,34 +278,110 @@ class AIContextAgent:
             code_files=code_files,
         )
 
-        # Prefix with /ai-context skill invocation for PilotSpaceAgent
-        return f"/ai-context\n\n{user_prompt}"
+        return system_prompt, user_prompt
 
-    async def _execute_agent(
+    async def _get_api_key(self, context: AgentContext) -> str:
+        """Get API key from PilotSpaceAgent (BYOK vault + env fallback)."""
+        return await self._agent._get_api_key(context.workspace_id)  # type: ignore[no-any-return]  # noqa: SLF001
+
+    async def _execute_query(
         self,
-        prompt: str,
-        input_data: AIContextInput,
+        system_prompt: str,
+        user_prompt: str,
         context: AgentContext,
-    ) -> Any:
-        """Execute PilotSpaceAgent and collect response."""
-        from pilot_space.ai.agents.pilotspace_agent import ChatInput
+    ) -> str:
+        """Execute one-shot query via claude_agent_sdk.query().
 
-        chat_input = ChatInput(
-            message=prompt,
-            session_id=None,
-            context={"source": "ai_context_generation", "issue_id": input_data.issue_id},
-            user_id=context.user_id,
-            workspace_id=context.workspace_id,
+        Uses SDK query() with no allowed_tools and max_turns=1 to get a clean
+        JSON response without tool-calling interference.
+        """
+        import os
+
+        import claude_agent_sdk
+
+        from pilot_space.ai.sdk.sandbox_config import ModelTier
+
+        model_tier = ModelTier.SONNET
+        api_key = await self._get_api_key(context)
+
+        stderr_lines: list[str] = []
+
+        def _capture_stderr(line: str) -> None:
+            stderr_lines.append(line)
+            logger.debug("[AIContext] CLI stderr: %s", line.rstrip())
+
+        options = claude_agent_sdk.ClaudeAgentOptions(
+            model=model_tier.model_id,
+            system_prompt=system_prompt,
+            allowed_tools=[],
+            disallowed_tools=[
+                "Bash",
+                "Read",
+                "Write",
+                "Edit",
+                "Glob",
+                "Grep",
+                "WebFetch",
+                "WebSearch",
+                "Task",
+                "NotebookEdit",
+            ],
+            max_turns=1,
+            permission_mode="bypassPermissions",
+            cwd="/tmp",
+            setting_sources=[],
+            stderr=_capture_stderr,
+            extra_args={"debug-to-stderr": None},
+            env={
+                "ANTHROPIC_API_KEY": api_key,
+                "PATH": os.environ.get("PATH", ""),
+                "HOME": os.environ.get("HOME", ""),
+            },
         )
 
-        return await self._agent.execute(chat_input, context)
+        text_parts: list[str] = []
+        try:
+            async for message in claude_agent_sdk.query(
+                prompt=user_prompt,
+                options=options,
+            ):
+                # Extract text from AssistantMessage content blocks
+                if isinstance(message, claude_agent_sdk.AssistantMessage):
+                    for block in message.content:
+                        if isinstance(block, claude_agent_sdk.TextBlock):
+                            text_parts.append(block.text)
+                # ResultMessage has cost/usage info
+                elif isinstance(message, claude_agent_sdk.ResultMessage):
+                    logger.info(
+                        "[AIContext] query() result: cost=$%.4f, turns=%s",
+                        message.total_cost_usd,
+                        message.num_turns,
+                    )
+        except Exception:
+            logger.exception(
+                "[AIContext] SDK query() failed. stderr=%s",
+                "\n".join(stderr_lines),
+            )
+            raise
+
+        full_response = "".join(text_parts)
+        logger.info(
+            "[AIContext] query() finished: response_len=%d, preview=%.200s",
+            len(full_response),
+            full_response[:200],
+        )
+
+        if not full_response:
+            logger.warning("[AIContext] Empty response from SDK query()")
+
+        return full_response
 
     def _parse_response(
         self,
         response_text: str,
         input_data: AIContextInput,
     ) -> AIContextOutput:
-        """Parse PilotSpaceAgent response into structured AIContextOutput."""
+        """Parse response into structured AIContextOutput."""
         parsed = parse_context_response(response_text)
 
         # Build Claude Code prompt from parsed data
@@ -375,24 +449,53 @@ class AIContextAgent:
     def _extract_text_from_sse(chunk: str) -> str | None:
         """Extract text content from an SSE event chunk.
 
+        A single chunk may contain MULTIPLE concatenated SSE events
+        (e.g. content_block_start + text_delta from DeltaBuffer flush).
+        Split by double-newline first, then collect ALL text deltas.
+
         Handles:
         - 'event: text_delta\\ndata: {"delta": "text"}' → "text"
         - 'data: text' → "text"
+        - Multiple events in one chunk → concatenated text
         - Everything else → None
         """
         import json as _json
 
-        for line in chunk.strip().split("\n"):
-            if line.startswith("data: "):
-                data_str = line[6:]
-                try:
-                    data = _json.loads(data_str)
-                    if isinstance(data, dict):
-                        return data.get("delta") or data.get("text")
-                except (ValueError, TypeError):
-                    # Plain text data
-                    return data_str
-        return None
+        text_parts: list[str] = []
+
+        # Split by double-newline to separate individual SSE events
+        events = chunk.strip().split("\n\n")
+
+        for event_block in events:
+            event_type: str | None = None
+            data_str: str | None = None
+
+            for line in event_block.strip().split("\n"):
+                if line.startswith("event: "):
+                    event_type = line[7:].strip()
+                elif line.startswith("data: "):
+                    data_str = line[6:]
+
+            if data_str is None:
+                continue
+
+            # Only extract text from text_delta events or bare data lines
+            is_text_event = event_type == "text_delta" or event_type is None
+
+            if not is_text_event:
+                continue
+
+            try:
+                data = _json.loads(data_str)
+                if isinstance(data, dict):
+                    delta = data.get("delta") or data.get("text")
+                    if delta:
+                        text_parts.append(delta)
+            except (ValueError, TypeError):
+                # Plain text data line (not JSON)
+                text_parts.append(data_str)
+
+        return "".join(text_parts) if text_parts else None
 
 
 __all__ = [
