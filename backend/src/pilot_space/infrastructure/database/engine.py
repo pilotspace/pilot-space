@@ -39,7 +39,7 @@ def create_engine(settings: "Settings | None" = None) -> AsyncEngine:
         max_overflow=settings.database_max_overflow,
         pool_timeout=settings.database_pool_timeout,
         pool_pre_ping=True,  # Verify connections before use
-        echo=settings.debug,
+        # echo=settings.debug,
     )
 
 

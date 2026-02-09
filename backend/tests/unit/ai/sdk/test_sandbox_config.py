@@ -172,16 +172,27 @@ class TestConfigureSDKForSpace:
         assert "PILOT_SPACE_ID" in config.env  # Original preserved
 
     def test_default_allowed_tools(self, space_context: SpaceContext) -> None:
-        """Test default allowed_tools includes core tools."""
+        """Test default allowed_tools includes core tools (Skill excluded by default)."""
         config = configure_sdk_for_space(space_context)
 
         expected_tools = [
-            "Read", "Glob", "Grep", "Write", "Edit", "Bash",
-            "Skill", "Task", "AskUserQuestion", "WebFetch", "WebSearch",
+            "Read",
+            "Glob",
+            "Grep",
+            "Write",
+            "Edit",
+            "Bash",
+            "Task",
+            "AskUserQuestion",
+            "WebFetch",
+            "WebSearch",
         ]
 
         for tool in expected_tools:
             assert tool in config.allowed_tools
+
+        # Skill excluded by default (skills_available=False)
+        assert "Skill" not in config.allowed_tools
 
     def test_additional_tools_appended(self, space_context: SpaceContext) -> None:
         """Test additional_tools are appended to default list."""
@@ -208,6 +219,25 @@ class TestConfigureSDKForSpace:
         config = configure_sdk_for_space(space_context, max_tokens=4096)
 
         assert config.max_tokens == 4096
+
+    def test_skill_tool_excluded_when_no_skills(self, space_context: SpaceContext) -> None:
+        """Skill tool excluded from allowed_tools when skills_available=False."""
+        config = configure_sdk_for_space(space_context, skills_available=False)
+
+        assert "Skill" not in config.allowed_tools
+        assert "Task" in config.allowed_tools  # Other tools unaffected
+
+    def test_skill_tool_included_when_skills_available(self, space_context: SpaceContext) -> None:
+        """Skill tool included in allowed_tools when skills_available=True."""
+        config = configure_sdk_for_space(space_context, skills_available=True)
+
+        assert "Skill" in config.allowed_tools
+
+    def test_skill_tool_excluded_by_default(self, space_context: SpaceContext) -> None:
+        """Default skills_available=False excludes Skill tool."""
+        config = configure_sdk_for_space(space_context)
+
+        assert "Skill" not in config.allowed_tools
 
 
 class TestIsBashCommandSafe:

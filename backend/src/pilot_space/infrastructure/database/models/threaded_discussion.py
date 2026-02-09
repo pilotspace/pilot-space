@@ -11,6 +11,7 @@ from enum import Enum
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
+    CheckConstraint,
     Enum as SQLEnum,
     ForeignKey,
     Index,
@@ -57,11 +58,11 @@ class ThreadedDiscussion(WorkspaceScopedModel):
 
     __tablename__ = "threaded_discussions"  # type: ignore[assignment]
 
-    # Parent note reference
-    note_id: Mapped[uuid.UUID] = mapped_column(
+    # Parent note reference (nullable for issue/discussion targets)
+    note_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("notes.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
     )
 
     # Block reference (optional - can be for entire note)
@@ -81,6 +82,18 @@ class ThreadedDiscussion(WorkspaceScopedModel):
         default=DiscussionStatus.OPEN,
     )
 
+    # Generic target reference (AD-001: support issue/note discussions)
+    target_type: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="note",
+        server_default="note",
+    )
+    target_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+    )
+
     # Resolution tracking
     resolved_by_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
@@ -89,7 +102,7 @@ class ThreadedDiscussion(WorkspaceScopedModel):
     )
 
     # Relationships
-    note: Mapped[Note] = relationship(
+    note: Mapped[Note | None] = relationship(
         "Note",
         back_populates="discussions",
         lazy="joined",
@@ -115,6 +128,12 @@ class ThreadedDiscussion(WorkspaceScopedModel):
         Index("ix_threaded_discussions_resolved_by_id", "resolved_by_id"),
         Index("ix_threaded_discussions_is_deleted", "is_deleted"),
         Index("ix_threaded_discussions_note_block", "note_id", "block_id"),
+        # Ensure note_id is set for note discussions, target_id for non-note
+        CheckConstraint(
+            "(target_type = 'note' AND note_id IS NOT NULL) OR "
+            "(target_type != 'note' AND target_id IS NOT NULL)",
+            name="ck_threaded_discussions_target_integrity",
+        ),
     )
 
     def __repr__(self) -> str:

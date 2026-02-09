@@ -24,6 +24,10 @@ class AIUpdateOperation(str, Enum):
     REPLACE_BLOCK = "replace_block"
     APPEND_BLOCKS = "append_blocks"
     INSERT_INLINE_ISSUE = "insert_inline_issue"
+    INSERT_BLOCKS = "insert_blocks"
+    REMOVE_BLOCK = "remove_block"
+    REMOVE_CONTENT = "remove_content"
+    REPLACE_CONTENT = "replace_content"
 
 
 @dataclass(slots=True)

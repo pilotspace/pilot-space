@@ -257,18 +257,18 @@ class TestIssueOperationsTransform:
 class TestNonContentUpdateOperations:
     """Test operations that should NOT emit content_update events."""
 
-    def test_summarize_note_does_not_emit_content_update(
+    def test_search_notes_does_not_emit_content_update(
         self, agent: PilotSpaceAgent, context: AgentContext
     ) -> None:
-        """Verify summarize_note (read_content) does not emit content_update."""
+        """Verify search_notes (read operation) does not emit content_update."""
         # Arrange
         tool_result = {
-            "tool": "summarize_note",
-            "note_id": str(uuid4()),
-            "operation": "read_content",
-            "status": "pending_apply",
+            "tool": "search_notes",
+            "query": "test",
+            "operation": "search",
+            "status": "executed",
         }
-        message = MockToolResultMessage("summarize_note", tool_result)
+        message = MockToolResultMessage("search_notes", tool_result)
 
         # Act
         result = agent.transform_sdk_message(message, context)
@@ -348,10 +348,13 @@ class TestNonToolMessages:
         result_msg.__class__.__name__ = "ResultMessage"
         result_msg.session_id = "test-session"
         result_msg.is_error = False
+        result_msg.result = None
         result_msg.usage = MagicMock()
         result_msg.usage.input_tokens = 100
         result_msg.usage.output_tokens = 50
-        result_msg.usage.total_cost_usd = None  # Set to None to avoid MagicMock serialization
+        result_msg.usage.cached_read_input_tokens = 0
+        result_msg.usage.cached_creation_input_tokens = 0
+        result_msg.usage.total_cost_usd = None
 
         # Act
         result = agent.transform_sdk_message(result_msg, context)

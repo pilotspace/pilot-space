@@ -10,6 +10,7 @@ Reference: docs/DESIGN_DECISIONS.md#dd-003
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
@@ -20,6 +21,8 @@ from pilot_space.ai.infrastructure.approval import ActionType
 
 if TYPE_CHECKING:
     from pilot_space.ai.infrastructure.approval import ApprovalService
+
+logger = logging.getLogger(__name__)
 
 
 class ActionClassification(StrEnum):
@@ -170,11 +173,52 @@ class PermissionHandler:
         "assignee_recommend": ActionClassification.AUTO_EXECUTE,
         "doc_generate": ActionClassification.AUTO_EXECUTE,
         "diagram_generate": ActionClassification.AUTO_EXECUTE,
-        # Default require approval (creates/modifies entities)
+        # Note tools — read (AUTO_EXECUTE)
+        "search_notes": ActionClassification.AUTO_EXECUTE,
+        "search_note_content": ActionClassification.AUTO_EXECUTE,
+        # Note tools — write (REQUIRE_APPROVAL)
+        "create_note": ActionClassification.DEFAULT_REQUIRE_APPROVAL,
+        "update_note": ActionClassification.DEFAULT_REQUIRE_APPROVAL,
+        "insert_block": ActionClassification.DEFAULT_REQUIRE_APPROVAL,
+        "remove_block": ActionClassification.DEFAULT_REQUIRE_APPROVAL,
+        "remove_content": ActionClassification.DEFAULT_REQUIRE_APPROVAL,
+        "replace_content": ActionClassification.DEFAULT_REQUIRE_APPROVAL,
+        # Retained tools (6 from note_tools.py, registered in MCP servers)
+        "update_note_block": ActionClassification.DEFAULT_REQUIRE_APPROVAL,
+        "enhance_text": ActionClassification.AUTO_EXECUTE,
+        "extract_issues": ActionClassification.DEFAULT_REQUIRE_APPROVAL,
+        "create_issue_from_note": ActionClassification.DEFAULT_REQUIRE_APPROVAL,
+        "link_existing_issues": ActionClassification.DEFAULT_REQUIRE_APPROVAL,
+        "write_to_note": ActionClassification.DEFAULT_REQUIRE_APPROVAL,
+        # Issue tools — read (AUTO_EXECUTE)
+        "get_issue": ActionClassification.AUTO_EXECUTE,
+        "search_issues": ActionClassification.AUTO_EXECUTE,
+        # Issue tools — write (REQUIRE_APPROVAL)
         "create_issue": ActionClassification.DEFAULT_REQUIRE_APPROVAL,
+        "update_issue": ActionClassification.DEFAULT_REQUIRE_APPROVAL,
+        "link_issue_to_note": ActionClassification.DEFAULT_REQUIRE_APPROVAL,
+        "link_issues": ActionClassification.DEFAULT_REQUIRE_APPROVAL,
+        "add_sub_issue": ActionClassification.DEFAULT_REQUIRE_APPROVAL,
+        "transition_issue_state": ActionClassification.DEFAULT_REQUIRE_APPROVAL,
+        # Issue tools — destructive (CRITICAL)
+        "unlink_issue_from_note": ActionClassification.CRITICAL_REQUIRE_APPROVAL,
+        "unlink_issues": ActionClassification.CRITICAL_REQUIRE_APPROVAL,
+        # Project tools — read (AUTO_EXECUTE)
+        "get_project": ActionClassification.AUTO_EXECUTE,
+        "search_projects": ActionClassification.AUTO_EXECUTE,
+        # Project tools — write (REQUIRE_APPROVAL)
+        "create_project": ActionClassification.DEFAULT_REQUIRE_APPROVAL,
+        "update_project": ActionClassification.DEFAULT_REQUIRE_APPROVAL,
+        "update_project_settings": ActionClassification.DEFAULT_REQUIRE_APPROVAL,
+        # Comment tools — read (AUTO_EXECUTE)
+        "search_comments": ActionClassification.AUTO_EXECUTE,
+        "get_comments": ActionClassification.AUTO_EXECUTE,
+        # Comment tools — write (CM-001: create_comment auto, update requires approval)
+        "create_comment": ActionClassification.AUTO_EXECUTE,
+        "update_comment": ActionClassification.DEFAULT_REQUIRE_APPROVAL,
+        # Legacy actions
         "create_annotation": ActionClassification.DEFAULT_REQUIRE_APPROVAL,
         "link_commit": ActionClassification.DEFAULT_REQUIRE_APPROVAL,
-        "update_issue": ActionClassification.DEFAULT_REQUIRE_APPROVAL,
         "decompose_tasks": ActionClassification.DEFAULT_REQUIRE_APPROVAL,
         # Critical require approval (destructive)
         "delete_issue": ActionClassification.CRITICAL_REQUIRE_APPROVAL,
@@ -261,6 +305,11 @@ class PermissionHandler:
         except ValueError:
             # Fallback: if action_name doesn't match ActionType enum,
             # use a generic type based on classification
+            logger.warning(
+                "Action '%s' not in ActionType enum, using fallback (classification=%s)",
+                action_name,
+                classification.value,
+            )
             if classification == ActionClassification.CRITICAL_REQUIRE_APPROVAL:
                 action_type = ActionType.DELETE_ISSUE  # Generic critical action
             else:

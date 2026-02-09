@@ -161,6 +161,81 @@ describe('PilotSpaceStreamHandler', () => {
       expect(pending?.status).toBe('pending');
     });
 
+    it('should extract blockId from note tool_use and call addPendingAIBlockId', () => {
+      const spy = vi.spyOn(store, 'addPendingAIBlockId');
+
+      handler.handleSSEEvent({
+        type: 'tool_use',
+        data: {
+          toolCallId: 'tc-note-1',
+          toolName: 'update_note_block',
+          toolInput: { block_id: 'block-abc', content: 'hello' },
+        },
+      });
+
+      expect(spy).toHaveBeenCalledWith('block-abc');
+    });
+
+    it('should extract blockId using camelCase fallback from note tool_use', () => {
+      const spy = vi.spyOn(store, 'addPendingAIBlockId');
+
+      handler.handleSSEEvent({
+        type: 'tool_use',
+        data: {
+          toolCallId: 'tc-note-2',
+          toolName: 'enhance_text',
+          toolInput: { blockId: 'block-def' },
+        },
+      });
+
+      expect(spy).toHaveBeenCalledWith('block-def');
+    });
+
+    it('should extract blockId from MCP-prefixed tool names', () => {
+      const spy = vi.spyOn(store, 'addPendingAIBlockId');
+
+      handler.handleSSEEvent({
+        type: 'tool_use',
+        data: {
+          toolCallId: 'tc-mcp-1',
+          toolName: 'mcp__pilot-notes__update_note_block',
+          toolInput: { block_id: 'block-mcp' },
+        },
+      });
+
+      expect(spy).toHaveBeenCalledWith('block-mcp');
+    });
+
+    it('should skip ¶N block references for pending-edit indicator', () => {
+      const spy = vi.spyOn(store, 'addPendingAIBlockId');
+
+      handler.handleSSEEvent({
+        type: 'tool_use',
+        data: {
+          toolCallId: 'tc-para-1',
+          toolName: 'update_note_block',
+          toolInput: { block_id: '¶3' },
+        },
+      });
+
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('should NOT call addPendingAIBlockId for non-note tools', () => {
+      const spy = vi.spyOn(store, 'addPendingAIBlockId');
+
+      handler.handleSSEEvent({
+        type: 'tool_use',
+        data: {
+          toolCallId: 'tc-other',
+          toolName: 'web_search',
+          toolInput: { query: 'test' },
+        },
+      });
+
+      expect(spy).not.toHaveBeenCalled();
+    });
+
     it('should route tool_result and update pending tool call status', () => {
       // Buffer a tool call first (simulates tool_use during streaming)
       store.addPendingToolCall({
@@ -777,6 +852,134 @@ describe('PilotSpaceStreamHandler', () => {
       expect(blocks).toHaveLength(1);
       expect(blocks![0]!.content).toBe('Part 1 Part 2');
     });
+
+    it('should set startedAt on new thinking blocks', () => {
+      const beforeTime = Date.now();
+      handler.handleSSEEvent({
+        type: 'content_block_start',
+        data: { index: 0, contentType: 'thinking' },
+      });
+      handler.handleSSEEvent({
+        type: 'thinking_delta',
+        data: { delta: 'Thought', blockIndex: 0 },
+      });
+
+      const blocks = store.streamingState.thinkingBlocks;
+      expect(blocks![0]!.startedAt).toBeGreaterThanOrEqual(beforeTime);
+      expect(blocks![0]!.startedAt).toBeLessThanOrEqual(Date.now());
+    });
+
+    it('should finalize durationMs when text block starts after thinking', () => {
+      handler.handleSSEEvent({
+        type: 'content_block_start',
+        data: { index: 0, contentType: 'thinking' },
+      });
+      handler.handleSSEEvent({
+        type: 'thinking_delta',
+        data: { delta: 'Thinking...', blockIndex: 0 },
+      });
+
+      // Text block starts — should finalize the thinking block duration
+      handler.handleSSEEvent({
+        type: 'content_block_start',
+        data: { index: 1, contentType: 'text' },
+      });
+
+      const blocks = store.streamingState.thinkingBlocks;
+      expect(blocks![0]!.durationMs).toBeDefined();
+      expect(blocks![0]!.durationMs).toBeGreaterThanOrEqual(0);
+    });
+
+    it('should finalize durationMs when tool_use block starts after thinking', () => {
+      handler.handleSSEEvent({
+        type: 'content_block_start',
+        data: { index: 0, contentType: 'thinking' },
+      });
+      handler.handleSSEEvent({
+        type: 'thinking_delta',
+        data: { delta: 'Thinking...', blockIndex: 0 },
+      });
+
+      handler.handleSSEEvent({
+        type: 'content_block_start',
+        data: { index: 1, contentType: 'tool_use' },
+      });
+
+      const blocks = store.streamingState.thinkingBlocks;
+      expect(blocks![0]!.durationMs).toBeDefined();
+    });
+
+    it('should finalize durationMs on message_stop for in-progress thinking', () => {
+      handler.handleSSEEvent({
+        type: 'message_start',
+        data: { messageId: 'msg-dur', sessionId: 's1' },
+      });
+      handler.handleSSEEvent({
+        type: 'content_block_start',
+        data: { index: 0, contentType: 'thinking' },
+      });
+      handler.handleSSEEvent({
+        type: 'thinking_delta',
+        data: { delta: 'Still thinking', blockIndex: 0 },
+      });
+
+      // message_stop without an intervening text/tool block
+      handler.handleSSEEvent({
+        type: 'message_stop',
+        data: {
+          messageId: 'msg-dur',
+          stopReason: 'end_turn',
+          usage: { inputTokens: 10, outputTokens: 20, totalTokens: 30 },
+        },
+      });
+
+      const msg = store.messages.find((m) => m.id === 'msg-dur');
+      const thinkingBlock = msg?.contentBlocks?.find((b) => b.type === 'thinking');
+      expect(thinkingBlock).toBeDefined();
+      if (thinkingBlock?.type === 'thinking') {
+        expect(thinkingBlock.durationMs).toBeDefined();
+        expect(thinkingBlock.durationMs).toBeGreaterThanOrEqual(0);
+      }
+    });
+
+    it('should pass startedAt and durationMs through to contentBlocks', () => {
+      handler.handleSSEEvent({
+        type: 'message_start',
+        data: { messageId: 'msg-pass', sessionId: 's1' },
+      });
+      handler.handleSSEEvent({
+        type: 'content_block_start',
+        data: { index: 0, contentType: 'thinking' },
+      });
+      handler.handleSSEEvent({
+        type: 'thinking_delta',
+        data: { delta: 'First', blockIndex: 0 },
+      });
+      handler.handleSSEEvent({
+        type: 'content_block_start',
+        data: { index: 1, contentType: 'text' },
+      });
+      handler.handleSSEEvent({
+        type: 'text_delta',
+        data: { delta: 'Response' },
+      });
+      handler.handleSSEEvent({
+        type: 'message_stop',
+        data: {
+          messageId: 'msg-pass',
+          stopReason: 'end_turn',
+          usage: { inputTokens: 10, outputTokens: 20, totalTokens: 30 },
+        },
+      });
+
+      const msg = store.messages.find((m) => m.id === 'msg-pass');
+      const thinking = msg?.contentBlocks?.find((b) => b.type === 'thinking');
+      expect(thinking).toBeDefined();
+      if (thinking?.type === 'thinking') {
+        expect(thinking.startedAt).toBeDefined();
+        expect(thinking.durationMs).toBeDefined();
+      }
+    });
   });
 
   describe('flag-based block separator', () => {
@@ -1096,6 +1299,72 @@ describe('PilotSpaceStreamHandler', () => {
       expect(firstBlockOrder).not.toBe(secondBlockOrder);
       expect(firstTextSegments).not.toBe(secondTextSegments);
     });
+
+    it('should create new thinkingBlocks array reference on each thinking_delta', () => {
+      handler.handleSSEEvent({
+        type: 'content_block_start',
+        data: { index: 0, contentType: 'thinking' },
+      });
+      handler.handleSSEEvent({
+        type: 'thinking_delta',
+        data: { delta: 'First', blockIndex: 0 },
+      });
+
+      const firstRef = store.streamingState.thinkingBlocks;
+
+      handler.handleSSEEvent({
+        type: 'thinking_delta',
+        data: { delta: ' second', blockIndex: 0 },
+      });
+
+      const secondRef = store.streamingState.thinkingBlocks;
+
+      // Different array references for React memo detection
+      expect(firstRef).not.toBe(secondRef);
+      // Content accumulated correctly
+      expect(secondRef![0]!.content).toBe('First second');
+    });
+
+    it('should reset isThinking when tool_use content_block_start follows thinking', () => {
+      handler.handleSSEEvent({
+        type: 'content_block_start',
+        data: { index: 0, contentType: 'thinking' },
+      });
+      handler.handleSSEEvent({
+        type: 'thinking_delta',
+        data: { delta: 'Thinking...', blockIndex: 0 },
+      });
+
+      expect(store.streamingState.isThinking).toBe(true);
+
+      // tool_use starts without text in between
+      handler.handleSSEEvent({
+        type: 'content_block_start',
+        data: { index: 1, contentType: 'tool_use' },
+      });
+
+      expect(store.streamingState.isThinking).toBe(false);
+    });
+
+    it('should reset isThinking when text content_block_start follows thinking', () => {
+      handler.handleSSEEvent({
+        type: 'content_block_start',
+        data: { index: 0, contentType: 'thinking' },
+      });
+      handler.handleSSEEvent({
+        type: 'thinking_delta',
+        data: { delta: 'Thinking...', blockIndex: 0 },
+      });
+
+      expect(store.streamingState.isThinking).toBe(true);
+
+      handler.handleSSEEvent({
+        type: 'content_block_start',
+        data: { index: 1, contentType: 'text' },
+      });
+
+      expect(store.streamingState.isThinking).toBe(false);
+    });
   });
 
   describe('parentToolUseId correlation (G12)', () => {
@@ -1322,6 +1591,634 @@ describe('PilotSpaceStreamHandler', () => {
     });
   });
 
+  describe('tool_use dedup (2A)', () => {
+    it('should not create duplicate tool call when same toolCallId sent twice', () => {
+      handler.handleSSEEvent({
+        type: 'content_block_start',
+        data: { index: 0, contentType: 'tool_use' },
+      });
+      handler.handleSSEEvent({
+        type: 'tool_use',
+        data: { toolCallId: 'tc-dup', toolName: 'extract_issues', toolInput: {} },
+      });
+
+      // Second tool_use with same ID but with input
+      handler.handleSSEEvent({
+        type: 'tool_use',
+        data: { toolCallId: 'tc-dup', toolName: 'extract_issues', toolInput: { noteId: 'n1' } },
+      });
+
+      // Should have exactly one pending tool call
+      const allPending = store.consumePendingToolCalls();
+      expect(allPending).toHaveLength(1);
+      expect(allPending![0]!.id).toBe('tc-dup');
+      // Input should be merged from second event
+      expect(allPending![0]!.input).toEqual({ noteId: 'n1' });
+    });
+
+    it('should not overwrite input when duplicate has empty input', () => {
+      handler.handleSSEEvent({
+        type: 'tool_use',
+        data: { toolCallId: 'tc-dup2', toolName: 'search', toolInput: { query: 'test' } },
+      });
+
+      // Second event with empty input should not clear existing input
+      handler.handleSSEEvent({
+        type: 'tool_use',
+        data: { toolCallId: 'tc-dup2', toolName: 'search', toolInput: {} },
+      });
+
+      const pending = store.findPendingToolCall('tc-dup2');
+      expect(pending?.input).toEqual({ query: 'test' });
+    });
+  });
+
+  describe('partialInput parsing on tool_result (2B)', () => {
+    it('should parse partialInput into input when input is empty on completion', () => {
+      // Add tool call with empty input (streaming scenario)
+      store.addPendingToolCall({
+        id: 'tc-partial',
+        name: 'update_note_block',
+        input: {},
+        status: 'pending',
+      });
+
+      // Accumulate partial input via tool_input_delta
+      handler.handleSSEEvent({
+        type: 'tool_input_delta',
+        data: { toolUseId: 'tc-partial', inputDelta: '{"blockId":"b1",' },
+      });
+      handler.handleSSEEvent({
+        type: 'tool_input_delta',
+        data: { toolUseId: 'tc-partial', inputDelta: '"content":"hello"}' },
+      });
+
+      // Complete the tool
+      handler.handleSSEEvent({
+        type: 'tool_result',
+        data: { toolCallId: 'tc-partial', status: 'completed', output: { ok: true } },
+      });
+
+      const tc = store.findPendingToolCall('tc-partial');
+      expect(tc?.input).toEqual({ blockId: 'b1', content: 'hello' });
+    });
+
+    it('should leave partialInput as-is when JSON is incomplete', () => {
+      store.addPendingToolCall({
+        id: 'tc-broken',
+        name: 'update_note_block',
+        input: {},
+        status: 'pending',
+      });
+
+      // Incomplete JSON
+      handler.handleSSEEvent({
+        type: 'tool_input_delta',
+        data: { toolUseId: 'tc-broken', inputDelta: '{"blockId":"b1"' },
+      });
+
+      handler.handleSSEEvent({
+        type: 'tool_result',
+        data: { toolCallId: 'tc-broken', status: 'completed' },
+      });
+
+      const tc = store.findPendingToolCall('tc-broken');
+      // input remains empty, partialInput still holds the fragment
+      expect(tc?.input).toEqual({});
+      expect(tc?.partialInput).toBe('{"blockId":"b1"');
+    });
+
+    it('should not overwrite existing input with partialInput', () => {
+      store.addPendingToolCall({
+        id: 'tc-has-input',
+        name: 'search',
+        input: { query: 'existing' },
+        status: 'pending',
+        partialInput: '{"query":"from_partial"}',
+      });
+
+      handler.handleSSEEvent({
+        type: 'tool_result',
+        data: { toolCallId: 'tc-has-input', status: 'completed' },
+      });
+
+      const tc = store.findPendingToolCall('tc-has-input');
+      // Original input preserved since it's non-empty
+      expect(tc?.input).toEqual({ query: 'existing' });
+    });
+  });
+
+  describe('toolInput from backend in tool_result (2C)', () => {
+    it('should use backend-provided toolInput when present', () => {
+      store.addPendingToolCall({
+        id: 'tc-backend',
+        name: 'extract_issues',
+        input: {},
+        status: 'pending',
+      });
+
+      handler.handleSSEEvent({
+        type: 'tool_result',
+        data: {
+          toolCallId: 'tc-backend',
+          status: 'completed',
+          output: { issues: [] },
+          toolInput: { noteId: 'n1', blocks: ['b1', 'b2'] },
+        },
+      });
+
+      const tc = store.findPendingToolCall('tc-backend');
+      expect(tc?.input).toEqual({ noteId: 'n1', blocks: ['b1', 'b2'] });
+    });
+
+    it('should not overwrite input with empty toolInput from backend', () => {
+      store.addPendingToolCall({
+        id: 'tc-noop',
+        name: 'search',
+        input: { query: 'test' },
+        status: 'pending',
+      });
+
+      handler.handleSSEEvent({
+        type: 'tool_result',
+        data: {
+          toolCallId: 'tc-noop',
+          status: 'completed',
+          toolInput: {},
+        },
+      });
+
+      const tc = store.findPendingToolCall('tc-noop');
+      expect(tc?.input).toEqual({ query: 'test' });
+    });
+
+    it('should prefer backend toolInput over partialInput parsing', () => {
+      store.addPendingToolCall({
+        id: 'tc-both',
+        name: 'update_note_block',
+        input: {},
+        status: 'pending',
+        partialInput: '{"fromPartial":true}',
+      });
+
+      handler.handleSSEEvent({
+        type: 'tool_result',
+        data: {
+          toolCallId: 'tc-both',
+          status: 'completed',
+          toolInput: { fromBackend: true },
+        },
+      });
+
+      const tc = store.findPendingToolCall('tc-both');
+      // Backend toolInput wins because it's applied first, making input non-empty
+      // so partialInput parsing is skipped
+      expect(tc?.input).toEqual({ fromBackend: true });
+    });
+  });
+
+  describe('block_id extraction from tool_input_delta (SSE flow proof)', () => {
+    // Proves the exact SSE sequence from backend:
+    // 1. tool_use arrives with toolInput: {} (empty)
+    // 2. tool_input_delta streams actual JSON containing block_id
+    // 3. addPendingAIBlockId is called from delta, NOT from tool_use
+
+    it('should NOT call addPendingAIBlockId when toolInput is empty at tool_use time', () => {
+      const spy = vi.spyOn(store, 'addPendingAIBlockId');
+
+      // Exactly what backend sends: tool_use with empty toolInput
+      handler.handleSSEEvent({
+        type: 'content_block_start',
+        data: { index: 1, contentType: 'tool_use' },
+      });
+      handler.handleSSEEvent({
+        type: 'tool_use',
+        data: {
+          toolCallId: 'toolu_01ABC',
+          toolName: 'mcp__pilot-notes__update_note_block',
+          toolInput: {},
+        },
+      });
+
+      // At this point block_id is unknown — should NOT have been called
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('should extract block_id from tool_input_delta and call addPendingAIBlockId', () => {
+      const spy = vi.spyOn(store, 'addPendingAIBlockId');
+
+      // Step 1: tool_use with empty input (real SSE)
+      handler.handleSSEEvent({
+        type: 'content_block_start',
+        data: { index: 1, contentType: 'tool_use' },
+      });
+      handler.handleSSEEvent({
+        type: 'tool_use',
+        data: {
+          toolCallId: 'toolu_01ABC',
+          toolName: 'mcp__pilot-notes__update_note_block',
+          toolInput: {},
+        },
+      });
+      expect(spy).not.toHaveBeenCalled();
+
+      // Step 2: tool_input_delta streams partial JSON with block_id
+      handler.handleSSEEvent({
+        type: 'tool_input_delta',
+        data: { blockIndex: 1, delta: '{"block_id": "abc-123-def",' },
+      });
+
+      // NOW addPendingAIBlockId should have been called with the extracted block_id
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(spy).toHaveBeenCalledWith('abc-123-def');
+    });
+
+    it('should extract block_id only once even with multiple deltas', () => {
+      const spy = vi.spyOn(store, 'addPendingAIBlockId');
+
+      handler.handleSSEEvent({
+        type: 'content_block_start',
+        data: { index: 1, contentType: 'tool_use' },
+      });
+      handler.handleSSEEvent({
+        type: 'tool_use',
+        data: {
+          toolCallId: 'toolu_02DEF',
+          toolName: 'update_note_block',
+          toolInput: {},
+        },
+      });
+
+      // First delta with block_id
+      handler.handleSSEEvent({
+        type: 'tool_input_delta',
+        data: { blockIndex: 1, delta: '{"block_id": "block-xyz",' },
+      });
+      expect(spy).toHaveBeenCalledTimes(1);
+
+      // More deltas with content — should NOT extract again
+      handler.handleSSEEvent({
+        type: 'tool_input_delta',
+        data: { blockIndex: 1, delta: ' "markdown": "# Hello"}' },
+      });
+      expect(spy).toHaveBeenCalledTimes(1); // still 1, not 2
+    });
+
+    it('should call requestNoteEndScroll for write_to_note with empty toolInput', () => {
+      const spy = vi.spyOn(store, 'requestNoteEndScroll');
+
+      handler.handleSSEEvent({
+        type: 'content_block_start',
+        data: { index: 1, contentType: 'tool_use' },
+      });
+      handler.handleSSEEvent({
+        type: 'tool_use',
+        data: {
+          toolCallId: 'toolu_03GHI',
+          toolName: 'mcp__pilot-notes__write_to_note',
+          toolInput: {},
+        },
+      });
+
+      // write_to_note triggers end-scroll immediately (no block_id needed)
+      expect(spy).toHaveBeenCalledTimes(1);
+    });
+
+    it('should NOT extract block_id from non-note tool deltas', () => {
+      const spy = vi.spyOn(store, 'addPendingAIBlockId');
+
+      handler.handleSSEEvent({
+        type: 'content_block_start',
+        data: { index: 1, contentType: 'tool_use' },
+      });
+      handler.handleSSEEvent({
+        type: 'tool_use',
+        data: {
+          toolCallId: 'toolu_04JKL',
+          toolName: 'web_search',
+          toolInput: {},
+        },
+      });
+
+      handler.handleSSEEvent({
+        type: 'tool_input_delta',
+        data: { blockIndex: 1, delta: '{"block_id": "should-be-ignored", "query": "test"}' },
+      });
+
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('should skip ¶N block references extracted from deltas', () => {
+      const spy = vi.spyOn(store, 'addPendingAIBlockId');
+
+      handler.handleSSEEvent({
+        type: 'content_block_start',
+        data: { index: 1, contentType: 'tool_use' },
+      });
+      handler.handleSSEEvent({
+        type: 'tool_use',
+        data: {
+          toolCallId: 'toolu_05MNO',
+          toolName: 'update_note_block',
+          toolInput: {},
+        },
+      });
+
+      handler.handleSSEEvent({
+        type: 'tool_input_delta',
+        data: { blockIndex: 1, delta: '{"block_id": "¶3",' },
+      });
+
+      // ¶N references are backend-only notation — should be skipped
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('full SSE sequence: message_start → tool_use(empty) → deltas → tool_result', () => {
+      const blockIdSpy = vi.spyOn(store, 'addPendingAIBlockId');
+
+      // message_start
+      handler.handleSSEEvent({
+        type: 'message_start',
+        data: { messageId: 'msg-proof', sessionId: 'sess-proof' },
+      });
+
+      // content_block_start for tool_use
+      handler.handleSSEEvent({
+        type: 'content_block_start',
+        data: { index: 1, contentType: 'tool_use' },
+      });
+
+      // tool_use with EMPTY toolInput (this is what backend actually sends)
+      handler.handleSSEEvent({
+        type: 'tool_use',
+        data: {
+          toolCallId: 'toolu_proof',
+          toolName: 'mcp__pilot-notes__update_note_block',
+          toolInput: {},
+        },
+      });
+      expect(blockIdSpy).not.toHaveBeenCalled();
+
+      // tool_input_delta streams in the actual JSON
+      handler.handleSSEEvent({
+        type: 'tool_input_delta',
+        data: { blockIndex: 1, delta: '{"block_' },
+      });
+      expect(blockIdSpy).not.toHaveBeenCalled(); // partial, no match yet
+
+      handler.handleSSEEvent({
+        type: 'tool_input_delta',
+        data: { blockIndex: 1, delta: 'id": "real-block-id-456",' },
+      });
+      // NOW block_id is complete in accumulated partialInput
+      expect(blockIdSpy).toHaveBeenCalledTimes(1);
+      expect(blockIdSpy).toHaveBeenCalledWith('real-block-id-456');
+
+      // More delta with content
+      handler.handleSSEEvent({
+        type: 'tool_input_delta',
+        data: { blockIndex: 1, delta: ' "markdown": "updated text"}' },
+      });
+      // Should still be called only once
+      expect(blockIdSpy).toHaveBeenCalledTimes(1);
+
+      // tool_result
+      handler.handleSSEEvent({
+        type: 'tool_result',
+        data: {
+          toolCallId: 'toolu_proof',
+          status: 'completed',
+          output: { ok: true },
+        },
+      });
+
+      // Verify tool call has correct state
+      const tc = store.findPendingToolCall('toolu_proof');
+      expect(tc?.status).toBe('completed');
+      expect(tc?.partialInput).toContain('real-block-id-456');
+    });
+
+    it('should clear _blockIdExtractedIds on new message_start', () => {
+      const spy = vi.spyOn(store, 'addPendingAIBlockId');
+
+      // First message with extraction
+      handler.handleSSEEvent({
+        type: 'message_start',
+        data: { messageId: 'msg-1', sessionId: 's1' },
+      });
+      handler.handleSSEEvent({
+        type: 'content_block_start',
+        data: { index: 1, contentType: 'tool_use' },
+      });
+      handler.handleSSEEvent({
+        type: 'tool_use',
+        data: { toolCallId: 'tc-1', toolName: 'update_note_block', toolInput: {} },
+      });
+      handler.handleSSEEvent({
+        type: 'tool_input_delta',
+        data: { blockIndex: 1, delta: '{"block_id": "b1"}' },
+      });
+      expect(spy).toHaveBeenCalledTimes(1);
+
+      // New message resets state
+      handler.handleSSEEvent({
+        type: 'message_start',
+        data: { messageId: 'msg-2', sessionId: 's1' },
+      });
+      handler.handleSSEEvent({
+        type: 'content_block_start',
+        data: { index: 1, contentType: 'tool_use' },
+      });
+      handler.handleSSEEvent({
+        type: 'tool_use',
+        data: { toolCallId: 'tc-2', toolName: 'update_note_block', toolInput: {} },
+      });
+      handler.handleSSEEvent({
+        type: 'tool_input_delta',
+        data: { blockIndex: 1, delta: '{"block_id": "b2"}' },
+      });
+
+      // Should have been called again for the new message
+      expect(spy).toHaveBeenCalledTimes(2);
+      expect(spy).toHaveBeenCalledWith('b2');
+    });
+  });
+
+  describe('block_id extraction fallbacks (dedup + tool_result)', () => {
+    // Tests the three extraction paths:
+    // 1. tool_input_delta (primary, tested above)
+    // 2. tool_use dedup (when AssistantMessage re-emits with full input)
+    // 3. tool_result (last-resort fallback from resolved input)
+
+    it('should extract block_id from dedup tool_use with full input', () => {
+      const spy = vi.spyOn(store, 'addPendingAIBlockId');
+
+      // First tool_use with empty input (StreamEvent path)
+      handler.handleSSEEvent({
+        type: 'content_block_start',
+        data: { index: 1, contentType: 'tool_use' },
+      });
+      handler.handleSSEEvent({
+        type: 'tool_use',
+        data: {
+          toolCallId: 'toolu_dedup',
+          toolName: 'update_note_block',
+          toolInput: {},
+        },
+      });
+      expect(spy).not.toHaveBeenCalled();
+
+      // Second tool_use with full input (AssistantMessage path)
+      handler.handleSSEEvent({
+        type: 'tool_use',
+        data: {
+          toolCallId: 'toolu_dedup',
+          toolName: 'update_note_block',
+          toolInput: { block_id: 'dedup-block', markdown: '# Hello' },
+        },
+      });
+
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(spy).toHaveBeenCalledWith('dedup-block');
+    });
+
+    it('should extract block_id from tool_result when all other paths missed it', () => {
+      const spy = vi.spyOn(store, 'addPendingAIBlockId');
+
+      // tool_use with empty input
+      handler.handleSSEEvent({
+        type: 'content_block_start',
+        data: { index: 1, contentType: 'tool_use' },
+      });
+      handler.handleSSEEvent({
+        type: 'tool_use',
+        data: {
+          toolCallId: 'toolu_fallback',
+          toolName: 'update_note_block',
+          toolInput: {},
+        },
+      });
+
+      // tool_result with toolInput (backend provides complete input)
+      handler.handleSSEEvent({
+        type: 'tool_result',
+        data: {
+          toolCallId: 'toolu_fallback',
+          status: 'completed',
+          output: { ok: true },
+          toolInput: { block_id: 'fallback-block', markdown: '# Test' },
+        },
+      });
+
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(spy).toHaveBeenCalledWith('fallback-block');
+    });
+
+    it('should extract block_id from parsed partialInput in tool_result', () => {
+      const spy = vi.spyOn(store, 'addPendingAIBlockId');
+
+      handler.handleSSEEvent({
+        type: 'content_block_start',
+        data: { index: 1, contentType: 'tool_use' },
+      });
+      handler.handleSSEEvent({
+        type: 'tool_use',
+        data: {
+          toolCallId: 'toolu_partial',
+          toolName: 'enhance_text',
+          toolInput: {},
+        },
+      });
+
+      // Simulate late tool_input_delta that arrived but wasn't processed for blockId
+      // (e.g., arrived after tool_result was already processing)
+      const tc = store.findPendingToolCall('toolu_partial');
+      if (tc) {
+        tc.partialInput = '{"block_id": "partial-block", "text": "improved"}';
+      }
+
+      // tool_result triggers parsing of partialInput → input → block_id extraction
+      handler.handleSSEEvent({
+        type: 'tool_result',
+        data: {
+          toolCallId: 'toolu_partial',
+          status: 'completed',
+          output: { ok: true },
+        },
+      });
+
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(spy).toHaveBeenCalledWith('partial-block');
+    });
+
+    it('should NOT double-extract if tool_input_delta already extracted', () => {
+      const spy = vi.spyOn(store, 'addPendingAIBlockId');
+
+      handler.handleSSEEvent({
+        type: 'content_block_start',
+        data: { index: 1, contentType: 'tool_use' },
+      });
+      handler.handleSSEEvent({
+        type: 'tool_use',
+        data: {
+          toolCallId: 'toolu_nodup',
+          toolName: 'update_note_block',
+          toolInput: {},
+        },
+      });
+
+      // tool_input_delta extracts block_id (primary path)
+      handler.handleSSEEvent({
+        type: 'tool_input_delta',
+        data: { blockIndex: 1, delta: '{"block_id": "first-extract"}' },
+      });
+      expect(spy).toHaveBeenCalledTimes(1);
+
+      // tool_result with same tool → should NOT re-extract
+      handler.handleSSEEvent({
+        type: 'tool_result',
+        data: {
+          toolCallId: 'toolu_nodup',
+          status: 'completed',
+          output: { ok: true },
+          toolInput: { block_id: 'first-extract', markdown: '# Hi' },
+        },
+      });
+      expect(spy).toHaveBeenCalledTimes(1); // still 1, not 2
+    });
+
+    it('should handle write_to_note in dedup path', () => {
+      const spy = vi.spyOn(store, 'requestNoteEndScroll');
+
+      handler.handleSSEEvent({
+        type: 'content_block_start',
+        data: { index: 1, contentType: 'tool_use' },
+      });
+      handler.handleSSEEvent({
+        type: 'tool_use',
+        data: {
+          toolCallId: 'toolu_write',
+          toolName: 'write_to_note',
+          toolInput: {},
+        },
+      });
+      // write_to_note triggers end scroll immediately on first tool_use
+      expect(spy).toHaveBeenCalledTimes(1);
+
+      // Dedup tool_use should NOT re-trigger
+      handler.handleSSEEvent({
+        type: 'tool_use',
+        data: {
+          toolCallId: 'toolu_write',
+          toolName: 'write_to_note',
+          toolInput: { note_id: 'n1', markdown: 'text' },
+        },
+      });
+      // Already extracted — should still be 1
+      expect(spy).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('resetRetryState', () => {
     it('should clear retry count so next error starts at 1/3', () => {
       vi.useFakeTimers();
@@ -1362,6 +2259,82 @@ describe('PilotSpaceStreamHandler', () => {
       expect(store.error).not.toContain('2/3');
 
       vi.useRealTimers();
+    });
+  });
+
+  // ===========================================================================
+  // focus_block event handling
+  // ===========================================================================
+  describe('focus_block event handling', () => {
+    it('should add blockId to pendingAIBlockIds on focus_block', () => {
+      handler.handleSSEEvent({
+        type: 'focus_block',
+        data: { noteId: 'note-1', blockId: 'blk-focus', scrollToEnd: false },
+      } as SSEEvent);
+
+      expect(store.pendingAIBlockIds).toContain('blk-focus');
+    });
+
+    it('should call requestNoteEndScroll when scrollToEnd is true', () => {
+      const spy = vi.spyOn(store, 'requestNoteEndScroll');
+
+      handler.handleSSEEvent({
+        type: 'focus_block',
+        data: { noteId: 'note-2', blockId: null, scrollToEnd: true },
+      } as SSEEvent);
+
+      expect(spy).toHaveBeenCalledOnce();
+      expect(store.pendingAIBlockIds).toHaveLength(0);
+    });
+
+    it('should not add empty blockId', () => {
+      handler.handleSSEEvent({
+        type: 'focus_block',
+        data: { noteId: 'note-3', blockId: null, scrollToEnd: false },
+      } as SSEEvent);
+
+      expect(store.pendingAIBlockIds).toHaveLength(0);
+    });
+
+    it('should not duplicate blockId if already pending', () => {
+      store.addPendingAIBlockId('blk-dup');
+
+      handler.handleSSEEvent({
+        type: 'focus_block',
+        data: { noteId: 'note-4', blockId: 'blk-dup', scrollToEnd: false },
+      } as SSEEvent);
+
+      expect(store.pendingAIBlockIds.filter((id) => id === 'blk-dup')).toHaveLength(1);
+    });
+
+    it('should process focus_block before content_update in sequential dispatch', () => {
+      // Simulate the backend SSE order: focus_block → content_update
+      const focusEvent = {
+        type: 'focus_block',
+        data: { noteId: 'note-5', blockId: 'blk-seq', scrollToEnd: false },
+      } as SSEEvent;
+
+      const contentUpdateEvent = {
+        type: 'content_update',
+        data: {
+          noteId: 'note-5',
+          operation: 'replace_block',
+          blockId: 'blk-seq',
+          markdown: '# Updated',
+          content: null,
+          issueData: null,
+          afterBlockId: null,
+        },
+      } as SSEEvent;
+
+      handler.handleSSEEvent(focusEvent);
+      // Block should be pending before content_update
+      expect(store.pendingAIBlockIds).toContain('blk-seq');
+
+      handler.handleSSEEvent(contentUpdateEvent);
+      // content_update should be queued
+      expect(store.pendingContentUpdates).toHaveLength(1);
+      expect(store.pendingContentUpdates[0]!.blockId).toBe('blk-seq');
     });
   });
 });

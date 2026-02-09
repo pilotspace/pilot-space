@@ -19,7 +19,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "022_workspace_onboarding"
-down_revision: str | None = "022_multi_context_sessions"
+down_revision: str | None = "022_workspace_invitations"
 branch_labels: tuple[str, ...] | None = None
 depends_on: tuple[str, ...] | None = None
 
@@ -147,7 +147,7 @@ def _create_onboarding_rls_policies() -> None:
                 SELECT wm.workspace_id
                 FROM workspace_members wm
                 WHERE wm.user_id = current_setting('app.current_user_id', true)::uuid
-                AND wm.role IN ('owner', 'admin')
+                AND WM.ROLE IN ('OWNER', 'ADMIN')
                 AND wm.is_deleted = false
             )
         )
@@ -163,7 +163,7 @@ def _create_onboarding_rls_policies() -> None:
                 SELECT wm.workspace_id
                 FROM workspace_members wm
                 WHERE wm.user_id = current_setting('app.current_user_id', true)::uuid
-                AND wm.role IN ('owner', 'admin')
+                AND WM.ROLE IN ('OWNER', 'ADMIN')
                 AND wm.is_deleted = false
             )
         )
@@ -179,7 +179,7 @@ def _create_onboarding_rls_policies() -> None:
                 SELECT wm.workspace_id
                 FROM workspace_members wm
                 WHERE wm.user_id = current_setting('app.current_user_id', true)::uuid
-                AND wm.role IN ('owner', 'admin')
+                AND WM.ROLE IN ('OWNER', 'ADMIN')
                 AND wm.is_deleted = false
             )
         )
@@ -188,7 +188,7 @@ def _create_onboarding_rls_policies() -> None:
                 SELECT wm.workspace_id
                 FROM workspace_members wm
                 WHERE wm.user_id = current_setting('app.current_user_id', true)::uuid
-                AND wm.role IN ('owner', 'admin')
+                AND WM.ROLE IN ('OWNER', 'ADMIN')
                 AND wm.is_deleted = false
             )
         )
@@ -206,7 +206,7 @@ def _create_onboarding_rls_policies() -> None:
                 SELECT wm.workspace_id
                 FROM workspace_members wm
                 WHERE wm.user_id = current_setting('app.current_user_id', true)::uuid
-                AND wm.role IN ('owner', 'admin')
+                AND WM.ROLE IN ('OWNER', 'ADMIN')
                 AND wm.is_deleted = false
             )
         )

@@ -32,13 +32,17 @@ _FORWARDED_EVENT_TYPES = frozenset(
 # Anthropic stream event types to silently ignore
 _IGNORED_EVENT_TYPES = frozenset(
     {
-        "content_block_stop",
         "message_start",
         "message_delta",
         "message_stop",
         "ping",
     }
 )
+
+# content_block_stop triggers a delta buffer flush (not ignored, not forwarded).
+# This ensures tool_input_delta events are flushed BEFORE the tool executes,
+# not after the tool_result arrives (which would make them useless for early UI feedback).
+_FLUSH_EVENT_TYPES = frozenset({"content_block_stop"})
 
 
 def transform_stream_event(
@@ -59,6 +63,13 @@ def transform_stream_event(
         SSE-formatted string with one or more events, or None if ignored
     """
     event_type = event_data.get("type", "")
+
+    # content_block_stop: flush accumulated deltas so tool_input_delta events
+    # reach the frontend BEFORE the tool executes (not after tool_result).
+    if event_type in _FLUSH_EVENT_TYPES:
+        if delta_buffer:
+            return delta_buffer.flush()
+        return None
 
     if event_type not in _FORWARDED_EVENT_TYPES:
         if event_type not in _IGNORED_EVENT_TYPES:
@@ -163,8 +174,20 @@ def _handle_content_block_delta(
 
     mapping = delta_map.get(delta_type)
     if mapping is None:
-        # signature_delta and unknown types are silently ignored
-        if delta_type not in ("signature_delta", ""):
+        # Forward signature_delta for thinking block multi-turn integrity.
+        # The Anthropic API sends thinking signatures as a separate delta
+        # type; without forwarding, persisted sessions lose signatures and
+        # subsequent turns fail with "Missing required field: 'signature'".
+        if delta_type == "signature_delta":
+            sig = delta.get("signature", "")
+            if sig:
+                sig_data: dict[str, Any] = {
+                    "messageId": message_id,
+                    "signature": sig,
+                    "blockIndex": block_index,
+                }
+                return f"event: thinking_delta\ndata: {json.dumps(sig_data)}\n\n"
+        elif delta_type != "":
             logger.debug("Unknown content_block_delta type: %s", delta_type)
         return None
 
@@ -175,15 +198,15 @@ def _handle_content_block_delta(
 
     # If buffer provided, use water pumping (batch deltas)
     if delta_buffer:
-        # Ensure buffer has current message context
         delta_buffer.set_message_context(message_id, parent_tool_use_id)
-
-        if sse_event_name == "thinking_delta":
-            return delta_buffer.add_thinking_delta(block_index, text)
-        if sse_event_name == "text_delta":
-            return delta_buffer.add_text_delta(block_index, text)
-        if sse_event_name == "tool_input_delta":
-            return delta_buffer.add_tool_input_delta(block_index, text)
+        buffer_handlers = {
+            "thinking_delta": delta_buffer.add_thinking_delta,
+            "text_delta": delta_buffer.add_text_delta,
+            "tool_input_delta": delta_buffer.add_tool_input_delta,
+        }
+        handler = buffer_handlers.get(sse_event_name)
+        if handler:
+            return handler(block_index, text)
 
     # Fallback: immediate emit (backward compatible, no buffer)
     data: dict[str, Any] = {
