@@ -16,10 +16,8 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
 
-from pilot_space.ai.agents.pilotspace_agent_helpers import (
-    _extract_citation,
-    transform_sdk_message,
-)
+from pilot_space.ai.agents.pilotspace_agent_helpers import transform_sdk_message
+from pilot_space.ai.agents.pilotspace_note_helpers import extract_citation
 from pilot_space.ai.sdk.sandbox_config import configure_sdk_for_space
 from pilot_space.spaces.base import SpaceContext
 
@@ -232,7 +230,7 @@ class TestCitationBlocks:
 
 
 class TestExtractCitationHelper:
-    """T58: Direct tests for _extract_citation() helper."""
+    """T58: Direct tests for extract_citation() helper."""
 
     def test_extract_citation_from_dict(self) -> None:
         block = {
@@ -247,7 +245,7 @@ class TestExtractCitationHelper:
             "cited_text": "important detail",
         }
 
-        result = _extract_citation(block)
+        result = extract_citation(block)
 
         assert result is not None
         assert result["sourceType"] == "document"
@@ -268,7 +266,7 @@ class TestExtractCitationHelper:
         # Ensure isinstance(block, dict) is False
         assert not isinstance(block, dict)
 
-        result = _extract_citation(block)
+        result = extract_citation(block)
 
         assert result is not None
         assert result["sourceType"] == "web"
@@ -278,7 +276,7 @@ class TestExtractCitationHelper:
     def test_extract_citation_returns_none_for_empty_block(self) -> None:
         block = {"type": "citation", "source": {}, "cited_text": ""}
 
-        result = _extract_citation(block)
+        result = extract_citation(block)
 
         assert result is None
 
@@ -289,7 +287,7 @@ class TestExtractCitationHelper:
             "cited_text": "some text",
         }
 
-        result = _extract_citation(block)
+        result = extract_citation(block)
 
         assert result is not None
         assert result["sourceType"] == "note"
@@ -309,7 +307,7 @@ class TestExtractCitationHelper:
             "cited_text": "quoted text",
         }
 
-        result = _extract_citation(block)
+        result = extract_citation(block)
 
         assert result is not None
         assert result["sourceType"] == "document"

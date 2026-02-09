@@ -16,6 +16,52 @@ from uuid import uuid4
 logger = logging.getLogger(__name__)
 
 
+def emit_focus_block_event(result_data: dict[str, Any], note_id: str, operation: str) -> str | None:
+    """Emit focus_block SSE event before content_update for early UI scroll/lock.
+
+    Sent immediately before content_update so the frontend can scroll to and
+    visually prepare (pending-edit highlight) the target block before the
+    content replacement arrives.
+
+    Args:
+        result_data: Tool result data with block_id / block_ids / after_block_id
+        note_id: Note ID
+        operation: The pending_apply operation name
+
+    Returns:
+        SSE-formatted focus_block event, or None if no block to focus
+    """
+    block_id: str | None = None
+    scroll_to_end = False
+
+    if operation in {"replace_block", "remove_block"}:
+        block_id = result_data.get("block_id")
+    elif operation == "append_blocks":
+        block_id = result_data.get("after_block_id")
+        if not block_id:
+            scroll_to_end = True
+    elif operation in {"insert_blocks"}:
+        block_id = result_data.get("before_block_id") or result_data.get("after_block_id")
+    elif operation in {"create_issues", "create_single_issue"}:
+        block_id = result_data.get("block_id")
+        if not block_id:
+            block_ids = result_data.get("block_ids", [])
+            block_id = block_ids[0] if block_ids else None
+    elif operation in {"remove_content", "replace_content"}:
+        block_ids = result_data.get("block_ids", [])
+        block_id = block_ids[0] if block_ids else None
+
+    if not block_id and not scroll_to_end:
+        return None
+
+    event_data: dict[str, Any] = {
+        "noteId": note_id,
+        "blockId": block_id,
+        "scrollToEnd": scroll_to_end,
+    }
+    return f"event: focus_block\ndata: {json.dumps(event_data)}\n\n"
+
+
 def emit_replace_block_event(result_data: dict[str, Any], note_id: str) -> str:
     """Emit content_update SSE event for replace_block operation.
 
@@ -109,6 +155,100 @@ def emit_issue_creation_events(result_data: dict[str, Any], note_id: str) -> str
         events.append(f"event: content_update\ndata: {json.dumps(event_data)}\n\n")
 
     return "".join(events)
+
+
+def emit_insert_blocks_event(result_data: dict[str, Any], note_id: str) -> str:
+    """Emit content_update SSE event for insert_blocks operation.
+
+    Args:
+        result_data: Tool result data
+        note_id: Note ID
+
+    Returns:
+        SSE-formatted content_update event
+    """
+    event_data = {
+        "noteId": note_id,
+        "operation": "insert_blocks",
+        "blockId": result_data.get("block_id"),
+        "markdown": result_data.get("markdown") or result_data.get("content_markdown"),
+        "content": None,
+        "issueData": None,
+        "afterBlockId": result_data.get("after_block_id"),
+        "beforeBlockId": result_data.get("before_block_id"),
+    }
+    return f"event: content_update\ndata: {json.dumps(event_data)}\n\n"
+
+
+def emit_remove_block_event(result_data: dict[str, Any], note_id: str) -> str:
+    """Emit content_update SSE event for remove_block operation.
+
+    Args:
+        result_data: Tool result data
+        note_id: Note ID
+
+    Returns:
+        SSE-formatted content_update event
+    """
+    event_data = {
+        "noteId": note_id,
+        "operation": "remove_block",
+        "blockId": result_data.get("block_id"),
+        "markdown": None,
+        "content": None,
+        "issueData": None,
+        "afterBlockId": None,
+    }
+    return f"event: content_update\ndata: {json.dumps(event_data)}\n\n"
+
+
+def emit_remove_content_event(result_data: dict[str, Any], note_id: str) -> str:
+    """Emit content_update SSE event for remove_content operation.
+
+    Args:
+        result_data: Tool result data
+        note_id: Note ID
+
+    Returns:
+        SSE-formatted content_update event
+    """
+    event_data = {
+        "noteId": note_id,
+        "operation": "remove_content",
+        "blockId": None,
+        "markdown": None,
+        "content": None,
+        "issueData": None,
+        "afterBlockId": None,
+        "pattern": result_data.get("pattern"),
+        "blockIds": result_data.get("block_ids", []),
+    }
+    return f"event: content_update\ndata: {json.dumps(event_data)}\n\n"
+
+
+def emit_replace_content_event(result_data: dict[str, Any], note_id: str) -> str:
+    """Emit content_update SSE event for replace_content operation.
+
+    Args:
+        result_data: Tool result data
+        note_id: Note ID
+
+    Returns:
+        SSE-formatted content_update event
+    """
+    event_data = {
+        "noteId": note_id,
+        "operation": "replace_content",
+        "blockId": None,
+        "markdown": None,
+        "content": None,
+        "issueData": None,
+        "afterBlockId": None,
+        "oldPattern": result_data.get("old_pattern"),
+        "newContent": result_data.get("new_content"),
+        "blockIds": result_data.get("block_ids", []),
+    }
+    return f"event: content_update\ndata: {json.dumps(event_data)}\n\n"
 
 
 def transform_todo_to_task_progress(
@@ -241,10 +381,16 @@ def transform_user_message_tool_results(message: Any) -> str | None:
                     "append_blocks": emit_append_blocks_event,
                     "create_issues": emit_issue_creation_events,
                     "create_single_issue": emit_issue_creation_events,
+                    "insert_blocks": emit_insert_blocks_event,
+                    "remove_block": emit_remove_block_event,
+                    "remove_content": emit_remove_content_event,
+                    "replace_content": emit_replace_content_event,
                 }
                 handler = operation_handlers.get(operation)
                 content_update_event = handler(result_data, note_id) if handler else None
                 if content_update_event:
+                    # focus_block is emitted by tool handlers via event_queue
+                    # (before DB call) for immediate delivery. No duplicate here.
                     events.append(content_update_event)
                 # Also emit tool_result so ToolCallCard shows completion
                 tool_result_event_data = {
@@ -297,3 +443,39 @@ def _map_todo_status(status: str) -> str:
         "completed": "completed",
         "done": "completed",
     }.get(status, "pending")
+
+
+def extract_citation(block: Any) -> dict[str, Any] | None:
+    """Extract citation data from SDK citation block (T58).
+
+    Citation blocks reference source documents used in the response.
+    """
+    if isinstance(block, dict):
+        source = block.get("source", {})
+        cited_text = block.get("cited_text", block.get("text", ""))
+    else:
+        source = getattr(block, "source", {})
+        cited_text = getattr(block, "cited_text", getattr(block, "text", ""))
+
+    if not source and not cited_text:
+        return None
+
+    if source and not isinstance(source, dict):
+        logger.warning("Citation source is not a dict: %s (type=%s)", source, type(source).__name__)
+        source = {}
+
+    source_dict: dict[str, Any] = source if isinstance(source, dict) else {}
+    result: dict[str, Any] = {
+        "sourceType": source_dict.get("type", "document"),
+        "sourceId": source_dict.get("id", ""),
+        "sourceTitle": source_dict.get("title", ""),
+        "citedText": str(cited_text),
+    }
+    # Only include index fields when present (T70 — reduce JSON noise)
+    start_idx = source_dict.get("start_index")
+    end_idx = source_dict.get("end_index")
+    if start_idx is not None:
+        result["startIndex"] = start_idx
+    if end_idx is not None:
+        result["endIndex"] = end_idx
+    return result

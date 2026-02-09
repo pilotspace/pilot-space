@@ -34,6 +34,9 @@ from pilot_space.infrastructure.database.repositories.integration_repository imp
 from pilot_space.infrastructure.database.repositories.invitation_repository import (
     InvitationRepository,
 )
+from pilot_space.infrastructure.database.repositories.issue_link_repository import (
+    IssueLinkRepository,
+)
 from pilot_space.infrastructure.database.repositories.issue_repository import (
     IssueFilters,
     IssueRepository,
@@ -49,6 +52,10 @@ from pilot_space.infrastructure.database.repositories.note_repository import (
 )
 from pilot_space.infrastructure.database.repositories.project_repository import (
     ProjectRepository,
+)
+from pilot_space.infrastructure.database.repositories.role_skill_repository import (
+    RoleSkillRepository,
+    RoleTemplateRepository,
 )
 from pilot_space.infrastructure.database.repositories.template_repository import (
     TemplateRepository,
@@ -75,11 +82,14 @@ __all__ = [
     "IntegrationRepository",
     "InvitationRepository",
     "IssueFilters",
+    "IssueLinkRepository",
     "IssueRepository",
     "LabelRepository",
     "NoteAnnotationRepository",
     "NoteRepository",
     "ProjectRepository",
+    "RoleSkillRepository",
+    "RoleTemplateRepository",
     "TemplateRepository",
     "UserRepository",
     "WorkspaceRepository",

@@ -50,6 +50,7 @@ from pilot_space.infrastructure.database.models.integration import (
 )
 from pilot_space.infrastructure.database.models.issue import Issue, IssuePriority
 from pilot_space.infrastructure.database.models.issue_label import issue_labels
+from pilot_space.infrastructure.database.models.issue_link import IssueLink, IssueLinkType
 from pilot_space.infrastructure.database.models.label import Label
 from pilot_space.infrastructure.database.models.module import Module, ModuleStatus
 from pilot_space.infrastructure.database.models.note import Note
@@ -75,6 +76,10 @@ from pilot_space.infrastructure.database.models.threaded_discussion import (
     ThreadedDiscussion,
 )
 from pilot_space.infrastructure.database.models.user import User
+from pilot_space.infrastructure.database.models.user_role_skill import (
+    RoleTemplate,
+    UserRoleSkill,
+)
 from pilot_space.infrastructure.database.models.workspace import Workspace
 from pilot_space.infrastructure.database.models.workspace_api_key import WorkspaceAPIKey
 from pilot_space.infrastructure.database.models.workspace_invitation import (
@@ -116,6 +121,8 @@ __all__ = [
     "IntegrationProvider",
     "InvitationStatus",
     "Issue",
+    "IssueLink",
+    "IssueLinkType",
     "IssuePriority",
     "LLMProvider",
     "Label",
@@ -127,6 +134,7 @@ __all__ = [
     "NoteIssueLink",
     "NoteLinkType",
     "Project",
+    "RoleTemplate",
     "SlugMixin",
     "SoftDeleteMixin",
     "State",
@@ -137,6 +145,7 @@ __all__ = [
     "TimestampMixin",
     "ToolCallStatus",
     "User",
+    "UserRoleSkill",
     "Workspace",
     "WorkspaceAPIKey",
     "WorkspaceInvitation",

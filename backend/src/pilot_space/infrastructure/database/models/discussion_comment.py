@@ -7,13 +7,15 @@ Comments can be from users or AI-generated.
 from __future__ import annotations
 
 import uuid
-from typing import TYPE_CHECKING
+from datetime import datetime
+from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import Boolean, ForeignKey, Index, Text, text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Text, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from pilot_space.infrastructure.database.base import WorkspaceScopedModel
+from pilot_space.infrastructure.database.types import JSONBCompat
 
 if TYPE_CHECKING:
     from pilot_space.infrastructure.database.models.threaded_discussion import (
@@ -63,6 +65,19 @@ class DiscussionComment(WorkspaceScopedModel):
         nullable=False,
         default=False,
         server_default=text("false"),
+    )
+
+    # Reactions (AD-001, P2 consumer)
+    reactions: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONBCompat,
+        nullable=True,
+        default=dict,
+    )
+
+    # Edit tracking (AD-001)
+    edited_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
     )
 
     # Relationships

@@ -29,6 +29,7 @@ import type {
   CitationEvent,
   MemoryUpdateEvent,
   ToolInputDeltaEvent,
+  FocusBlockEvent,
 } from './types/events';
 import {
   isMessageStartEvent,
@@ -49,6 +50,7 @@ import {
   isMemoryUpdateEvent,
   isToolInputDeltaEvent,
   isContentUpdateEvent,
+  isFocusBlockEvent,
 } from './types/events';
 import type { PilotSpaceStore } from './PilotSpaceStore';
 
@@ -66,6 +68,8 @@ export class PilotSpaceStreamHandler {
   private _retryTimer: ReturnType<typeof setTimeout> | null = null;
   /** Maps content block index → tool call ID for tool_input_delta routing */
   private _blockIndexToToolCallId = new Map<number, string>();
+  /** Track tool call IDs where block_id has already been extracted from partial input */
+  private _blockIdExtractedIds = new Set<string>();
   /** Tracks the last content block index seen for tool_use blocks */
   private _lastToolUseBlockIndex: number | null = null;
   /** Monotonic counter for thinking turns (incremented on each thinking content_block_start).
@@ -290,7 +294,8 @@ export class PilotSpaceStreamHandler {
         | ErrorEvent
         | CitationEvent
         | MemoryUpdateEvent
-        | ToolInputDeltaEvent;
+        | ToolInputDeltaEvent
+        | FocusBlockEvent;
 
       // Route to type-specific handler
       if (isMessageStartEvent(event)) {
@@ -311,6 +316,8 @@ export class PilotSpaceStreamHandler {
         this.handleApprovalRequired(event);
       } else if (isAskUserQuestionEvent(event)) {
         this.handleAskUserQuestion(event);
+      } else if (isFocusBlockEvent(event)) {
+        this.handleFocusBlock(event);
       } else if (isContentUpdateEvent(event)) {
         this.store.handleContentUpdate(event);
       } else if (isStructuredResultEvent(event)) {
@@ -343,6 +350,7 @@ export class PilotSpaceStreamHandler {
     // Reset parent correlation state
     this._lastParentToolUseId = null;
     this._blockIndexToToolCallId.clear();
+    this._blockIdExtractedIds.clear();
     this._lastToolUseBlockIndex = null;
     this._thinkingTurnIndex = -1;
     this._skipDuplicateTextBlock = false;
@@ -363,6 +371,16 @@ export class PilotSpaceStreamHandler {
       interrupted: false,
       wordCount: 0,
     };
+  }
+
+  /** Finalize durationMs on the last thinking block if it has a startedAt but no durationMs. */
+  private finalizeLastThinkingBlockDuration(): void {
+    const blocks = this.store.streamingState.thinkingBlocks;
+    if (!blocks || blocks.length === 0) return;
+    const last = blocks[blocks.length - 1]!;
+    if (last.startedAt && !last.durationMs) {
+      last.durationMs = Date.now() - last.startedAt;
+    }
   }
 
   /** Handle content_block_start — tracks block type for progressive rendering. */
@@ -390,6 +408,12 @@ export class PilotSpaceStreamHandler {
         this.store.streamingState.thinkingStartedAt = Date.now();
       }
     } else if (contentType === 'text') {
+      // End thinking phase when text block starts (safety: also handled in handleTextDelta)
+      if (this.store.streamingState.isThinking) {
+        this.store.streamingState.isThinking = false;
+        this.finalizeLastThinkingBlockDuration();
+      }
+
       // Detect duplicate "summary" text blocks: models like kimi-k2.5 emit
       // a content_block_start index:0 text after word-by-word deltas, containing
       // the full text again. Skip these to avoid duplicate content.
@@ -407,6 +431,11 @@ export class PilotSpaceStreamHandler {
       }
       this.store.streamingState.phase = 'content';
     } else if (contentType === 'tool_use') {
+      // End thinking phase when tool_use starts (thinking → tool_use without text in between)
+      if (this.store.streamingState.isThinking) {
+        this.store.streamingState.isThinking = false;
+        this.finalizeLastThinkingBlockDuration();
+      }
       // Track block index for tool_input_delta routing
       this._lastToolUseBlockIndex = index;
       this._skipDuplicateTextBlock = false;
@@ -441,18 +470,26 @@ export class PilotSpaceStreamHandler {
     if (!this.store.streamingState.thinkingBlocks) {
       this.store.streamingState.thinkingBlocks = [];
     }
-    const existing = this.store.streamingState.thinkingBlocks.find(
+    const existingIdx = this.store.streamingState.thinkingBlocks.findIndex(
       (b) => b.blockIndex === turnIndex
     );
-    if (existing) {
-      existing.content += delta;
+    if (existingIdx >= 0) {
+      // Immutable update: replace entry to create new object reference
+      const existing = this.store.streamingState.thinkingBlocks[existingIdx]!;
+      this.store.streamingState.thinkingBlocks[existingIdx] = {
+        ...existing,
+        content: existing.content + delta,
+      };
     } else {
       this.store.streamingState.thinkingBlocks.push({
         content: delta,
         blockIndex: turnIndex,
         redacted,
+        startedAt: Date.now(),
       });
     }
+    // Create new array reference so React memo() on OrderedStreamingBlocks detects changes
+    this.store.streamingState.thinkingBlocks = [...this.store.streamingState.thinkingBlocks];
 
     // Capture thinking block signature for multi-turn verification (G-06)
     if (signature) {
@@ -504,6 +541,21 @@ export class PilotSpaceStreamHandler {
   handleToolUseStart(event: ToolUseEvent): void {
     const { toolCallId, toolName, toolInput } = event.data;
 
+    // Dedup: if tool call already exists, merge input instead of duplicating.
+    // AssistantMessage may re-emit tool_use with full input after StreamEvent
+    // sent it with empty input. Extract block_id from the full input for early scroll.
+    const existing = this.store.findPendingToolCall(toolCallId);
+    if (existing) {
+      if (toolInput && Object.keys(toolInput).length > 0) {
+        existing.input = toolInput;
+        // Extract block_id if not already extracted (late arrival from AssistantMessage)
+        if (!this._blockIdExtractedIds.has(toolCallId)) {
+          this.tryExtractBlockIdFromInput(toolCallId, existing.name, toolInput);
+        }
+      }
+      return;
+    }
+
     // Create tool call entry with optional parent correlation (G12)
     const toolCall: ToolCall = {
       id: toolCallId,
@@ -521,6 +573,33 @@ export class PilotSpaceStreamHandler {
 
     // Buffer tool call — message doesn't exist in messages[] during streaming
     this.store.addPendingToolCall(toolCall);
+
+    // Extract blockId from note-editing tools for early auto-scroll (before content_update)
+    const NOTE_TOOLS = [
+      'update_note_block',
+      'enhance_text',
+      'write_to_note',
+      'insert_block',
+      'remove_block',
+      'remove_content',
+      'replace_content',
+      'extract_issues',
+      'create_issue_from_note',
+    ];
+    // Strip MCP server prefix (e.g. "mcp__pilot-notes__update_note_block" → "update_note_block")
+    const strippedName = toolName.includes('__') ? toolName.split('__').pop()! : toolName;
+    if (NOTE_TOOLS.includes(strippedName)) {
+      const blockId = toolInput?.block_id ?? toolInput?.blockId;
+      // Skip ¶N block references — they're backend-only notation with no matching DOM element
+      if (typeof blockId === 'string' && !blockId.startsWith('¶')) {
+        this.store.addPendingAIBlockId(blockId);
+        this._blockIdExtractedIds.add(toolCallId);
+      } else if (strippedName === 'write_to_note') {
+        // write_to_note appends at document end — signal scroll to last block
+        this._blockIdExtractedIds.add(toolCallId);
+        this.store.requestNoteEndScroll();
+      }
+    }
 
     this.store.streamingState.phase = 'tool_use';
 
@@ -548,6 +627,26 @@ export class PilotSpaceStreamHandler {
       if (errorMessage) {
         pendingTc.errorMessage = errorMessage;
       }
+
+      // Use backend-provided complete toolInput if available
+      if (event.data.toolInput && Object.keys(event.data.toolInput).length > 0) {
+        pendingTc.input = event.data.toolInput;
+      }
+
+      // Parse accumulated partialInput into structured input
+      if (Object.keys(pendingTc.input).length === 0 && pendingTc.partialInput) {
+        try {
+          pendingTc.input = JSON.parse(pendingTc.partialInput);
+        } catch {
+          // Incomplete JSON — leave as-is, partialInput still visible in UI
+        }
+      }
+
+      // Last-resort block_id extraction: if tool_input_delta and tool_use dedup
+      // both missed it, extract from the resolved input now.
+      if (!this._blockIdExtractedIds.has(toolCallId) && Object.keys(pendingTc.input).length > 0) {
+        this.tryExtractBlockIdFromInput(toolCallId, pendingTc.name, pendingTc.input);
+      }
       return;
     }
 
@@ -563,6 +662,27 @@ export class PilotSpaceStreamHandler {
           }
           break;
         }
+      }
+    }
+  }
+
+  /** Handle focus_block — authoritative backend signal to scroll to / visually prepare a block.
+   *  Emitted immediately before content_update so the target block is visible and
+   *  highlighted (pending-edit) before the content replacement arrives. */
+  handleFocusBlock(event: FocusBlockEvent): void {
+    const { blockId, scrollToEnd } = event.data;
+
+    if (scrollToEnd) {
+      this.store.requestNoteEndScroll();
+      return;
+    }
+
+    if (typeof blockId === 'string' && blockId.length > 0) {
+      this.store.addPendingAIBlockId(blockId);
+      // Scroll directly — don't wait for MobX reaction → React render chain
+      const el = document.querySelector(`[data-block-id="${blockId}"]`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     }
   }
@@ -638,6 +758,9 @@ export class PilotSpaceStreamHandler {
   /** Handle message_stop — finalizes message and adds to history. */
   handleTextComplete(event: MessageStopEvent): void {
     const { messageId, usage, costUsd } = event.data;
+
+    // Finalize any in-progress thinking block duration
+    this.finalizeLastThinkingBlockDuration();
 
     // Calculate thinking duration if thinking occurred
     const thinkingDurationMs = this.store.streamingState.thinkingStartedAt
@@ -809,6 +932,73 @@ export class PilotSpaceStreamHandler {
 
     if (tc) {
       tc.partialInput = (tc.partialInput ?? '') + inputText;
+
+      // Extract block_id from partial input for NOTE_TOOLS (early auto-scroll).
+      // toolInput is empty at tool_use time — the actual input streams via deltas.
+      if (!this._blockIdExtractedIds.has(tc.id)) {
+        this.tryExtractBlockIdFromDelta(tc);
+      }
+    }
+  }
+
+  /**
+   * Try to extract block_id from accumulated partial tool input.
+   * Called during tool_input_delta to enable early auto-scroll before content_update.
+   */
+  private tryExtractBlockIdFromDelta(tc: ToolCall): void {
+    const NOTE_TOOLS = [
+      'update_note_block',
+      'enhance_text',
+      'insert_block',
+      'remove_block',
+      'remove_content',
+      'replace_content',
+      'extract_issues',
+      'create_issue_from_note',
+    ];
+    const strippedName = tc.name.includes('__') ? tc.name.split('__').pop()! : tc.name;
+    if (!NOTE_TOOLS.includes(strippedName)) return;
+
+    const match = tc.partialInput?.match(/"block_id"\s*:\s*"([^"]+)"/);
+    if (match?.[1]) {
+      this._blockIdExtractedIds.add(tc.id);
+      const blockId = match[1];
+      if (!blockId.startsWith('¶')) {
+        this.store.addPendingAIBlockId(blockId);
+      }
+    }
+  }
+
+  /**
+   * Extract block_id from a complete tool input object.
+   * Used as fallback when tool_input_delta or tool_use dedup paths didn't extract it.
+   */
+  private tryExtractBlockIdFromInput(
+    toolCallId: string,
+    toolName: string,
+    toolInput: Record<string, unknown>
+  ): void {
+    const NOTE_TOOLS = [
+      'update_note_block',
+      'enhance_text',
+      'write_to_note',
+      'insert_block',
+      'remove_block',
+      'remove_content',
+      'replace_content',
+      'extract_issues',
+      'create_issue_from_note',
+    ];
+    const strippedName = toolName.includes('__') ? toolName.split('__').pop()! : toolName;
+    if (!NOTE_TOOLS.includes(strippedName)) return;
+
+    const blockId = toolInput?.block_id ?? toolInput?.blockId;
+    if (typeof blockId === 'string' && !blockId.startsWith('¶')) {
+      this._blockIdExtractedIds.add(toolCallId);
+      this.store.addPendingAIBlockId(blockId);
+    } else if (strippedName === 'write_to_note') {
+      this._blockIdExtractedIds.add(toolCallId);
+      this.store.requestNoteEndScroll();
     }
   }
 
@@ -844,6 +1034,8 @@ export class PilotSpaceStreamHandler {
             blockIndex: tb.blockIndex,
             content: tb.content,
             redacted: tb.redacted,
+            startedAt: tb.startedAt,
+            durationMs: tb.durationMs,
           });
         }
         thinkingIdx++;

@@ -309,6 +309,7 @@ def configure_sdk_for_space(
     system_prompt_base: str | None = None,
     code_execution_enabled: bool = False,
     streaming_input_mode: bool = False,
+    skills_available: bool = False,
 ) -> SDKConfiguration:
     """Configure Claude SDK with space-rooted sandbox settings.
 
@@ -337,6 +338,7 @@ def configure_sdk_for_space(
         enable_file_checkpointing: Enable SDK file checkpoint/rewind (G5)
         betas: SDK beta features list (e.g. ["context-1m-2025-08-07"]) (G6)
         system_prompt_base: Base system prompt for SDK-native caching (G7)
+        skills_available: Whether skill files exist in .claude/skills/ (controls Skill tool)
 
     Returns:
         SDKConfiguration ready for SDK initialization.
@@ -359,8 +361,7 @@ def configure_sdk_for_space(
         "Edit",
         # Execution (requires approval outside whitelist)
         "Bash",
-        # Skills and subagents
-        "Skill",
+        # Subagents
         "Task",
         # User interaction
         "AskUserQuestion",
@@ -371,6 +372,12 @@ def configure_sdk_for_space(
         "TodoWrite",
         "TodoRead",
     ]
+
+    # Only include Skill tool when skill files exist in .claude/skills/.
+    # Without skill files the SDK subprocess has no Skill handler registered;
+    # listing it in allowed_tools causes "No such tool available: skill".
+    if skills_available:
+        base_tools.append("Skill")
 
     allowed_tools = base_tools + (additional_tools or [])
 

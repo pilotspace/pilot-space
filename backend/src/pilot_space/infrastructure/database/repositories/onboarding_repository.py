@@ -78,7 +78,12 @@ class OnboardingRepository(BaseRepository[WorkspaceOnboarding]):
         # Create new
         onboarding = WorkspaceOnboarding(
             workspace_id=workspace_id,
-            steps={"ai_providers": False, "invite_members": False, "first_note": False},
+            steps={
+                "ai_providers": False,
+                "invite_members": False,
+                "first_note": False,
+                "role_setup": False,
+            },
         )
         return await self.create(onboarding)
 
@@ -92,7 +97,7 @@ class OnboardingRepository(BaseRepository[WorkspaceOnboarding]):
 
         Args:
             workspace_id: The workspace UUID.
-            step_name: One of 'ai_providers', 'invite_members', 'first_note'.
+            step_name: One of 'ai_providers', 'invite_members', 'first_note', 'role_setup'.
             completed: Whether the step is completed.
 
         Returns:
@@ -101,7 +106,7 @@ class OnboardingRepository(BaseRepository[WorkspaceOnboarding]):
         Raises:
             ValueError: If step_name is invalid.
         """
-        if step_name not in ("ai_providers", "invite_members", "first_note"):
+        if step_name not in ("ai_providers", "invite_members", "first_note", "role_setup"):
             msg = f"Invalid step name: {step_name}"
             raise ValueError(msg)
 
