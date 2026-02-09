@@ -228,7 +228,6 @@ class TestTransformStreamEventIgnored:
     @pytest.mark.parametrize(
         "event_type",
         [
-            "content_block_stop",
             "message_start",
             "message_delta",
             "message_stop",
@@ -240,6 +239,16 @@ class TestTransformStreamEventIgnored:
         holder = _make_holder()
         result = transform_stream_event(
             event_data={"type": event_type},
+            parent_tool_use_id=None,
+            current_message_id_holder=holder,
+        )
+        assert result is None
+
+    def test_content_block_stop_returns_none_without_buffer(self) -> None:
+        """content_block_stop returns None when no delta buffer is provided."""
+        holder = _make_holder()
+        result = transform_stream_event(
+            event_data={"type": "content_block_stop"},
             parent_tool_use_id=None,
             current_message_id_holder=holder,
         )
@@ -349,6 +358,167 @@ class TestStreamEventDedup:
 
         assert result is not None
         assert "Normal response" in result
+
+
+class TestContentBlockStopFlush:
+    """Test that content_block_stop flushes the delta buffer.
+
+    This ensures tool_input_delta events reach the frontend BEFORE
+    the tool executes, not after tool_result (which would be too late
+    for early UI feedback like auto-scroll and pending-edit highlight).
+    """
+
+    def test_content_block_stop_flushes_tool_input_deltas(self) -> None:
+        """content_block_stop flushes buffered tool_input_delta events."""
+        from pilot_space.ai.agents.sse_delta_buffer import DeltaBuffer
+
+        holder = _make_holder()
+        buffer = DeltaBuffer()
+        buffer.set_message_context("msg-123")
+
+        # Simulate tool input streaming (input_json_delta → buffer)
+        transform_stream_event(
+            event_data={
+                "type": "content_block_delta",
+                "index": 1,
+                "delta": {"type": "input_json_delta", "partial_json": '{"block_id": "abc"}'},
+            },
+            parent_tool_use_id=None,
+            current_message_id_holder=holder,
+            delta_buffer=buffer,
+        )
+
+        # Buffer has content but hasn't flushed yet (within 50ms window)
+        assert buffer._has_buffered_content()
+
+        # content_block_stop triggers flush
+        result = transform_stream_event(
+            event_data={"type": "content_block_stop", "index": 1},
+            parent_tool_use_id=None,
+            current_message_id_holder=holder,
+            delta_buffer=buffer,
+        )
+
+        # Buffer flushed — tool_input_delta event emitted
+        assert result is not None
+        assert "event: tool_input_delta" in result
+        data = json.loads(result.split("data: ")[1].split("\n")[0])
+        assert data["delta"] == '{"block_id": "abc"}'
+        assert data["blockIndex"] == 1
+
+        # Buffer is now empty
+        assert not buffer._has_buffered_content()
+
+    def test_content_block_stop_flushes_all_buffer_types(self) -> None:
+        """content_block_stop flushes thinking, text, and tool_input deltas."""
+        from pilot_space.ai.agents.sse_delta_buffer import DeltaBuffer
+
+        holder = _make_holder()
+        buffer = DeltaBuffer()
+        buffer.set_message_context("msg-123")
+
+        # Buffer text and thinking deltas
+        buffer.add_thinking_delta(0, "analyzing...")
+        buffer.add_text_delta(2, "Here is the result")
+
+        result = transform_stream_event(
+            event_data={"type": "content_block_stop", "index": 0},
+            parent_tool_use_id=None,
+            current_message_id_holder=holder,
+            delta_buffer=buffer,
+        )
+
+        assert result is not None
+        assert "event: thinking_delta" in result
+        assert "event: text_delta" in result
+        assert not buffer._has_buffered_content()
+
+    def test_content_block_stop_empty_buffer_returns_none(self) -> None:
+        """content_block_stop with empty buffer returns None."""
+        from pilot_space.ai.agents.sse_delta_buffer import DeltaBuffer
+
+        holder = _make_holder()
+        buffer = DeltaBuffer()
+
+        result = transform_stream_event(
+            event_data={"type": "content_block_stop"},
+            parent_tool_use_id=None,
+            current_message_id_holder=holder,
+            delta_buffer=buffer,
+        )
+
+        assert result is None
+
+    def test_tool_input_delta_order_before_tool_result(self) -> None:
+        """Simulates the full SSE sequence proving correct event ordering.
+
+        Expected order after fix:
+        1. tool_use (empty input from content_block_start)
+        2. tool_input_delta (flushed by content_block_stop, BEFORE tool executes)
+        3. content_update + tool_result (from UserMessage after tool execution)
+        """
+        from pilot_space.ai.agents.sse_delta_buffer import DeltaBuffer
+
+        holder = _make_holder()
+        buffer = DeltaBuffer()
+        buffer.set_message_context("msg-123")
+        sse_events: list[str] = []
+
+        # Step 1: content_block_start → tool_use(empty)
+        result = transform_stream_event(
+            event_data={
+                "type": "content_block_start",
+                "index": 1,
+                "content_block": {
+                    "type": "tool_use",
+                    "id": "toolu_abc",
+                    "name": "update_note_block",
+                },
+            },
+            parent_tool_use_id=None,
+            current_message_id_holder=holder,
+            delta_buffer=buffer,
+        )
+        if result:
+            sse_events.append(result)
+
+        # Step 2: input_json_delta → buffered
+        result = transform_stream_event(
+            event_data={
+                "type": "content_block_delta",
+                "index": 1,
+                "delta": {
+                    "type": "input_json_delta",
+                    "partial_json": '{"block_id": "block-xyz", "markdown": "hello"}',
+                },
+            },
+            parent_tool_use_id=None,
+            current_message_id_holder=holder,
+            delta_buffer=buffer,
+        )
+        if result:
+            sse_events.append(result)
+
+        # Step 3: content_block_stop → FLUSH (tool_input_delta emitted)
+        result = transform_stream_event(
+            event_data={"type": "content_block_stop", "index": 1},
+            parent_tool_use_id=None,
+            current_message_id_holder=holder,
+            delta_buffer=buffer,
+        )
+        if result:
+            sse_events.append(result)
+
+        # Verify: tool_use came first, then tool_input_delta
+        all_events = "".join(sse_events)
+        tool_use_pos = all_events.index("event: tool_use")
+        tool_input_pos = all_events.index("event: tool_input_delta")
+        assert tool_use_pos < tool_input_pos, (
+            "tool_input_delta must arrive after tool_use but before tool_result"
+        )
+
+        # Verify tool_input_delta contains the block_id (escaped in JSON)
+        assert "block-xyz" in all_events
 
 
 class TestStreamEventViaTransformSdkMessage:

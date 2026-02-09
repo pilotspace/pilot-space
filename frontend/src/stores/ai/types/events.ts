@@ -33,6 +33,7 @@ export type SSEEventType =
   | 'citation'
   | 'memory_update'
   | 'tool_input_delta'
+  | 'focus_block'
   | 'error';
 
 /**
@@ -586,6 +587,24 @@ export interface ToolInputDeltaEvent extends SSEEvent {
 }
 
 /**
+ * Focus block event.
+ * Emitted by backend immediately before content_update so the frontend can
+ * scroll to and visually prepare (pending-edit highlight) the target block
+ * before the content replacement arrives.
+ */
+export interface FocusBlockEvent extends SSEEvent {
+  type: 'focus_block';
+  data: {
+    /** Note ID containing the block */
+    noteId: string;
+    /** Block ID to focus (null when scrollToEnd is true) */
+    blockId: string | null;
+    /** When true, scroll to the end of the document (write_to_note) */
+    scrollToEnd: boolean;
+  };
+}
+
+/**
  * Type guard to narrow SSEEvent to specific event type.
  *
  * @example
@@ -702,4 +721,8 @@ export function isMemoryUpdateEvent(event: SSEEvent): event is MemoryUpdateEvent
 
 export function isToolInputDeltaEvent(event: SSEEvent): event is ToolInputDeltaEvent {
   return event.type === 'tool_input_delta';
+}
+
+export function isFocusBlockEvent(event: SSEEvent): event is FocusBlockEvent {
+  return event.type === 'focus_block';
 }

@@ -4,6 +4,7 @@
  */
 import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey, type Transaction } from '@tiptap/pm/state';
+import type { EditorView } from '@tiptap/pm/view';
 import { type Node as ProseMirrorNode } from '@tiptap/pm/model';
 
 export interface BlockIdOptions {
@@ -16,6 +17,57 @@ export interface BlockIdOptions {
 }
 
 const BLOCK_ID_PLUGIN_KEY = new PluginKey('blockId');
+const AI_EDIT_GUARD_KEY = new PluginKey('aiEditGuard');
+
+/** Navigation keys that should NOT be blocked even in pending blocks. */
+const NAV_KEYS = new Set([
+  'ArrowUp',
+  'ArrowDown',
+  'ArrowLeft',
+  'ArrowRight',
+  'Home',
+  'End',
+  'PageUp',
+  'PageDown',
+  'Tab',
+  'Escape',
+  'Shift',
+  'Control',
+  'Alt',
+  'Meta',
+  'F1',
+  'F2',
+  'F3',
+  'F4',
+  'F5',
+  'F6',
+  'F7',
+  'F8',
+  'F9',
+  'F10',
+  'F11',
+  'F12',
+]);
+
+/**
+ * Check if the current selection anchor is inside a block
+ * that has the `ai-block-pending-edit` CSS class (applied by highlightBlock).
+ *
+ * Uses DOM state — fast O(1) check via classList + closest().
+ * Only user DOM events call this; programmatic editor.commands bypass it.
+ */
+export function isSelectionInPendingBlock(view: EditorView): boolean {
+  try {
+    const { from } = view.state.selection;
+    const domPos = view.domAtPos(from);
+    const node = domPos.node;
+    const el = node instanceof Element ? node : node.parentElement;
+    const blockEl = el?.closest('[data-block-id]');
+    return blockEl?.classList.contains('ai-block-pending-edit') ?? false;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Generates a unique block ID using crypto API with fallback
@@ -127,6 +179,29 @@ export const BlockIdExtension = Extension.create<BlockIdOptions>({
           });
 
           return modified ? tr : null;
+        },
+      }),
+      // Guard plugin: block user edits on AI-pending blocks.
+      // Only intercepts DOM events (typing, paste, drop, key).
+      // Programmatic editor.commands (AI content updates) bypass DOM handlers.
+      new Plugin({
+        key: AI_EDIT_GUARD_KEY,
+        props: {
+          handleTextInput(view) {
+            return isSelectionInPendingBlock(view);
+          },
+          handleKeyDown(view, event) {
+            if (isSelectionInPendingBlock(view) && !NAV_KEYS.has(event.key)) {
+              return true;
+            }
+            return false;
+          },
+          handlePaste(view) {
+            return isSelectionInPendingBlock(view);
+          },
+          handleDrop(view) {
+            return isSelectionInPendingBlock(view);
+          },
         },
       }),
     ];

@@ -108,6 +108,24 @@ def create_note_content_server(
             return block_ref_map.format_ref(block_id)
         return block_id
 
+    async def _emit_focus_block(
+        note_id: str,
+        block_id: str | None = None,
+        *,
+        scroll_to_end: bool = False,
+    ) -> None:
+        """Push focus_block SSE event to queue for immediate frontend delivery."""
+        if not block_id and not scroll_to_end:
+            return
+        event_data = json.dumps(
+            {
+                "noteId": note_id,
+                "blockId": block_id,
+                "scrollToEnd": scroll_to_end,
+            }
+        )
+        await event_queue.put(f"event: focus_block\ndata: {event_data}\n\n")
+
     async def _verify_note_workspace(note_id: str | None) -> str | None:
         """Verify note belongs to current workspace. Returns error message or None."""
         if not tool_context:
@@ -265,10 +283,6 @@ def create_note_content_server(
     )
     async def insert_block(args: dict[str, Any]) -> dict[str, Any]:
         note_id = args.get("note_id")
-        ws_error = await _verify_note_workspace(note_id)
-        if ws_error:
-            return _text_result(f"Error: {ws_error}")
-
         content_markdown = args.get("content_markdown", "").strip()
         after_block_id = (
             _resolve_block_ref(args["after_block_id"]) if args.get("after_block_id") else None
@@ -276,6 +290,17 @@ def create_note_content_server(
         before_block_id = (
             _resolve_block_ref(args["before_block_id"]) if args.get("before_block_id") else None
         )
+
+        # Emit focus_block BEFORE DB call so frontend can scroll immediately
+        focus_id = before_block_id or after_block_id
+        if focus_id:
+            await _emit_focus_block(note_id or "", focus_id)
+        else:
+            await _emit_focus_block(note_id or "", scroll_to_end=True)
+
+        ws_error = await _verify_note_workspace(note_id)
+        if ws_error:
+            return _text_result(f"Error: {ws_error}")
 
         if not content_markdown:
             return _text_result("Error: content_markdown cannot be empty")
@@ -319,15 +344,17 @@ def create_note_content_server(
     )
     async def remove_block(args: dict[str, Any]) -> dict[str, Any]:
         note_id = args.get("note_id")
-        ws_error = await _verify_note_workspace(note_id)
-        if ws_error:
-            return _text_result(f"Error: {ws_error}")
-
         block_id = _resolve_block_ref(args["block_id"]) if args.get("block_id") else None
 
         if not block_id:
             return _text_result("Error: block_id is required")
 
+        # Emit focus_block BEFORE DB call so frontend can scroll immediately
+        await _emit_focus_block(note_id or "", block_id)
+
+        ws_error = await _verify_note_workspace(note_id)
+        if ws_error:
+            return _text_result(f"Error: {ws_error}")
         logger.info("[NoteContentTools] remove_block: note=%s, block=%s", note_id, block_id)
         approval_level = get_tool_approval_level("remove_block")
         status = "approval_required" if approval_level.value != "auto_execute" else "pending_apply"
@@ -366,14 +393,18 @@ def create_note_content_server(
     )
     async def remove_content(args: dict[str, Any]) -> dict[str, Any]:
         note_id = args.get("note_id")
-        ws_error = await _verify_note_workspace(note_id)
-        if ws_error:
-            return _text_result(f"Error: {ws_error}")
-
         pattern = args.get("pattern")
         use_regex = args.get("regex", False)
         raw_block_ids = args.get("block_ids", [])
         block_ids = [_resolve_block_ref(bid) for bid in raw_block_ids]
+
+        # Emit focus_block BEFORE DB call so frontend can scroll immediately
+        if block_ids:
+            await _emit_focus_block(note_id or "", block_ids[0])
+
+        ws_error = await _verify_note_workspace(note_id)
+        if ws_error:
+            return _text_result(f"Error: {ws_error}")
 
         if not pattern:
             return _text_result("Error: pattern is required")
@@ -435,16 +466,20 @@ def create_note_content_server(
     )
     async def replace_content(args: dict[str, Any]) -> dict[str, Any]:
         note_id = args.get("note_id")
-        ws_error = await _verify_note_workspace(note_id)
-        if ws_error:
-            return _text_result(f"Error: {ws_error}")
-
         old_pattern = args.get("old_pattern")
         new_content = args.get("new_content")
         use_regex = args.get("regex", False)
         raw_block_ids = args.get("block_ids", [])
         block_ids = [_resolve_block_ref(bid) for bid in raw_block_ids]
         replace_all = args.get("replace_all", True)
+
+        # Emit focus_block BEFORE DB call so frontend can scroll immediately
+        focus_id = block_ids[0] if block_ids else None
+        await _emit_focus_block(note_id or "", focus_id)
+
+        ws_error = await _verify_note_workspace(note_id)
+        if ws_error:
+            return _text_result(f"Error: {ws_error}")
 
         if not old_pattern:
             return _text_result("Error: old_pattern is required")

@@ -9,9 +9,15 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from claude_agent_sdk.types import ToolResultBlock
+
 from pilot_space.ai.agents.pilotspace_agent_helpers import (
     transform_sdk_message,
     transform_tool_result,
+)
+from pilot_space.ai.agents.pilotspace_note_helpers import (
+    emit_focus_block_event,
+    transform_user_message_tool_results,
 )
 
 
@@ -243,3 +249,156 @@ class TestTransformSdkMessageToolInput:
         events = _parse_sse_events(raw)
         data = events[0]["data"]
         assert "toolInput" not in data
+
+
+# ---------------------------------------------------------------------------
+# 2: emit_focus_block_event — unit tests
+# ---------------------------------------------------------------------------
+
+
+class TestEmitFocusBlockEvent:
+    """Verify focus_block SSE event generation for each operation type."""
+
+    def test_replace_block_emits_focus_on_block_id(self) -> None:
+        result = emit_focus_block_event({"block_id": "blk-1"}, "note-1", "replace_block")
+        assert result is not None
+        events = _parse_sse_events(result)
+        assert len(events) == 1
+        assert events[0]["event"] == "focus_block"
+        assert events[0]["data"]["blockId"] == "blk-1"
+        assert events[0]["data"]["noteId"] == "note-1"
+        assert events[0]["data"]["scrollToEnd"] is False
+
+    def test_append_blocks_with_after_block_id(self) -> None:
+        result = emit_focus_block_event({"after_block_id": "blk-2"}, "note-2", "append_blocks")
+        assert result is not None
+        events = _parse_sse_events(result)
+        assert events[0]["data"]["blockId"] == "blk-2"
+        assert events[0]["data"]["scrollToEnd"] is False
+
+    def test_append_blocks_without_after_block_id_scrolls_to_end(self) -> None:
+        result = emit_focus_block_event({"after_block_id": None}, "note-3", "append_blocks")
+        assert result is not None
+        events = _parse_sse_events(result)
+        assert events[0]["data"]["blockId"] is None
+        assert events[0]["data"]["scrollToEnd"] is True
+
+    def test_remove_block_emits_focus_on_block_id(self) -> None:
+        result = emit_focus_block_event({"block_id": "blk-rm"}, "note-4", "remove_block")
+        assert result is not None
+        events = _parse_sse_events(result)
+        assert events[0]["data"]["blockId"] == "blk-rm"
+
+    def test_insert_blocks_prefers_before_block_id(self) -> None:
+        result = emit_focus_block_event(
+            {"before_block_id": "blk-before", "after_block_id": "blk-after"},
+            "note-5",
+            "insert_blocks",
+        )
+        assert result is not None
+        events = _parse_sse_events(result)
+        assert events[0]["data"]["blockId"] == "blk-before"
+
+    def test_create_issues_uses_first_block_id(self) -> None:
+        result = emit_focus_block_event(
+            {"block_ids": ["blk-a", "blk-b"]}, "note-6", "create_issues"
+        )
+        assert result is not None
+        events = _parse_sse_events(result)
+        assert events[0]["data"]["blockId"] == "blk-a"
+
+    def test_create_single_issue_uses_block_id(self) -> None:
+        result = emit_focus_block_event({"block_id": "blk-si"}, "note-7", "create_single_issue")
+        assert result is not None
+        events = _parse_sse_events(result)
+        assert events[0]["data"]["blockId"] == "blk-si"
+
+    def test_no_block_id_returns_none(self) -> None:
+        """Operations without any block reference return None (no focus event)."""
+        result = emit_focus_block_event({}, "note-8", "replace_block")
+        assert result is None
+
+    def test_unknown_operation_returns_none(self) -> None:
+        """Unknown operation type returns None."""
+        result = emit_focus_block_event({"block_id": "blk-x"}, "note-9", "unknown_op")
+        assert result is None
+
+
+# ---------------------------------------------------------------------------
+# 3: transform_user_message_tool_results — focus_block before content_update
+# ---------------------------------------------------------------------------
+
+
+class FakeUserMessage:
+    """Fake UserMessage from Claude Agent SDK (content = list of ToolResultBlock)."""
+
+    def __init__(self, blocks: list[Any]):
+        self.content = blocks
+
+
+class TestNoFocusBlockInPipeline:
+    """Verify focus_block is NOT emitted from transform_user_message_tool_results.
+
+    focus_block is now emitted by tool handlers directly via event_queue
+    (before DB call) for immediate delivery. The SDK pipeline only emits
+    content_update + tool_result.
+    """
+
+    def test_replace_block_emits_content_update_without_focus(self) -> None:
+        """replace_block emits content_update + tool_result, no focus_block."""
+        payload = json.dumps(
+            {
+                "status": "pending_apply",
+                "operation": "replace_block",
+                "note_id": "note-r1",
+                "block_id": "blk-r1",
+                "markdown": "# Hello",
+            }
+        )
+        msg = FakeUserMessage([ToolResultBlock(tool_use_id="tu-r1", content=payload)])
+        raw = transform_user_message_tool_results(msg)
+        assert raw is not None
+
+        events = _parse_sse_events(raw)
+        event_types = [e["event"] for e in events]
+        assert "focus_block" not in event_types
+        assert "content_update" in event_types
+        assert "tool_result" in event_types
+
+    def test_append_blocks_no_focus_block(self) -> None:
+        """append_blocks emits content_update + tool_result, no focus_block."""
+        payload = json.dumps(
+            {
+                "status": "pending_apply",
+                "operation": "append_blocks",
+                "note_id": "note-a1",
+                "markdown": "New content",
+                "after_block_id": None,
+            }
+        )
+        msg = FakeUserMessage([ToolResultBlock(tool_use_id="tu-a1", content=payload)])
+        raw = transform_user_message_tool_results(msg)
+        assert raw is not None
+
+        events = _parse_sse_events(raw)
+        focus_events = [e for e in events if e["event"] == "focus_block"]
+        assert len(focus_events) == 0
+
+    def test_event_order_is_content_update_tool_result(self) -> None:
+        """Event sequence: content_update → tool_result (focus_block via queue)."""
+        payload = json.dumps(
+            {
+                "status": "pending_apply",
+                "operation": "replace_block",
+                "note_id": "note-o1",
+                "block_id": "blk-o1",
+                "markdown": "Updated",
+            }
+        )
+        msg = FakeUserMessage([ToolResultBlock(tool_use_id="tu-o1", content=payload)])
+        raw = transform_user_message_tool_results(msg)
+        assert raw is not None
+
+        events = _parse_sse_events(raw)
+        event_types = [e["event"] for e in events]
+        assert event_types == ["content_update", "tool_result"]

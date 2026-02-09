@@ -398,15 +398,38 @@ export function useContentUpdates(
       }
     );
 
-    // Watch for early AI block IDs from tool_use events (visual pending-edit indicator only).
-    // Auto-scroll is NOT triggered here — it stays with the content_update reaction
-    // to avoid consuming the processingBlockIds "new entry" signal before the
-    // content is actually applied.
+    // Watch for early AI block IDs from tool_use events — apply pending-edit visual
+    // AND add to processingBlockIds so useAIAutoScroll scrolls to the block BEFORE
+    // the content_update arrives. This lets the user see the block being prepared.
     const disposePending = reaction(
       () => store.pendingAIBlockIds.length,
       () => {
         for (const blockId of store.pendingAIBlockIds) {
           highlightBlock(blockId, 'pending-edit');
+          // Trigger early auto-scroll to the target block
+          setProcessingBlockIds((prev) => (prev.includes(blockId) ? prev : [...prev, blockId]));
+        }
+      }
+    );
+
+    // Watch for write_to_note tool_use (no block_id) — scroll to last block in document
+    const disposeEndScroll = reaction(
+      () => store.pendingNoteEndScroll,
+      (shouldScroll) => {
+        if (!shouldScroll || !editor) return;
+        store.clearNoteEndScroll();
+        const { doc } = editor.state;
+        let lastBlockId: string | null = null;
+        doc.descendants((node) => {
+          const bid = node.attrs?.blockId;
+          if (typeof bid === 'string' && bid) lastBlockId = bid;
+          return true;
+        });
+        if (lastBlockId) {
+          highlightBlock(lastBlockId, 'pending-edit');
+          setProcessingBlockIds((prev) =>
+            prev.includes(lastBlockId!) ? prev : [...prev, lastBlockId!]
+          );
         }
       }
     );
@@ -414,6 +437,7 @@ export function useContentUpdates(
     return () => {
       dispose();
       disposePending();
+      disposeEndScroll();
       // Clean up active timeouts to prevent state updates after unmount
       for (const timer of activeTimeoutsRef.current) {
         clearTimeout(timer);

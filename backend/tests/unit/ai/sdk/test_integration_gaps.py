@@ -579,7 +579,8 @@ class TestUserMessageToolResults:
         sse = transform_sdk_message(msg, holder)
 
         assert sse is not None
-        # Should contain two events: content_update + tool_result
+        # focus_block is emitted by tool handlers via event_queue (not here).
+        # SDK pipeline emits: content_update + tool_result
         raw_events = [e for e in sse.split("\n\n") if e.strip()]
         assert len(raw_events) == 2
 
