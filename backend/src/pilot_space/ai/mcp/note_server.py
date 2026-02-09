@@ -86,6 +86,29 @@ def create_note_tools_server(
             return block_ref_map.resolve(ref_or_id)
         return ref_or_id
 
+    async def _emit_focus_block(
+        note_id: str,
+        block_id: str | None = None,
+        *,
+        scroll_to_end: bool = False,
+    ) -> None:
+        """Push focus_block SSE event to queue for immediate frontend delivery.
+
+        Called at the START of each mutation tool — before any DB work —
+        so the frontend can scroll to and visually prepare the block before
+        the content_update arrives after tool execution.
+        """
+        if not block_id and not scroll_to_end:
+            return
+        event_data = json.dumps(
+            {
+                "noteId": note_id,
+                "blockId": block_id,
+                "scrollToEnd": scroll_to_end,
+            }
+        )
+        await event_queue.put(f"event: focus_block\ndata: {event_data}\n\n")
+
     async def _verify_note_workspace(note_id: str) -> str | None:
         """Verify note belongs to current workspace. Returns error message or None."""
         if not tool_context:
@@ -134,11 +157,14 @@ def create_note_tools_server(
             return _text_result(f"Invalid operation: {operation}. Must be 'replace' or 'append'.")
 
         note_id = _resolve_note_id(args)
+        block_id = _resolve_block_ref(args["block_id"])
+        # Emit focus_block BEFORE DB call so frontend can scroll immediately
+        await _emit_focus_block(note_id, block_id)
+
         ws_err = await _verify_note_workspace(note_id)
         if ws_err:
             return _text_result(f"Error: {ws_err}")
 
-        block_id = _resolve_block_ref(args["block_id"])
         ai_op = "replace_block" if operation == "replace" else "append_blocks"
         logger.info("[NoteTools] update_note_block: %s block=%s", ai_op, block_id)
         return _text_result(
@@ -171,11 +197,13 @@ def create_note_tools_server(
     )
     async def enhance_text(args: dict[str, Any]) -> dict[str, Any]:
         note_id = _resolve_note_id(args)
+        block_id = _resolve_block_ref(args["block_id"])
+        # Emit focus_block BEFORE DB call so frontend can scroll immediately
+        await _emit_focus_block(note_id, block_id)
+
         ws_err = await _verify_note_workspace(note_id)
         if ws_err:
             return _text_result(f"Error: {ws_err}")
-
-        block_id = _resolve_block_ref(args["block_id"])
         logger.info("[NoteTools] enhance_text: block=%s", block_id)
         return _text_result(
             json.dumps(
@@ -212,6 +240,9 @@ def create_note_tools_server(
             return _text_result("Error: markdown content cannot be empty.")
 
         note_id = _resolve_note_id(args)
+        # Emit focus_block BEFORE DB call so frontend can scroll immediately
+        await _emit_focus_block(note_id, scroll_to_end=True)
+
         ws_err = await _verify_note_workspace(note_id)
         if ws_err:
             return _text_result(f"Error: {ws_err}")
@@ -273,6 +304,10 @@ def create_note_tools_server(
         # Resolve ¶N references to UUIDs
         block_ids = [_resolve_block_ref(bid) for bid in raw_block_ids]
         note_id = _resolve_note_id(args)
+        # Emit focus_block BEFORE DB call so frontend can scroll immediately
+        if block_ids:
+            await _emit_focus_block(note_id, block_ids[0])
+
         ws_err = await _verify_note_workspace(note_id)
         if ws_err:
             return _text_result(f"Error: {ws_err}")
@@ -331,11 +366,13 @@ def create_note_tools_server(
     )
     async def create_issue_from_note(args: dict[str, Any]) -> dict[str, Any]:
         note_id = _resolve_note_id(args)
+        block_id = _resolve_block_ref(args["block_id"])
+        # Emit focus_block BEFORE DB call so frontend can scroll immediately
+        await _emit_focus_block(note_id, block_id)
+
         ws_err = await _verify_note_workspace(note_id)
         if ws_err:
             return _text_result(f"Error: {ws_err}")
-
-        block_id = _resolve_block_ref(args["block_id"])
         issue_data = {
             "title": args["title"],
             "description": args["description"],

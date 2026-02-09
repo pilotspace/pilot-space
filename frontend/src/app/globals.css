@@ -1435,30 +1435,77 @@
 }
 
 /* =============================================================================
-   AI BLOCK PENDING EDIT - Orange pulse when AI tool call targets a block
+   AI BLOCK PENDING EDIT - Pulse + overlay when AI tool call targets a block.
+   Visually signals "AI is editing" and discourages user edits on the block.
    ============================================================================= */
 [data-block-id].ai-block-pending-edit {
-  border-left: 2px solid var(--warning);
+  border-left: 3px solid var(--warning);
   padding-left: 8px;
-  background: rgba(217, 133, 63, 0.08);
-  animation: pendingEditPulse 2s ease-in-out infinite;
+  background: rgba(217, 133, 63, 0.06);
+  animation: pendingEditPulse 1.5s ease-in-out infinite;
   position: relative;
+  border-radius: 4px;
+}
+
+/* Semi-transparent overlay — blocks pointer interaction while AI is working */
+[data-block-id].ai-block-pending-edit::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(217, 133, 63, 0.04);
+  border-radius: 4px;
+  pointer-events: all;
+  cursor: wait;
+  z-index: 5;
+  animation: pendingOverlayPulse 1.5s ease-in-out infinite;
+}
+
+/* "AI editing" label — top-right corner */
+[data-block-id].ai-block-pending-edit::after {
+  content: 'AI editing';
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  font-size: 0.625rem;
+  font-weight: 500;
+  color: var(--warning);
+  opacity: 0.7;
+  pointer-events: none;
+  z-index: 6;
+  letter-spacing: 0.02em;
 }
 
 @keyframes pendingEditPulse {
   0%,
   100% {
     border-left-color: var(--warning);
-    background: rgba(217, 133, 63, 0.08);
+    box-shadow: -2px 0 8px rgba(217, 133, 63, 0.15);
   }
   50% {
-    border-left-color: rgba(217, 133, 63, 0.4);
+    border-left-color: rgba(217, 133, 63, 0.5);
+    box-shadow: -2px 0 16px rgba(217, 133, 63, 0.25);
+  }
+}
+
+@keyframes pendingOverlayPulse {
+  0%,
+  100% {
     background: rgba(217, 133, 63, 0.04);
+  }
+  50% {
+    background: rgba(217, 133, 63, 0.08);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   [data-block-id].ai-block-pending-edit {
+    animation: none;
+    box-shadow: -2px 0 8px rgba(217, 133, 63, 0.15);
+  }
+  [data-block-id].ai-block-pending-edit::before {
+    animation: none;
+  }
+  [data-block-id].ai-block-pending-edit::after {
     animation: none;
   }
 }
@@ -1471,6 +1518,19 @@
   transition:
     border-left-color 0.3s ease-out,
     background 0.3s ease-out;
+}
+
+/* Hide "AI editing" label during transition; overlay becomes reveal shimmer */
+[data-block-id].ai-block-pending-edit.ai-block-streaming-reveal::after {
+  content: '';
+  font-size: 0;
+  opacity: 0;
+}
+
+[data-block-id].ai-block-pending-edit.ai-block-streaming-reveal::before {
+  animation: none;
+  pointer-events: none;
+  background: transparent;
 }
 
 /* =============================================================================

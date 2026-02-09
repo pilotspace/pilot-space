@@ -32,13 +32,17 @@ _FORWARDED_EVENT_TYPES = frozenset(
 # Anthropic stream event types to silently ignore
 _IGNORED_EVENT_TYPES = frozenset(
     {
-        "content_block_stop",
         "message_start",
         "message_delta",
         "message_stop",
         "ping",
     }
 )
+
+# content_block_stop triggers a delta buffer flush (not ignored, not forwarded).
+# This ensures tool_input_delta events are flushed BEFORE the tool executes,
+# not after the tool_result arrives (which would make them useless for early UI feedback).
+_FLUSH_EVENT_TYPES = frozenset({"content_block_stop"})
 
 
 def transform_stream_event(
@@ -59,6 +63,13 @@ def transform_stream_event(
         SSE-formatted string with one or more events, or None if ignored
     """
     event_type = event_data.get("type", "")
+
+    # content_block_stop: flush accumulated deltas so tool_input_delta events
+    # reach the frontend BEFORE the tool executes (not after tool_result).
+    if event_type in _FLUSH_EVENT_TYPES:
+        if delta_buffer:
+            return delta_buffer.flush()
+        return None
 
     if event_type not in _FORWARDED_EVENT_TYPES:
         if event_type not in _IGNORED_EVENT_TYPES:

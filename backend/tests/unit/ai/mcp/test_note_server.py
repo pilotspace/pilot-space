@@ -72,8 +72,10 @@ class TestWriteToNoteTool:
         assert payload["operation"] == "append_blocks"
         assert payload["markdown"] == "# Hello World"
         assert payload["note_id"] == "note-abc"
-        # Queue should be empty — tools no longer push events directly
-        assert queue.empty()
+        # Queue may contain focus_block events but no content_update events
+        while not queue.empty():
+            event = queue.get_nowait()
+            assert "content_update" not in event, "content_update must not be pushed to queue"
 
     @pytest.mark.asyncio
     async def test_uses_context_note_id(self) -> None:
@@ -127,15 +129,18 @@ class TestWriteToNoteTool:
         assert payload["after_block_id"] is None
 
     @pytest.mark.asyncio
-    async def test_no_queue_push(self) -> None:
-        """write_to_note does not push events to the queue (single source of truth)."""
+    async def test_no_content_update_queue_push(self) -> None:
+        """write_to_note does not push content_update to queue (single source of truth)."""
         queue: asyncio.Queue[str] = asyncio.Queue()
         tools = _capture_tools(queue, context_note_id="note-abc")
         write_tool = tools["write_to_note"]
 
         await write_tool.handler({"note_id": "note-abc", "markdown": "Content"})
 
-        assert queue.empty()
+        # focus_block is allowed in queue; content_update is not
+        while not queue.empty():
+            event = queue.get_nowait()
+            assert "content_update" not in event, "content_update must not be pushed to queue"
 
 
 class TestToolNamesConstant:

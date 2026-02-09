@@ -16,6 +16,52 @@ from uuid import uuid4
 logger = logging.getLogger(__name__)
 
 
+def emit_focus_block_event(result_data: dict[str, Any], note_id: str, operation: str) -> str | None:
+    """Emit focus_block SSE event before content_update for early UI scroll/lock.
+
+    Sent immediately before content_update so the frontend can scroll to and
+    visually prepare (pending-edit highlight) the target block before the
+    content replacement arrives.
+
+    Args:
+        result_data: Tool result data with block_id / block_ids / after_block_id
+        note_id: Note ID
+        operation: The pending_apply operation name
+
+    Returns:
+        SSE-formatted focus_block event, or None if no block to focus
+    """
+    block_id: str | None = None
+    scroll_to_end = False
+
+    if operation in {"replace_block", "remove_block"}:
+        block_id = result_data.get("block_id")
+    elif operation == "append_blocks":
+        block_id = result_data.get("after_block_id")
+        if not block_id:
+            scroll_to_end = True
+    elif operation in {"insert_blocks"}:
+        block_id = result_data.get("before_block_id") or result_data.get("after_block_id")
+    elif operation in {"create_issues", "create_single_issue"}:
+        block_id = result_data.get("block_id")
+        if not block_id:
+            block_ids = result_data.get("block_ids", [])
+            block_id = block_ids[0] if block_ids else None
+    elif operation in {"remove_content", "replace_content"}:
+        block_ids = result_data.get("block_ids", [])
+        block_id = block_ids[0] if block_ids else None
+
+    if not block_id and not scroll_to_end:
+        return None
+
+    event_data: dict[str, Any] = {
+        "noteId": note_id,
+        "blockId": block_id,
+        "scrollToEnd": scroll_to_end,
+    }
+    return f"event: focus_block\ndata: {json.dumps(event_data)}\n\n"
+
+
 def emit_replace_block_event(result_data: dict[str, Any], note_id: str) -> str:
     """Emit content_update SSE event for replace_block operation.
 
@@ -343,6 +389,8 @@ def transform_user_message_tool_results(message: Any) -> str | None:
                 handler = operation_handlers.get(operation)
                 content_update_event = handler(result_data, note_id) if handler else None
                 if content_update_event:
+                    # focus_block is emitted by tool handlers via event_queue
+                    # (before DB call) for immediate delivery. No duplicate here.
                     events.append(content_update_event)
                 # Also emit tool_result so ToolCallCard shows completion
                 tool_result_event_data = {
