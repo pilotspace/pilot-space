@@ -9,7 +9,6 @@ Endpoints:
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Annotated, Any
 from uuid import UUID
 
@@ -27,11 +26,12 @@ from pilot_space.dependencies import (
     get_session,
 )
 from pilot_space.infrastructure.cache.redis import RedisClient
+from pilot_space.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
     from pilot_space.infrastructure.database.models.ai_context import AIContext
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/issues/{issue_id}/ai-context", tags=["ai-context"])
 

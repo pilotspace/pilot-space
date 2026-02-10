@@ -15,7 +15,6 @@ Note: Streaming endpoints are in issues_ai_context_streaming.py
 
 from __future__ import annotations
 
-import logging
 from typing import Annotated
 from uuid import UUID
 
@@ -37,8 +36,9 @@ from pilot_space.api.v1.schemas.ai_context import (
 )
 from pilot_space.dependencies.auth import SessionDep, get_current_user_id
 from pilot_space.dependencies.workspace import get_current_workspace_id
+from pilot_space.infrastructure.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/issues/{issue_id}/ai-context", tags=["ai-context"])
 

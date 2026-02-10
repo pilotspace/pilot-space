@@ -12,14 +12,15 @@ from __future__ import annotations
 import asyncio
 import fnmatch
 import json
-import logging
 import re
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from pilot_space.infrastructure.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class HookType(Enum):

@@ -8,10 +8,10 @@ Reference: docs/architect/scalable-agent-architecture.md
 
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 from uuid import UUID
 
+from pilot_space.infrastructure.logging import get_logger
 from pilot_space.spaces.base import (
     SpaceContext,
     SpaceInterface,
@@ -19,7 +19,7 @@ from pilot_space.spaces.base import (
 )
 from pilot_space.spaces.bootstrapper import ProjectBootstrapper
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class LocalFileSystemSpace(SpaceInterface):

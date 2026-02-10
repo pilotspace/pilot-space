@@ -5,12 +5,12 @@ T128: Create ListIssuesService with advanced filtering.
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from pilot_space.infrastructure.database.models import IssuePriority, StateGroup
 from pilot_space.infrastructure.database.repositories import CursorPage, IssueFilters
+from pilot_space.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
     from datetime import date
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from pilot_space.infrastructure.database.models import Issue
     from pilot_space.infrastructure.database.repositories import IssueRepository
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

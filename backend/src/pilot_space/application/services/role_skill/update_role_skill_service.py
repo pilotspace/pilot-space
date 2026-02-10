@@ -7,9 +7,10 @@ Source: 011-role-based-skills, T009, FR-009, FR-010
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
+
+from pilot_space.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -20,7 +21,7 @@ if TYPE_CHECKING:
         UserRoleSkill,
     )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass(frozen=True, slots=True)

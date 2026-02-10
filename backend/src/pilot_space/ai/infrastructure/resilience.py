@@ -9,7 +9,6 @@ T016: ResilientExecutor with retry and circuit breaker.
 from __future__ import annotations
 
 import asyncio
-import logging
 import random
 from dataclasses import dataclass
 from functools import wraps
@@ -17,11 +16,12 @@ from typing import TYPE_CHECKING, Any, TypeVar
 
 from pilot_space.ai.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
 from pilot_space.ai.exceptions import AITimeoutError, RateLimitError
+from pilot_space.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Awaitable, Callable
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 T = TypeVar("T")
 
@@ -228,13 +228,11 @@ class ResilientExecutor:
 
             try:
                 logger.debug(
-                    "Executing operation",
-                    extra={
-                        "provider": provider,
-                        "attempt": attempt,
-                        "max_retries": config.max_retries,
-                        "timeout_sec": timeout_sec,
-                    },
+                    "resilience_executing_operation",
+                    provider=provider,
+                    attempt=attempt,
+                    max_retries=config.max_retries,
+                    timeout_sec=timeout_sec,
                 )
 
                 result = await self.execute_once(
@@ -245,12 +243,10 @@ class ResilientExecutor:
 
                 if attempt > 1:
                     logger.info(
-                        "Operation succeeded after retry",
-                        extra={
-                            "provider": provider,
-                            "attempt": attempt,
-                            "previous_errors": attempt - 1,
-                        },
+                        "resilience_operation_succeeded_after_retry",
+                        provider=provider,
+                        attempt=attempt,
+                        previous_errors=attempt - 1,
                     )
 
                 return result
@@ -260,39 +256,33 @@ class ResilientExecutor:
 
                 if not self._should_retry(e, attempt, config):
                     logger.debug(
-                        "Not retrying operation",
-                        extra={
-                            "provider": provider,
-                            "attempt": attempt,
-                            "error_type": type(e).__name__,
-                            "error": str(e),
-                        },
+                        "resilience_not_retrying_operation",
+                        provider=provider,
+                        attempt=attempt,
+                        error_type=type(e).__name__,
+                        error_message=str(e),
                     )
                     raise
 
                 if attempt > config.max_retries:
                     logger.warning(
-                        "Operation failed after all retries",
-                        extra={
-                            "provider": provider,
-                            "total_attempts": attempt,
-                            "max_retries": config.max_retries,
-                            "error_type": type(e).__name__,
-                            "error": str(e),
-                        },
+                        "resilience_operation_failed_after_all_retries",
+                        provider=provider,
+                        total_attempts=attempt,
+                        max_retries=config.max_retries,
+                        error_type=type(e).__name__,
+                        error_message=str(e),
                     )
                     raise
 
                 delay = self._calculate_delay(attempt, config)
                 logger.info(
-                    "Retrying operation after delay",
-                    extra={
-                        "provider": provider,
-                        "attempt": attempt,
-                        "max_retries": config.max_retries,
-                        "delay_seconds": delay,
-                        "error_type": type(e).__name__,
-                    },
+                    "resilience_retrying_operation_after_delay",
+                    provider=provider,
+                    attempt=attempt,
+                    max_retries=config.max_retries,
+                    delay_seconds=delay,
+                    error_type=type(e).__name__,
                 )
 
                 await asyncio.sleep(delay)
@@ -338,13 +328,11 @@ class ResilientExecutor:
 
             try:
                 logger.debug(
-                    "Starting streaming operation",
-                    extra={
-                        "provider": provider,
-                        "attempt": attempt,
-                        "max_retries": config.max_retries,
-                        "timeout_sec": timeout_sec,
-                    },
+                    "resilience_starting_streaming_operation",
+                    provider=provider,
+                    attempt=attempt,
+                    max_retries=config.max_retries,
+                    timeout_sec=timeout_sec,
                 )
 
                 # Create stream starter that can be wrapped by circuit breaker
@@ -389,11 +377,9 @@ class ResilientExecutor:
                             stream_started = True
                             if attempt > 1:
                                 logger.info(
-                                    "Streaming operation started after retry",
-                                    extra={
-                                        "provider": provider,
-                                        "attempt": attempt,
-                                    },
+                                    "resilience_streaming_operation_started_after_retry",
+                                    provider=provider,
+                                    attempt=attempt,
                                 )
                         yield item
                 finally:
@@ -408,35 +394,29 @@ class ResilientExecutor:
 
                 if not self._should_retry(e, attempt, config):
                     logger.debug(
-                        "Not retrying streaming operation",
-                        extra={
-                            "provider": provider,
-                            "attempt": attempt,
-                            "error_type": type(e).__name__,
-                        },
+                        "resilience_not_retrying_streaming_operation",
+                        provider=provider,
+                        attempt=attempt,
+                        error_type=type(e).__name__,
                     )
                     raise
 
                 if attempt > config.max_retries:
                     logger.warning(
-                        "Streaming operation failed after all retries",
-                        extra={
-                            "provider": provider,
-                            "total_attempts": attempt,
-                            "error_type": type(e).__name__,
-                        },
+                        "resilience_streaming_operation_failed_after_all_retries",
+                        provider=provider,
+                        total_attempts=attempt,
+                        error_type=type(e).__name__,
                     )
                     raise
 
                 delay = self._calculate_delay(attempt, config)
                 logger.info(
-                    "Retrying streaming operation after delay",
-                    extra={
-                        "provider": provider,
-                        "attempt": attempt,
-                        "delay_seconds": delay,
-                        "error_type": type(e).__name__,
-                    },
+                    "resilience_retrying_streaming_operation_after_delay",
+                    provider=provider,
+                    attempt=attempt,
+                    delay_seconds=delay,
+                    error_type=type(e).__name__,
                 )
 
                 await asyncio.sleep(delay)

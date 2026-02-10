@@ -5,7 +5,6 @@
 import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey, type Transaction } from '@tiptap/pm/state';
 import type { EditorView } from '@tiptap/pm/view';
-import { type Node as ProseMirrorNode } from '@tiptap/pm/model';
 
 export interface BlockIdOptions {
   /** Function to generate unique IDs */

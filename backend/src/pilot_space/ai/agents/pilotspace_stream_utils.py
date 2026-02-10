@@ -12,7 +12,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
-import logging
 import re
 from collections.abc import AsyncIterator
 from pathlib import Path
@@ -44,13 +43,14 @@ from pilot_space.ai.mcp.project_server import (
     SERVER_NAME as PROJECT_SERVER_NAME,
     create_project_tools_server,
 )
+from pilot_space.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
     from pilot_space.ai.agents.pilotspace_agent import ChatInput
     from pilot_space.ai.mcp.block_ref_map import BlockRefMap
     from pilot_space.ai.tools.mcp_server import ToolContext
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def build_mcp_servers(
@@ -217,18 +217,31 @@ def capture_content_from_sse(
                     "input": data.get("toolInput", {}),
                     "index": len(content_blocks),
                 }
+                logger.debug(
+                    "content_capture_tool_use",
+                    tool_name=data.get("toolName", ""),
+                    tool_id=tool_id,
+                    total_blocks=len(content_blocks),
+                )
 
         elif event_type == "tool_result":
             tool_id = data.get("toolCallId", "")
             if tool_id:
                 key = f"tool_result_{tool_id}"
+                is_error = data.get("status") == "failed"
                 content_blocks[key] = {
                     "type": "tool_result",
                     "tool_use_id": tool_id,
                     "content": data.get("output", data.get("errorMessage", "")),
-                    "is_error": data.get("status") == "failed",
+                    "is_error": is_error,
                     "index": len(content_blocks),
                 }
+                logger.debug(
+                    "content_capture_tool_result",
+                    tool_id=tool_id,
+                    is_error=is_error,
+                    total_blocks=len(content_blocks),
+                )
 
 
 def build_structured_content(

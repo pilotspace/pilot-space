@@ -5,14 +5,15 @@ Provides standardized error responses following RFC 7807 specification.
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 from fastapi import HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-logger = logging.getLogger(__name__)
+from pilot_space.infrastructure.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class ProblemDetail:

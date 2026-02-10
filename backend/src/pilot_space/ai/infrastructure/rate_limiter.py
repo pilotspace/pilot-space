@@ -12,10 +12,11 @@ T321: Rate limiter implementation for testing purposes.
 
 from __future__ import annotations
 
-import logging
 from typing import Protocol
 
-logger = logging.getLogger(__name__)
+from pilot_space.infrastructure.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class RedisClientProtocol(Protocol):
@@ -102,12 +103,10 @@ class RateLimiter:
 
         if current_count >= self._max_requests:
             logger.warning(
-                "Rate limit exceeded",
-                extra={
-                    "key": key,
-                    "current_count": current_count,
-                    "max_requests": self._max_requests,
-                },
+                "rate_limit_exceeded",
+                key=key,
+                current_count=current_count,
+                max_requests=self._max_requests,
             )
             return False
 
@@ -150,7 +149,7 @@ class RateLimiter:
         """
         redis_key = f"ratelimit:{key}"
         await self._redis.delete(redis_key)
-        logger.info("Rate limit reset", extra={"key": key})
+        logger.info("rate_limit_reset", key=key)
 
 
 __all__ = ["RateLimiter", "RedisClientProtocol"]

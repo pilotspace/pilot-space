@@ -35,7 +35,8 @@ vi.mock('@/lib/supabase', () => ({
 describe('PilotSpaceStore - Queue Mode Integration', () => {
   let store: PilotSpaceStore;
   let mockAIStore: AIStore;
-  let fetchSpy: ReturnType<typeof vi.spyOn>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let fetchSpy: any;
 
   beforeEach(() => {
     mockAIStore = {} as AIStore;
@@ -69,10 +70,22 @@ describe('PilotSpaceStore - Queue Mode Integration', () => {
       // Mock SSEClient.connect to avoid actual connection
       const { SSEClient } = await import('@/lib/sse-client');
       const mockConnect = vi.fn().mockResolvedValue(undefined);
-      vi.mocked(SSEClient).mockImplementation(() => ({
-        connect: mockConnect,
-        abort: vi.fn(),
-      }));
+      vi.mocked(SSEClient).mockImplementation(
+        () =>
+          ({
+            connect: mockConnect,
+            abort: vi.fn(),
+            get isConnected() {
+              return false;
+            },
+            resetRetries: vi.fn(),
+            abortController: null,
+            retryCount: 0,
+            maxRetries: 3,
+            retryDelayMs: 1000,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          }) as any
+      );
 
       await store.sendMessage('Hello');
 
@@ -157,7 +170,9 @@ describe('PilotSpaceStore - Queue Mode Integration', () => {
       await store.sendMessage('Follow-up message');
 
       // Verify session_id included in request
-      const requestBody = JSON.parse(fetchSpy.mock.calls[0][1]?.body as string);
+      const requestBody = JSON.parse(
+        (fetchSpy.mock.calls[0]![1] as RequestInit & { body?: string })?.body as string
+      );
       expect(requestBody.session_id).toBe('existing-session-id');
     });
 
@@ -304,7 +319,9 @@ data: {"delta":"Valid"}
 
       await store.sendMessage('Hello');
 
-      const requestBody = JSON.parse(fetchSpy.mock.calls[0][1]?.body as string);
+      const requestBody = JSON.parse(
+        (fetchSpy.mock.calls[0]![1] as RequestInit & { body?: string })?.body as string
+      );
       expect(requestBody.context).toMatchObject({
         workspaceId: 'test-workspace-id',
         noteId: 'note-123',

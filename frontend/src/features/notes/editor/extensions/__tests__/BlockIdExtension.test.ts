@@ -5,7 +5,7 @@
  * `aiEditGuard` ProseMirror plugin that blocks user edits
  * on blocks with the `ai-block-pending-edit` CSS class.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import type { EditorView } from '@tiptap/pm/view';
 import { isSelectionInPendingBlock } from '../BlockIdExtension';
 
@@ -35,7 +35,7 @@ describe('isSelectionInPendingBlock', () => {
     container.appendChild(block);
 
     // Cursor is inside the text node
-    const textNode = block.firstChild!;
+    const textNode = block.firstChild! as Text;
     const view = createMockView(textNode);
 
     expect(isSelectionInPendingBlock(view)).toBe(true);
@@ -47,7 +47,7 @@ describe('isSelectionInPendingBlock', () => {
     block.textContent = 'Normal block';
     container.appendChild(block);
 
-    const textNode = block.firstChild!;
+    const textNode = block.firstChild! as Text;
     const view = createMockView(textNode);
 
     expect(isSelectionInPendingBlock(view)).toBe(false);
@@ -60,7 +60,7 @@ describe('isSelectionInPendingBlock', () => {
     block.textContent = 'Revealing block';
     container.appendChild(block);
 
-    const textNode = block.firstChild!;
+    const textNode = block.firstChild! as Text;
     const view = createMockView(textNode);
 
     expect(isSelectionInPendingBlock(view)).toBe(false);
@@ -77,7 +77,7 @@ describe('isSelectionInPendingBlock', () => {
     container.appendChild(block);
 
     // Cursor is inside the <strong> → closest [data-block-id] should be the <p>
-    const textNode = strong.firstChild!;
+    const textNode = strong.firstChild! as Text;
     const view = createMockView(textNode);
 
     expect(isSelectionInPendingBlock(view)).toBe(true);
@@ -88,7 +88,7 @@ describe('isSelectionInPendingBlock', () => {
     span.textContent = 'No block parent';
     container.appendChild(span);
 
-    const textNode = span.firstChild!;
+    const textNode = span.firstChild! as Text;
     const view = createMockView(textNode);
 
     expect(isSelectionInPendingBlock(view)).toBe(false);
@@ -131,7 +131,7 @@ describe('aiEditGuard plugin behavior', () => {
     block.textContent = 'Blocked';
     document.body.appendChild(block);
 
-    const textNode = block.firstChild!;
+    const textNode = block.firstChild! as Text;
     const view = createMockView(textNode);
 
     // Guard detects pending block
@@ -150,7 +150,7 @@ describe('aiEditGuard plugin behavior', () => {
     block.textContent = 'Processing...';
     document.body.appendChild(block);
 
-    const textNode = block.firstChild!;
+    const textNode = block.firstChild! as Text;
     const view = createMockView(textNode);
 
     // Initially blocked

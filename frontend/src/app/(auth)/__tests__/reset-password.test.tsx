@@ -4,13 +4,15 @@
  * T035: Supabase token verification, password form, validation.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('motion/react', () => ({
   motion: {
-    div: ({ children, ...props }: Record<string, unknown>) => <div {...props}>{children}</div>,
+    div: ({ children, ...props }: Record<string, unknown>) => (
+      <div {...props}>{children as React.ReactNode}</div>
+    ),
   },
 }));
 

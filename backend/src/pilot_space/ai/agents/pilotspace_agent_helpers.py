@@ -7,7 +7,6 @@ Extracted from pilotspace_agent.py for modularity (file size quality gate).
 from __future__ import annotations
 
 import json
-import logging
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
@@ -27,6 +26,7 @@ from pilot_space.ai.agents.pilotspace_note_helpers import (
     validate_structured_output,
 )
 from pilot_space.ai.agents.stream_event_transformer import transform_stream_event
+from pilot_space.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
     from claude_agent_sdk import Message
@@ -34,7 +34,7 @@ if TYPE_CHECKING:
     from pilot_space.ai.agents.pilotspace_agent import ChatInput
     from pilot_space.ai.agents.sse_delta_buffer import DeltaBuffer
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def build_subagent_definitions() -> dict[str, AgentDefinition]:

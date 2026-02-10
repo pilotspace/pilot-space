@@ -15,6 +15,7 @@ DEFAULT_FOLDER = "/tmp/pilot-space/spaces"
 default_folder_path = Path(DEFAULT_FOLDER)
 default_folder_path.mkdir(parents=True, exist_ok=True)
 
+
 class Settings(BaseSettings):
     """Application settings loaded from environment variables.
 
@@ -104,12 +105,6 @@ class Settings(BaseSettings):
     ai_max_retries: int = Field(default=3, ge=1, le=10)
     ai_ghost_text_debounce_ms: int = Field(default=500, ge=100, le=2000)
     ai_ghost_text_max_tokens: int = Field(default=50, ge=10, le=200)
-
-    # Queue-based async chat mode
-    ai_queue_mode: bool = Field(
-        default=False,
-        description="Enable queue-based async chat. False = legacy blocking SSE.",
-    )
 
     # Fake AI Mode (development only - no external API calls)
     ai_fake_mode: bool = Field(

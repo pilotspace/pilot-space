@@ -7,7 +7,6 @@ Source: 011-role-based-skills, T011
 
 from __future__ import annotations
 
-import logging
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, status
@@ -42,8 +41,9 @@ from pilot_space.application.services.role_skill.generate_role_skill_service imp
     SkillGenerationRateLimitError,
 )
 from pilot_space.dependencies.auth import CurrentUser, CurrentUserId, SessionDep, WorkspaceMemberId
+from pilot_space.infrastructure.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------

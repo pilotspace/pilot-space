@@ -36,7 +36,8 @@ describe('PilotSpaceActions', () => {
   let store: PilotSpaceStore;
   let actions: PilotSpaceActions;
   let streamHandler: PilotSpaceStreamHandler;
-  let fetchSpy: ReturnType<typeof vi.spyOn>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let fetchSpy: any;
 
   beforeEach(() => {
     const mockAIStore = {} as AIStore;

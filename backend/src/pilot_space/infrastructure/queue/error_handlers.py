@@ -11,17 +11,18 @@ from __future__ import annotations
 
 import asyncio
 import functools
-import logging
 import random
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar
 
+from pilot_space.infrastructure.logging import get_logger
+
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 P = ParamSpec("P")
 R = TypeVar("R")

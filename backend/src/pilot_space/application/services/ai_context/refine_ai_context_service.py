@@ -10,7 +10,6 @@ Handles:
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
@@ -23,6 +22,7 @@ from pilot_space.ai.agents.ai_context_agent import (
     CodeReference,
     RelatedItem,
 )
+from pilot_space.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -39,7 +39,7 @@ if TYPE_CHECKING:
         IssueRepository,
     )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

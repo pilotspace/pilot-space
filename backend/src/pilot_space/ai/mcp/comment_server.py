@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 import uuid
 from typing import Any
 
@@ -35,8 +34,9 @@ from pilot_space.infrastructure.database.models.discussion_comment import (
 from pilot_space.infrastructure.database.models.threaded_discussion import (
     ThreadedDiscussion,
 )
+from pilot_space.infrastructure.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # MCP server name — used in allowed_tools as mcp__pilot-comments__{tool_name}
 SERVER_NAME = "pilot-comments"

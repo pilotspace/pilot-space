@@ -10,7 +10,6 @@ Reference: docs/architect/claude-agent-sdk-architecture.md
 from __future__ import annotations
 
 import asyncio
-import logging
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -18,7 +17,9 @@ from typing import Any
 
 import yaml
 
-logger = logging.getLogger(__name__)
+from pilot_space.infrastructure.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 @dataclass

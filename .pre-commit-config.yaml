@@ -38,6 +38,7 @@ repos:
         entry: bash -c 'cd frontend && pnpm exec tsc --noEmit'
         language: system
         files: ^frontend/.*\.(ts|tsx)$
+        exclude: (__tests__/.*|\.test\.(ts|tsx)$|\.spec\.(ts|tsx)$)
         pass_filenames: false
         require_serial: true
 

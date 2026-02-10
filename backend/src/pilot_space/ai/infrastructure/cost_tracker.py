@@ -8,7 +8,6 @@ T013: CostTracker class with provider pricing.
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
@@ -18,11 +17,12 @@ from uuid import UUID
 from sqlalchemy import Date, cast, func, select
 
 from pilot_space.infrastructure.database.models.ai_cost_record import AICostRecord
+from pilot_space.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Pricing per million tokens (as of 2026-01)
 # Structure: {provider: {model: (input_cost, output_cost)}}
@@ -221,17 +221,15 @@ class CostTracker:
         await self.session.refresh(record)
 
         logger.info(
-            "AI cost tracked",
-            extra={
-                "workspace_id": str(workspace_id),
-                "user_id": str(user_id),
-                "agent": agent_name,
-                "provider": provider,
-                "model": model,
-                "input_tokens": input_tokens,
-                "output_tokens": output_tokens,
-                "cost_usd": cost_usd,
-            },
+            "cost_tracker_tracked",
+            workspace_id=str(workspace_id),
+            user_id=str(user_id),
+            agent=agent_name,
+            provider=provider,
+            model=model,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cost_usd=cost_usd,
         )
 
         return CostRecord(

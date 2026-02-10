@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 import re
 from typing import Any
 
@@ -27,8 +26,9 @@ from claude_agent_sdk import McpSdkServerConfig, create_sdk_mcp_server, tool
 
 from pilot_space.ai.tools.entity_resolver import resolve_entity_id
 from pilot_space.ai.tools.mcp_server import ToolContext, get_tool_approval_level
+from pilot_space.infrastructure.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # MCP server name — used in allowed_tools as mcp__pilot-projects__{tool_name}
 SERVER_NAME = "pilot-projects"

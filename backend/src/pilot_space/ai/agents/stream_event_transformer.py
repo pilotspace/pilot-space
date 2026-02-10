@@ -13,13 +13,14 @@ Extracted from pilotspace_agent_helpers.py to keep both files under 700 lines.
 from __future__ import annotations
 
 import json
-import logging
 from typing import TYPE_CHECKING, Any
+
+from pilot_space.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
     from pilot_space.ai.agents.sse_delta_buffer import DeltaBuffer
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Anthropic stream event types that should be forwarded
 _FORWARDED_EVENT_TYPES = frozenset(
@@ -68,12 +69,17 @@ def transform_stream_event(
     # reach the frontend BEFORE the tool executes (not after tool_result).
     if event_type in _FLUSH_EVENT_TYPES:
         if delta_buffer:
-            return delta_buffer.flush()
+            flushed = delta_buffer.flush()
+            if flushed:
+                logger.debug(
+                    "stream_event_flush", event_type=event_type, trigger="content_block_stop"
+                )
+            return flushed
         return None
 
     if event_type not in _FORWARDED_EVENT_TYPES:
         if event_type not in _IGNORED_EVENT_TYPES:
-            logger.debug("Unknown stream event type: %s", event_type)
+            logger.warning("stream_event_unknown", event_type=event_type)
         return None
 
     # Track that stream events were sent for dedup with AssistantMessage
@@ -124,6 +130,14 @@ def _handle_content_block_start(
     else:
         content_type = "text"
 
+    logger.debug(
+        "stream_block_start",
+        block_type=block_type,
+        content_type=content_type,
+        block_index=block_index,
+        tool_name=content_block.get("name", "") if block_type == "tool_use" else "",
+    )
+
     block_start_data: dict[str, Any] = {
         "index": block_index,
         "contentType": content_type,
@@ -173,6 +187,8 @@ def _handle_content_block_delta(
     }
 
     mapping = delta_map.get(delta_type)
+    if mapping is None and delta_type not in {"signature_delta", ""}:
+        logger.debug("stream_delta_unmapped", delta_type=delta_type, block_index=block_index)
     if mapping is None:
         # Forward signature_delta for thinking block multi-turn integrity.
         # The Anthropic API sends thinking signatures as a separate delta

@@ -6,7 +6,6 @@ Supports both HS256 (legacy/local) and ES256 (Supabase Cloud) algorithms.
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from functools import lru_cache
@@ -18,8 +17,9 @@ import jwt
 from jwt import PyJWKClient, PyJWTError
 
 from pilot_space.config import get_settings
+from pilot_space.infrastructure.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SupabaseAuthError(Exception):

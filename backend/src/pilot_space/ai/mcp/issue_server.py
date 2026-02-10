@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 from typing import Any
 from uuid import UUID
 
@@ -36,8 +35,9 @@ from pilot_space.infrastructure.database.repositories.issue_repository import (
     IssueFilters,
     IssueRepository,
 )
+from pilot_space.infrastructure.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # MCP server name — used in allowed_tools as mcp__pilot-issues__{tool_name}
 SERVER_NAME = "pilot-issues"
@@ -419,6 +419,7 @@ def create_issue_tools_server(
         },
     )
     async def create_issue(args: dict[str, Any]) -> dict[str, Any]:
+        logger.info("mcp_tool_invoked", tool="create_issue", title=args.get("title", "")[:80])
         if not tool_context:
             return _text_result("Error: Tool context not available")
 
@@ -518,6 +519,7 @@ def create_issue_tools_server(
         },
     )
     async def update_issue(args: dict[str, Any]) -> dict[str, Any]:
+        logger.info("mcp_tool_invoked", tool="update_issue", issue_id=args.get("issue_id", ""))
         if not tool_context:
             return _text_result("Error: Tool context not available")
 

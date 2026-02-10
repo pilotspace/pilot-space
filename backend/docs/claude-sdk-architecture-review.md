@@ -3,6 +3,11 @@
 
 **Date:** 2026-01-30
 **Reviewer:** AI Architecture Team
+**Status:** ⚠️ DEPRECATED - Queue mode never implemented
+
+**Migration Note:** Queue mode was experimental and never enabled in production. Removed in February 2026. System uses direct SSE streaming via PilotSpaceAgent only.
+**Historical Document:** Retained for architectural analysis reference only.
+
 **Documents Reviewed:**
 - `backend/docs/message-storage-architecture.md`
 - `backend/docs/plan-conversational-agent-v2.md`
@@ -14,12 +19,14 @@
 
 ## Executive Summary
 
-**Overall Architecture Grade: C-**
+**Overall Architecture Grade: C-** (Historical review of proposed but unimplemented architecture)
 
-**Top 3 Critical Issues:**
-1. **No Queue Implementation** - Plan describes async queue workers, but codebase has ZERO pgmq integration. Current architecture blocks FastAPI workers during AI streaming (can't scale beyond 10 concurrent users).
-2. **Database Schema Mismatch** - Migration creates `ai_messages` table missing critical columns (`job_id`, `token_usage`, `message_embedding`) required by the planned architecture.
-3. **Over-Engineering** - Plan proposes 6 separate worker classes + 4 queues + full event replay storage when 1 worker class + 1 queue + partial response storage achieves identical functionality with 70% less code.
+**Note**: This document analyzed a proposed queue-based architecture that was never implemented in production. The actual system uses direct SSE streaming without async queue processing.
+
+**Top 3 Critical Issues (from original review):**
+1. **No Queue Implementation** - Plan described async queue workers, but was never implemented. Current architecture uses direct SSE streaming.
+2. **Database Schema Mismatch** - Migration creates `ai_messages` table missing critical columns proposed in the plan.
+3. **Over-Engineering** - Plan proposed 6 separate worker classes + 4 queues when simpler patterns would suffice.
 
 **Estimated Tech Debt Cost if Not Addressed:**
 - **$50,000-$75,000** in rework costs (6 months to untangle over-abstractions)

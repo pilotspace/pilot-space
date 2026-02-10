@@ -7,7 +7,6 @@ API keys are encrypted before storage and never returned in responses.
 from __future__ import annotations
 
 import asyncio
-import logging
 import time
 from typing import Annotated
 from uuid import UUID
@@ -37,8 +36,9 @@ from pilot_space.infrastructure.encryption import (
     decrypt_api_key,
     encrypt_api_key,
 )
+from pilot_space.infrastructure.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/ai/configurations", tags=["ai-configuration"])
 

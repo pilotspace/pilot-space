@@ -6,7 +6,6 @@ T330: Enhanced OpenAPI documentation for all endpoints.
 
 from __future__ import annotations
 
-import logging
 from typing import Annotated
 from uuid import UUID
 
@@ -27,11 +26,13 @@ from pilot_space.api.v1.schemas.issue import (
     IssueListResponse,
     IssueResponse,
     IssueUpdateRequest,
+    UserBriefSchema,
 )
 from pilot_space.dependencies.auth import SessionDep, get_current_user_id
 from pilot_space.dependencies.workspace import get_current_workspace_id
+from pilot_space.infrastructure.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(
     prefix="/issues",
@@ -451,7 +452,7 @@ async def get_issue_activities(
                 comment=a.comment,
                 metadata=a.activity_metadata,
                 created_at=a.created_at,
-                actor=a.actor,
+                actor=UserBriefSchema.model_validate(a.actor) if a.actor else None,
             )
             for a in result.activities
         ],
@@ -501,7 +502,7 @@ async def add_comment(
         comment=activity.comment,
         metadata=activity.activity_metadata,
         created_at=activity.created_at,
-        actor=activity.actor,
+        actor=UserBriefSchema.model_validate(activity.actor) if activity.actor else None,
     )
 
 

@@ -6,7 +6,6 @@ Routes are mounted under /workspaces/{workspace_id}/members.
 
 from __future__ import annotations
 
-import logging
 from typing import Annotated
 from uuid import UUID
 
@@ -20,8 +19,9 @@ from pilot_space.api.v1.schemas.workspace import (
 from pilot_space.dependencies.auth import CurrentUser, CurrentUserId, SessionDep
 from pilot_space.infrastructure.database.models.workspace import Workspace
 from pilot_space.infrastructure.database.models.workspace_member import WorkspaceRole
+from pilot_space.infrastructure.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 

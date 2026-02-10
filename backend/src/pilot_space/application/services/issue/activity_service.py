@@ -5,11 +5,11 @@ T129: Create ActivityService for issue history management.
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from pilot_space.infrastructure.database.models import Activity, ActivityType
+from pilot_space.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
     from pilot_space.infrastructure.database.repositories import ActivityRepository
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

@@ -12,11 +12,12 @@ from __future__ import annotations
 
 import base64
 import json
-import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 from uuid import UUID
+
+from pilot_space.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,7 +26,7 @@ if TYPE_CHECKING:
         HomepageRepository,
     )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass(frozen=True, slots=True)

@@ -9,16 +9,17 @@ Source: 011-role-based-skills, FR-006, FR-007, FR-008, FR-014
 from __future__ import annotations
 
 import asyncio
-import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+from pilot_space.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
     from uuid import UUID
 
     from sqlalchemy.ext.asyncio import AsyncSession
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Prefix used for role skill directories to distinguish from system skills
 _ROLE_SKILL_PREFIX = "role-"

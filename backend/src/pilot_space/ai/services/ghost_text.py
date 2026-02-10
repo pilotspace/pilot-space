@@ -10,14 +10,15 @@ Design Decisions: DD-011 (Model Selection for Latency)
 from __future__ import annotations
 
 import hashlib
-import logging
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
+
+from pilot_space.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
     from pilot_space.infrastructure.cache.redis import RedisClient
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Cache configuration
 GHOST_TEXT_CACHE_TTL = 3600  # 1 hour
@@ -155,12 +156,10 @@ class GhostTextService:
                 )
 
             logger.info(
-                "Generated ghost text completion",
-                extra={
-                    "workspace_id": str(workspace_id),
-                    "suggestion_length": len(suggestion),
-                    "confidence": confidence,
-                },
+                "ghost_text_completion_generated",
+                workspace_id=str(workspace_id),
+                suggestion_length=len(suggestion),
+                confidence=confidence,
             )
 
             return result
@@ -206,11 +205,9 @@ Complete this:
                 await self._redis.delete(key)
 
         logger.info(
-            "Cleared ghost text cache",
-            extra={
-                "workspace_id": str(workspace_id),
-                "keys_cleared": len(keys),
-            },
+            "ghost_text_cache_cleared",
+            workspace_id=str(workspace_id),
+            keys_cleared=len(keys),
         )
 
         return len(keys)

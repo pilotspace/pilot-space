@@ -20,15 +20,16 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 from typing import TYPE_CHECKING, Any
 
 from claude_agent_sdk import McpSdkServerConfig, create_sdk_mcp_server, tool
 
+from pilot_space.infrastructure.logging import get_logger
+
 if TYPE_CHECKING:
     from pilot_space.ai.mcp.block_ref_map import BlockRefMap
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # MCP server name — used in allowed_tools as mcp__pilot-notes__{tool_name}
 SERVER_NAME = "pilot-notes"
@@ -166,7 +167,9 @@ def create_note_tools_server(
             return _text_result(f"Error: {ws_err}")
 
         ai_op = "replace_block" if operation == "replace" else "append_blocks"
-        logger.info("[NoteTools] update_note_block: %s block=%s", ai_op, block_id)
+        logger.info(
+            "mcp_tool_invoked", tool="update_note_block", operation=ai_op, block_id=block_id
+        )
         return _text_result(
             json.dumps(
                 {
@@ -204,7 +207,7 @@ def create_note_tools_server(
         ws_err = await _verify_note_workspace(note_id)
         if ws_err:
             return _text_result(f"Error: {ws_err}")
-        logger.info("[NoteTools] enhance_text: block=%s", block_id)
+        logger.info("mcp_tool_invoked", tool="enhance_text", block_id=block_id)
         return _text_result(
             json.dumps(
                 {
@@ -246,7 +249,7 @@ def create_note_tools_server(
         ws_err = await _verify_note_workspace(note_id)
         if ws_err:
             return _text_result(f"Error: {ws_err}")
-        logger.info("[NoteTools] write_to_note: appended to note=%s", note_id)
+        logger.info("mcp_tool_invoked", tool="write_to_note", note_id=note_id)
         return _text_result(
             json.dumps(
                 {
@@ -325,7 +328,7 @@ def create_note_tools_server(
             )
 
         count = len(issues)
-        logger.info("[NoteTools] extract_issues: %d issues from note=%s", count, note_id)
+        logger.info("mcp_tool_invoked", tool="extract_issues", issue_count=count, note_id=note_id)
         return _text_result(
             json.dumps(
                 {
@@ -379,7 +382,12 @@ def create_note_tools_server(
             "priority": args.get("priority", "medium"),
             "type": args.get("issue_type", "task"),
         }
-        logger.info("[NoteTools] create_issue_from_note: '%s' block=%s", args["title"], block_id)
+        logger.info(
+            "mcp_tool_invoked",
+            tool="create_issue_from_note",
+            title=args["title"][:80],
+            block_id=block_id,
+        )
         return _text_result(
             json.dumps(
                 {
@@ -455,9 +463,10 @@ def create_note_tools_server(
             ]
 
             logger.info(
-                "[NoteTools] link_existing_issues: query='%s', found=%d",
-                query,
-                len(results),
+                "mcp_tool_invoked",
+                tool="link_existing_issues",
+                query=query[:50],
+                found=len(results),
             )
 
             if not results:
@@ -468,7 +477,7 @@ def create_note_tools_server(
                 + json.dumps(results, indent=2)
             )
         except Exception as e:
-            logger.exception("[NoteTools] link_existing_issues failed")
+            logger.exception("mcp_tool_error", tool="link_existing_issues")
             return _text_result(f"Error searching issues: {e!s}")
 
     @tool(
@@ -544,13 +553,15 @@ def create_note_tools_server(
                     result_item["content_preview"] = preview_text[:200]
                 results.append(result_item)
 
-            logger.info("[NoteTools] search_notes: query='%s', found=%d", query, len(results))
+            logger.info(
+                "mcp_tool_invoked", tool="search_notes", query=query[:50], found=len(results)
+            )
             return _text_result(
                 f"Found {len(results)} note(s) matching '{query}':\n"
                 + "\n".join(f"- {r['title']} ({r['id']})" for r in results)
             )
         except Exception as e:
-            logger.exception("[NoteTools] search_notes failed")
+            logger.exception("mcp_tool_error", tool="search_notes")
             return _text_result(f"Error searching notes: {e!s}")
 
     @tool(
@@ -586,7 +597,7 @@ def create_note_tools_server(
         if "project_id" in args:
             payload["project_id"] = args["project_id"]
 
-        logger.info("[NoteTools] create_note: title='%s'", title)
+        logger.info("mcp_tool_invoked", tool="create_note", title=title[:80])
         return _text_result(
             json.dumps(
                 {
@@ -655,7 +666,7 @@ def create_note_tools_server(
         if not changes:
             return _text_result("Error: no changes specified")
 
-        logger.info("[NoteTools] update_note: note_id=%s, changes=%s", note_id, changes)
+        logger.info("mcp_tool_invoked", tool="update_note", note_id=note_id, changes=changes)
         return _text_result(
             json.dumps(
                 {

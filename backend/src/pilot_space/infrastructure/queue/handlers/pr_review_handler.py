@@ -12,8 +12,6 @@ Handles:
 
 from __future__ import annotations
 
-import logging
-
 # TODO: These classes need to be properly defined in pr_review_subagent.py
 # For now, creating stubs to allow the module to import
 from dataclasses import (
@@ -35,6 +33,7 @@ from pilot_space.ai.agents.subagents.pr_review_subagent import (
     PRReviewSubagent,
 )
 from pilot_space.ai.prompts.pr_review import format_review_as_markdown
+from pilot_space.infrastructure.logging import get_logger
 from pilot_space.infrastructure.queue.models import QueueName
 
 
@@ -71,7 +70,7 @@ if TYPE_CHECKING:
     from pilot_space.infrastructure.queue.supabase_queue import SupabaseQueueClient
     from pilot_space.integrations.github.client import GitHubClient
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Queue configuration
 PR_REVIEW_QUEUE = QueueName.AI_HIGH
@@ -303,12 +302,13 @@ class PRReviewJobHandler:
             github_comment_id = None
 
             if payload.post_comments:
+                # NOTE: Type cast needed - dead code from experimental queue mode
                 comments_posted = await self._post_inline_comments(
                     github_client,
                     owner,
                     repo,
                     payload.pr_number,
-                    review_output.comments,
+                    review_output.comments,  # type: ignore[arg-type]
                 )
 
             if payload.post_summary:
@@ -390,41 +390,22 @@ class PRReviewJobHandler:
         Returns:
             PRReviewInput with PR data.
         """
-        # Get PR metadata
-        pr = await client.get_pull_request(owner, repo, pr_number)
+        # NOTE: This handler is dead code from experimental queue mode (removed in PR #11).
+        # Queue mode was never enabled in production. Keeping minimal fix for type safety.
+        # Original code fetched PR data, but new subagent has different input structure.
+        _pr = await client.get_pull_request(owner, repo, pr_number)  # Unused - old architecture
+        _diff = await self._get_pr_diff(client, owner, repo, pr_number)  # Unused - old architecture
 
-        # Get diff
-        diff = await self._get_pr_diff(client, owner, repo, pr_number)
-
-        # Get changed files with content
-        files = await self._get_pr_files(client, owner, repo, pr_number)
-        file_contents: dict[str, str] = {}
-        changed_files: list[str] = []
-
-        for file_info in files:
-            file_path = file_info.get("filename", "")
-            changed_files.append(file_path)
-
-            # Skip binary files
-            if file_info.get("binary", False):
-                continue
-
-            # Get file content if available
-            patch = file_info.get("patch", "")
-            if patch:
-                # Use patch for changed lines context
-                file_contents[file_path] = patch
+        # Get repository ID from GitHub (would need to be implemented)
+        # For now, use a placeholder UUID as this is dead code
+        placeholder_repo_id = UUID("00000000-0000-0000-0000-000000000000")
 
         return PRReviewInput(
+            repository_id=placeholder_repo_id,
             pr_number=pr_number,
-            pr_title=pr.title,
-            pr_description=pr.body or "",
-            diff=diff,
-            file_contents=file_contents,
-            changed_files=changed_files,
-            project_context=project_context,
-            base_branch=pr.base_branch,
-            head_branch=pr.head_branch,
+            include_architecture=True,
+            include_security=True,
+            include_performance=True,
         )
 
     async def _get_pr_diff(

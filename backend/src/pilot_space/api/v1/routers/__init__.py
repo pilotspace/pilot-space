@@ -16,8 +16,6 @@ Available routers:
 
 from __future__ import annotations
 
-import logging
-
 from pilot_space.api.v1.routers.ai_approvals import router as ai_approvals_router
 from pilot_space.api.v1.routers.ai_chat import router as ai_chat_router
 from pilot_space.api.v1.routers.ai_configuration import router as ai_configuration_router
@@ -59,12 +57,12 @@ from pilot_space.api.v1.routers.workspace_note_issue_links import (
 from pilot_space.api.v1.routers.workspace_notes import router as workspace_notes_router
 from pilot_space.api.v1.routers.workspace_notes_ai import router as workspace_notes_ai_router
 from pilot_space.api.v1.routers.workspaces import router as workspaces_router
-from pilot_space.config import get_settings
+from pilot_space.infrastructure.logging import get_logger
 
 # These routers depend on deleted agent modules (pre-005 architecture).
 # They will be migrated to PilotSpaceAgent skill/subagent pattern.
 # Lazy imports with fallback to prevent startup failure.
-_logger = logging.getLogger(__name__)
+_logger = get_logger(__name__)
 
 ai_router = None
 ai_annotations_router = None
@@ -97,11 +95,8 @@ try:
 except ImportError:
     _logger.warning("notes_ai_router unavailable: get_sdk_orchestrator removed")
 
-# Conditional import for debug router (development only)
-_settings = get_settings()
+# Debug router removed (was development-only mock generator)
 debug_router = None
-if _settings.is_development:
-    from pilot_space.api.v1.routers.debug import router as debug_router
 
 __all__ = [
     "ai_annotations_router",

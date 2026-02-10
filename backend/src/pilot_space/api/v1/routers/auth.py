@@ -7,7 +7,6 @@ are handled client-side by the Supabase JS SDK (RD-002).
 
 from __future__ import annotations
 
-import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -22,8 +21,9 @@ from pilot_space.dependencies import CurrentUser, DbSession
 from pilot_space.infrastructure.database.repositories.user_repository import (
     UserRepository,
 )
+from pilot_space.infrastructure.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 

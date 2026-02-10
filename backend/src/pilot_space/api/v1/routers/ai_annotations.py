@@ -9,7 +9,6 @@ Annotations now route through PilotSpaceAgent orchestrator.
 
 from __future__ import annotations
 
-import logging
 import uuid
 from typing import Annotated
 
@@ -23,8 +22,9 @@ from pilot_space.api.v1.schemas.annotation import (
     AnalyzeNoteResponse,
 )
 from pilot_space.dependencies.auth import CurrentUserId, SessionDep
+from pilot_space.infrastructure.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["AI Annotations"])
 

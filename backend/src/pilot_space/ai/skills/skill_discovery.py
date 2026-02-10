@@ -6,7 +6,6 @@ SKILL.md, merges with UI metadata, and returns a list of user-invocable skills.
 
 from __future__ import annotations
 
-import logging
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -14,8 +13,9 @@ from pathlib import Path
 import yaml
 
 from pilot_space.ai.skills.skill_metadata import get_skill_ui_metadata
+from pilot_space.infrastructure.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Triggers that indicate the skill is NOT user-invocable via slash command
 _NON_INVOCABLE_TRIGGERS = frozenset({"scheduled", "intent_detection"})

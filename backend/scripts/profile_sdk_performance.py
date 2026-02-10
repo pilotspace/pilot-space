@@ -222,9 +222,7 @@ async def profile_sdk_client_lifecycle() -> None:
             context = AgentContext(workspace_id=workspace_id, user_id=user_id)
             return await agent.create_client(chat_input, context)
 
-        client_metrics = await profiler.profile_operation(
-            "SDK Client Creation", create_client_op
-        )
+        client_metrics = await profiler.profile_operation("SDK Client Creation", create_client_op)
 
         if client_metrics.subprocess_count > 0:
             logger.warning(

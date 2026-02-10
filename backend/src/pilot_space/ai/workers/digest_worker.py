@@ -12,9 +12,9 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 from typing import TYPE_CHECKING, Any
 
+from pilot_space.infrastructure.logging import get_logger
 from pilot_space.infrastructure.queue.models import QueueName
 
 if TYPE_CHECKING:
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
     from pilot_space.infrastructure.queue.supabase_queue import SupabaseQueueClient
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Task type constant for routing
 DIGEST_TASK_TYPE = "generate_workspace_digest"

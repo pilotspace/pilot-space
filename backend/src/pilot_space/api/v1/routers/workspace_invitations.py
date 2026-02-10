@@ -6,7 +6,6 @@ Extracted from workspaces.py to keep files under 700 lines.
 
 from __future__ import annotations
 
-import logging
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, status
@@ -22,8 +21,9 @@ from pilot_space.api.v1.schemas.workspace import (
     WorkspaceMemberResponse,
 )
 from pilot_space.dependencies.auth import CurrentUser, SessionDep
+from pilot_space.infrastructure.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/workspaces", tags=["workspaces", "invitations"])
 

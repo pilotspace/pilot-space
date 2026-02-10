@@ -205,8 +205,8 @@ describe('Phase 1 SDK Features (T57-T59)', () => {
 
       const buffered = store.consumePendingCitations();
       expect(buffered).toHaveLength(2);
-      expect(buffered?.[0].sourceId).toBe('note-100');
-      expect(buffered?.[1].sourceId).toBe('issue-456');
+      expect(buffered?.[0]!.sourceId).toBe('note-100');
+      expect(buffered?.[1]!.sourceId).toBe('issue-456');
     });
 
     it('should not crash and buffer is empty when no citations sent', () => {
@@ -456,7 +456,7 @@ describe('Phase 1 SDK Features (T57-T59)', () => {
 
       const buffered = store.consumePendingCitations();
       expect(buffered).toHaveLength(1);
-      expect(buffered?.[0].sourceId).toBe('doc-1');
+      expect(buffered?.[0]!.sourceId).toBe('doc-1');
     });
 
     it('should route tool_input_delta event to pending buffer with partialInput', () => {

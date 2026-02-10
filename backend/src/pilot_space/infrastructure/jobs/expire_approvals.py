@@ -8,14 +8,15 @@ T076: Approval expiration cron job.
 
 from __future__ import annotations
 
-import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
+
+from pilot_space.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def expire_pending_approvals(session: AsyncSession) -> int:

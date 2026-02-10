@@ -12,7 +12,6 @@ Reference: docs/architect/claude-agent-sdk-architecture.md
 from __future__ import annotations
 
 import json
-import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, ClassVar
@@ -24,12 +23,13 @@ from pilot_space.ai.sdk.hooks_lifecycle import (
     ContextPreservationHook,
     InputValidationHook,
 )
+from pilot_space.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
     from pilot_space.ai.sdk.file_hooks import FileBasedHookExecutor
     from pilot_space.ai.sdk.permission_handler import PermissionHandler
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

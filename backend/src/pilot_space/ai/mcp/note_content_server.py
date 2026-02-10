@@ -17,18 +17,18 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 import re
 from typing import TYPE_CHECKING, Any
 
 from claude_agent_sdk import McpSdkServerConfig, create_sdk_mcp_server, tool
 
 from pilot_space.ai.tools.mcp_server import ToolContext, get_tool_approval_level
+from pilot_space.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
     from pilot_space.ai.mcp.block_ref_map import BlockRefMap
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # MCP server name
 SERVER_NAME = "pilot-note-content"

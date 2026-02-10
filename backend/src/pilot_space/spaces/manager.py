@@ -8,16 +8,16 @@ Reference: docs/architect/scalable-agent-architecture.md
 
 from __future__ import annotations
 
-import logging
 import os
 from pathlib import Path
 from uuid import UUID
 
+from pilot_space.infrastructure.logging import get_logger
 from pilot_space.spaces.base import SpaceInterface
 from pilot_space.spaces.bootstrapper import ProjectBootstrapper
 from pilot_space.spaces.local import LocalFileSystemSpace
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SpaceManager:
@@ -54,24 +54,19 @@ class SpaceManager:
             deployment_mode: Override for PILOT_DEPLOYMENT_MODE env var
         """
         self._bootstrapper = bootstrapper
-        self._deployment_mode = deployment_mode or os.getenv(
-            "PILOT_DEPLOYMENT_MODE", "local"
-        )
+        self._deployment_mode = deployment_mode or os.getenv("PILOT_DEPLOYMENT_MODE", "local")
 
         # Determine storage root
         if storage_root:
             self._storage_root = Path(storage_root)
         else:
             default_root = Path.home() / ".pilot-space" / "workspaces"
-            self._storage_root = Path(
-                os.getenv("PILOT_STORAGE_ROOT", str(default_root))
-            )
+            self._storage_root = Path(os.getenv("PILOT_STORAGE_ROOT", str(default_root)))
 
         # Ensure storage root exists
         self._storage_root.mkdir(parents=True, exist_ok=True)
         logger.info(
-            f"SpaceManager initialized: mode={self._deployment_mode}, "
-            f"root={self._storage_root}"
+            f"SpaceManager initialized: mode={self._deployment_mode}, root={self._storage_root}"
         )
 
     @property
@@ -100,8 +95,7 @@ class SpaceManager:
         if self._deployment_mode == "container":
             # Future: ContainerSpace for K8s/MicroVM
             raise NotImplementedError(
-                "ContainerSpace not yet implemented. "
-                "Set PILOT_DEPLOYMENT_MODE=local for MVP."
+                "ContainerSpace not yet implemented. Set PILOT_DEPLOYMENT_MODE=local for MVP."
             )
 
         return LocalFileSystemSpace(
@@ -111,9 +105,7 @@ class SpaceManager:
             bootstrapper=self._bootstrapper,
         )
 
-    def get_existing_space(
-        self, workspace_id: UUID, user_id: UUID
-    ) -> LocalFileSystemSpace | None:
+    def get_existing_space(self, workspace_id: UUID, user_id: UUID) -> LocalFileSystemSpace | None:
         """Get existing space if it exists.
 
         Unlike get_space(), this doesn't create a new space if it
@@ -186,9 +178,7 @@ def create_space_manager(templates_dir: Path | str | None = None) -> SpaceManage
     """
     if templates_dir is None:
         # Default to package templates directory
-        templates_dir = (
-            Path(__file__).parent.parent / "ai" / "templates"
-        )
+        templates_dir = Path(__file__).parent.parent / "ai" / "templates"
 
     bootstrapper = ProjectBootstrapper(templates_dir)
     return SpaceManager(bootstrapper)

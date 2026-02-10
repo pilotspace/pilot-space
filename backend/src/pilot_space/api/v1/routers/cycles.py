@@ -5,7 +5,6 @@ T163: Create Cycles CRUD and management endpoints.
 
 from __future__ import annotations
 
-import logging
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -36,8 +35,9 @@ from pilot_space.api.v1.schemas.issue import (
 from pilot_space.dependencies import get_current_user_id, get_current_workspace_id
 from pilot_space.dependencies.auth import SessionDep
 from pilot_space.infrastructure.database.models import CycleStatus
+from pilot_space.infrastructure.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/cycles", tags=["cycles"])
 

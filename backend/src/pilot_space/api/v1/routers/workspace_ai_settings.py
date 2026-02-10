@@ -7,7 +7,6 @@ Routes are mounted under /workspaces/{workspace_id}/ai/settings.
 
 from __future__ import annotations
 
-import logging
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, status
@@ -28,8 +27,9 @@ from pilot_space.infrastructure.database.models.workspace import Workspace
 from pilot_space.infrastructure.database.repositories.workspace_repository import (
     WorkspaceRepository,
 )
+from pilot_space.infrastructure.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 

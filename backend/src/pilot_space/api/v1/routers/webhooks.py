@@ -5,20 +5,20 @@ T187: Create webhooks router for GitHub event handling.
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 from fastapi import APIRouter, Header, HTTPException, Request, status
 
 from pilot_space.api.v1.schemas.integration import WebhookProcessResult
 from pilot_space.config import get_settings
+from pilot_space.infrastructure.logging import get_logger
 from pilot_space.integrations.github import (
     GitHubWebhookHandler,
     WebhookProcessingError,
     WebhookVerificationError,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 

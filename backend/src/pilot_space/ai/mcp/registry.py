@@ -8,17 +8,17 @@ Design Decisions: DD-003 (Human-in-the-loop for destructive actions)
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from pilot_space.ai.exceptions import AIError
 from pilot_space.ai.mcp.base import MCPTool, ToolResult
+from pilot_space.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ToolNotFoundError(AIError):
@@ -94,11 +94,9 @@ class MCPToolRegistry:
         self._tools[tool.name] = tool
 
         logger.info(
-            "Registered MCP tool",
-            extra={
-                "tool_name": tool.name,
-                "requires_approval": tool.requires_approval,
-            },
+            "mcp_tool_registered",
+            tool_name=tool.name,
+            requires_approval=tool.requires_approval,
         )
 
     def deregister(self, tool_name: str) -> bool:
@@ -112,7 +110,7 @@ class MCPToolRegistry:
         """
         if tool_name in self._tools:
             del self._tools[tool_name]
-            logger.info("Deregistered MCP tool", extra={"tool_name": tool_name})
+            logger.info("mcp_tool_deregistered", tool_name=tool_name)
             return True
 
         return False
@@ -311,13 +309,10 @@ class MCPToolRegistry:
             )
 
             logger.info(
-                "Tool executed successfully",
-                extra={
-                    "tool_name": tool_name,
-                    "workspace_id": str(workspace_id),
-                    "user_id": str(user_id),
-                    "success": result.success,
-                },
+                "mcp_tool_executed",
+                tool_name=tool_name,
+                workspace_id=str(workspace_id),
+                success=result.success,
             )
 
             return result

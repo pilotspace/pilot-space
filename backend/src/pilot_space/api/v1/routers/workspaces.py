@@ -8,7 +8,6 @@ AI settings: see workspace_ai_settings.py
 
 from __future__ import annotations
 
-import logging
 from typing import Annotated
 from uuid import UUID
 
@@ -33,8 +32,9 @@ from pilot_space.infrastructure.database.models.workspace_member import Workspac
 from pilot_space.infrastructure.database.repositories.label_repository import (
     LabelRepository,
 )
+from pilot_space.infrastructure.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/workspaces", tags=["workspaces"])
 

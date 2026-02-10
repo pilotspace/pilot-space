@@ -23,7 +23,6 @@ if TYPE_CHECKING:
     from pilot_space.ai.infrastructure.cost_tracker import CostTracker
     from pilot_space.ai.infrastructure.resilience import ResilientExecutor
     from pilot_space.ai.providers.provider_selector import ProviderSelector
-    from pilot_space.ai.tools.mcp_server import ToolRegistry
 
 
 @dataclass(frozen=True)

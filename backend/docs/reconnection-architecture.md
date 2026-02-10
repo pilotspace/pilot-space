@@ -1,5 +1,7 @@
 # Conversation Reconnection Architecture
 
+**Migration Note:** This document describes SSE reconnection patterns. Queue mode references are deprecated (never implemented in production). System uses direct SSE streaming only.
+
 ## Problem Statement
 
 Users may navigate away from conversations while AI is processing, then return expecting to see:
@@ -166,10 +168,8 @@ T+60s   User returns
 
 | Key | Type | Purpose | TTL |
 |-----|------|---------|-----|
-| `stream:active:{job_id}` | STRING | Indicates job is still processing | 10m |
-| `stream:events:{job_id}` | LIST | Ordered list of all events | 5m |
-| `partial:response:{job_id}` | STRING | Accumulated text response | 10m |
-| `stream:active:{job_id}` | STRING | Worker heartbeat | 10m |
+| `stream:active:{session_id}` | STRING | Indicates stream is still active | 10m |
+| `partial:response:{session_id}` | STRING | Accumulated text response | 10m |
 
 ### PostgreSQL (Persistent)
 
@@ -264,10 +264,10 @@ eventSource.onmessage = () => {
 
 | Edge Case | Solution |
 |-----------|----------|
-| **User navigates while event is mid-stream** | Worker continues processing; partial response stored in Redis |
+| **User navigates while event is mid-stream** | Agent continues processing; partial response stored in Redis |
 | **SSE connection drops during approval** | Approval state persisted in DB; frontend refetches on reconnect |
-| **Worker crashes mid-processing** | pgmq visibility timeout ensures message reprocessed; partial response recoverable |
-| **User opens conversation in multiple tabs** | Each tab has own SSE connection; worker broadcasts to all via Redis pub/sub |
+| **Agent crashes mid-processing** | Partial response recoverable from last checkpoint; user can retry |
+| **User opens conversation in multiple tabs** | Each tab has own SSE connection; events broadcast to all tabs |
 | **Browser refresh during streaming** | Frontend fetches missed events from Redis, reconnects to SSE |
 | **User returns after job expired (> 10min)** | Events purged from Redis, but response persisted in DB; show completed result |
 | **Network flaps (multiple disconnects)** | Exponential backoff prevents thundering herd; max 5 retries |

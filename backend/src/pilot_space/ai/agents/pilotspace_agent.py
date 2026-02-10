@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 import os
 import shutil
+import time
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -41,6 +41,7 @@ from pilot_space.ai.mcp.note_content_server import TOOL_NAMES as NOTE_CONTENT_TO
 from pilot_space.ai.mcp.note_server import TOOL_NAMES as NOTE_TOOL_NAMES
 from pilot_space.ai.mcp.project_server import TOOL_NAMES as PROJECT_TOOL_NAMES
 from pilot_space.ai.sdk.sandbox_config import ModelTier, configure_sdk_for_space
+from pilot_space.infrastructure.logging import get_logger
 from pilot_space.spaces.manager import SpaceManager
 
 if TYPE_CHECKING:
@@ -53,7 +54,7 @@ if TYPE_CHECKING:
     from pilot_space.ai.tools.mcp_server import ToolRegistry
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Aggregated tool names across all MCP servers (33 tools total: 27 spec + 6 retained)
 ALL_TOOL_NAMES: list[str] = [
@@ -153,7 +154,6 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
         key_storage: SecureKeyStorage | None = None,
     ) -> None:
         super().__init__(
-            tool_registry=tool_registry,
             provider_selector=provider_selector,
             cost_tracker=cost_tracker,
             resilient_executor=resilient_executor,
@@ -480,6 +480,8 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
                 sdk_event_count = 0
                 transformed_count = 0
                 tool_event_count = 0
+                stream_start = time.monotonic()
+                ttft: float | None = None  # time-to-first-token
 
                 try:
                     async for source, item in merge_sdk_and_queue(
@@ -501,6 +503,13 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
                             session_id=session_id_str,
                         )
                         if sse_event:
+                            if ttft is None:
+                                ttft = time.monotonic() - stream_start
+                                logger.info(
+                                    "stream_ttft",
+                                    ttft_ms=round(ttft * 1000, 1),
+                                    session_id=session_id_str,
+                                )
                             transformed_count += 1
                             yield sse_event
                             capture_content_from_sse(sse_event, content_blocks)
@@ -515,10 +524,13 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
                     partial_flush = delta_buffer.flush()
                     if partial_flush:
                         yield partial_flush
+                    duration_ms = round((time.monotonic() - stream_start) * 1000, 1)
                     logger.error(
-                        "[SDK/Space] Stream error (session=%s): %s",
-                        query_session_id,
-                        stream_err,
+                        "stream_error",
+                        session_id=query_session_id,
+                        error=str(stream_err),
+                        sdk_events_before_error=sdk_event_count,
+                        duration_ms=duration_ms,
                         exc_info=True,
                     )
                     err = {
@@ -545,11 +557,15 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
                         pass
 
                     stream_completed = True
+                    duration_ms = round((time.monotonic() - stream_start) * 1000, 1)
                     logger.info(
-                        "[SDK/Space] Query finished: %d sdk_events, %d transformed, %d tool_events",
-                        sdk_event_count,
-                        transformed_count,
-                        tool_event_count,
+                        "stream_completed",
+                        sdk_events=sdk_event_count,
+                        transformed=transformed_count,
+                        tool_events=tool_event_count,
+                        duration_ms=duration_ms,
+                        ttft_ms=round(ttft * 1000, 1) if ttft else None,
+                        session_id=session_id_str,
                     )
 
             finally:

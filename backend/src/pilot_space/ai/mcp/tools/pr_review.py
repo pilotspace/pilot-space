@@ -8,7 +8,6 @@ Design Decisions: DD-011 (Claude for code review)
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 from uuid import UUID
 
@@ -20,8 +19,9 @@ from pilot_space.ai.mcp.base import (
     ToolParameterType,
     ToolResult,
 )
+from pilot_space.infrastructure.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class PRReviewResult(BaseModel):
@@ -181,14 +181,12 @@ class PRReviewTool(MCPTool):
                 review_result = await self._full_review(pr_data)
 
             logger.info(
-                "Completed PR review",
-                extra={
-                    "workspace_id": str(workspace_id),
-                    "user_id": str(user_id),
-                    "repo": repo,
-                    "pr_number": pr_number,
-                    "review_type": review_type,
-                },
+                "pr_review_completed",
+                workspace_id=str(workspace_id),
+                user_id=str(user_id),
+                repo=repo,
+                pr_number=pr_number,
+                review_type=review_type,
             )
 
             return ToolResult.ok(

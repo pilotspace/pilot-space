@@ -11,9 +11,44 @@ Provides request/response schemas for:
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime
+from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
+
+
+class ReviewSeverity(StrEnum):
+    """Severity levels for review findings."""
+
+    CRITICAL = "critical"
+    WARNING = "warning"
+    SUGGESTION = "suggestion"
+    INFO = "info"
+
+
+class ReviewCategory(StrEnum):
+    """Review aspect categories."""
+
+    ARCHITECTURE = "architecture"
+    SECURITY = "security"
+    QUALITY = "quality"
+    PERFORMANCE = "performance"
+    DOCUMENTATION = "documentation"
+
+
+@dataclass
+class ReviewComment:
+    """Single review comment from findings."""
+
+    file_path: str
+    line_number: int
+    end_line: int | None
+    severity: ReviewSeverity
+    category: ReviewCategory
+    message: str
+    suggestion: str | None = None
+    code_snippet: str | None = None
 
 
 class TriggerReviewRequest(BaseModel):

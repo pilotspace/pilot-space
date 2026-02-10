@@ -8,7 +8,6 @@ Source: FR-014, FR-015, FR-016, US3.
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
@@ -22,6 +21,7 @@ from pilot_space.infrastructure.database.models.workspace_member import (
     WorkspaceMember,
     WorkspaceRole,
 )
+from pilot_space.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
     from pilot_space.infrastructure.database.repositories.invitation_repository import (
@@ -34,7 +34,7 @@ if TYPE_CHECKING:
         WorkspaceRepository,
     )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

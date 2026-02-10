@@ -8,11 +8,12 @@ Reference: docs/architect/scalable-agent-architecture.md
 
 from __future__ import annotations
 
-import logging
 import shutil
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
+from pilot_space.infrastructure.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class ProjectBootstrapper:

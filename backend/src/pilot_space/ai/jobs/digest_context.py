@@ -11,7 +11,6 @@ References:
 
 from __future__ import annotations
 
-import logging
 import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -20,10 +19,12 @@ from uuid import UUID
 
 from sqlalchemy import func, select
 
+from pilot_space.infrastructure.logging import get_logger
+
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Token budget: ~4000 tokens = ~16000 chars (1 token ~ 4 chars)
 MAX_CONTEXT_CHARS = 15000
