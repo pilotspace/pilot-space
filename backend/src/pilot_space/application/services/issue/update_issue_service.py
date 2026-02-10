@@ -5,7 +5,6 @@ T126: Create UpdateIssueService with field-level change detection.
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -15,6 +14,7 @@ from pilot_space.infrastructure.database.models import (
     Issue,
     IssuePriority,
 )
+from pilot_space.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
     from datetime import date
@@ -28,7 +28,7 @@ if TYPE_CHECKING:
         LabelRepository,
     )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # Sentinel for unchanged values

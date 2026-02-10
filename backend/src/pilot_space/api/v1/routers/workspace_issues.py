@@ -11,7 +11,6 @@ Supports both UUID and slug for workspace identification.
 
 from __future__ import annotations
 
-import logging
 from datetime import datetime
 from typing import Annotated, Any
 from uuid import UUID
@@ -34,8 +33,9 @@ from pilot_space.infrastructure.database.models.workspace import Workspace
 from pilot_space.infrastructure.database.repositories.issue_repository import (
     IssueFilters,
 )
+from pilot_space.infrastructure.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 

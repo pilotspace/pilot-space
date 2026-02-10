@@ -21,6 +21,7 @@ from pilot_space.infrastructure.auth import (
     TokenPayload,
 )
 from pilot_space.infrastructure.database.engine import get_db_session
+from pilot_space.infrastructure.logging import get_logger
 
 # Singleton auth instance
 _auth: SupabaseAuth | None = None
@@ -292,8 +293,6 @@ async def ensure_user_synced(
     Returns:
         User UUID (synced to local DB).
     """
-    import logging
-
     from sqlalchemy.exc import IntegrityError
 
     from pilot_space.infrastructure.database.models.user import User
@@ -307,7 +306,7 @@ async def ensure_user_synced(
         WorkspaceRepository,
     )
 
-    logger = logging.getLogger(__name__)
+    logger = get_logger(__name__)
     user_repo = UserRepository(session=session)
 
     # Check if user exists by ID (scalar-only, no relationship loading)

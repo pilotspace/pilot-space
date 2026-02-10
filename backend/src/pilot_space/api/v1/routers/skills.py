@@ -6,15 +6,14 @@ No auth required — skill list is not workspace-specific.
 
 from __future__ import annotations
 
-import logging
-
 from fastapi import APIRouter
 from pydantic import BaseModel
 
 from pilot_space.ai.skills.skill_discovery import SkillInfo, discover_skills
 from pilot_space.config import get_settings
+from pilot_space.infrastructure.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/skills", tags=["skills"])
 

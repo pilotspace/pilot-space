@@ -11,18 +11,18 @@ T334: Redis Caching for AI Responses
 from __future__ import annotations
 
 import hashlib
-import logging
 from dataclasses import dataclass
 from enum import IntEnum
 from typing import TYPE_CHECKING, Any, TypeVar
 
 from pilot_space.infrastructure.cache.redis import RedisClient
+from pilot_space.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
     from uuid import UUID
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 T = TypeVar("T")
 

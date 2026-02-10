@@ -13,15 +13,15 @@ Design Decisions: DD-058 (SDK mode for streaming)
 from __future__ import annotations
 
 import json
-import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from pilot_space.ai.session.session_manager import AIMessage, SessionNotFoundError
+from pilot_space.infrastructure.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -332,14 +332,12 @@ class SessionHandler:
             ConversationSession if found and valid, None otherwise.
         """
         logger.info(
-            "get_session_by_context: starting lookup",
-            extra={
-                "user_id": str(user_id),
-                "workspace_id": str(workspace_id),
-                "agent_name": agent_name,
-                "context_id": str(context_id),
-                "has_db_session": self._db_session is not None,
-            },
+            "session_handler_starting_context_lookup",
+            user_id=str(user_id),
+            workspace_id=str(workspace_id),
+            agent_name=agent_name,
+            context_id=str(context_id),
+            has_db_session=self._db_session is not None,
         )
 
         # 1. Try Redis index (fast path)
@@ -351,16 +349,14 @@ class SessionHandler:
 
         if ai_session:
             logger.info(
-                "get_session_by_context: found in Redis",
-                extra={
-                    "session_id": str(ai_session.id),
-                    "context_id": str(context_id),
-                },
+                "session_handler_found_in_redis",
+                session_id=str(ai_session.id),
+                context_id=str(context_id),
             )
         else:
             logger.info(
-                "get_session_by_context: not found in Redis, trying PostgreSQL",
-                extra={"context_id": str(context_id)},
+                "session_handler_trying_postgresql",
+                context_id=str(context_id),
             )
 
         # 2. Fall back to PostgreSQL if Redis expired
@@ -382,8 +378,8 @@ class SessionHandler:
 
         if ai_session is None:
             logger.info(
-                "get_session_by_context: no session found",
-                extra={"context_id": str(context_id)},
+                "session_handler_no_session_found",
+                context_id=str(context_id),
             )
             return None
 

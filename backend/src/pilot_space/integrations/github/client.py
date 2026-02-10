@@ -5,13 +5,13 @@ T177: Create GitHubClient with authenticated requests and rate limiting.
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Self
 
 import httpx
 
+from pilot_space.infrastructure.logging import get_logger
 from pilot_space.integrations.github.exceptions import (
     GitHubAPIError,
     GitHubAuthError,
@@ -25,7 +25,7 @@ from pilot_space.integrations.github.models import (
     RateLimitInfo,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # GitHub API endpoints
 GITHUB_API_URL = "https://api.github.com"

@@ -13,14 +13,15 @@ Covers 5 review dimensions:
 from __future__ import annotations
 
 import json
-import logging
 import re
 from typing import TYPE_CHECKING, Any
 
-if TYPE_CHECKING:
-    from pilot_space.ai.agents.pr_review_agent import PRReviewOutput
+from pilot_space.infrastructure.logging import get_logger
 
-logger = logging.getLogger(__name__)
+if TYPE_CHECKING:
+    from pilot_space.ai.agents.subagents.pr_review_subagent import PRReviewOutput
+
+logger = get_logger(__name__)
 
 PR_REVIEW_SYSTEM_PROMPT = """You are an expert senior software engineer conducting a comprehensive code review.
 Your task is to review a pull request across 5 key dimensions, providing actionable feedback.
@@ -260,12 +261,8 @@ def parse_pr_review_response(
     Returns:
         Parsed PRReviewOutput.
     """
-    from pilot_space.ai.agents.pr_review_agent import (
-        PRReviewOutput,
-        ReviewCategory,
-        ReviewComment,
-        ReviewSeverity,
-    )
+    from pilot_space.ai.agents.subagents.pr_review_subagent import PRReviewOutput
+    from pilot_space.api.v1.schemas.pr_review import ReviewCategory, ReviewSeverity
 
     # Try to extract JSON from response
     try:
@@ -291,9 +288,15 @@ def parse_pr_review_response(
     if approval not in ("approve", "request_changes", "comment"):
         approval = "comment"
 
-    # Parse comments
+    # Parse comments and categorize by category
     raw_comments = data.get("comments", [])
-    comments: list[ReviewComment] = []
+
+    # Initialize findings lists by category
+    architecture_findings: list[dict[str, Any]] = []
+    security_findings: list[dict[str, Any]] = []
+    code_quality_findings: list[dict[str, Any]] = []
+    performance_findings: list[dict[str, Any]] = []
+    documentation_findings: list[dict[str, Any]] = []
 
     for raw in raw_comments:
         if not isinstance(raw, dict):
@@ -329,23 +332,37 @@ def parse_pr_review_response(
         if not message:
             continue
 
-        comments.append(
-            ReviewComment(
-                file_path=file_path,
-                line_number=line_number,
-                end_line=raw.get("end_line"),
-                severity=severity,
-                category=category,
-                message=message,
-                suggestion=raw.get("suggestion"),
-                code_snippet=raw.get("code_snippet"),
-            )
-        )
+        # Build finding dict
+        finding = {
+            "file_path": file_path,
+            "line_number": line_number,
+            "end_line": raw.get("end_line"),
+            "severity": severity.value,
+            "message": message,
+            "suggestion": raw.get("suggestion"),
+            "code_snippet": raw.get("code_snippet"),
+        }
+
+        # Categorize by category
+        if category == ReviewCategory.ARCHITECTURE:
+            architecture_findings.append(finding)
+        elif category == ReviewCategory.SECURITY:
+            security_findings.append(finding)
+        elif category == ReviewCategory.QUALITY:
+            code_quality_findings.append(finding)
+        elif category == ReviewCategory.PERFORMANCE:
+            performance_findings.append(finding)
+        elif category == ReviewCategory.DOCUMENTATION:
+            documentation_findings.append(finding)
 
     return PRReviewOutput(
         summary=summary,
-        comments=comments,
-        approval_recommendation=approval,
+        approval_status=approval,
+        architecture_findings=architecture_findings,
+        security_findings=security_findings,
+        code_quality_findings=code_quality_findings,
+        performance_findings=performance_findings,
+        documentation_findings=documentation_findings,
         partial_review=partial_review,
         files_reviewed=files_reviewed,
         files_skipped=files_skipped,
@@ -361,10 +378,8 @@ def format_review_as_markdown(output: Any) -> str:
     Returns:
         Formatted markdown string.
     """
-    from pilot_space.ai.agents.pr_review_agent import (
-        PRReviewOutput,
-        ReviewSeverity,
-    )
+    from pilot_space.ai.agents.subagents.pr_review_subagent import PRReviewOutput
+    from pilot_space.api.v1.schemas.pr_review import ReviewSeverity
 
     if not isinstance(output, PRReviewOutput):
         return "Error: Invalid review output"
@@ -416,7 +431,7 @@ def format_review_as_markdown(output: Any) -> str:
     }
 
     for severity in severity_order:
-        severity_comments = [c for c in output.comments if c.severity == severity]
+        severity_comments = [c for c in output.comments if c.get("severity") == severity.value]
         if not severity_comments:
             continue
 
@@ -424,17 +439,17 @@ def format_review_as_markdown(output: Any) -> str:
 
         for comment in severity_comments:
             # File and line reference
-            line_ref = f"L{comment.line_number}"
-            if comment.end_line:
-                line_ref = f"L{comment.line_number}-L{comment.end_line}"
+            line_ref = f"L{comment['line_number']}"
+            if comment.get("end_line"):
+                line_ref = f"L{comment['line_number']}-L{comment['end_line']}"
 
-            parts.append(f"#### `{comment.file_path}` ({line_ref})\n")
-            parts.append(f"**Category**: {comment.category.value}\n\n")
-            parts.append(f"{comment.message}\n")
+            parts.append(f"#### `{comment['file_path']}` ({line_ref})\n")
+            parts.append(f"**Category**: {comment['category']}\n\n")
+            parts.append(f"{comment['message']}\n")
 
-            if comment.suggestion:
+            if comment.get("suggestion"):
                 parts.append("\n**Suggested fix**:\n")
-                parts.append(f"```\n{comment.suggestion}\n```\n")
+                parts.append(f"```\n{comment['suggestion']}\n```\n")
 
             parts.append("\n---\n\n")
 

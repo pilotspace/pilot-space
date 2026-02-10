@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any, ClassVar
 from uuid import UUID
@@ -21,8 +20,9 @@ from pilot_space.infrastructure.database.engine import get_db_session
 from pilot_space.infrastructure.database.repositories.approval_repository import (
     ApprovalRepository,
 )
+from pilot_space.infrastructure.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Polling defaults for wait_for_approval
 DEFAULT_TIMEOUT_SECONDS: int = 300  # 5 minutes (not 24h; avoids blocking SDK)

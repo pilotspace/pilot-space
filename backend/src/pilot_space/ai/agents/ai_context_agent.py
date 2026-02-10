@@ -14,7 +14,6 @@ are the stable interface consumed by the service layer.
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -25,6 +24,7 @@ from pilot_space.ai.prompts.ai_context import (
     build_refinement_prompt,
     parse_context_response,
 )
+from pilot_space.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -35,7 +35,7 @@ if TYPE_CHECKING:
     from pilot_space.ai.providers.provider_selector import ProviderSelector
     from pilot_space.ai.tools.mcp_server import ToolRegistry
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # =============================================================================
@@ -188,11 +188,9 @@ class AIContextAgent:
             return AgentResult.ok(output)
         except Exception as e:
             logger.exception(
-                "AI context generation failed",
-                extra={
-                    "issue_id": input_data.issue_id,
-                    "workspace_id": input_data.workspace_id,
-                },
+                "ai_context_generation_failed",
+                issue_id=input_data.issue_id,
+                workspace_id=input_data.workspace_id,
             )
             return AgentResult.fail(str(e))
 

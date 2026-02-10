@@ -7,7 +7,6 @@ Implements per-workspace rate limiting using Redis (NFR-019):
 
 from __future__ import annotations
 
-import logging
 import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -15,11 +14,13 @@ from typing import TYPE_CHECKING
 from fastapi import HTTPException, Request, status
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 
+from pilot_space.infrastructure.logging import get_logger
+
 if TYPE_CHECKING:
     from redis.asyncio import Redis
     from starlette.responses import Response
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

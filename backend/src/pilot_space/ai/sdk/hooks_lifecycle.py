@@ -9,12 +9,13 @@ Reference: tmp/005-sdk-gap-analysis.md (G8-G11)
 from __future__ import annotations
 
 import json
-import logging
 import re
 import time
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from pilot_space.infrastructure.logging import get_logger
+
+logger = get_logger(__name__)
 
 # Max user prompt length (50K characters)
 MAX_INPUT_LENGTH = 50_000

@@ -8,7 +8,6 @@ Design Decisions: DD-011 (Gemini for latency)
 
 from __future__ import annotations
 
-import logging
 import time
 from typing import Any
 from uuid import UUID
@@ -17,8 +16,9 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from pilot_space.dependencies import CurrentUserId, DbSession, RedisDep
+from pilot_space.infrastructure.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/ai/ghost-text", tags=["ghost-text"])
 

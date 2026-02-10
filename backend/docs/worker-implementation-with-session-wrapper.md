@@ -1,9 +1,9 @@
 # Worker Implementation with Session Wrapper
 **ConversationWorker - Enhanced with Session Management**
 
-**Status:** Implementation Ready
-**Date:** 2026-01-30
-**Note:** Uses session wrapper around `query()` for cleaner session management
+**Status:** ⚠️ DEPRECATED - Queue mode never implemented in production
+**Migration Note:** Queue mode was experimental and never enabled in production. Removed in February 2026. System uses direct SSE streaming via PilotSpaceAgent only.
+**Historical Document:** Retained for reference only.
 
 ---
 

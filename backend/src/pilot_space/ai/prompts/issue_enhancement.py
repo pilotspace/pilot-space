@@ -6,11 +6,12 @@ T133: Create prompt templates for IssueEnhancerAgent.
 from __future__ import annotations
 
 import json
-import logging
 import re
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from pilot_space.infrastructure.logging import get_logger
+
+logger = get_logger(__name__)
 
 ENHANCEMENT_SYSTEM_PROMPT = """You are an expert software project manager assistant that helps improve issue quality.
 Your task is to enhance issue titles and descriptions to be clearer, more actionable, and better structured.

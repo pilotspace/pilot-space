@@ -6,10 +6,11 @@ T198: Add PR review trigger endpoint.
 
 from __future__ import annotations
 
-import logging
 import secrets
 from typing import TYPE_CHECKING, Annotated
 from uuid import UUID
+
+from pilot_space.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -46,7 +47,7 @@ from pilot_space.infrastructure.database.repositories import (
 )
 from pilot_space.infrastructure.encryption import decrypt_api_key
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/integrations", tags=["integrations"])
 

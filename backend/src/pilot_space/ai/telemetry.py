@@ -22,7 +22,15 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterator
     from uuid import UUID
 
-logger = logging.getLogger(__name__)
+# Try to use structured logging if available, otherwise fall back to standard logging
+try:
+    from pilot_space.infrastructure.logging import get_logger
+
+    logger = get_logger(__name__)
+    _use_structlog = True
+except ImportError:
+    logger = logging.getLogger(__name__)
+    _use_structlog = False
 
 
 class AIProvider(Enum):
@@ -218,11 +226,20 @@ class TelemetryCollector:
         if not metrics.success:
             totals["total_errors"] += 1
 
-        # Log metrics
-        logger.info(
-            "AI operation completed",
-            extra=metrics.to_dict(),
-        )
+        # Log metrics with structured data
+        if _use_structlog:
+            import structlog
+
+            log = structlog.get_logger(__name__)
+            log.info(
+                "ai_operation_completed",
+                **metrics.to_dict(),
+            )
+        else:
+            logger.info(
+                "AI operation completed",
+                extra=metrics.to_dict(),
+            )
 
     def get_workspace_summary(self, workspace_id: UUID) -> dict[str, Any]:
         """Get cost summary for a workspace.
@@ -388,16 +405,31 @@ def log_ai_latency(
         model: Model identifier.
         **extra: Additional context.
     """
-    logger.info(
-        "AI latency",
-        extra={
-            "operation": operation,
-            "duration_ms": duration_ms,
-            "provider": provider,
-            "model": model,
+    if _use_structlog:
+        # Structlog accepts kwargs directly
+        import structlog
+
+        log = structlog.get_logger(__name__)
+        log.info(
+            "ai_latency",
+            operation=operation,
+            duration_ms=duration_ms,
+            provider=provider,
+            model=model,
             **extra,
-        },
-    )
+        )
+    else:
+        # When structlog is not available, logger is from stdlib which requires extra dict
+        logger.info(
+            "AI latency",
+            extra={
+                "operation": operation,
+                "duration_ms": duration_ms,
+                "provider": provider,
+                "model": model,
+                **extra,
+            },
+        )
 
 
 # Prometheus metrics for SDK operations (T328)

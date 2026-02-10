@@ -5,7 +5,6 @@ T181: Create ConnectGitHubService for OAuth code exchange and setup.
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -14,6 +13,7 @@ from pilot_space.infrastructure.database.models import (
     IntegrationProvider,
 )
 from pilot_space.infrastructure.encryption import encrypt_api_key
+from pilot_space.infrastructure.logging import get_logger
 from pilot_space.integrations.github.client import (
     GitHubAuthError,
     GitHubClient,
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 
     from pilot_space.infrastructure.database.repositories import IntegrationRepository
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class GitHubConnectionError(Exception):

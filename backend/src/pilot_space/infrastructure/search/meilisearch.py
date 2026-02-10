@@ -15,12 +15,12 @@ Indexes:
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import TYPE_CHECKING, Any, cast
 
 import httpx
 import orjson
 
+from pilot_space.infrastructure.logging import get_logger
 from pilot_space.infrastructure.search.config import (
     DEFAULT_INDEX_SETTINGS,
     INDEX_CONFIGS,
@@ -35,7 +35,7 @@ from pilot_space.infrastructure.search.models import (
 if TYPE_CHECKING:
     from uuid import UUID
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Re-export for backward compatibility
 __all__ = [

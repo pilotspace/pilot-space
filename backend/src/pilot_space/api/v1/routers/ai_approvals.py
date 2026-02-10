@@ -7,7 +7,6 @@ T073-T075: Approval queue endpoints.
 
 from __future__ import annotations
 
-import logging
 import uuid
 from typing import Annotated, Any
 from uuid import UUID
@@ -27,8 +26,9 @@ from pilot_space.dependencies import (
     CurrentUserId,
     DbSession,
 )
+from pilot_space.infrastructure.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/approvals", tags=["AI Approvals"])
 

@@ -5,7 +5,6 @@ T179: Create GitHubSyncService for syncing commits and PRs.
 
 from __future__ import annotations
 
-import logging
 import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -14,6 +13,7 @@ from pilot_space.infrastructure.database.models import (
     IntegrationLink,
     IntegrationLinkType,
 )
+from pilot_space.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -33,7 +33,7 @@ if TYPE_CHECKING:
         ParsedPushEvent,
     )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Pattern to match issue references like PILOT-123, ABC-456
 ISSUE_REF_PATTERN = re.compile(r"([A-Z]{2,10})-(\d+)", re.IGNORECASE)

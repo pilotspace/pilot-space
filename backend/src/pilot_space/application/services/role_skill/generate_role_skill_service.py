@@ -10,7 +10,6 @@ Source: 011-role-based-skills, T010, FR-003, FR-004
 from __future__ import annotations
 
 import json
-import logging
 import time
 from collections import defaultdict
 from dataclasses import dataclass
@@ -21,11 +20,12 @@ from pilot_space.ai.exceptions import ProviderUnavailableError
 from pilot_space.ai.infrastructure.resilience import ResilientExecutor, RetryConfig
 from pilot_space.ai.providers.provider_selector import ProviderSelector, TaskType
 from pilot_space.application.services.role_skill.types import VALID_ROLE_TYPES
+from pilot_space.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # In-memory sliding window rate limiter: max 5 generations/hour/user (FR-003)
 _RATE_LIMIT_MAX = 5

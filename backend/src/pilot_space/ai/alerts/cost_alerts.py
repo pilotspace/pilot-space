@@ -5,16 +5,17 @@ T329: Daily and weekly cost threshold checks with alert messages.
 
 from __future__ import annotations
 
-import logging
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING
 from uuid import UUID
 
+from pilot_space.infrastructure.logging import get_logger
+
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Cost thresholds (configurable per workspace in production)
 DAILY_COST_THRESHOLD = Decimal("10.00")
@@ -151,12 +152,10 @@ async def check_cost_alerts(
     if daily_cost > daily_limit:
         alerts.append(f"Daily AI cost ${daily_cost:.2f} exceeds threshold ${daily_limit:.2f}")
         logger.warning(
-            "Daily cost threshold exceeded",
-            extra={
-                "workspace_id": str(workspace_id),
-                "daily_cost": float(daily_cost),
-                "threshold": float(daily_limit),
-            },
+            "cost_alert_daily_threshold_exceeded",
+            workspace_id=str(workspace_id),
+            daily_cost=float(daily_cost),
+            threshold=float(daily_limit),
         )
 
     # Check weekly cost
@@ -164,23 +163,19 @@ async def check_cost_alerts(
     if weekly_cost > weekly_limit:
         alerts.append(f"Weekly AI cost ${weekly_cost:.2f} exceeds threshold ${weekly_limit:.2f}")
         logger.warning(
-            "Weekly cost threshold exceeded",
-            extra={
-                "workspace_id": str(workspace_id),
-                "weekly_cost": float(weekly_cost),
-                "threshold": float(weekly_limit),
-            },
+            "cost_alert_weekly_threshold_exceeded",
+            workspace_id=str(workspace_id),
+            weekly_cost=float(weekly_cost),
+            threshold=float(weekly_limit),
         )
 
     if alerts:
         logger.info(
-            "Cost alerts generated",
-            extra={
-                "workspace_id": str(workspace_id),
-                "alert_count": len(alerts),
-                "daily_cost": float(daily_cost),
-                "weekly_cost": float(weekly_cost),
-            },
+            "cost_alert_generated",
+            workspace_id=str(workspace_id),
+            alert_count=len(alerts),
+            daily_cost=float(daily_cost),
+            weekly_cost=float(weekly_cost),
         )
 
     return alerts

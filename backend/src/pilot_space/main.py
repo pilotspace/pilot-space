@@ -62,6 +62,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     from pilot_space.config import get_settings
     from pilot_space.container import get_container
+    from pilot_space.infrastructure.logging import configure_structlog, get_logger
 
     # Startup: Initialize DI container and connections
     container = get_container()
@@ -73,57 +74,58 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.container = container
     settings = get_settings()
 
+    # Configure structured logging first
+    configure_structlog(settings)
+    logger = get_logger(__name__)
+    logger.info(
+        "application_startup",
+        app_name=settings.app_name,
+        app_env=settings.app_env,
+        log_level=settings.log_level,
+    )
+
+    # Initialize DI container and connections
+    app.state.container = get_container()
+
     # Connect to Redis for session management
     redis_client = app.state.container.redis_client()
     if redis_client is not None:
         await redis_client.connect()
 
-    # Start conversation worker if queue mode enabled
-    worker_task: asyncio.Task[None] | None = None
-    worker = None
+    # Start digest worker for homepage digest generation
     digest_worker_task: asyncio.Task[None] | None = None
     digest_worker = None
-    if settings.ai_queue_mode:
-        queue_client = app.state.container.queue_client()
-        if queue_client and redis_client:
-            from pilot_space.infrastructure.queue.models import QueueName
+    queue_client = app.state.container.queue_client()
+    if queue_client and redis_client:
+        from pilot_space.infrastructure.queue.models import QueueName
 
-            await queue_client.create_queue(QueueName.AI_CHAT)
-            await queue_client.create_queue(QueueName.AI_LOW)
+        await queue_client.create_queue(QueueName.AI_LOW)
 
-            from pilot_space.ai.workers.conversation_worker import ConversationWorker
+        from pilot_space.ai.workers.digest_worker import DigestWorker
 
-            agent = app.state.container.pilotspace_agent()
-            session_handler = None
-            session_manager = app.state.container.session_manager()
-            if session_manager is not None:
-                from pilot_space.ai.sdk.session_handler import SessionHandler
+        session_factory = app.state.container.session_factory()
+        digest_worker = DigestWorker(queue_client, session_factory)
+        digest_worker_task = asyncio.create_task(digest_worker.start())
 
-                session_handler = SessionHandler(session_manager=session_manager)
-
-            worker = ConversationWorker(queue_client, redis_client, agent, session_handler)
-            worker_task = asyncio.create_task(worker.start())
-
-            # Start digest worker for AI_LOW queue
-            from pilot_space.ai.workers.digest_worker import DigestWorker
-
-            session_factory = app.state.container.session_factory()
-            digest_worker = DigestWorker(queue_client, session_factory)
-            digest_worker_task = asyncio.create_task(digest_worker.start())
+    # Log startup completion
+    logger.info(
+        "application_ready",
+        redis_connected=redis_client is not None,
+    )
 
     yield
 
     # Shutdown: Clean up workers and connections
+    logger.info("application_shutdown_start")
     if digest_worker:
         await digest_worker.stop()
+        logger.info("digest_worker_stopped")
     if digest_worker_task:
         digest_worker_task.cancel()
-    if worker:
-        await worker.stop()
-    if worker_task:
-        worker_task.cancel()
     if redis_client is not None:
         await redis_client.disconnect()
+        logger.info("redis_disconnected")
+    logger.info("application_shutdown_complete")
 
 
 app = FastAPI(
@@ -190,13 +192,10 @@ app.include_router(issues_router, prefix=API_V1_PREFIX)
 app.include_router(issues_ai_router, prefix=API_V1_PREFIX)
 app.include_router(issues_ai_context_router, prefix=API_V1_PREFIX)
 app.include_router(issues_ai_context_streaming_router, prefix=API_V1_PREFIX)
-if notes_ai_router is not None:
-    app.include_router(notes_ai_router, prefix=API_V1_PREFIX)
+app.include_router(notes_ai_router, prefix=API_V1_PREFIX)
 app.include_router(cycles_router, prefix=API_V1_PREFIX)
-if ai_router is not None:
-    app.include_router(ai_router, prefix=API_V1_PREFIX)
-if ai_annotations_router is not None:
-    app.include_router(ai_annotations_router, prefix=API_V1_PREFIX)
+app.include_router(ai_router, prefix=API_V1_PREFIX)
+app.include_router(ai_annotations_router, prefix=API_V1_PREFIX)
 app.include_router(ai_approvals_router, prefix=API_V1_PREFIX)
 app.include_router(ai_chat_router, prefix=f"{API_V1_PREFIX}/ai")
 app.include_router(ai_configuration_router, prefix=API_V1_PREFIX)
@@ -205,8 +204,7 @@ app.include_router(ai_extraction_router, prefix=API_V1_PREFIX)
 app.include_router(ghost_text_router, prefix=API_V1_PREFIX)
 app.include_router(ai_tasks_router, prefix=API_V1_PREFIX)
 app.include_router(mcp_tools_router, prefix=API_V1_PREFIX)
-if ai_pr_review_router is not None:
-    app.include_router(ai_pr_review_router, prefix=API_V1_PREFIX)
+app.include_router(ai_pr_review_router, prefix=API_V1_PREFIX)
 app.include_router(ai_sessions_router, prefix=API_V1_PREFIX)
 app.include_router(integrations_router, prefix=API_V1_PREFIX)
 app.include_router(webhooks_router, prefix=API_V1_PREFIX)

@@ -156,8 +156,8 @@ describe('RoleSkillStore', () => {
       store.setGenerationStep('select');
       expect(store.generationStep).toBe('select');
 
-      store.setGenerationStep('describe');
-      expect(store.generationStep).toBe('describe');
+      store.setGenerationStep('form');
+      expect(store.generationStep).toBe('form');
 
       store.setGenerationStep('generating');
       expect(store.generationStep).toBe('generating');

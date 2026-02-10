@@ -10,7 +10,6 @@ and graceful error handling for caching use cases:
 
 from __future__ import annotations
 
-import logging
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any, TypeVar
 
@@ -26,11 +25,12 @@ from pilot_space.infrastructure.cache.types import (
     DEFAULT_TTL_SECONDS,
     CacheResult,
 )
+from pilot_space.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 T = TypeVar("T")
 

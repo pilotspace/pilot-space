@@ -10,7 +10,6 @@ Reference: docs/DESIGN_DECISIONS.md#dd-003
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
@@ -18,11 +17,12 @@ from typing import TYPE_CHECKING, Any, ClassVar
 from uuid import UUID
 
 from pilot_space.ai.infrastructure.approval import ActionType
+from pilot_space.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
     from pilot_space.ai.infrastructure.approval import ApprovalService
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ActionClassification(StrEnum):

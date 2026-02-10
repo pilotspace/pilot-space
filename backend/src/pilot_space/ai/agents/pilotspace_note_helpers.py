@@ -9,11 +9,12 @@ Extracted from pilotspace_agent_helpers.py for file size quality gate (700 lines
 from __future__ import annotations
 
 import json
-import logging
 from typing import Any
 from uuid import uuid4
 
-logger = logging.getLogger(__name__)
+from pilot_space.infrastructure.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 def emit_focus_block_event(result_data: dict[str, Any], note_id: str, operation: str) -> str | None:

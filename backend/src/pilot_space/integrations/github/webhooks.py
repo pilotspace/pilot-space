@@ -7,18 +7,19 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Any
+
+from pilot_space.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
     from uuid import UUID
 
     from pilot_space.infrastructure.queue.supabase_queue import SupabaseQueueClient
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class GitHubEventType(str, Enum):

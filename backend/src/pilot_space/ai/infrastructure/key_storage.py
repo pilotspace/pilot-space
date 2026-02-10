@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import base64
 import hashlib
-import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
@@ -23,10 +22,12 @@ from cryptography.fernet import Fernet
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 
+from pilot_space.infrastructure.logging import get_logger
+
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -155,12 +156,10 @@ class SecureKeyStorage:
         await self.db.commit()
 
         logger.info(
-            "API key stored",
-            extra={
-                "workspace_id": str(workspace_id),
-                "provider": provider,
-                "key_preview": self._mask_key(api_key),
-            },
+            "key_storage_api_key_stored",
+            workspace_id=str(workspace_id),
+            provider=provider,
+            key_preview=self._mask_key(api_key),
         )
 
     async def get_api_key(
@@ -223,11 +222,9 @@ class SecureKeyStorage:
         await self.db.commit()
 
         logger.info(
-            "API key deleted",
-            extra={
-                "workspace_id": str(workspace_id),
-                "provider": provider,
-            },
+            "key_storage_api_key_deleted",
+            workspace_id=str(workspace_id),
+            provider=provider,
         )
 
         return True
@@ -271,8 +268,8 @@ class SecureKeyStorage:
                 await model.generate_content_async("ping")
             else:
                 logger.warning(
-                    "Unknown provider for validation",
-                    extra={"provider": provider},
+                    "key_storage_unknown_provider",
+                    provider=provider,
                 )
                 return False
 
@@ -280,12 +277,10 @@ class SecureKeyStorage:
 
         except Exception as e:
             logger.warning(
-                "API key validation failed",
-                extra={
-                    "provider": provider,
-                    "error": str(e),
-                    "key_preview": self._mask_key(api_key),
-                },
+                "key_storage_validation_failed",
+                provider=provider,
+                error=str(e),
+                key_preview=self._mask_key(api_key),
             )
             return False
 

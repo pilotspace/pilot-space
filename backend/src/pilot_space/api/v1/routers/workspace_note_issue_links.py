@@ -11,7 +11,6 @@ Routes:
 
 from __future__ import annotations
 
-import logging
 from typing import Annotated
 from uuid import UUID
 
@@ -28,8 +27,9 @@ from pilot_space.infrastructure.database.models.note_issue_link import (
     NoteIssueLink,
     NoteLinkType,
 )
+from pilot_space.infrastructure.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 

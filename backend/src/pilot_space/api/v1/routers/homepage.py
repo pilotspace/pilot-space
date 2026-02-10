@@ -13,7 +13,6 @@ References:
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Sequence
 from uuid import UUID
 
@@ -40,8 +39,9 @@ from pilot_space.api.v1.schemas.homepage import (
     StateBrief,
 )
 from pilot_space.dependencies import DbSession, QueueClientDep, WorkspaceMemberId
+from pilot_space.infrastructure.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/workspaces/{workspace_id}/homepage", tags=["homepage"])
 
@@ -77,11 +77,13 @@ async def get_activity(
         GetActivityService,
     )
     from pilot_space.infrastructure.database.repositories.homepage_repository import (
+        HomepageRepository,
         IssueActivityRow,
         NoteActivityRow,
     )
 
-    service = GetActivityService(session)
+    repo = HomepageRepository(session)
+    service = GetActivityService(session, repo)
     result = await service.execute(
         GetActivityPayload(
             workspace_id=workspace_id,
@@ -197,8 +199,13 @@ async def get_digest(
         GetDigestPayload,
         GetDigestService,
     )
+    from pilot_space.infrastructure.database.repositories.homepage_repository import (
+        HomepageRepository,
+    )
 
-    service = GetDigestService(session)
+    repo = HomepageRepository(session)
+
+    service = GetDigestService(session, repo)
     result = await service.execute(
         GetDigestPayload(
             workspace_id=workspace_id,

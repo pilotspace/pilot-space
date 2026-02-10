@@ -11,7 +11,6 @@ Uses pgmq (Postgres Message Queue) under the hood via Supabase Edge Functions.
 
 from __future__ import annotations
 
-import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, cast
 from uuid import uuid4
@@ -19,6 +18,7 @@ from uuid import uuid4
 import httpx
 import orjson
 
+from pilot_space.infrastructure.logging import get_logger
 from pilot_space.infrastructure.queue.models import (
     MessageStatus,
     QueueMessage,
@@ -28,7 +28,7 @@ from pilot_space.infrastructure.queue.models import (
 if TYPE_CHECKING:
     from uuid import UUID
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Re-export models for backward compatibility
 __all__ = [

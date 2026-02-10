@@ -58,7 +58,7 @@ export default function HomePage() {
         if (cancelled) return;
 
         if (items.length > 0) {
-          const defaultWorkspace = items[0];
+          const defaultWorkspace = items[0]!; // Safe: guard confirms items.length > 0
           addRecentWorkspace(defaultWorkspace.slug);
           router.replace(`/${defaultWorkspace.slug}`);
           return;

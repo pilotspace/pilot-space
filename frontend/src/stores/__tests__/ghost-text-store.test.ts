@@ -29,7 +29,8 @@ vi.mock('@/services/api/ai', () => ({
 describe('GhostTextStore', () => {
   let aiStore: AIStore;
   let ghostTextStore: GhostTextStore;
-  let fetchSpy: ReturnType<typeof vi.spyOn>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let fetchSpy: any;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -263,7 +264,7 @@ describe('GhostTextStore', () => {
       });
 
       const call = fetchSpy.mock.calls[0]!;
-      const body = JSON.parse(call[1]?.body as string);
+      const body = JSON.parse((call[1] as RequestInit & { body?: string })?.body as string);
       expect(body.context).toHaveLength(500);
       expect(body.prefix).toHaveLength(200);
       expect(body.context).toBe('a'.repeat(500));

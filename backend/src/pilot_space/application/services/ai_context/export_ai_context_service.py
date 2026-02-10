@@ -11,11 +11,12 @@ Handles:
 from __future__ import annotations
 
 import json
-import logging
 from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING
 from uuid import UUID
+
+from pilot_space.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,7 +26,7 @@ if TYPE_CHECKING:
         IssueRepository,
     )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ExportFormat(str, Enum):

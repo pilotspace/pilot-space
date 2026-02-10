@@ -16,15 +16,16 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
+from pilot_space.infrastructure.logging import get_logger
+
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Cooldown: skip if a digest was generated within this window
 DIGEST_COOLDOWN_MINUTES = 30
@@ -67,8 +68,9 @@ class DigestJobHandler:
         trigger = payload.get("trigger", "scheduled")
 
         logger.info(
-            "Starting digest generation",
-            extra={"workspace_id": str(workspace_id), "trigger": trigger},
+            "digest_starting_generation",
+            workspace_id=str(workspace_id),
+            trigger=trigger,
         )
 
         # Step 0: Acquire advisory lock to prevent concurrent generation
@@ -81,16 +83,16 @@ class DigestJobHandler:
         )
         if not lock_result.scalar():
             logger.info(
-                "Skipping digest generation: concurrent job in progress",
-                extra={"workspace_id": str(workspace_id)},
+                "digest_skipping_concurrent_job",
+                workspace_id=str(workspace_id),
             )
             return {"status": "skipped", "reason": "concurrent_lock"}
 
         # Step 1: Deduplication check
         if await self._recently_generated(workspace_id):
             logger.info(
-                "Skipping digest generation: recent digest exists",
-                extra={"workspace_id": str(workspace_id)},
+                "digest_skipping_recent_digest_exists",
+                workspace_id=str(workspace_id),
             )
             return {"status": "skipped", "reason": "cooldown"}
 
@@ -102,8 +104,8 @@ class DigestJobHandler:
 
         if context.total_chars == 0:
             logger.info(
-                "Skipping digest generation: no workspace activity",
-                extra={"workspace_id": str(workspace_id)},
+                "digest_skipping_no_activity",
+                workspace_id=str(workspace_id),
             )
             return {"status": "skipped", "reason": "no_activity"}
 
@@ -118,11 +120,9 @@ class DigestJobHandler:
         )
 
         logger.info(
-            "Digest generation complete",
-            extra={
-                "workspace_id": str(workspace_id),
-                "suggestion_count": len(suggestions),
-            },
+            "digest_generation_complete",
+            workspace_id=str(workspace_id),
+            suggestion_count=len(suggestions),
         )
 
         return {"status": "completed", "suggestion_count": len(suggestions)}

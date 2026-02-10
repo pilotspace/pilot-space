@@ -60,6 +60,9 @@ class PRReviewOutput:
         code_quality_findings: Code quality issues
         performance_findings: Performance concerns
         documentation_findings: Documentation gaps
+        partial_review: Whether this was a partial review
+        files_reviewed: Number of files reviewed
+        files_skipped: Number of files skipped
     """
 
     summary: str
@@ -69,6 +72,61 @@ class PRReviewOutput:
     code_quality_findings: list[dict[str, Any]]
     performance_findings: list[dict[str, Any]]
     documentation_findings: list[dict[str, Any]]
+    partial_review: bool = False
+    files_reviewed: int = 0
+    files_skipped: int = 0
+
+    @property
+    def approval_recommendation(self) -> str:
+        """Alias for approval_status (backward compatibility)."""
+        return self.approval_status
+
+    @property
+    def comments(self) -> list[dict[str, Any]]:
+        """Flatten findings into comments list."""
+        all_comments: list[dict[str, Any]] = []
+        category_map = [
+            (self.architecture_findings, "architecture"),
+            (self.security_findings, "security"),
+            (self.code_quality_findings, "quality"),
+            (self.performance_findings, "performance"),
+            (self.documentation_findings, "documentation"),
+        ]
+        for findings, category in category_map:
+            for finding in findings:
+                all_comments.append(
+                    {
+                        "file_path": finding.get("file_path", ""),
+                        "line_number": finding.get("line_number", 0),
+                        "end_line": finding.get("end_line"),
+                        "severity": finding.get("severity", "info"),
+                        "category": category,
+                        "message": finding.get("message", ""),
+                        "suggestion": finding.get("suggestion"),
+                        "code_snippet": finding.get("code_snippet"),
+                    }
+                )
+        return all_comments
+
+    @property
+    def critical_count(self) -> int:
+        """Count of critical findings."""
+        return sum(1 for c in self.comments if c.get("severity") == "critical")
+
+    @property
+    def warning_count(self) -> int:
+        """Count of warning findings."""
+        return sum(1 for c in self.comments if c.get("severity") == "warning")
+
+    @property
+    def suggestion_count(self) -> int:
+        """Count of suggestion findings."""
+        return sum(1 for c in self.comments if c.get("severity") == "suggestion")
+
+    @property
+    def info_count(self) -> int:
+        """Count of info findings."""
+        return sum(1 for c in self.comments if c.get("severity") == "info")
 
 
 class PRReviewSubagent(StreamingSDKBaseAgent[PRReviewInput, PRReviewOutput]):

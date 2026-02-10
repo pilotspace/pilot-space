@@ -8,15 +8,16 @@ T091d: Graceful degradation for AI features.
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
+from pilot_space.infrastructure.logging import get_logger
+
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 T = TypeVar("T")
 
@@ -98,11 +99,9 @@ class GhostTextFallback:
         message = cls.RATE_LIMITED_MESSAGE if rate_limited else cls.UNAVAILABLE_MESSAGE
 
         logger.info(
-            "Ghost text degraded to empty suggestion",
-            extra={
-                "rate_limited": rate_limited,
-                "original_error": error_message,
-            },
+            "degradation_ghost_text_empty_suggestion",
+            rate_limited=rate_limited,
+            original_error=error_message,
         )
 
         return DegradedResponse(
@@ -146,11 +145,9 @@ class MarginAnnotationFallback:
             DegradedResponse indicating panel should be hidden.
         """
         logger.info(
-            "Margin annotations degraded to hidden panel",
-            extra={
-                "preserve_existing": preserve_existing,
-                "original_error": error_message,
-            },
+            "degradation_margin_annotations_hidden_panel",
+            preserve_existing=preserve_existing,
+            original_error=error_message,
         )
 
         return DegradedResponse(
@@ -216,11 +213,9 @@ class IssueEnhancementFallback:
             DegradedResponse with original data.
         """
         logger.info(
-            "Issue enhancement degraded to original",
-            extra={
-                "issue_id": original.get("id"),
-                "original_error": error_message,
-            },
+            "degradation_issue_enhancement_original",
+            issue_id=original.get("id"),
+            original_error=error_message,
         )
 
         # Add metadata indicating AI fields are missing
@@ -268,8 +263,8 @@ class IssueExtractionFallback:
             DegradedResponse with empty extraction.
         """
         logger.info(
-            "Issue extraction degraded to empty result",
-            extra={"original_error": error_message},
+            "degradation_issue_extraction_empty_result",
+            original_error=error_message,
         )
 
         return DegradedResponse(
@@ -310,8 +305,8 @@ class DuplicateDetectionFallback:
             DegradedResponse with empty duplicate list.
         """
         logger.info(
-            "Duplicate detection degraded to empty result",
-            extra={"original_error": error_message},
+            "degradation_duplicate_detection_empty_result",
+            original_error=error_message,
         )
 
         return DegradedResponse(
@@ -358,22 +353,18 @@ def graceful_degradation(
                 return result
             except AIError as e:
                 logger.warning(
-                    "AI operation failed, using fallback",
-                    extra={
-                        "function": func.__name__,
-                        "error_type": type(e).__name__,
-                        "error": str(e),
-                    },
+                    "degradation_ai_operation_failed_fallback",
+                    function=func.__name__,
+                    error_type=type(e).__name__,
+                    error=str(e),
                 )
                 return fallback_fn(error_message=str(e))
             except Exception as e:
                 logger.exception(
-                    "Unexpected error in AI operation, using fallback",
-                    extra={
-                        "function": func.__name__,
-                        "error_type": type(e).__name__,
-                        "error": str(e),
-                    },
+                    "degradation_unexpected_error_fallback",
+                    function=func.__name__,
+                    error_type=type(e).__name__,
+                    error=str(e),
                 )
                 return fallback_fn(error_message=str(e))
 

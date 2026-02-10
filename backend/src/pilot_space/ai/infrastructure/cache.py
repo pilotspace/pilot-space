@@ -9,15 +9,16 @@ T319: Response caching implementation.
 from __future__ import annotations
 
 import hashlib
-import logging
 from typing import TYPE_CHECKING, Any
 
 import orjson
 
+from pilot_space.infrastructure.logging import get_logger
+
 if TYPE_CHECKING:
     from pilot_space.infrastructure.cache.redis import RedisClient
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Default cache TTL (1 hour)
 DEFAULT_CACHE_TTL_SECONDS = 3600
@@ -118,14 +119,16 @@ class AIResponseCache:
             cached_value = await self._redis.get(key)
             if cached_value is None:
                 logger.debug(
-                    "AI cache miss",
-                    extra={"agent": agent_name, "hash": input_hash},
+                    "cache_miss",
+                    agent=agent_name,
+                    input_hash=input_hash,
                 )
                 return None
 
             logger.info(
-                "AI cache hit",
-                extra={"agent": agent_name, "hash": input_hash},
+                "cache_hit",
+                agent=agent_name,
+                input_hash=input_hash,
             )
 
             # Deserialize JSON response
@@ -138,8 +141,9 @@ class AIResponseCache:
 
         except Exception as e:
             logger.warning(
-                "Failed to retrieve from AI cache",
-                extra={"agent": agent_name, "error": str(e)},
+                "cache_retrieve_failed",
+                agent=agent_name,
+                error=str(e),
             )
             return None
 
@@ -177,20 +181,19 @@ class AIResponseCache:
 
             if success:
                 logger.debug(
-                    "AI response cached",
-                    extra={
-                        "agent": agent_name,
-                        "hash": input_hash,
-                        "ttl": self._ttl,
-                    },
+                    "cache_response_cached",
+                    agent=agent_name,
+                    input_hash=input_hash,
+                    ttl=self._ttl,
                 )
 
             return success
 
         except Exception as e:
             logger.warning(
-                "Failed to cache AI response",
-                extra={"agent": agent_name, "error": str(e)},
+                "cache_set_failed",
+                agent=agent_name,
+                error=str(e),
             )
             return False
 
@@ -218,8 +221,9 @@ class AIResponseCache:
             deleted = await self._redis.delete(key)
             if deleted > 0:
                 logger.info(
-                    "AI cache entry invalidated",
-                    extra={"agent": agent_name, "hash": input_hash},
+                    "cache_entry_invalidated",
+                    agent=agent_name,
+                    input_hash=input_hash,
                 )
                 return True
 
@@ -227,8 +231,9 @@ class AIResponseCache:
 
         except Exception as e:
             logger.warning(
-                "Failed to invalidate AI cache",
-                extra={"agent": agent_name, "error": str(e)},
+                "cache_invalidate_failed",
+                agent=agent_name,
+                error=str(e),
             )
             return False
 
@@ -257,16 +262,18 @@ class AIResponseCache:
                     deleted += 1
 
             logger.info(
-                "AI cache invalidated for agent",
-                extra={"agent": agent_name, "count": deleted},
+                "cache_agent_invalidated",
+                agent=agent_name,
+                count=deleted,
             )
 
             return deleted
 
         except Exception as e:
             logger.warning(
-                "Failed to invalidate agent cache",
-                extra={"agent": agent_name, "error": str(e)},
+                "cache_agent_invalidate_failed",
+                agent=agent_name,
+                error=str(e),
             )
             return 0
 
@@ -292,16 +299,16 @@ class AIResponseCache:
                     deleted += 1
 
             logger.info(
-                "AI cache cleared",
-                extra={"count": deleted},
+                "cache_cleared",
+                count=deleted,
             )
 
             return deleted
 
         except Exception as e:
             logger.warning(
-                "Failed to clear AI cache",
-                extra={"error": str(e)},
+                "cache_clear_failed",
+                error=str(e),
             )
             return 0
 
@@ -326,8 +333,8 @@ class AIResponseCache:
 
         except Exception as e:
             logger.warning(
-                "Failed to get cache stats",
-                extra={"error": str(e)},
+                "cache_stats_failed",
+                error=str(e),
             )
             return {"enabled": True, "entry_count": 0, "error": str(e)}
 

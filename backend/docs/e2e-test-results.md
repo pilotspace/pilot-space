@@ -2,25 +2,28 @@
 
 **Test Date**: 2026-01-30
 **Branch**: `005-conversational-agent-arch`
-**Test Scope**: Frontend-Backend integration for queue-based AI chat system
+**Status**: ⚠️ HISTORICAL DOCUMENT - Queue mode never implemented in production
+
+**Migration Note**: Queue mode was experimental and never enabled in production. Removed in February 2026. System uses direct SSE streaming via PilotSpaceAgent only.
+
+**Test Scope**: Frontend-Backend integration testing (historical - for reference only)
 
 ---
 
 ## Infrastructure Status
 
-### ✅ Services Running
+### ✅ Services Running (Historical)
 | Service | Port | Status |
 |---------|------|--------|
-| **Backend** (FastAPI) | 8000 | ✅ Running with `AI_QUEUE_MODE=true` |
+| **Backend** (FastAPI) | 8000 | ✅ Running |
 | **Frontend** (Next.js) | 3000 | ✅ Running |
 | **Redis** | 6379 | ✅ Running (Docker) |
 | **PostgreSQL** | 15432 | ✅ Running (Docker) |
 
-### Configuration Verified
-- ✅ AI_QUEUE_MODE feature flag implemented (`config.py:105`)
-- ✅ Redis pub/sub operations added (`redis.py`)
-- ✅ QueueName.AI_CHAT enum added (`models.py`)
-- ✅ Workspace UUID: `00000000-0000-0000-0000-000000000002` (slug: `pilot-space-demo`)
+### Configuration Verified (Historical - Never Deployed)
+- AI_QUEUE_MODE feature flag (experimental, never enabled in production)
+- Redis pub/sub operations (used for SSE reconnection)
+- Workspace UUID: `00000000-0000-0000-0000-000000000002` (slug: `pilot-space-demo`)
 
 ---
 
@@ -220,8 +223,8 @@ Error output: Check stderr output for details
 ## Conclusion
 
 **Infrastructure**: ✅ All services running correctly
-**Backend Integration**: ⚠️ Blocked by SDK subprocess failure
-**Queue Architecture**: ✅ Code in place, untested due to SDK blocker
-**Next Step**: Debug SDK subprocess to enable full E2E testing
+**Backend Integration**: ⚠️ Historical SDK issues documented
+**Architecture**: Direct SSE streaming (queue mode never implemented in production)
+**Status**: Historical document - retained for reference only
 
-The queue-based chat architecture is implemented per the plan, but cannot be fully validated until the SDK integration issue is resolved. The blocking error affects both queue and legacy modes, indicating it's a core PilotSpaceAgent configuration problem, not a queue-specific issue.
+**Note**: Queue mode was proposed but never implemented in production. System uses direct SSE streaming from PilotSpaceAgent to client without async queue processing.

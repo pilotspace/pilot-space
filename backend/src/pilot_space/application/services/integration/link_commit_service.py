@@ -5,7 +5,6 @@ T183: Create LinkCommitService for commit-issue linking.
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -16,6 +15,7 @@ from pilot_space.infrastructure.database.models import (
     IntegrationLinkType,
 )
 from pilot_space.infrastructure.encryption import decrypt_api_key
+from pilot_space.infrastructure.logging import get_logger
 from pilot_space.integrations.github.client import GitHubClient
 
 if TYPE_CHECKING:
@@ -30,7 +30,7 @@ if TYPE_CHECKING:
         IssueRepository,
     )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class LinkCommitError(Exception):

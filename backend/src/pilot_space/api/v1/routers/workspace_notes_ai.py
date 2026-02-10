@@ -6,7 +6,6 @@ Supports both UUID and slug for workspace identification.
 
 from __future__ import annotations
 
-import logging
 from typing import Annotated
 from uuid import UUID
 
@@ -23,8 +22,9 @@ from pilot_space.dependencies.auth import CurrentUserId, SessionDep
 from pilot_space.infrastructure.database.repositories.note_repository import (
     NoteRepository,
 )
+from pilot_space.infrastructure.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 

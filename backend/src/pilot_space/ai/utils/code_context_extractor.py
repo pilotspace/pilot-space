@@ -12,13 +12,14 @@ Supports Python, TypeScript, and Go languages.
 
 from __future__ import annotations
 
-import logging
 import re
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, ClassVar
 
-logger = logging.getLogger(__name__)
+from pilot_space.infrastructure.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class Language(str, Enum):

@@ -10,7 +10,6 @@ Provides:
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -18,6 +17,7 @@ from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
 from pilot_space.infrastructure.database.models import IntegrationProvider
+from pilot_space.infrastructure.logging import get_logger
 from pilot_space.infrastructure.queue.handlers.pr_review_handler import (
     PR_REVIEW_QUEUE,
     PRReviewJobPayload,
@@ -32,7 +32,7 @@ if TYPE_CHECKING:
     )
     from pilot_space.infrastructure.queue.supabase_queue import SupabaseQueueClient
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Cache keys for job tracking
 JOB_STATUS_KEY_PREFIX = "pr_review:job:"

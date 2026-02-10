@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 from typing import Any
 from uuid import UUID
 
@@ -33,8 +32,9 @@ from pilot_space.infrastructure.database.models.issue_link import IssueLinkType
 from pilot_space.infrastructure.database.repositories.issue_repository import (
     IssueRepository,
 )
+from pilot_space.infrastructure.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # MCP server name — used in allowed_tools as mcp__pilot-issue-relations__{tool_name}
 SERVER_NAME = "pilot-issue-relations"
@@ -139,12 +139,9 @@ async def _check_circular_parent(
 
     from pilot_space.infrastructure.database.models import Issue
 
-    stmt = (
-        select(Issue.id, Issue.parent_id)
-        .where(
-            Issue.workspace_id == workspace_id,
-            Issue.is_deleted == False,  # noqa: E712
-        )
+    stmt = select(Issue.id, Issue.parent_id).where(
+        Issue.workspace_id == workspace_id,
+        Issue.is_deleted == False,  # noqa: E712
     )
     result = await repo.session.execute(stmt)
     parent_map: dict[UUID, UUID | None] = {row.id: row.parent_id for row in result}
@@ -360,8 +357,12 @@ def create_issue_relation_tools_server(
 
         # Resolve both issue IDs
         try:
-            source_uuid = await resolve_entity_id_strict("issue", args["source_issue_id"], tool_context)
-            target_uuid = await resolve_entity_id_strict("issue", args["target_issue_id"], tool_context)
+            source_uuid = await resolve_entity_id_strict(
+                "issue", args["source_issue_id"], tool_context
+            )
+            target_uuid = await resolve_entity_id_strict(
+                "issue", args["target_issue_id"], tool_context
+            )
         except EntityResolutionError as e:
             return _text_result(f"Error: {e}")
 
@@ -441,8 +442,12 @@ def create_issue_relation_tools_server(
             return _text_result("Error: Tool context not available")
 
         try:
-            source_uuid = await resolve_entity_id_strict("issue", args["source_issue_id"], tool_context)
-            target_uuid = await resolve_entity_id_strict("issue", args["target_issue_id"], tool_context)
+            source_uuid = await resolve_entity_id_strict(
+                "issue", args["source_issue_id"], tool_context
+            )
+            target_uuid = await resolve_entity_id_strict(
+                "issue", args["target_issue_id"], tool_context
+            )
         except EntityResolutionError as e:
             return _text_result(f"Error: {e}")
 
@@ -497,8 +502,12 @@ def create_issue_relation_tools_server(
             return _text_result("Error: Tool context not available")
 
         try:
-            parent_uuid = await resolve_entity_id_strict("issue", args["parent_issue_id"], tool_context)
-            child_uuid = await resolve_entity_id_strict("issue", args["child_issue_id"], tool_context)
+            parent_uuid = await resolve_entity_id_strict(
+                "issue", args["parent_issue_id"], tool_context
+            )
+            child_uuid = await resolve_entity_id_strict(
+                "issue", args["child_issue_id"], tool_context
+            )
         except EntityResolutionError as e:
             return _text_result(f"Error: {e}")
 

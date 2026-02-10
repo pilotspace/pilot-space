@@ -9,7 +9,6 @@ from pilot_space.api.v1.routers.ai_configuration import router as ai_configurati
 from pilot_space.api.v1.routers.auth import router as auth_router
 from pilot_space.api.v1.routers.projects import router as projects_router
 from pilot_space.api.v1.routers.workspaces import router as workspaces_router
-from pilot_space.config import get_settings
 
 api_router = APIRouter(prefix="/api/v1")
 
@@ -31,20 +30,7 @@ api_router.include_router(
     tags=["ai-configuration"],
 )
 
-# Debug router (development only)
-settings = get_settings()
-if settings.is_development:
-    from pilot_space.ai.providers import (  # Import to register generators
-        mock_generators,
-        mock_generators_supporting,
-    )
-    from pilot_space.api.v1.routers.debug import router as debug_router
-
-    # Use mock_generators to avoid unused import warning
-    _ = mock_generators
-    _ = mock_generators_supporting
-
-    api_router.include_router(debug_router)
+# Debug router and mock generators removed (were development-only features)
 
 
 __all__ = ["api_router"]

@@ -23,7 +23,6 @@ See: specs/002-github-integration/spec.md
 
 from __future__ import annotations
 
-import logging
 from typing import Annotated
 from uuid import UUID
 
@@ -31,8 +30,9 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Request, status
 from pydantic import BaseModel, Field
 
 from pilot_space.dependencies import PilotSpaceAgentDep, get_current_user_id
+from pilot_space.infrastructure.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/ai", tags=["AI", "PR Review"])
 

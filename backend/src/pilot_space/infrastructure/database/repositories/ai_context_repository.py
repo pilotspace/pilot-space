@@ -10,7 +10,6 @@ Provides:
 
 from __future__ import annotations
 
-import logging
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
@@ -20,11 +19,12 @@ from sqlalchemy.exc import IntegrityError
 
 from pilot_space.infrastructure.database.models.ai_context import AIContext
 from pilot_space.infrastructure.database.repositories.base import BaseRepository
+from pilot_space.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Cache duration for AI context (1 hour)
 CACHE_DURATION_HOURS = 1

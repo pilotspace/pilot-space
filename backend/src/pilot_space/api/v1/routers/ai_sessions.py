@@ -9,7 +9,6 @@ Design Decisions: DD-058 (Session Management)
 from __future__ import annotations
 
 import json
-import logging
 from typing import Any
 from uuid import UUID
 
@@ -18,8 +17,9 @@ from pydantic import BaseModel, Field
 
 from pilot_space.dependencies import CurrentUserId, DbSession, SessionManagerDep
 from pilot_space.infrastructure.database.rls import set_rls_context
+from pilot_space.infrastructure.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/ai/sessions", tags=["ai-sessions"])
 

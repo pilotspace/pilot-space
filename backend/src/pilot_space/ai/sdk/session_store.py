@@ -10,7 +10,6 @@ Design Decisions: DD-058 (Session Management)
 
 from __future__ import annotations
 
-import logging
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
@@ -20,13 +19,14 @@ from pilot_space.ai.session.session_manager import (
     AISession as RedisSession,
     SessionNotFoundError,
 )
+from pilot_space.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from pilot_space.ai.session.session_manager import SessionManager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Session configuration
 SESSION_TTL_HOURS = 24  # Database persistence TTL
@@ -154,11 +154,9 @@ class SessionStore:
             await self._db.commit()
 
             logger.info(
-                "Persisted session to database",
-                extra={
-                    "session_id": str(session_id),
-                    "turn_count": redis_session.turn_count,
-                },
+                "session_store_persisted",
+                session_id=str(session_id),
+                turn_count=redis_session.turn_count,
             )
 
             return True
@@ -271,12 +269,10 @@ class SessionStore:
             )
 
             logger.info(
-                "Restored session from database to Redis (with index)",
-                extra={
-                    "session_id": str(session_id),
-                    "turn_count": redis_session.turn_count,
-                    "context_id": str(db_session.context_id) if db_session.context_id else None,
-                },
+                "session_store_restored",
+                session_id=str(session_id),
+                turn_count=redis_session.turn_count,
+                context_id=str(db_session.context_id) if db_session.context_id else None,
             )
 
             return redis_session
@@ -312,13 +308,11 @@ class SessionStore:
             )
 
             logger.info(
-                "load_by_context: searching for session",
-                extra={
-                    "user_id": str(user_id),
-                    "agent_name": agent_name,
-                    "context_id": str(context_id),
-                    "now": datetime.now(UTC).isoformat(),
-                },
+                "session_store_load_by_context_searching",
+                user_id=str(user_id),
+                agent_name=agent_name,
+                context_id=str(context_id),
+                now=datetime.now(UTC).isoformat(),
             )
 
             stmt = (
@@ -340,23 +334,19 @@ class SessionStore:
 
             if not db_session:
                 logger.info(
-                    "load_by_context: no session found in DB",
-                    extra={
-                        "user_id": str(user_id),
-                        "agent_name": agent_name,
-                        "context_id": str(context_id),
-                    },
+                    "session_store_load_by_context_not_found",
+                    user_id=str(user_id),
+                    agent_name=agent_name,
+                    context_id=str(context_id),
                 )
                 return None
 
             logger.info(
-                "load_by_context: found session in DB, restoring to Redis",
-                extra={
-                    "session_id": str(db_session.id),
-                    "user_id": str(user_id),
-                    "context_id": str(context_id),
-                    "expires_at": db_session.expires_at.isoformat(),
-                },
+                "session_store_load_by_context_found",
+                session_id=str(db_session.id),
+                user_id=str(user_id),
+                context_id=str(context_id),
+                expires_at=db_session.expires_at.isoformat(),
             )
 
             # Reuse load_from_db to restore to Redis
@@ -473,12 +463,10 @@ class SessionStore:
         db_deleted = (result.rowcount or 0) > 0  # type: ignore[attr-defined]
 
         logger.info(
-            "Deleted session",
-            extra={
-                "session_id": str(session_id),
-                "redis_deleted": redis_deleted,
-                "db_deleted": db_deleted,
-            },
+            "session_store_deleted",
+            session_id=str(session_id),
+            redis_deleted=redis_deleted,
+            db_deleted=db_deleted,
         )
 
         return redis_deleted or db_deleted

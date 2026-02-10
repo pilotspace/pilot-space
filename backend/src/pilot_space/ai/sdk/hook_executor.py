@@ -13,7 +13,6 @@ from __future__ import annotations
 import asyncio
 import fnmatch
 import json
-import logging
 import os
 import re
 import shlex
@@ -28,8 +27,9 @@ from pilot_space.ai.sdk.hook_models import (
     HookType,
     PermissionDecision,
 )
+from pilot_space.infrastructure.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class FileBasedHookExecutor:

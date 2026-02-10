@@ -10,15 +10,16 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 from typing import TYPE_CHECKING, Any
 
 from fastapi.responses import StreamingResponse
 
+from pilot_space.infrastructure.logging import get_logger
+
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # SSE media type
 SSE_CONTENT_TYPE = "text/event-stream"

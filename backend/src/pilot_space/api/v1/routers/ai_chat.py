@@ -1,25 +1,19 @@
 """Unified AI chat endpoint for conversational agents.
 
 Provides endpoints for AI chat interactions with streaming responses via SSE.
-Supports both queue-based async mode and direct blocking SSE mode.
 
-Queue mode (AI_QUEUE_MODE=true):
-    POST /chat → enqueue job → return {job_id, session_id, stream_url}
-    GET /chat/stream/{job_id} → Redis pub/sub SSE stream
-
-Direct mode (AI_QUEUE_MODE=false):
+Flow:
     POST /chat → PilotSpaceAgent.stream() → SSE StreamingResponse
 
 Reference: docs/architect/pilotspace-agent-architecture.md
-Design Decisions: DD-058 (SSE streaming), DD-003 (Approval flow)
+Design Decisions: DD-066 (SSE streaming), DD-003 (Approval flow)
 """
 
 from __future__ import annotations
 
-import logging
 from datetime import UTC, datetime
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import orjson
 from fastapi import APIRouter, HTTPException, Request
@@ -31,14 +25,13 @@ from pilot_space.dependencies import (
     CurrentUserId,
     DbSession,
     PilotSpaceAgentDep,
-    QueueClientDep,
-    RedisDep,
     SessionHandlerDep,
     SkillRegistryDep,
 )
 from pilot_space.infrastructure.database.rls import set_rls_context
+from pilot_space.infrastructure.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["ai-chat"])
 
@@ -71,14 +64,6 @@ class ChatRequest(BaseSchema):
     context: ChatContext | None = Field(None, description="Context for AI response")
 
 
-class ChatQueueResponse(BaseSchema):
-    """Response when queue mode is enabled."""
-
-    job_id: str = Field(..., description="Queue job identifier")
-    session_id: str = Field(..., description="Conversation session ID")
-    stream_url: str = Field(..., description="URL to connect for SSE stream")
-
-
 @router.post("/chat", response_model=None)
 async def chat(
     chat_request: ChatRequest,
@@ -87,19 +72,16 @@ async def chat(
     session: DbSession,
     session_handler: SessionHandlerDep,
     agent: PilotSpaceAgentDep,
-    queue_client: QueueClientDep,
-    redis_client: RedisDep,
-) -> StreamingResponse | ChatQueueResponse:
+) -> StreamingResponse:
     """Unified AI chat endpoint with streaming responses.
 
     Supports:
     - Multi-turn conversations via session_id
     - Context-aware responses (note, issue, workspace)
-    - Queue-based async mode (AI_QUEUE_MODE=true)
-    - Direct SSE streaming mode (AI_QUEUE_MODE=false)
+    - Direct SSE streaming
 
     Returns:
-        StreamingResponse (direct mode) or ChatQueueResponse (queue mode).
+        StreamingResponse with SSE events.
     """
     from pilot_space.api.v1.middleware import extract_ai_context
 
@@ -221,39 +203,7 @@ async def chat(
         chat_request.session_id,
     )
 
-    # Queue mode: enqueue and return job reference
-    from pilot_space.config import get_settings
-    from pilot_space.infrastructure.queue.models import QueueName
-
-    settings = get_settings()
-    if settings.ai_queue_mode and queue_client is not None:
-        job_id = str(uuid4())
-        await queue_client.enqueue(
-            QueueName.AI_CHAT,
-            {
-                "job_id": job_id,
-                "message": chat_request.message,
-                "session_id": str(conv_session.session_id) if conv_session else None,
-                "workspace_id": str(ctx_workspace_id) if ctx_workspace_id else None,
-                "user_id": str(user_id),
-                "context": ai_context,
-            },
-        )
-
-        # Store job ownership in Redis for stream_job auth validation
-        await redis_client.setex(
-            f"stream:owner:{job_id}",
-            600,  # 10 min TTL (matches stream session)
-            str(user_id),
-        )
-
-        return ChatQueueResponse(
-            job_id=job_id,
-            session_id=str(conv_session.session_id) if conv_session else "",
-            stream_url=f"/api/v1/ai/chat/stream/{job_id}",
-        )
-
-    # Direct mode: blocking SSE stream
+    # Direct SSE streaming
     # session_id: tracking ID for all conversations (new or resumed)
     # resume_session_id: only set when resuming an existing session (triggers
     # --resume in Claude SDK CLI to restore conversation history)
@@ -452,79 +402,6 @@ async def answer_question(
             status="error",
             question_id=answer_request.question_id,
         )
-
-
-@router.get("/chat/stream/{job_id}")
-async def stream_job(
-    job_id: str,
-    user_id: CurrentUserId,
-    redis_client: RedisDep,
-) -> StreamingResponse:
-    """SSE stream endpoint for queue-mode chat jobs.
-
-    Clients connect here after receiving a job_id from POST /chat.
-    Delivers stored events (catch-up) then live events via Redis pub/sub.
-    Validates that the authenticated user owns the job before streaming.
-
-    Args:
-        job_id: Queue job identifier.
-        user_id: Authenticated user ID (validates ownership).
-        redis_client: Redis client for pub/sub.
-
-    Returns:
-        StreamingResponse with SSE events.
-
-    Raises:
-        HTTPException 403: If job does not belong to the user.
-    """
-    # Validate job ownership via Redis metadata
-    owner_raw = await redis_client.get_raw(f"stream:owner:{job_id}")
-    if owner_raw is not None:
-        owner_str = owner_raw.decode() if isinstance(owner_raw, bytes) else str(owner_raw)
-        if owner_str != str(user_id):
-            raise HTTPException(status_code=403, detail="Access denied to this stream")
-
-    async def event_stream():
-        import asyncio
-
-        try:
-            async with asyncio.timeout(600):
-                # 1. Catch up on stored events (for reconnection or late connect)
-                stored = await redis_client.lrange(f"stream:events:{job_id}", 0, -1)
-                for event_bytes in stored:
-                    yield event_bytes.decode()
-
-                # 2. Subscribe to live events
-                pubsub = await redis_client.subscribe(f"chat:stream:{job_id}")
-                try:
-                    async for msg in pubsub.listen():
-                        if msg["type"] == "message":
-                            data = msg["data"]
-                            event_str = data.decode() if isinstance(data, bytes) else data
-                            yield event_str
-                            if '"stream_end"' in event_str or '"error"' in event_str:
-                                break
-                finally:
-                    await pubsub.unsubscribe(f"chat:stream:{job_id}")
-                    await pubsub.aclose()
-        except TimeoutError:
-            logger.warning("SSE stream timeout for job %s", job_id)
-            error_data = {
-                "errorCode": "stream_timeout",
-                "message": "Stream exceeded maximum duration",
-                "retryable": False,
-            }
-            yield f"event: error\ndata: {orjson.dumps(error_data).decode()}\n\n"
-
-    return StreamingResponse(
-        event_stream(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
-    )
 
 
 # ============================================================================

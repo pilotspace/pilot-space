@@ -11,18 +11,18 @@ T091b: Circuit breaker pattern for AI providers.
 from __future__ import annotations
 
 import asyncio
-import logging
 import time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Any, ClassVar, TypeVar
 
 from pilot_space.ai.exceptions import ProviderUnavailableError
+from pilot_space.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 T = TypeVar("T")
 
@@ -144,10 +144,7 @@ class CircuitBreaker:
     def reset(self) -> None:
         """Reset circuit breaker to closed state."""
         self._state = CircuitBreakerState()
-        logger.info(
-            "Circuit breaker reset",
-            extra={"breaker": self.name},
-        )
+        logger.info("circuit_breaker_reset", breaker=self.name)
 
     async def execute(
         self,
@@ -174,11 +171,9 @@ class CircuitBreaker:
 
             if self._state.state == CircuitState.OPEN:
                 logger.warning(
-                    "Circuit breaker is open, failing fast",
-                    extra={
-                        "breaker": self.name,
-                        "failure_count": self._state.failure_count,
-                    },
+                    "circuit_breaker_open_failing_fast",
+                    breaker=self.name,
+                    failure_count=self._state.failure_count,
                 )
                 raise ProviderUnavailableError(
                     provider=self.name,
@@ -216,11 +211,9 @@ class CircuitBreaker:
             self._state.half_open_calls = 0
             self._state.success_count = 0
             logger.info(
-                "Circuit breaker transitioning to half-open",
-                extra={
-                    "breaker": self.name,
-                    "elapsed_seconds": elapsed,
-                },
+                "circuit_breaker_transitioning_to_half_open",
+                breaker=self.name,
+                elapsed_seconds=elapsed,
             )
 
     async def _on_success(self) -> None:
@@ -235,8 +228,8 @@ class CircuitBreaker:
                     self._state.failure_count = 0
                     self._state.success_count = 0
                     logger.info(
-                        "Circuit breaker closed after recovery",
-                        extra={"breaker": self.name},
+                        "circuit_breaker_closed_after_recovery",
+                        breaker=self.name,
                     )
             elif self._state.state == CircuitState.CLOSED:
                 # Reset failure count on success
@@ -257,22 +250,18 @@ class CircuitBreaker:
                 self._state.state = CircuitState.OPEN
                 self._state.half_open_calls = 0
                 logger.warning(
-                    "Circuit breaker re-opened after half-open failure",
-                    extra={
-                        "breaker": self.name,
-                        "error": str(error),
-                    },
+                    "circuit_breaker_reopened_after_half_open_failure",
+                    breaker=self.name,
+                    error=str(error),
                 )
             elif self._state.state == CircuitState.CLOSED:
                 if self._state.failure_count >= self.config.failure_threshold:
                     self._state.state = CircuitState.OPEN
                     logger.warning(
-                        "Circuit breaker opened after consecutive failures",
-                        extra={
-                            "breaker": self.name,
-                            "failure_count": self._state.failure_count,
-                            "error": str(error),
-                        },
+                        "circuit_breaker_opened_after_consecutive_failures",
+                        breaker=self.name,
+                        failure_count=self._state.failure_count,
+                        error=str(error),
                     )
 
     def get_metrics(self) -> dict[str, Any]:

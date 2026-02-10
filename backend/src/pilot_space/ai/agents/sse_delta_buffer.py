@@ -15,6 +15,10 @@ import json
 import time
 from dataclasses import dataclass, field
 
+from pilot_space.infrastructure.logging import get_logger
+
+logger = get_logger(__name__)
+
 # Flush interval in seconds (50ms for responsive feel)
 FLUSH_INTERVAL_MS = 50
 FLUSH_INTERVAL_SEC = FLUSH_INTERVAL_MS / 1000.0
@@ -174,13 +178,23 @@ class DeltaBuffer:
                 events.append(f"event: tool_input_delta\ndata: {json.dumps(data)}\n\n")
 
         # Reset buffers
+        flushed_size = self._buffer_size
+        elapsed_ms = round((time.monotonic() - self._last_flush_time) * 1000, 1)
         self._thinking_buffer.clear()
         self._text_buffer.clear()
         self._tool_input_buffer.clear()
         self._buffer_size = 0
         self._last_flush_time = time.monotonic()
 
-        return "".join(events) if events else None
+        result = "".join(events) if events else None
+        if result:
+            logger.debug(
+                "delta_buffer_flush",
+                event_count=len(events),
+                buffer_bytes=flushed_size,
+                elapsed_ms=elapsed_ms,
+            )
+        return result
 
     def _has_buffered_content(self) -> bool:
         """Check if any buffer has content."""

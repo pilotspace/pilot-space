@@ -12,14 +12,14 @@ T015: ProviderSelector class with DD-011 routing table.
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 from enum import Enum
 from typing import Final
 
 from pilot_space.ai.circuit_breaker import CircuitBreaker
+from pilot_space.infrastructure.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class Provider(Enum):
@@ -293,12 +293,11 @@ class ProviderSelector:
             provider, model = user_override
             if self.is_provider_healthy(provider):
                 logger.info(
-                    "Using user override",
-                    extra={
-                        "task_type": task_type.value,
-                        "provider": provider,
-                        "model": model,
-                    },
+                    "provider_selected",
+                    task_type=task_type.value,
+                    provider=provider,
+                    model=model,
+                    reason="user_override",
                 )
                 return ProviderConfig(
                     provider=provider,
@@ -313,16 +312,20 @@ class ProviderSelector:
         # Check if primary provider is healthy
         if not self.is_provider_healthy(config.provider):
             logger.warning(
-                "Primary provider unhealthy, attempting fallback",
-                extra={
-                    "task_type": task_type.value,
-                    "primary_provider": config.provider,
-                    "fallback_provider": config.fallback_provider,
-                },
+                "provider_unhealthy",
+                task_type=task_type.value,
+                primary_provider=config.provider,
+                fallback_provider=config.fallback_provider,
             )
 
             # Try fallback if available and healthy
             if config.fallback_provider and self.is_provider_healthy(config.fallback_provider):
+                logger.info(
+                    "provider_fallback_activated",
+                    task_type=task_type.value,
+                    from_provider=config.provider,
+                    to_provider=config.fallback_provider,
+                )
                 return ProviderConfig(
                     provider=config.fallback_provider,
                     model=config.fallback_model or config.model,
@@ -332,22 +335,18 @@ class ProviderSelector:
                 )
 
             logger.error(
-                "Both primary and fallback providers unavailable",
-                extra={
-                    "task_type": task_type.value,
-                    "primary": config.provider,
-                    "fallback": config.fallback_provider,
-                },
+                "provider_all_unavailable",
+                task_type=task_type.value,
+                primary=config.provider,
+                fallback=config.fallback_provider,
             )
 
         logger.info(
-            "Selected provider",
-            extra={
-                "task_type": task_type.value,
-                "provider": config.provider,
-                "model": config.model,
-                "reason": config.reason,
-            },
+            "provider_selected",
+            task_type=task_type.value,
+            provider=config.provider,
+            model=config.model,
+            reason=config.reason,
         )
 
         return config
@@ -390,12 +389,10 @@ class ProviderSelector:
 
         if not is_healthy:
             logger.warning(
-                "Provider circuit breaker is open",
-                extra={
-                    "provider": provider,
-                    "state": breaker.state.value,
-                    "metrics": breaker.get_metrics(),
-                },
+                "provider_circuit_breaker_open",
+                provider=provider,
+                state=breaker.state.value,
+                metrics=breaker.get_metrics(),
             )
 
         return is_healthy

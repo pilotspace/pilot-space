@@ -5,10 +5,10 @@ T182: Create ProcessGitHubWebhookService for handling webhook events.
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from pilot_space.infrastructure.logging import get_logger
 from pilot_space.integrations.github.webhooks import (
     GitHubEventType,
     GitHubPRAction,
@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     )
     from pilot_space.integrations.github.sync import GitHubSyncService
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

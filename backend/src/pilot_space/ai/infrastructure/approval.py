@@ -9,17 +9,18 @@ T012: ApprovalService class implementation.
 
 from __future__ import annotations
 
-import logging
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any, Final
 
+from pilot_space.infrastructure.logging import get_logger
+
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Default expiration time for approval requests
 DEFAULT_EXPIRATION_HOURS: Final[int] = 24
@@ -241,11 +242,9 @@ class ApprovalService:
         # ALWAYS_REQUIRE: Critical operations never auto-execute
         if action_type in self.ALWAYS_REQUIRE_ACTIONS:
             logger.debug(
-                "Action requires approval (always)",
-                extra={
-                    "action_type": action_type.value,
-                    "classification": "always_require",
-                },
+                "approval_requires_approval_always",
+                action_type=action_type.value,
+                classification="always_require",
             )
             return True
 
@@ -256,12 +255,10 @@ class ApprovalService:
         if action_name in settings.overrides:
             auto_execute = settings.overrides[action_name]
             logger.debug(
-                "Action approval determined by override",
-                extra={
-                    "action_type": action_name,
-                    "auto_execute": auto_execute,
-                    "requires_approval": not auto_execute,
-                },
+                "approval_determined_by_override",
+                action_type=action_name,
+                auto_execute=auto_execute,
+                requires_approval=not auto_execute,
             )
             return not auto_execute
 
@@ -274,12 +271,10 @@ class ApprovalService:
             requires_approval = settings.level == ApprovalLevel.CONSERVATIVE
 
         logger.debug(
-            "Action approval determined by level",
-            extra={
-                "action_type": action_name,
-                "level": settings.level.value,
-                "requires_approval": requires_approval,
-            },
+            "approval_determined_by_level",
+            action_type=action_name,
+            level=settings.level.value,
+            requires_approval=requires_approval,
         )
 
         return requires_approval
@@ -347,14 +342,12 @@ class ApprovalService:
         await self.session.refresh(db_request)
 
         logger.info(
-            "Approval request created",
-            extra={
-                "request_id": str(db_request.id),
-                "workspace_id": str(workspace_id),
-                "action_type": action_type.value,
-                "agent": requested_by_agent,
-                "expires_at": expires_at.isoformat(),
-            },
+            "approval_request_created",
+            request_id=str(db_request.id),
+            workspace_id=str(workspace_id),
+            action_type=action_type.value,
+            agent=requested_by_agent,
+            expires_at=expires_at.isoformat(),
         )
 
         return db_request.id
@@ -396,13 +389,11 @@ class ApprovalService:
             raise ValueError(f"Approval request not found: {request_id}")
 
         logger.info(
-            "Approval request resolved",
-            extra={
-                "request_id": str(request_id),
-                "status": resolved_request.status.value,
-                "resolved_by": str(resolved_by),
-                "has_note": resolution_note is not None,
-            },
+            "approval_request_resolved",
+            request_id=str(request_id),
+            status=resolved_request.status.value,
+            resolved_by=str(resolved_by),
+            has_note=resolution_note is not None,
         )
 
     async def list_requests(
@@ -441,13 +432,11 @@ class ApprovalService:
         )
 
         logger.debug(
-            "Listed approval requests",
-            extra={
-                "workspace_id": str(workspace_id),
-                "status_filter": status,
-                "count": len(requests),
-                "total": total,
-            },
+            "approval_listed_requests",
+            workspace_id=str(workspace_id),
+            status_filter=status,
+            count=len(requests),
+            total=total,
         )
 
         return list(requests), total
@@ -481,11 +470,9 @@ class ApprovalService:
 
         if expired_count > 0:
             logger.info(
-                "Expired stale approval requests",
-                extra={
-                    "expired_count": expired_count,
-                    "checked_at": now.isoformat(),
-                },
+                "approval_expired_stale_requests",
+                expired_count=expired_count,
+                checked_at=now.isoformat(),
             )
 
         return expired_count

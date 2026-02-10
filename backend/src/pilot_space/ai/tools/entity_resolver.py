@@ -17,6 +17,7 @@ if TYPE_CHECKING:
 class EntityResolutionError(Exception):
     """Raised when an entity identifier cannot be resolved to a UUID."""
 
+
 # UUID v4 pattern
 _UUID_PATTERN = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",

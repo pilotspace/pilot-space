@@ -9,7 +9,6 @@ T091c: Retry decorator for AI operations.
 from __future__ import annotations
 
 import asyncio
-import logging
 import random
 from dataclasses import dataclass
 from functools import wraps
@@ -20,11 +19,12 @@ from pilot_space.ai.exceptions import (
     ProviderUnavailableError,
     RateLimitError,
 )
+from pilot_space.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 T = TypeVar("T")
 
@@ -154,24 +154,20 @@ async def retry_async(
             # Check if this is the last attempt
             if attempt >= config.max_retries:
                 logger.exception(
-                    "All retry attempts exhausted",
-                    extra={
-                        "function": func.__name__,
-                        "attempts": attempt + 1,
-                        "error": str(e),
-                    },
+                    "retry_attempts_exhausted",
+                    function=func.__name__,
+                    attempts=attempt + 1,
+                    error=str(e),
                 )
                 raise
 
             # Check if error is transient
             if not is_transient_error(e):
                 logger.warning(
-                    "Non-transient error, not retrying",
-                    extra={
-                        "function": func.__name__,
-                        "error_type": type(e).__name__,
-                        "error": str(e),
-                    },
+                    "retry_non_transient_error",
+                    function=func.__name__,
+                    error_type=type(e).__name__,
+                    error=str(e),
                 )
                 raise
 
@@ -183,15 +179,13 @@ async def retry_async(
                 delay = max(delay, float(e.retry_after_seconds))
 
             logger.warning(
-                "Transient error, retrying",
-                extra={
-                    "function": func.__name__,
-                    "attempt": attempt + 1,
-                    "max_retries": config.max_retries,
-                    "delay_seconds": delay,
-                    "error_type": type(e).__name__,
-                    "error": str(e),
-                },
+                "retry_transient_error",
+                function=func.__name__,
+                attempt=attempt + 1,
+                max_retries=config.max_retries,
+                delay_seconds=delay,
+                error_type=type(e).__name__,
+                error=str(e),
             )
 
             # Invoke callback if provided
@@ -307,13 +301,11 @@ class RetryContext:
             delay = max(delay, float(error.retry_after_seconds))
 
         logger.warning(
-            "Retry context handling transient error",
-            extra={
-                "attempt": self.attempt + 1,
-                "max_retries": self.config.max_retries,
-                "delay_seconds": delay,
-                "error": str(error),
-            },
+            "retry_context_handling_error",
+            attempt=self.attempt + 1,
+            max_retries=self.config.max_retries,
+            delay_seconds=delay,
+            error=str(error),
         )
 
         await asyncio.sleep(delay)

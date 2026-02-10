@@ -7,12 +7,13 @@ from __future__ import annotations
 
 import base64
 import hashlib
-import logging
 from functools import lru_cache
 
 from cryptography.fernet import Fernet, InvalidToken
 
-logger = logging.getLogger(__name__)
+from pilot_space.infrastructure.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class EncryptionError(Exception):

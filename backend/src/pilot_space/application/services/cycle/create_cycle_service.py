@@ -5,12 +5,12 @@ T158: Create CreateCycleService with payload validation.
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 from datetime import date
 from typing import TYPE_CHECKING
 
 from pilot_space.infrastructure.database.models import Cycle, CycleStatus
+from pilot_space.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
     from pilot_space.infrastructure.database.repositories import CycleRepository
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

@@ -7,7 +7,6 @@ T058-T059: Issue extraction and approval.
 
 from __future__ import annotations
 
-import logging
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -22,8 +21,9 @@ from pilot_space.dependencies import (
     DbSession,
     get_approval_service_dep,
 )
+from pilot_space.infrastructure.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["AI Extraction"])
 

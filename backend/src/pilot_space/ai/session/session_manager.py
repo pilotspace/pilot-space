@@ -16,18 +16,18 @@ T014: SessionManager class with Redis storage
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
 from pilot_space.ai.exceptions import AIError
+from pilot_space.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
     from pilot_space.infrastructure.cache.redis import RedisClient
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Session configuration constants
 SESSION_TTL_SECONDS = 1800  # 30 minutes
@@ -349,7 +349,10 @@ class SessionManager:
         )
 
         if not success:
-            logger.error("Failed to create session in Redis: %s", session.id)
+            logger.error(
+                "failed_to_create_session_in_redis",
+                session_id=str(session.id),
+            )
             raise AIError(
                 "Failed to create session",
                 details={"session_id": str(session.id)},
@@ -364,14 +367,12 @@ class SessionManager:
         )
 
         logger.info(
-            "Created AI session",
-            extra={
-                "session_id": str(session.id),
-                "user_id": str(user_id),
-                "workspace_id": str(workspace_id),
-                "agent_name": agent_name,
-                "context_id": str(context_id) if context_id else None,
-            },
+            "session_created",
+            session_id=str(session.id),
+            user_id=str(user_id),
+            workspace_id=str(workspace_id),
+            agent_name=agent_name,
+            context_id=str(context_id) if context_id else None,
         )
 
         return session
@@ -393,7 +394,7 @@ class SessionManager:
         data = await self._redis.get(session_key)
 
         if data is None:
-            logger.warning("Session not found in Redis: %s", session_id)
+            logger.warning("session_not_found_in_redis", session_id=str(session_id))
             raise SessionNotFoundError(session_id)
 
         try:
@@ -401,18 +402,18 @@ class SessionManager:
         except (KeyError, ValueError, TypeError) as e:
             # Delete corrupted session from Redis to prevent repeated failures
             logger.warning(
-                "Deleting corrupted session %s from Redis: %s",
-                session_id,
-                str(e),
+                "deleting_corrupted_session",
+                session_id=str(session_id),
+                error=str(e),
             )
             await self._redis.delete(session_key)
             raise SessionNotFoundError(session_id) from e
 
         if session.is_expired():
             logger.warning(
-                "Session %s has expired at %s",
-                session_id,
-                session.expires_at.isoformat(),
+                "session_expired",
+                session_id=str(session_id),
+                expires_at=session.expires_at.isoformat(),
             )
             raise SessionExpiredError(session_id, session.expires_at)
 
@@ -468,7 +469,10 @@ class SessionManager:
         )
 
         if not success:
-            logger.error("Failed to update session in Redis: %s", session_id)
+            logger.error(
+                "failed_to_update_session_in_redis",
+                session_id=str(session_id),
+            )
             raise AIError(
                 "Failed to update session",
                 details={"session_id": str(session_id)},
@@ -483,12 +487,10 @@ class SessionManager:
         await self._redis.expire(index_key, SESSION_TTL_SECONDS)
 
         logger.debug(
-            "Updated AI session",
-            extra={
-                "session_id": str(session_id),
-                "turn_count": session.turn_count,
-                "total_cost_usd": session.total_cost_usd,
-            },
+            "session_updated",
+            session_id=str(session_id),
+            turn_count=session.turn_count,
+            total_cost_usd=session.total_cost_usd,
         )
 
         return session
@@ -518,18 +520,16 @@ class SessionManager:
             await self._redis.delete(index_key)
 
             logger.info(
-                "Ended AI session",
-                extra={
-                    "session_id": str(session_id),
-                    "turn_count": session.turn_count,
-                    "total_cost_usd": session.total_cost_usd,
-                },
+                "session_ended",
+                session_id=str(session_id),
+                turn_count=session.turn_count,
+                total_cost_usd=session.total_cost_usd,
             )
 
             return deleted > 0
 
         except SessionNotFoundError:
-            logger.debug("Session not found for cleanup: %s", session_id)
+            logger.debug("session_not_found_for_cleanup", session_id=str(session_id))
             return False
 
     async def get_active_session(
@@ -596,7 +596,7 @@ class SessionManager:
                 cleaned += 1
 
         if cleaned > 0:
-            logger.info("Cleaned up %d expired sessions", cleaned)
+            logger.info("cleaned_up_expired_sessions", cleaned_count=cleaned)
 
         return cleaned
 

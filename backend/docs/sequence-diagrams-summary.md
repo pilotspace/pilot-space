@@ -1,8 +1,12 @@
 # Worker Event Processing Pipeline - Sequence Diagrams Summary
 
+**Status:** ⚠️ DEPRECATED - Queue mode never implemented in production
+**Migration Note:** Queue mode was experimental and never enabled in production. Removed in February 2026. System uses direct SSE streaming via PilotSpaceAgent only.
+**Historical Document:** Retained for architectural reference only.
+
 **Location:** `backend/docs/plan-conversational-agent-v2.md` - Section **2.3.7**
 
-This document summarizes the 6 comprehensive sequence diagrams added to visualize the worker event processing pipeline.
+This document summarizes proposed sequence diagrams for a queue-based worker architecture that was never implemented.
 
 ---
 
