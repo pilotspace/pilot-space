@@ -16,6 +16,13 @@ from uuid import UUID
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
+    from pilot_space.infrastructure.database.repositories.note_repository import (
+        NoteRepository,
+    )
+    from pilot_space.infrastructure.database.repositories.onboarding_repository import (
+        OnboardingRepository,
+    )
+
 
 # T040: Guided note template content
 # Topic: "Planning authentication for our app" (per spec decision)
@@ -213,13 +220,22 @@ class CreateGuidedNoteService:
     Returns 409 CONFLICT if guided note already exists.
     """
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        onboarding_repository: OnboardingRepository,
+        note_repository: NoteRepository,
+    ) -> None:
         """Initialize CreateGuidedNoteService.
 
         Args:
             session: The async database session.
+            onboarding_repository: Repository for onboarding operations.
+            note_repository: Repository for note operations.
         """
         self._session = session
+        self._onboarding_repo = onboarding_repository
+        self._note_repo = note_repository
 
     async def execute(
         self,
@@ -237,23 +253,14 @@ class CreateGuidedNoteService:
             ValueError: If guided note already exists (409 CONFLICT).
         """
         from pilot_space.infrastructure.database.models.note import Note
-        from pilot_space.infrastructure.database.repositories.note_repository import (
-            NoteRepository,
-        )
-        from pilot_space.infrastructure.database.repositories.onboarding_repository import (
-            OnboardingRepository,
-        )
-
-        onboarding_repo = OnboardingRepository(self._session)
-        note_repo = NoteRepository(self._session)
 
         # Get or create onboarding record
-        onboarding = await onboarding_repo.upsert_for_workspace(payload.workspace_id)
+        onboarding = await self._onboarding_repo.upsert_for_workspace(payload.workspace_id)
 
         # Check if guided note already exists
         if onboarding.guided_note_id:
             # Return existing note info
-            existing_note = await note_repo.get_by_id(onboarding.guided_note_id)
+            existing_note = await self._note_repo.get_by_id(onboarding.guided_note_id)
             if existing_note:
                 return CreateGuidedNoteResult(
                     note_id=existing_note.id,
@@ -273,16 +280,16 @@ class CreateGuidedNoteService:
             reading_time_mins=1,
         )
 
-        created_note = await note_repo.create(note)
+        created_note = await self._note_repo.create(note)
 
         # Update onboarding with guided note reference
-        await onboarding_repo.set_guided_note_id(
+        await self._onboarding_repo.set_guided_note_id(
             workspace_id=payload.workspace_id,
             note_id=created_note.id,
         )
 
         # Mark first_note step as complete
-        await onboarding_repo.update_step(
+        await self._onboarding_repo.update_step(
             workspace_id=payload.workspace_id,
             step_name="first_note",
             completed=True,

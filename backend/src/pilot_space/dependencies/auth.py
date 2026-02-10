@@ -7,6 +7,7 @@ workspace membership checks, and user sync.
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
+from contextvars import ContextVar
 from typing import Annotated
 from uuid import UUID
 
@@ -24,6 +25,10 @@ from pilot_space.infrastructure.database.engine import get_db_session
 # Singleton auth instance
 _auth: SupabaseAuth | None = None
 
+# Request-scoped session context (for dependency-injector integration)
+# Pattern from FastAPI docs: https://fastapi.tiangolo.com/ko/release-notes
+_request_session_ctx: ContextVar[AsyncSession | None] = ContextVar("request_session", default=None)
+
 
 def get_auth() -> SupabaseAuth:
     """Get Supabase Auth instance (singleton).
@@ -38,13 +43,48 @@ def get_auth() -> SupabaseAuth:
 
 
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
-    """Get database session dependency.
+    """Get database session dependency with ContextVar injection.
+
+    Provides session for FastAPI Depends() while also injecting it into
+    ContextVar for dependency-injector Factory providers to access.
+
+    Pattern from FastAPI best practices:
+    - Uses ContextVar for request-scoped state (async-safe)
+    - Token reset in finally block prevents memory leaks
+    - Ensures proper cleanup even if exceptions occur
 
     Yields:
         AsyncSession for database operations.
     """
     async with get_db_session() as session:
-        yield session
+        # Set session in context for container providers
+        token = _request_session_ctx.set(session)
+        try:
+            yield session
+        finally:
+            # Always reset context var to avoid leaks
+            _request_session_ctx.reset(token)
+
+
+def get_current_session() -> AsyncSession:
+    """Get session from current request context.
+
+    Used by dependency-injector Factory providers to resolve session
+    dependencies without explicit FastAPI Depends() injection.
+
+    Returns:
+        AsyncSession from current request context.
+
+    Raises:
+        RuntimeError: If no session in current context (get_session not called).
+    """
+    session = _request_session_ctx.get()
+    if session is None:
+        raise RuntimeError(
+            "No session in current context. "
+            "Ensure get_session() dependency is called first in the route handler."
+        )
+    return session
 
 
 def get_token_from_header(request: Request) -> str:
@@ -226,6 +266,7 @@ async def require_workspace_admin(
 CurrentUser = Annotated[TokenPayload, Depends(get_current_user)]
 CurrentUserId = Annotated[UUID, Depends(get_current_user_id)]
 DbSession = Annotated[AsyncSession, Depends(get_session)]
+SessionDep = Annotated[AsyncSession, Depends(get_session)]  # FastAPI best practice naming
 WorkspaceMemberId = Annotated[UUID, Depends(require_workspace_member)]
 WorkspaceAdminId = Annotated[UUID, Depends(require_workspace_admin)]
 

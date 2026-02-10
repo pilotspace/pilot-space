@@ -24,6 +24,13 @@ if TYPE_CHECKING:
     from pilot_space.infrastructure.database.models.threaded_discussion import (
         ThreadedDiscussion,
     )
+    from pilot_space.infrastructure.database.repositories.discussion_repository import (
+        DiscussionCommentRepository,
+        DiscussionRepository,
+    )
+    from pilot_space.infrastructure.database.repositories.note_repository import (
+        NoteRepository,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,13 +76,25 @@ class CreateDiscussionService:
     Supports both human and AI-generated discussions.
     """
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        note_repository: NoteRepository,
+        discussion_repository: DiscussionRepository,
+        comment_repository: DiscussionCommentRepository,
+    ) -> None:
         """Initialize CreateDiscussionService.
 
         Args:
             session: The async database session.
+            note_repository: Repository for note queries.
+            discussion_repository: Repository for discussion persistence.
+            comment_repository: Repository for comment persistence.
         """
         self._session = session
+        self._note_repo = note_repository
+        self._discussion_repo = discussion_repository
+        self._comment_repo = comment_repository
 
     async def execute(self, payload: CreateDiscussionPayload) -> CreateDiscussionResult:
         """Execute discussion creation.
@@ -97,13 +116,6 @@ class CreateDiscussionService:
         from pilot_space.infrastructure.database.models.threaded_discussion import (
             ThreadedDiscussion,
         )
-        from pilot_space.infrastructure.database.repositories.discussion_repository import (
-            DiscussionCommentRepository,
-            DiscussionRepository,
-        )
-        from pilot_space.infrastructure.database.repositories.note_repository import (
-            NoteRepository,
-        )
 
         # Validate initial comment
         if not payload.initial_comment or not payload.initial_comment.strip():
@@ -111,8 +123,7 @@ class CreateDiscussionService:
             raise ValueError(msg)
 
         # Verify note exists
-        note_repo = NoteRepository(self._session)
-        note = await note_repo.get_by_id(payload.note_id)
+        note = await self._note_repo.get_by_id(payload.note_id)
         if not note:
             msg = f"Note with ID {payload.note_id} not found"
             raise ValueError(msg)
@@ -131,8 +142,7 @@ class CreateDiscussionService:
             status=DiscussionStatus.OPEN,
         )
 
-        discussion_repo = DiscussionRepository(self._session)
-        created_discussion = await discussion_repo.create(discussion)
+        created_discussion = await self._discussion_repo.create(discussion)
 
         # Create first comment
         comment = DiscussionComment(
@@ -143,8 +153,7 @@ class CreateDiscussionService:
             is_ai_generated=payload.is_ai_generated,
         )
 
-        comment_repo = DiscussionCommentRepository(self._session)
-        created_comment = await comment_repo.create(comment)
+        created_comment = await self._comment_repo.create(comment)
 
         return CreateDiscussionResult(
             discussion=created_discussion,
@@ -178,10 +187,6 @@ class CreateDiscussionService:
         from pilot_space.infrastructure.database.models.discussion_comment import (
             DiscussionComment,
         )
-        from pilot_space.infrastructure.database.repositories.discussion_repository import (
-            DiscussionCommentRepository,
-            DiscussionRepository,
-        )
 
         # Validate content
         if not content or not content.strip():
@@ -189,8 +194,7 @@ class CreateDiscussionService:
             raise ValueError(msg)
 
         # Verify discussion exists and is open
-        discussion_repo = DiscussionRepository(self._session)
-        discussion = await discussion_repo.get_by_id(discussion_id)
+        discussion = await self._discussion_repo.get_by_id(discussion_id)
         if not discussion:
             msg = f"Discussion with ID {discussion_id} not found"
             raise ValueError(msg)
@@ -212,8 +216,7 @@ class CreateDiscussionService:
             is_ai_generated=is_ai_generated,
         )
 
-        comment_repo = DiscussionCommentRepository(self._session)
-        return await comment_repo.create(comment)
+        return await self._comment_repo.create(comment)
 
     async def resolve_discussion(
         self,
@@ -233,12 +236,7 @@ class CreateDiscussionService:
         Raises:
             ValueError: If discussion not found or already resolved.
         """
-        from pilot_space.infrastructure.database.repositories.discussion_repository import (
-            DiscussionRepository,
-        )
-
-        discussion_repo = DiscussionRepository(self._session)
-        discussion = await discussion_repo.get_by_id(discussion_id)
+        discussion = await self._discussion_repo.get_by_id(discussion_id)
         if not discussion:
             msg = f"Discussion with ID {discussion_id} not found"
             raise ValueError(msg)
@@ -250,4 +248,4 @@ class CreateDiscussionService:
         discussion.status = DiscussionStatus.RESOLVED
         discussion.resolved_by_id = resolved_by_id
 
-        return await discussion_repo.update(discussion)
+        return await self._discussion_repo.update(discussion)

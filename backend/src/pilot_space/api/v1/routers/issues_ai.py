@@ -10,15 +10,13 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends
 
+from pilot_space.api.v1.dependencies import ActivityServiceDep
 from pilot_space.api.v1.schemas.ai_suggestion import (
     SuggestionDecisionRequest,
     SuggestionDecisionResponse,
 )
-from pilot_space.dependencies import (
-    CurrentUserId,
-    get_activity_service,
-    get_current_workspace_id,
-)
+from pilot_space.dependencies.auth import CurrentUserId, SessionDep
+from pilot_space.dependencies.workspace import get_current_workspace_id
 
 router = APIRouter(prefix="/issues", tags=["issues-ai"])
 
@@ -31,9 +29,10 @@ router = APIRouter(prefix="/issues", tags=["issues-ai"])
 async def record_suggestion_decision(
     issue_id: UUID,
     request: SuggestionDecisionRequest,
+    session: SessionDep,
     workspace_id: Annotated[UUID, Depends(get_current_workspace_id)],
     user_id: CurrentUserId,
-    activity_service: Annotated[..., Depends(get_activity_service)],
+    activity_service: ActivityServiceDep,
 ) -> SuggestionDecisionResponse:
     """Record user's decision on an AI suggestion for analytics."""
     activity = await activity_service.log_suggestion_decision(

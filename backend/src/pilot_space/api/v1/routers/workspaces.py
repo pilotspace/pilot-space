@@ -14,6 +14,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 
+from pilot_space.api.v1.dependencies import WorkspaceRepositoryDep
 from pilot_space.api.v1.schemas.base import DeleteResponse, PaginatedResponse
 from pilot_space.api.v1.schemas.issue import LabelBriefSchema
 from pilot_space.api.v1.schemas.workspace import (
@@ -32,21 +33,10 @@ from pilot_space.infrastructure.database.models.workspace_member import Workspac
 from pilot_space.infrastructure.database.repositories.label_repository import (
     LabelRepository,
 )
-from pilot_space.infrastructure.database.repositories.workspace_repository import (
-    WorkspaceRepository,
-)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/workspaces", tags=["workspaces"])
-
-
-def get_workspace_repository(session: DbSession) -> WorkspaceRepository:
-    """Get workspace repository with session."""
-    return WorkspaceRepository(session=session)
-
-
-WorkspaceRepo = Annotated[WorkspaceRepository, Depends(get_workspace_repository)]
 
 
 def get_label_repository(session: DbSession) -> LabelRepository:
@@ -72,7 +62,7 @@ def _is_valid_uuid(value: str) -> bool:
 
 async def _resolve_workspace(
     workspace_id_or_slug: str,
-    workspace_repo: WorkspaceRepository,
+    workspace_repo: WorkspaceRepositoryDep,
     *,
     load_members: bool = False,
 ) -> Workspace:
@@ -124,7 +114,7 @@ def _workspace_to_response(
 @router.get("", response_model=PaginatedResponse[WorkspaceResponse], tags=["workspaces"])
 async def list_workspaces(
     current_user: CurrentUser,
-    workspace_repo: WorkspaceRepo,
+    workspace_repo: WorkspaceRepositoryDep,
     cursor: str | None = Query(default=None, description="Pagination cursor"),
     page_size: int = Query(default=20, ge=1, le=100, description="Items per page"),
 ) -> PaginatedResponse[WorkspaceResponse]:
@@ -188,7 +178,7 @@ async def list_workspaces(
 async def create_workspace(
     request: WorkspaceCreate,
     current_user_id: CurrentUserId,
-    workspace_repo: WorkspaceRepo,
+    workspace_repo: WorkspaceRepositoryDep,
 ) -> WorkspaceDetailResponse:
     """Create a new workspace.
 
@@ -239,7 +229,7 @@ async def create_workspace(
 async def get_workspace(
     workspace_id: WorkspaceIdOrSlug,
     current_user: CurrentUser,
-    workspace_repo: WorkspaceRepo,
+    workspace_repo: WorkspaceRepositoryDep,
 ) -> WorkspaceDetailResponse:
     """Get workspace by ID or slug.
 
@@ -278,7 +268,7 @@ async def update_workspace(
     workspace_id: WorkspaceIdOrSlug,
     request: WorkspaceUpdate,
     current_user: CurrentUser,
-    workspace_repo: WorkspaceRepo,
+    workspace_repo: WorkspaceRepositoryDep,
 ) -> WorkspaceDetailResponse:
     """Update workspace.
 
@@ -334,7 +324,7 @@ async def update_workspace(
 async def delete_workspace(
     workspace_id: WorkspaceIdOrSlug,
     current_user: CurrentUser,
-    workspace_repo: WorkspaceRepo,
+    workspace_repo: WorkspaceRepositoryDep,
 ) -> DeleteResponse:
     """Soft delete workspace.
 
@@ -387,7 +377,7 @@ async def delete_workspace(
 async def list_workspace_labels(
     workspace_id: WorkspaceIdOrSlug,
     current_user_id: CurrentUserId,
-    workspace_repo: WorkspaceRepo,
+    workspace_repo: WorkspaceRepositoryDep,
     label_repo: LabelRepo,
     project_id: Annotated[UUID | None, Query(description="Filter by project ID")] = None,
 ) -> list[LabelBriefSchema]:

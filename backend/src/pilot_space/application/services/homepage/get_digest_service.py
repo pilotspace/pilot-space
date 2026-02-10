@@ -19,6 +19,11 @@ from uuid import UUID
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
+    from pilot_space.infrastructure.database.repositories.digest_repository import (
+        DigestRepository,
+        DismissalRepository,
+    )
+
 logger = logging.getLogger(__name__)
 
 
@@ -91,13 +96,22 @@ class GetDigestService:
     relevance_score desc.
     """
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        digest_repository: DigestRepository,
+        dismissal_repository: DismissalRepository,
+    ) -> None:
         """Initialize GetDigestService.
 
         Args:
             session: The async database session.
+            digest_repository: Repository for digest queries.
+            dismissal_repository: Repository for dismissal queries.
         """
         self._session = session
+        self._digest_repo = digest_repository
+        self._dismissal_repo = dismissal_repository
 
     async def execute(self, payload: GetDigestPayload) -> GetDigestResult:
         """Execute digest retrieval.
@@ -108,21 +122,13 @@ class GetDigestService:
         Returns:
             GetDigestResult with filtered suggestions.
         """
-        from pilot_space.infrastructure.database.repositories.digest_repository import (
-            DigestRepository,
-            DismissalRepository,
-        )
-
-        digest_repo = DigestRepository(self._session)
-        dismissal_repo = DismissalRepository(self._session)
-
         # Fetch latest digest
-        digest = await digest_repo.get_latest_digest(payload.workspace_id)
+        digest = await self._digest_repo.get_latest_digest(payload.workspace_id)
         if digest is None:
             return GetDigestResult()
 
         # Get dismissed (entity_id, category) pairs for this user
-        dismissed = await dismissal_repo.get_dismissed_entity_ids(
+        dismissed = await self._dismissal_repo.get_dismissed_entity_ids(
             payload.workspace_id,
             payload.user_id,
         )

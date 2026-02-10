@@ -16,6 +16,9 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from pilot_space.infrastructure.database.models.note import Note
+    from pilot_space.infrastructure.database.repositories.note_repository import (
+        NoteRepository,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,13 +45,19 @@ class GetNoteService:
     Optimizes queries based on requested data.
     """
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        note_repository: NoteRepository,
+    ) -> None:
         """Initialize GetNoteService.
 
         Args:
             session: The async database session.
+            note_repository: Repository for note operations.
         """
         self._session = session
+        self._note_repo = note_repository
 
     async def get_by_id(
         self,
@@ -64,32 +73,27 @@ class GetNoteService:
         Returns:
             The note if found, None otherwise.
         """
-        from pilot_space.infrastructure.database.repositories.note_repository import (
-            NoteRepository,
-        )
-
         options = options or GetNoteOptions()
-        note_repo = NoteRepository(self._session)
 
         if options.include_all_relations:
-            return await note_repo.get_with_all_relations(
+            return await self._note_repo.get_with_all_relations(
                 note_id,
                 include_deleted=options.include_deleted,
             )
 
         if options.include_discussions:
-            return await note_repo.get_with_discussions(
+            return await self._note_repo.get_with_discussions(
                 note_id,
                 include_deleted=options.include_deleted,
             )
 
         if options.include_annotations:
-            return await note_repo.get_with_annotations(
+            return await self._note_repo.get_with_annotations(
                 note_id,
                 include_deleted=options.include_deleted,
             )
 
-        return await note_repo.get_by_id(
+        return await self._note_repo.get_by_id(
             note_id,
             include_deleted=options.include_deleted,
         )
@@ -115,20 +119,14 @@ class GetNoteService:
         Returns:
             List of notes.
         """
-        from pilot_space.infrastructure.database.repositories.note_repository import (
-            NoteRepository,
-        )
-
-        note_repo = NoteRepository(self._session)
-
         if project_id:
-            return await note_repo.get_by_project(
+            return await self._note_repo.get_by_project(
                 project_id,
                 include_deleted=include_deleted,
                 limit=limit,
             )
 
-        return await note_repo.get_by_workspace(
+        return await self._note_repo.get_by_workspace(
             workspace_id,
             include_deleted=include_deleted,
             limit=limit,
@@ -158,14 +156,8 @@ class GetNoteService:
         Returns:
             List of matching notes.
         """
-        from pilot_space.infrastructure.database.repositories.note_repository import (
-            NoteRepository,
-        )
-
-        note_repo = NoteRepository(self._session)
-
         if use_full_text:
-            return await note_repo.search_full_text(
+            return await self._note_repo.search_full_text(
                 workspace_id,
                 search_term,
                 project_id=project_id,
@@ -173,7 +165,7 @@ class GetNoteService:
                 limit=limit,
             )
 
-        return await note_repo.search_by_title(
+        return await self._note_repo.search_by_title(
             workspace_id,
             search_term,
             project_id=project_id,
@@ -198,12 +190,7 @@ class GetNoteService:
         Returns:
             List of pinned notes.
         """
-        from pilot_space.infrastructure.database.repositories.note_repository import (
-            NoteRepository,
-        )
-
-        note_repo = NoteRepository(self._session)
-        return await note_repo.get_pinned_notes(
+        return await self._note_repo.get_pinned_notes(
             workspace_id,
             project_id=project_id,
             limit=limit,
@@ -228,12 +215,7 @@ class GetNoteService:
         Returns:
             List of notes by the owner.
         """
-        from pilot_space.infrastructure.database.repositories.note_repository import (
-            NoteRepository,
-        )
-
-        note_repo = NoteRepository(self._session)
-        return await note_repo.get_by_owner(
+        return await self._note_repo.get_by_owner(
             owner_id,
             workspace_id,
             include_deleted=include_deleted,
@@ -255,12 +237,7 @@ class GetNoteService:
         Returns:
             Count of pinned notes.
         """
-        from pilot_space.infrastructure.database.repositories.note_repository import (
-            NoteRepository,
-        )
-
-        note_repo = NoteRepository(self._session)
-        return await note_repo.count_pinned(
+        return await self._note_repo.count_pinned(
             workspace_id,
             project_id=project_id,
         )

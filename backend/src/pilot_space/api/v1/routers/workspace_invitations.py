@@ -7,55 +7,25 @@ Extracted from workspaces.py to keep files under 700 lines.
 from __future__ import annotations
 
 import logging
-from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, HTTPException, status
 
+from pilot_space.api.v1.dependencies import (
+    InvitationRepositoryDep,
+    WorkspaceRepositoryDep,
+    WorkspaceServiceDep,
+)
 from pilot_space.api.v1.schemas.workspace import (
     InvitationCreateRequest,
     InvitationResponse,
     WorkspaceMemberResponse,
 )
-from pilot_space.application.services.workspace import WorkspaceService
-from pilot_space.dependencies import CurrentUser, DbSession
-from pilot_space.infrastructure.database.repositories.invitation_repository import (
-    InvitationRepository,
-)
-from pilot_space.infrastructure.database.repositories.user_repository import (
-    UserRepository,
-)
-from pilot_space.infrastructure.database.repositories.workspace_repository import (
-    WorkspaceRepository,
-)
+from pilot_space.dependencies.auth import CurrentUser, SessionDep
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/workspaces", tags=["workspaces", "invitations"])
-
-
-def get_workspace_repository(session: DbSession) -> WorkspaceRepository:
-    """Get workspace repository with session."""
-    return WorkspaceRepository(session=session)
-
-
-WorkspaceRepo = Annotated[WorkspaceRepository, Depends(get_workspace_repository)]
-
-
-def get_user_repository(session: DbSession) -> UserRepository:
-    """Get user repository with session."""
-    return UserRepository(session=session)
-
-
-UserRepo = Annotated[UserRepository, Depends(get_user_repository)]
-
-
-def get_invitation_repository(session: DbSession) -> InvitationRepository:
-    """Get invitation repository with session."""
-    return InvitationRepository(session=session)
-
-
-InvitationRepo = Annotated[InvitationRepository, Depends(get_invitation_repository)]
 
 
 @router.post(
@@ -68,10 +38,10 @@ InvitationRepo = Annotated[InvitationRepository, Depends(get_invitation_reposito
 async def add_workspace_member(
     workspace_id: UUID,
     request: InvitationCreateRequest,
+    session: SessionDep,
     current_user: CurrentUser,
-    workspace_repo: WorkspaceRepo,
-    user_repo: UserRepo,
-    invitation_repo: InvitationRepo,
+    workspace_repo: WorkspaceRepositoryDep,
+    workspace_service: WorkspaceServiceDep,
 ) -> WorkspaceMemberResponse | InvitationResponse:
     """Invite or add a member to workspace.
 
@@ -100,10 +70,8 @@ async def add_workspace_member(
             detail="Admin role required",
         )
 
-    service = WorkspaceService(workspace_repo, user_repo, invitation_repo)
-
     try:
-        result = await service.invite_member(
+        result = await workspace_service.invite_member(
             workspace_id=workspace_id,
             email=request.email,
             role=request.role,
@@ -151,9 +119,10 @@ async def add_workspace_member(
 )
 async def list_workspace_invitations(
     workspace_id: UUID,
+    session: SessionDep,
     current_user: CurrentUser,
-    workspace_repo: WorkspaceRepo,
-    invitation_repo: InvitationRepo,
+    workspace_repo: WorkspaceRepositoryDep,
+    invitation_repo: InvitationRepositoryDep,
 ) -> list[InvitationResponse]:
     """List invitations for a workspace.
 
@@ -202,9 +171,10 @@ async def list_workspace_invitations(
 async def cancel_workspace_invitation(
     workspace_id: UUID,
     invitation_id: UUID,
+    session: SessionDep,
     current_user: CurrentUser,
-    workspace_repo: WorkspaceRepo,
-    invitation_repo: InvitationRepo,
+    workspace_repo: WorkspaceRepositoryDep,
+    invitation_repo: InvitationRepositoryDep,
 ) -> None:
     """Cancel a pending invitation.
 

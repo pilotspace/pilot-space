@@ -62,13 +62,19 @@ class GetOnboardingService:
     for new workspaces.
     """
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        onboarding_repository: OnboardingRepository,
+    ) -> None:
         """Initialize GetOnboardingService.
 
         Args:
             session: The async database session.
+            onboarding_repository: Repository for onboarding operations.
         """
         self._session = session
+        self._repo = onboarding_repository
 
     async def execute(
         self,
@@ -85,17 +91,12 @@ class GetOnboardingService:
         Returns:
             GetOnboardingResult with current state.
         """
-        from pilot_space.infrastructure.database.repositories.onboarding_repository import (
-            OnboardingRepository,
-        )
-
-        repo = OnboardingRepository(self._session)
 
         # Get or create onboarding record
-        onboarding = await repo.upsert_for_workspace(workspace_id)
+        onboarding = await self._repo.upsert_for_workspace(workspace_id)
 
         # Auto-sync: detect completed steps from actual workspace state
-        await self._auto_sync_steps(repo, onboarding, workspace_id)
+        await self._auto_sync_steps(self._repo, onboarding, workspace_id)
 
         steps = onboarding.steps
         return GetOnboardingResult(

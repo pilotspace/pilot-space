@@ -21,6 +21,10 @@ from uuid import UUID
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
+    from pilot_space.infrastructure.database.repositories.homepage_repository import (
+        HomepageRepository,
+    )
+
 logger = logging.getLogger(__name__)
 
 
@@ -89,13 +93,19 @@ class GetActivityService:
     results.
     """
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        homepage_repository: HomepageRepository,
+    ) -> None:
         """Initialize GetActivityService.
 
         Args:
             session: The async database session.
+            homepage_repository: Repository for homepage activity queries.
         """
         self._session = session
+        self._repo = homepage_repository
 
     async def execute(self, payload: GetActivityPayload) -> GetActivityResult:
         """Execute activity feed query.
@@ -106,11 +116,6 @@ class GetActivityService:
         Returns:
             GetActivityResult with grouped items and pagination metadata.
         """
-        from pilot_space.infrastructure.database.repositories.homepage_repository import (
-            HomepageRepository,
-        )
-
-        repo = HomepageRepository(self._session)
         limit = min(payload.limit, 50)
 
         # Decode cursor → updated_at timestamp for keyset pagination
@@ -119,12 +124,12 @@ class GetActivityService:
         # Fetch one extra to detect has_more
         fetch_limit = limit + 1
 
-        notes = await repo.get_recent_notes_with_annotations(
+        notes = await self._repo.get_recent_notes_with_annotations(
             payload.workspace_id,
             limit=fetch_limit,
             cursor_updated_at=cursor_dt,
         )
-        issues = await repo.get_recent_issues_with_activity(
+        issues = await self._repo.get_recent_issues_with_activity(
             payload.workspace_id,
             limit=fetch_limit,
             cursor_updated_at=cursor_dt,

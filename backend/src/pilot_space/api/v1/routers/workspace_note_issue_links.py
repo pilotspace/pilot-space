@@ -15,20 +15,18 @@ import logging
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Path, status
+from fastapi import APIRouter, HTTPException, Path, status
 from pydantic import Field
 
+from pilot_space.api.v1.dependencies import (
+    NoteIssueLinkRepositoryDep,
+    NoteRepositoryDep,
+)
 from pilot_space.api.v1.schemas.base import BaseSchema
-from pilot_space.dependencies import CurrentUserId, DbSession
+from pilot_space.dependencies.auth import CurrentUserId, SessionDep
 from pilot_space.infrastructure.database.models.note_issue_link import (
     NoteIssueLink,
     NoteLinkType,
-)
-from pilot_space.infrastructure.database.repositories.note_issue_link_repository import (
-    NoteIssueLinkRepository,
-)
-from pilot_space.infrastructure.database.repositories.note_repository import (
-    NoteRepository,
 )
 
 logger = logging.getLogger(__name__)
@@ -67,22 +65,8 @@ class NoteIssueLinkResponse(BaseSchema):
 
 
 # ---------------------------------------------------------------------------
-# Dependency injection
+# Path parameter types
 # ---------------------------------------------------------------------------
-
-
-def get_link_repository(session: DbSession) -> NoteIssueLinkRepository:
-    """Get NoteIssueLinkRepository with session."""
-    return NoteIssueLinkRepository(session=session)
-
-
-def get_note_repository(session: DbSession) -> NoteRepository:
-    """Get NoteRepository with session."""
-    return NoteRepository(session=session)
-
-
-LinkRepo = Annotated[NoteIssueLinkRepository, Depends(get_link_repository)]
-NoteRepo = Annotated[NoteRepository, Depends(get_note_repository)]
 
 WorkspaceIdPath = Annotated[str, Path(description="Workspace ID (UUID) or slug")]
 NoteIdPath = Annotated[UUID, Path(description="Note ID")]
@@ -128,10 +112,10 @@ async def link_issue_to_note(
     workspace_id: WorkspaceIdPath,
     note_id: NoteIdPath,
     body: LinkIssueRequest,
+    session: SessionDep,
     current_user_id: CurrentUserId,
-    link_repo: LinkRepo,
-    note_repo: NoteRepo,
-    session: DbSession,
+    link_repo: NoteIssueLinkRepositoryDep,
+    note_repo: NoteRepositoryDep,
 ) -> NoteIssueLinkResponse:
     """Create a NoteIssueLink record.
 
@@ -210,9 +194,9 @@ async def unlink_issue_from_note(
     workspace_id: WorkspaceIdPath,
     note_id: NoteIdPath,
     issue_id: IssueIdPath,
+    session: SessionDep,
     current_user_id: CurrentUserId,
-    link_repo: LinkRepo,
-    session: DbSession,
+    link_repo: NoteIssueLinkRepositoryDep,
 ) -> None:
     """Soft-delete all NoteIssueLink records between a note and issue.
 
@@ -262,8 +246,9 @@ async def unlink_issue_from_note(
 async def list_note_issue_links(
     workspace_id: WorkspaceIdPath,
     note_id: NoteIdPath,
+    session: SessionDep,
     current_user_id: CurrentUserId,
-    link_repo: LinkRepo,
+    link_repo: NoteIssueLinkRepositoryDep,
 ) -> list[NoteIssueLinkResponse]:
     """Get all issue links for a note.
 

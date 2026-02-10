@@ -64,7 +64,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     from pilot_space.container import get_container
 
     # Startup: Initialize DI container and connections
-    app.state.container = get_container()
+    container = get_container()
+
+    # Wire container for dependency injection
+    # This enables @inject decorator and Provide[Container.x] patterns
+    container.wire(modules=container.wiring_config.modules)
+
+    app.state.container = container
     settings = get_settings()
 
     # Connect to Redis for session management

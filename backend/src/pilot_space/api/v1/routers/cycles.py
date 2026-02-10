@@ -6,11 +6,18 @@ T163: Create Cycles CRUD and management endpoints.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Annotated, Any
+from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from pilot_space.api.v1.dependencies import (
+    AddIssueToCycleServiceDep,
+    CreateCycleServiceDep,
+    GetCycleServiceDep,
+    RolloverCycleServiceDep,
+    UpdateCycleServiceDep,
+)
 from pilot_space.api.v1.schemas.cycle import (
     AddIssueToCycleRequest,
     BulkAddIssuesToCycleRequest,
@@ -21,109 +28,18 @@ from pilot_space.api.v1.schemas.cycle import (
     RolloverCycleRequest,
     RolloverCycleResponse,
 )
-from pilot_space.api.v1.schemas.issue import IssueBriefResponse
-from pilot_space.dependencies import (
-    get_current_user_id,
-    get_current_workspace_id,
-    get_session,
+from pilot_space.api.v1.schemas.issue import (
+    IssueBriefResponse,
+    StateBriefSchema,
+    UserBriefSchema,
 )
+from pilot_space.dependencies import get_current_user_id, get_current_workspace_id
+from pilot_space.dependencies.auth import SessionDep
 from pilot_space.infrastructure.database.models import CycleStatus
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/cycles", tags=["cycles"])
-
-
-# ============================================================================
-# Dependency Injection
-# ============================================================================
-
-
-async def get_create_cycle_service(
-    session: Annotated[..., Depends(get_session)],
-) -> CreateCycleService:
-    """Get CreateCycleService instance."""
-    from pilot_space.application.services.cycle import CreateCycleService
-    from pilot_space.infrastructure.database.repositories import CycleRepository
-
-    return CreateCycleService(
-        session=session,
-        cycle_repository=CycleRepository(session),
-    )
-
-
-async def get_get_cycle_service(
-    session: Annotated[..., Depends(get_session)],
-) -> GetCycleService:
-    """Get GetCycleService instance."""
-    from pilot_space.application.services.cycle import GetCycleService
-    from pilot_space.infrastructure.database.repositories import CycleRepository
-
-    return GetCycleService(
-        cycle_repository=CycleRepository(session),
-    )
-
-
-async def get_update_cycle_service(
-    session: Annotated[..., Depends(get_session)],
-) -> UpdateCycleService:
-    """Get UpdateCycleService instance."""
-    from pilot_space.application.services.cycle import UpdateCycleService
-    from pilot_space.infrastructure.database.repositories import CycleRepository
-
-    return UpdateCycleService(
-        session=session,
-        cycle_repository=CycleRepository(session),
-    )
-
-
-async def get_add_issue_service(
-    session: Annotated[..., Depends(get_session)],
-) -> AddIssueToCycleService:
-    """Get AddIssueToCycleService instance."""
-    from pilot_space.application.services.cycle import AddIssueToCycleService
-    from pilot_space.infrastructure.database.repositories import (
-        ActivityRepository,
-        CycleRepository,
-        IssueRepository,
-    )
-
-    return AddIssueToCycleService(
-        session=session,
-        cycle_repository=CycleRepository(session),
-        issue_repository=IssueRepository(session),
-        activity_repository=ActivityRepository(session),
-    )
-
-
-async def get_rollover_service(
-    session: Annotated[..., Depends(get_session)],
-) -> RolloverCycleService:
-    """Get RolloverCycleService instance."""
-    from pilot_space.application.services.cycle import RolloverCycleService
-    from pilot_space.infrastructure.database.repositories import (
-        ActivityRepository,
-        CycleRepository,
-        IssueRepository,
-    )
-
-    return RolloverCycleService(
-        session=session,
-        cycle_repository=CycleRepository(session),
-        issue_repository=IssueRepository(session),
-        activity_repository=ActivityRepository(session),
-    )
-
-
-# Type imports
-if TYPE_CHECKING:
-    from pilot_space.application.services.cycle import (
-        AddIssueToCycleService,
-        CreateCycleService,
-        GetCycleService,
-        RolloverCycleService,
-        UpdateCycleService,
-    )
 
 
 # ============================================================================
@@ -139,9 +55,10 @@ if TYPE_CHECKING:
 )
 async def create_cycle(
     request: CycleCreateRequest,
+    session: SessionDep,
     workspace_id: Annotated[UUID, Depends(get_current_workspace_id)],
     user_id: Annotated[UUID, Depends(get_current_user_id)],
-    create_service: Annotated[..., Depends(get_create_cycle_service)],
+    create_service: CreateCycleServiceDep,
 ) -> CycleResponse:
     """Create a new cycle (sprint).
 
@@ -184,8 +101,9 @@ async def create_cycle(
     summary="List cycles",
 )
 async def list_cycles(
+    session: SessionDep,
     workspace_id: Annotated[UUID, Depends(get_current_workspace_id)],
-    get_service: Annotated[..., Depends(get_get_cycle_service)],
+    get_service: GetCycleServiceDep,
     project_id: UUID,
     status_filter: Annotated[CycleStatus | None, Query(alias="status")] = None,
     search: str | None = None,
@@ -251,8 +169,9 @@ async def list_cycles(
     summary="Get active cycle",
 )
 async def get_active_cycle(
+    session: SessionDep,
     workspace_id: Annotated[UUID, Depends(get_current_workspace_id)],
-    get_service: Annotated[..., Depends(get_get_cycle_service)],
+    get_service: GetCycleServiceDep,
     project_id: UUID,
     include_metrics: bool = True,
 ) -> CycleResponse | None:
@@ -285,7 +204,8 @@ async def get_active_cycle(
 )
 async def get_cycle(
     cycle_id: UUID,
-    get_service: Annotated[..., Depends(get_get_cycle_service)],
+    session: SessionDep,
+    get_service: GetCycleServiceDep,
     include_metrics: bool = True,
 ) -> CycleResponse:
     """Get a cycle by ID.
@@ -327,8 +247,9 @@ async def get_cycle(
 async def update_cycle(
     cycle_id: UUID,
     request: CycleUpdateRequest,
+    session: SessionDep,
     user_id: Annotated[UUID, Depends(get_current_user_id)],
-    update_service: Annotated[..., Depends(get_update_cycle_service)],
+    update_service: UpdateCycleServiceDep,
 ) -> CycleResponse:
     """Update a cycle.
 
@@ -395,7 +316,7 @@ async def update_cycle(
 )
 async def delete_cycle(
     cycle_id: UUID,
-    session: Annotated[..., Depends(get_session)],
+    session: SessionDep,
 ) -> None:
     """Soft delete a cycle.
 
@@ -432,9 +353,10 @@ async def delete_cycle(
 async def add_issue_to_cycle(
     cycle_id: UUID,
     request: AddIssueToCycleRequest,
+    session: SessionDep,
     workspace_id: Annotated[UUID, Depends(get_current_workspace_id)],
     user_id: Annotated[UUID, Depends(get_current_user_id)],
-    add_service: Annotated[..., Depends(get_add_issue_service)],
+    add_service: AddIssueToCycleServiceDep,
 ) -> dict[str, Any]:
     """Add an issue to a cycle.
 
@@ -477,9 +399,10 @@ async def add_issue_to_cycle(
 async def bulk_add_issues_to_cycle(
     cycle_id: UUID,
     request: BulkAddIssuesToCycleRequest,
+    session: SessionDep,
     workspace_id: Annotated[UUID, Depends(get_current_workspace_id)],
     user_id: Annotated[UUID, Depends(get_current_user_id)],
-    add_service: Annotated[..., Depends(get_add_issue_service)],
+    add_service: AddIssueToCycleServiceDep,
 ) -> dict[str, Any]:
     """Add multiple issues to a cycle.
 
@@ -516,9 +439,10 @@ async def bulk_add_issues_to_cycle(
 async def remove_issue_from_cycle(
     cycle_id: UUID,
     issue_id: UUID,
+    session: SessionDep,
     workspace_id: Annotated[UUID, Depends(get_current_workspace_id)],
     user_id: Annotated[UUID, Depends(get_current_user_id)],
-    add_service: Annotated[..., Depends(get_add_issue_service)],
+    add_service: AddIssueToCycleServiceDep,
 ) -> None:
     """Remove an issue from a cycle.
 
@@ -560,9 +484,10 @@ async def remove_issue_from_cycle(
 async def rollover_cycle(
     cycle_id: UUID,
     request: RolloverCycleRequest,
+    session: SessionDep,
     workspace_id: Annotated[UUID, Depends(get_current_workspace_id)],
     user_id: Annotated[UUID, Depends(get_current_user_id)],
-    rollover_service: Annotated[..., Depends(get_rollover_service)],
+    rollover_service: RolloverCycleServiceDep,
 ) -> RolloverCycleResponse:
     """Rollover incomplete issues from one cycle to another.
 
@@ -605,8 +530,8 @@ async def rollover_cycle(
                 identifier=i.identifier,
                 name=i.name,
                 priority=i.priority,
-                state=i.state,
-                assignee=i.assignee,
+                state=StateBriefSchema.model_validate(i.state),
+                assignee=UserBriefSchema.model_validate(i.assignee) if i.assignee else None,
             )
             for i in result.rolled_over_issues
         ],

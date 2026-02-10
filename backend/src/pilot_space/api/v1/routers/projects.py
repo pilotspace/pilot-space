@@ -9,8 +9,12 @@ import logging
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, status
 
+from pilot_space.api.v1.dependencies import (
+    ProjectRepositoryDep,
+    WorkspaceRepositoryDep,
+)
 from pilot_space.api.v1.schemas.base import DeleteResponse, PaginatedResponse
 from pilot_space.api.v1.schemas.project import (
     ProjectCreate,
@@ -19,32 +23,12 @@ from pilot_space.api.v1.schemas.project import (
     ProjectUpdate,
     StateResponse,
 )
-from pilot_space.dependencies import CurrentUser, DbSession
+from pilot_space.dependencies.auth import CurrentUser, SessionDep
 from pilot_space.infrastructure.database.models.project import Project
-from pilot_space.infrastructure.database.repositories.project_repository import (
-    ProjectRepository,
-)
-from pilot_space.infrastructure.database.repositories.workspace_repository import (
-    WorkspaceRepository,
-)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/projects", tags=["projects"])
-
-
-def get_project_repository(session: DbSession) -> ProjectRepository:
-    """Get project repository with session."""
-    return ProjectRepository(session=session)
-
-
-def get_workspace_repository(session: DbSession) -> WorkspaceRepository:
-    """Get workspace repository with session."""
-    return WorkspaceRepository(session=session)
-
-
-ProjectRepo = Annotated[ProjectRepository, Depends(get_project_repository)]
-WorkspaceRepo = Annotated[WorkspaceRepository, Depends(get_workspace_repository)]
 
 
 def _project_to_response(project: Project) -> ProjectDetailResponse:
@@ -76,7 +60,7 @@ def _project_to_response(project: Project) -> ProjectDetailResponse:
 
 
 async def _check_workspace_access(
-    workspace_repo: WorkspaceRepository,
+    workspace_repo: WorkspaceRepositoryDep,
     workspace_id: UUID,
     user_id: UUID,
     require_admin: bool = False,
@@ -119,9 +103,10 @@ async def _check_workspace_access(
 @router.get("", response_model=PaginatedResponse[ProjectResponse], tags=["projects"])
 async def list_projects(
     workspace_id: Annotated[UUID, Query(description="Filter by workspace")],
+    session: SessionDep,
     current_user: CurrentUser,
-    project_repo: ProjectRepo,
-    workspace_repo: WorkspaceRepo,
+    project_repo: ProjectRepositoryDep,
+    workspace_repo: WorkspaceRepositoryDep,
     cursor: Annotated[str | None, Query(description="Pagination cursor")] = None,
     page_size: Annotated[int, Query(ge=1, le=100, description="Items per page")] = 20,
 ) -> PaginatedResponse[ProjectResponse]:
@@ -180,9 +165,10 @@ async def list_projects(
 )
 async def create_project(
     request: ProjectCreate,
+    session: SessionDep,
     current_user: CurrentUser,
-    project_repo: ProjectRepo,
-    workspace_repo: WorkspaceRepo,
+    project_repo: ProjectRepositoryDep,
+    workspace_repo: WorkspaceRepositoryDep,
 ) -> ProjectDetailResponse:
     """Create a new project with default workflow states.
 
@@ -239,9 +225,10 @@ async def create_project(
 @router.get("/{project_id}", response_model=ProjectDetailResponse, tags=["projects"])
 async def get_project(
     project_id: UUID,
+    session: SessionDep,
     current_user: CurrentUser,
-    project_repo: ProjectRepo,
-    workspace_repo: WorkspaceRepo,
+    project_repo: ProjectRepositoryDep,
+    workspace_repo: WorkspaceRepositoryDep,
 ) -> ProjectDetailResponse:
     """Get project by ID.
 
@@ -273,9 +260,10 @@ async def get_project(
 async def update_project(
     project_id: UUID,
     request: ProjectUpdate,
+    session: SessionDep,
     current_user: CurrentUser,
-    project_repo: ProjectRepo,
-    workspace_repo: WorkspaceRepo,
+    project_repo: ProjectRepositoryDep,
+    workspace_repo: WorkspaceRepositoryDep,
 ) -> ProjectDetailResponse:
     """Update project.
 
@@ -320,9 +308,10 @@ async def update_project(
 @router.delete("/{project_id}", response_model=DeleteResponse, tags=["projects"])
 async def delete_project(
     project_id: UUID,
+    session: SessionDep,
     current_user: CurrentUser,
-    project_repo: ProjectRepo,
-    workspace_repo: WorkspaceRepo,
+    project_repo: ProjectRepositoryDep,
+    workspace_repo: WorkspaceRepositoryDep,
 ) -> DeleteResponse:
     """Soft delete project.
 

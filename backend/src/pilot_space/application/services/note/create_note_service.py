@@ -16,6 +16,12 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from pilot_space.infrastructure.database.models.note import Note
+    from pilot_space.infrastructure.database.repositories.note_repository import (
+        NoteRepository,
+    )
+    from pilot_space.infrastructure.database.repositories.template_repository import (
+        TemplateRepository,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,13 +73,22 @@ class CreateNoteService:
     word count calculation, and reading time estimation.
     """
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        note_repository: NoteRepository,
+        template_repository: TemplateRepository,
+    ) -> None:
         """Initialize CreateNoteService.
 
         Args:
             session: The async database session.
+            note_repository: Repository for note operations.
+            template_repository: Repository for template operations.
         """
         self._session = session
+        self._note_repo = note_repository
+        self._template_repo = template_repository
 
     async def execute(self, payload: CreateNotePayload) -> CreateNoteResult:
         """Execute note creation.
@@ -88,12 +103,6 @@ class CreateNoteService:
             ValueError: If validation fails.
         """
         from pilot_space.infrastructure.database.models.note import Note
-        from pilot_space.infrastructure.database.repositories.note_repository import (
-            NoteRepository,
-        )
-        from pilot_space.infrastructure.database.repositories.template_repository import (
-            TemplateRepository,
-        )
 
         # Validate title
         if not payload.title or not payload.title.strip():
@@ -105,8 +114,7 @@ class CreateNoteService:
         template_applied = False
 
         if payload.template_id:
-            template_repo = TemplateRepository(self._session)
-            template = await template_repo.get_by_id(payload.template_id)
+            template = await self._template_repo.get_by_id(payload.template_id)
             if template and template.content:
                 content = template.content
                 template_applied = True
@@ -129,8 +137,7 @@ class CreateNoteService:
             project_id=payload.project_id,
         )
 
-        note_repo = NoteRepository(self._session)
-        created_note = await note_repo.create(note)
+        created_note = await self._note_repo.create(note)
 
         return CreateNoteResult(
             note=created_note,

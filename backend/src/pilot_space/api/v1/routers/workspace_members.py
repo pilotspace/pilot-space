@@ -10,22 +10,16 @@ import logging
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Path, status
+from fastapi import APIRouter, HTTPException, Path, status
 
+from pilot_space.api.v1.dependencies import WorkspaceRepositoryDep
 from pilot_space.api.v1.schemas.workspace import (
     WorkspaceMemberResponse,
     WorkspaceMemberUpdate,
 )
-from pilot_space.dependencies import (
-    CurrentUser,
-    CurrentUserId,
-    DbSession,
-)
+from pilot_space.dependencies.auth import CurrentUser, CurrentUserId, SessionDep
 from pilot_space.infrastructure.database.models.workspace import Workspace
 from pilot_space.infrastructure.database.models.workspace_member import WorkspaceRole
-from pilot_space.infrastructure.database.repositories.workspace_repository import (
-    WorkspaceRepository,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -33,14 +27,6 @@ router = APIRouter()
 
 # Type alias for endpoints that accept both UUID and slug
 WorkspaceIdOrSlug = Annotated[str, Path(description="Workspace ID (UUID) or slug")]
-
-
-def _get_workspace_repository(session: DbSession) -> WorkspaceRepository:
-    """Get workspace repository with session."""
-    return WorkspaceRepository(session=session)
-
-
-WorkspaceRepo = Annotated[WorkspaceRepository, Depends(_get_workspace_repository)]
 
 
 def _is_valid_uuid(value: str) -> bool:
@@ -54,7 +40,7 @@ def _is_valid_uuid(value: str) -> bool:
 
 async def _resolve_workspace_with_members(
     workspace_id_or_slug: str,
-    workspace_repo: WorkspaceRepository,
+    workspace_repo: WorkspaceRepositoryDep,
 ) -> Workspace:
     """Resolve workspace by UUID or slug with members eagerly loaded.
 
@@ -88,8 +74,9 @@ async def _resolve_workspace_with_members(
 )
 async def list_workspace_members(
     workspace_id: WorkspaceIdOrSlug,
+    session: SessionDep,
     current_user_id: CurrentUserId,
-    workspace_repo: WorkspaceRepo,
+    workspace_repo: WorkspaceRepositoryDep,
 ) -> list[WorkspaceMemberResponse]:
     """List workspace members.
 
@@ -136,8 +123,9 @@ async def update_workspace_member(
     workspace_id: UUID,
     user_id: UUID,
     request: WorkspaceMemberUpdate,
+    session: SessionDep,
     current_user: CurrentUser,
-    workspace_repo: WorkspaceRepo,
+    workspace_repo: WorkspaceRepositoryDep,
 ) -> WorkspaceMemberResponse:
     """Update member role.
 
@@ -227,8 +215,9 @@ async def update_workspace_member(
 async def remove_workspace_member(
     workspace_id: UUID,
     user_id: UUID,
+    session: SessionDep,
     current_user: CurrentUser,
-    workspace_repo: WorkspaceRepo,
+    workspace_repo: WorkspaceRepositoryDep,
 ) -> None:
     """Remove member from workspace.
 
