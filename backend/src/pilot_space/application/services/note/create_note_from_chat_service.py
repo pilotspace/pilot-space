@@ -20,6 +20,10 @@ from uuid import UUID
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
+    from pilot_space.infrastructure.database.repositories.note_repository import (
+        NoteRepository,
+    )
+
 logger = logging.getLogger(__name__)
 
 
@@ -65,13 +69,19 @@ class CreateNoteFromChatService:
     and creates the Note with source_chat_session_id populated.
     """
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        note_repository: NoteRepository,
+    ) -> None:
         """Initialize CreateNoteFromChatService.
 
         Args:
             session: The async database session.
+            note_repository: Repository for note operations.
         """
         self._session = session
+        self._note_repo = note_repository
 
     async def execute(self, payload: CreateNoteFromChatPayload) -> CreateNoteFromChatResult:
         """Execute note creation from chat.
@@ -88,9 +98,6 @@ class CreateNoteFromChatService:
         from pilot_space.infrastructure.database.models.ai_message import MessageRole
         from pilot_space.infrastructure.database.models.ai_session import AISession
         from pilot_space.infrastructure.database.models.note import Note
-        from pilot_space.infrastructure.database.repositories.note_repository import (
-            NoteRepository,
-        )
 
         if not payload.title or not payload.title.strip():
             msg = "Note title is required"
@@ -127,8 +134,7 @@ class CreateNoteFromChatService:
             source_chat_session_id=payload.chat_session_id,
         )
 
-        note_repo = NoteRepository(self._session)
-        created_note = await note_repo.create(note)
+        created_note = await self._note_repo.create(note)
 
         logger.info(
             "Note created from chat session",

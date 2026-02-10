@@ -174,167 +174,52 @@ Three-tier containerized architecture: Frontend (Next.js 14 App Router) → Back
 
 ## AI Agent Architecture
 
-### Design Philosophy (DD-086)
+**Complete AI layer architecture, agents, skills, MCP tools, and provider routing**: See `backend/src/pilot_space/ai/CLAUDE.md`
 
-Migrated from 13 siloed agents to a **centralized conversational agent**. Single `PilotSpaceAgent` orchestrator handles all user-facing AI conversations through:
+### Quick Summary
 
-- **Skills**: Single-turn, stateless, filesystem-based (`.claude/skills/`). For focused tasks (extraction, enhancement, duplicates). Invoked via slash commands or intent detection.
-- **Subagents**: Multi-turn, stateful, spawned by orchestrator. For complex tasks (PR review, AI context, docs). Results flow through orchestrator's SSE stream.
+**Design Philosophy (DD-086)**: Centralized conversational agent. Single `PilotSpaceAgent` orchestrator routes to skills (single-turn, stateless) and subagents (multi-turn, stateful).
 
-**Exception**: Fast-path independent agents (GhostTextAgent) bypass orchestrator for latency-critical operations (<2.5s SLA). These agents use direct provider calls without multi-turn context management.
+**Agent Roster**: 1 orchestrator (PilotSpaceAgent) + 3 subagents (PR Review, AI Context, Doc Generator) + 1 independent (GhostText for <2s latency)
 
-### Agent Roster
+**Skills (8)**: extract-issues, enhance-issue, improve-writing, summarize, find-duplicates, recommend-assignee, decompose-tasks, generate-diagram
 
-agents[5]{agent,type,model,latency,purpose}
-GhostTextAgent,Independent,Gemini Flash,<2s,Inline completions on 500ms typing pause; max 50 tokens; code-aware
-PilotSpaceAgent,Orchestrator,Claude Sonnet,<10s,Routes requests to skills/subagents; manages sessions; note sync; tool auth
-PRReviewAgent,Subagent,Claude Opus,<5min,Unified code review (architecture; security; quality; docs) with severity tags
-AIContextAgent,Subagent,Claude Opus,<30s,Aggregates issue context: related issues; notes; code files; dependency graphs
-DocGeneratorAgent,Subagent,Claude Sonnet,<60s,Generates ADR; API docs; technical specs from code/issues/notes
+**MCP Tools (33)**: 6 servers (note, note_content, issue, issue_relation, project, comment) with operation payloads pattern
 
-### Skill System (DD-087)
+**Provider Routing (DD-011)**: Task-based selection (PR review→Opus, AI context→Opus, code gen→Sonnet, ghost→Flash) + per-task fallback chains
 
-Filesystem-based `.claude/skills/` with YAML frontmatter, auto-discovered by SDK.
+**Approval Workflow (DD-003)**: Non-destructive→auto, content creation→configurable, destructive→always require
 
-skills[8]{skill,purpose,output}
-extract-issues,Detect actionable items; categorize Explicit/Implicit/Related,Issue candidates with title/description/priority/type
-enhance-issue,Improve issue quality at creation,Enhanced title; acceptance criteria; suggested labels
-improve-writing,Enhance text clarity preserving meaning,Improved text preserving user voice
-summarize,Multi-format content summarization,Bullet; executive; or detailed breakdown
-find-duplicates,Semantic similarity detection (threshold: 70%),Ranked similar issues with scores
-recommend-assignee,Expertise matching for team members,Ranked assignees with expertise %
-decompose-tasks,Break features into subtasks,Subtask list with Fibonacci points; dependency graph
-generate-diagram,Create architecture diagrams,Mermaid or PlantUML output
-
-### Human-in-the-Loop Approval (DD-003)
-
-**Non-destructive** → Auto-execute, notify (labels, ghost text, annotations, auto-transition).
-**Content creation** → Require approval, configurable (create issues, PR comments, docs).
-**Destructive** → **Always require approval** (delete issues, merge PRs, archive workspaces).
-
-Implementation: SDK `canUseTool` → `PermissionHandler` → `ApprovalStore` with 24h auto-expiry.
-
-**Approval Classification Matrix**:
-
-approval_matrix[12]{operation,category,approval_required,permission_handler}
-enhance_text,Non-destructive,No (auto-execute),PermissionHandler.auto_approve()
-improve_writing,Non-destructive,No (auto-execute),PermissionHandler.auto_approve()
-summarize,Non-destructive,No (auto-execute),PermissionHandler.auto_approve()
-extract_issues,Content creation,Yes (configurable),PermissionHandler.request_approval()
-create_issue,Content creation,Yes (configurable),PermissionHandler.request_approval()
-enhance_issue,Content creation,Yes (configurable),PermissionHandler.request_approval()
-add_label,Non-destructive,No (auto-execute),PermissionHandler.auto_approve()
-assign_issue,Non-destructive,No (auto-execute),PermissionHandler.auto_approve()
-post_pr_comment,Content creation,Yes (configurable),PermissionHandler.request_approval()
-delete_issue,Destructive,Yes (always),PermissionHandler.require_approval()
-merge_pr,Destructive,Yes (always),PermissionHandler.require_approval()
-archive_workspace,Destructive,Yes (always),PermissionHandler.require_approval()
-
-### MCP Note Tools (6 tools)
-
-Registered via `create_note_tools_server()`. All return operation payloads (`status: pending_apply`), not direct DB mutations. Backend `transform_sdk_message()` converts markdown to TipTap JSON and emits SSE `content_update` events.
-
-mcp_tools[6]{tool,operation,use_case}
-update_note_block,Replace or append block content,Precise text modification by block ID
-enhance_text,Improve clarity without meaning change,Professional polish; expand abbreviations
-summarize_note,Read full note with metadata,Context gathering before modifications
-extract_issues,Create multiple linked issues from blocks,Bulk extraction from meeting notes
-create_issue_from_note,Create single linked issue,Convert selection to bug/feature/task
-link_existing_issues,Search and link workspace issues,Find related work; duplicate prevention
-
-### Skills vs MCP Tools: Relationship
-
-**Terminology Clarification**:
-
-- **Skill** (DD-087): YAML file in `.claude/skills/` with frontmatter. Auto-discovered by SDK. Invoked via slash commands (`/extract-issues`) or intent detection. Defines behavior, prompt, and expected output format.
-
-- **MCP Tool**: Python function registered via `create_note_tools_server()`. Exposed to Claude SDK as callable tools. Receives structured parameters, returns operation payloads. Backend applies transformations.
-
-**Relationship Flow**:
-```
-User types "/extract-issues"
-  → SDK detects skill intent
-  → Skill executes (calls MCP Tool if needed)
-  → MCP Tool: extract_issues() returns payload
-  → Backend: transform_sdk_message() applies operations
-  → SSE: content_update event to frontend
-```
-
-**Skills-to-Tools Mapping**:
-
-skill_tool_mapping[8]{skill,mcp_tool,implementation}
-extract-issues,extract_issues,Skill invokes MCP tool
-enhance-issue,enhance_text (partial),Skill invokes MCP tool for text enhancement only
-improve-writing,enhance_text,Skill invokes MCP tool
-summarize,summarize_note,Skill invokes MCP tool
-find-duplicates,--,Skill only (no direct tool; uses semantic search)
-recommend-assignee,--,Skill only (no direct tool; uses workspace member data)
-decompose-tasks,--,Skill only (no direct tool; uses issue analysis)
-generate-diagram,--,Skill only (no direct tool; generates Mermaid/PlantUML text)
-
-### Provider Routing (DD-011)
-
-**Agentic Tasks** (complexity-based routing):
-- **Complex analysis** (PR review, architecture analysis) → **Claude Opus** (preferred for deep reasoning)
-- **Context aggregation** (AI context, simple routing) → **Claude Sonnet** (cost-optimized fallback)
-- **Orchestration** (PilotSpaceAgent routing, chat management) → **Claude Sonnet**
-
-**One-shot Tasks**:
-- **Content enhancement** (enhance, summarize) → **Claude Sonnet** via `query()` (simple, stateless)
-
-**Latency-Critical**:
-- **Ghost text** (inline completions) → **Google Gemini 2.0 Flash** (<1.5s response time)
-
-**Embeddings**:
-- **Semantic search, RAG** → **Google Gemini gemini-embedding-001** (768-dim vectors)
-
-**Fallback Chain** (on circuit breaker): Claude Opus → Claude Sonnet → Gemini Pro → Error + Queue. Circuit breaker: 5 failures trigger OPEN state, 60s recovery to HALF_OPEN, 1 probe request.
-
-**Optimizations**: Prompt caching (`cache_control: ephemeral`) saves 63% tokens. Context window pruned at 50k tokens, preserving 10 most recent messages.
-
-### Error Handling & Resilience
-
-- **Retry**: `ResilientExecutor` exponential backoff (1s base, 60s cap, 30% jitter, 3 attempts). Retries on timeout/rate limit only.
-- **Circuit Breaker**: Per-provider. CLOSED → OPEN (5 failures) → HALF_OPEN (60s, 1 probe).
-- **SSE Abort**: Backend `AbortController`. Frontend max 3 reconnects with exponential backoff.
-- **Offline Queue**: pgmq when API unavailable, retry on reconnection.
-- **Cost Tracking**: Per-request token logging, per-provider pricing, budget alerts at 90%.
+**Resilience**: Exponential backoff (1-60s, 3 retries) + circuit breaker (3 failures→OPEN, 30s recovery) + cost tracking with 90% alerts
 
 ---
 
 ## Design Decisions Summary
 
-88 total decisions documented in `docs/DESIGN_DECISIONS.md`. **Key decisions by category** (selected highlights below; full list in design decisions doc):
+**Complete design decisions (88 total)**: See `docs/DESIGN_DECISIONS.md`
 
-### Foundational (DD-001 to DD-013)
+### Key Decisions by Category
 
-dd_foundational[8]{id,decision,rationale}
-DD-001,FastAPI replaces Django,Async-first; OpenAPI; Pydantic v2 native
-DD-002,BYOK + Claude Agent SDK,Users control costs; no vendor lock-in; Claude best for code
-DD-003,Critical-only AI approval,Balance speed with safety
-DD-004,MVP: GitHub + Slack only,Focus scope on largest market share
-DD-005,No real-time collab in MVP,Last-write-wins; Supabase Realtime for Phase 2
-DD-006,Unified AI PR Review,Single pass cheaper; cross-aspect references
-DD-011,Provider routing per task,Optimize cost/latency per task type
-DD-013,Note-First workflow,Core differentiator
+**Foundational (DD-001 to DD-013)**:
+- DD-001: FastAPI replaces Django (async-first, OpenAPI, Pydantic v2)
+- DD-002: BYOK + Claude Agent SDK (user control, no lock-in)
+- DD-003: Critical-only AI approval (balance speed with safety)
+- DD-011: Provider routing per task (optimize cost/latency)
+- DD-013: Note-First workflow (core differentiator)
 
-### Infrastructure (DD-059 to DD-070)
+**Infrastructure (DD-059 to DD-070)**:
+- DD-060: Supabase platform
+- DD-061: Supabase Auth + RLS (database-level authorization)
+- DD-064: CQRS-lite + Service Classes (clean separation)
+- DD-065: MobX (UI) + TanStack Query (server state)
+- DD-066: SSE for AI streaming (simpler than WebSocket)
+- DD-069: Supabase Queues/pgmq (exactly-once delivery)
+- DD-070: Gemini embeddings 768-dim HNSW (sub-linear search)
 
-dd_infra[8]{id,decision,impact}
-DD-060,Supabase platform,Consolidates 10+ services; 60-90% cost savings
-DD-061,Supabase Auth + RLS,Database-level authorization; defense-in-depth
-DD-064,CQRS-lite + Service Classes,Clean command/query separation without Event Sourcing
-DD-065,MobX (UI) + TanStack Query (server),MobX for observable state; TanStack for caching
-DD-066,SSE for AI streaming,Simpler than WebSocket; HTTP/2 compatible; cookie auth
-DD-067,Ghost text: 500ms/50 tokens/code-aware,Balance responsiveness with cost
-DD-069,Supabase Queues (pgmq),Native PostgreSQL; exactly-once; 3 priority levels
-DD-070,Gemini embeddings 768-dim HNSW,Best quality; sub-linear search on 100K+ vectors
-
-### Agent Architecture (DD-086 to DD-088)
-
-DD-086: Centralized agent (1+3+8) → unified context, single SSE stream, 8K token budget.
-DD-087: Filesystem skill system → auto-discovery, version-controlled, easy to modify.
-DD-088: MCP tool registry → RLS-enforced, operation payloads, decorator-based.
+**Agent Architecture (DD-086 to DD-088)**:
+- DD-086: Centralized agent (1 orchestrator + 3 subagents + 8 skills)
+- DD-087: Filesystem skill system (auto-discovery, version-controlled)
+- DD-088: MCP tool registry (RLS-enforced, operation payloads)
 
 ---
 
@@ -413,149 +298,68 @@ Conventional commits,feat|fix|refactor|docs|test|chore(scope): description
 
 ## Architecture Patterns
 
-**Load `docs/dev-pattern/45-pilot-space-patterns.md` first** for project-specific patterns.
+**Complete patterns with code examples**: See `docs/dev-pattern/45-pilot-space-patterns.md` (project-specific patterns)
 
 ### Backend Patterns
 
-backend_patterns[8]{pattern,implementation,rationale}
-CQRS-lite (DD-064),Service.execute(Payload) → Result,Separate read/write without Event Sourcing
-Repository,BaseRepository[T] + 15 repos; async SQLAlchemy,Abstract persistence; testable; RLS-enforced
-Unit of Work,SQLAlchemyUnitOfWork transaction boundaries,Atomic operations + event publishing
-Domain Events,IssueCreated; IssueStateChanged after commit,Decouple side effects
-DI (DD-064),dependency-injector: Singleton (config/engine); Factory (repos/sessions),Testable; explicit; no global state
-Errors,RFC 7807 Problem Details,Standard machine-readable format
-Validation,Pydantic v2 at boundary; domain invariants in entities,Fail fast at edge; rich behavior inside
-Auth (DD-061),Supabase Auth + RLS: JWT → workspace_id → RLS enforcement,Defense-in-depth
+**See `backend/CLAUDE.md` for complete backend patterns**
 
-*Summary above for quick reference; full patterns with code examples: see `backend/CLAUDE.md`*
+**Quick Summary**: CQRS-lite (Service.execute), Repository (RLS-enforced), Unit of Work, Domain Events, DI (dependency-injector), RFC 7807 Errors, Pydantic v2 Validation, Supabase Auth+RLS
 
 ### AI Agent Patterns
 
-ai_patterns[9]{pattern,implementation,rationale}
-Centralized agent (DD-086),PilotSpaceAgent orchestrator + skills + subagents,Unified context; eliminates 13 siloed agents
-SDK integration (DD-002),query() one-shot; ClaudeSDKClient multi-turn,Fast for simple; stateful for complex
-Skill system (DD-087),Filesystem .claude/skills/ YAML frontmatter,Auto-discovered; version-controlled
-MCP tools (DD-088),create_sdk_mcp_server() for domain operations,RLS-enforced; operation payloads
-Provider routing (DD-011),See Provider Routing section,Optimize cost/latency + fallback chain
-Approval (DD-003),canUseTool → PermissionHandler → ApprovalStore,Human oversight; configurable autonomy
-Streaming (DD-066),SSE; 8 event types,Real-time; simpler than WebSocket
-Resilience,ResilientExecutor + CircuitBreaker per provider,Prevent cascade; graceful degradation
-Sessions,Redis (30-min hot) + PostgreSQL (durable),Fast resumption + persistent history
+**See `backend/src/pilot_space/ai/CLAUDE.md` for complete AI patterns**
 
-*Summary above for quick reference; see inline sections for detailed implementation notes*
+**Quick Summary**: Centralized agent (PilotSpaceAgent), SDK integration (query/multi-turn), Skill system (YAML), MCP tools (operation payloads), Provider routing (DD-011), Approval (DD-003), SSE streaming, Resilience (retry+circuit breaker), Session management (Redis+PostgreSQL)
 
 ### Frontend Patterns
 
-frontend_patterns[7]{pattern,implementation,rationale}
-State split (DD-065),MobX for UI; TanStack Query for server data,Clear ownership; never store API data in MobX
-Feature folders,features/{domain}/ per business domain,Colocated components; hooks; stores
-Editor extensions,13 TipTap extensions (independently testable),Modular editor capabilities
-Optimistic updates,TanStack onMutate + snapshot + rollback,Instant feedback; MobX tracks in-flight ops
-SSE handling,Custom sse-client.ts (fetch ReadableStream for POST),EventSource is GET-only; custom supports POST + auth
-Auto-save,MobX reaction → 2s debounce → saveNote(),No save button; dirty state tracked
-Accessibility,WCAG 2.2 AA: keyboard nav; ARIA; focus management; prefers-reduced-motion,Inclusive by default
+**See `frontend/CLAUDE.md` for complete frontend patterns**
 
-*Summary above for quick reference; full patterns with React/TypeScript examples: see `frontend/CLAUDE.md`*
+**Quick Summary**: State split (MobX UI/TanStack server), Feature folders, 13 TipTap extensions, Optimistic updates, SSE handling (custom client), Auto-save (2s debounce), WCAG 2.2 AA Accessibility
 
 ---
 
 ## UI/UX Design System
 
+**Complete design system, component specs, and page catalog**: See `frontend/CLAUDE.md` - Section "UI/UX Design System"
+
+### Quick Summary
+
+**Design Philosophy**: Warm, Capable, Collaborative (inspired by Craft, Apple, Things 3)
+
+**Color System**: Warm neutrals (#FDFCFA background) + teal-green primary (#29A386) + dusty blue AI accent (#6B8FAD)
+
+**Typography**: Geist font, 11-24px range (text-xs to text-2xl)
+
+**Components**: 6 button variants, 4 card variants, squircle corners (6-18px radius), 4px spacing grid
+
+**Pages**: 12 core pages from Login to Settings, all following consistent layout patterns
+
 *Full specification: `specs/001-pilot-space-mvp/ui-design-spec.md` v4.0*
-
-### Design Philosophy
-
-Three adjectives: **Warm, Capable, Collaborative**.
-
-**Inspirations**: Craft (layered surfaces), Apple (squircle corners, frosted glass), Things 3 (natural colors, spacious calm).
-
-**NOT**: Cold enterprise software, generic shadcn/ui defaults, AI as separate "system", dense displays.
-
-### Color System
-
-**Base Palette** (Warm Neutrals):
-
-base_palette[6]{token,light,dark,usage}
---background,#FDFCFA,#1A1A1A,Primary surface
---background-subtle,#F7F5F2,#1F1F1F,Secondary surface
---foreground,#171717,#EDEDED,Primary text
---foreground-muted,#737373,#999999,Secondary text
---border,#E5E2DD,#2E2E2E,Borders
---border-subtle,#EBE8E4,#262626,Subtle borders
-
-**Accent Colors**:
-
-accent_colors[7]{token,value,usage}
---primary,#29A386 / #34B896,Primary actions (teal-green)
---primary-hover,#238F74,Hover state
---primary-muted,#29A38615,Subtle backgrounds
---ai,#6B8FAD / #7DA4C4,AI elements (dusty blue)
---ai-muted,#6B8FAD15,AI annotation backgrounds
---ai-border,#6B8FAD30,AI element borders
---destructive,#D9534F / #E06560,Delete/remove actions
-
-**Issue State Colors**: Backlog `#9C9590`, Todo `#5B8FC9`, In Progress `#D9853F`, In Review `#8B7EC8`, Done `#29A386`, Cancelled `#D9534F`
-
-**Priority Colors**: Urgent `#D9534F`, High `#D9853F`, Medium `#C4A035`, Low `#5B8FC9`, None `#9C9590`
-
-### Component Design Language
-
-**Buttons**: 6 variants (default/secondary/outline/ghost/destructive/ai). 5 sizes. Hover: scale 2% + shadow.
-
-**Cards**: 4 variants (default/elevated/interactive/glass). Interactive: translateY -2px + scale 1% on hover.
-
-**Inputs**: 38px height, rounded 10px, 14px font, focus primary border + 3px ring.
-
-*Full component specs, typography, spacing, animations: see `specs/001-pilot-space-mvp/ui-design-spec.md` Sections 5-6*
-
-### Page Catalog
-
-pages[12]{page,route,capabilities}
-Login,/login,Centered form; email/password + OAuth
-Home,/[workspaceSlug],Redirects to Notes List (Note Canvas = home)
-Notes List,.../notes,Grid/List toggle; search; sort; filters
-Note Editor,.../notes/[noteId],65/35 split (canvas + ChatView); auto-save 2s
-Issues,.../issues,Board/List/Table; filters; keyboard nav
-Issue Detail,.../issues/[issueId],70/30 split; inline edit; AI Context tabs
-Projects,.../projects,3-col grid; progress bars
-Cycle Detail,.../cycles/[cycleId],Burndown + Velocity charts
-AI Chat,.../chat,Full-page ChatView; session list
-Approvals,.../approvals,Tabs; countdown timer; content diff
-AI Costs,.../costs,Summary cards; cost trends; export CSV
-Settings,.../settings/*,General; Members; AI Providers; Integrations
-
-*Full wireframes and interaction patterns: see `specs/001-pilot-space-mvp/ui-design-spec.md` Sections 7-9*
 
 ---
 
 ## Key Entities
 
-entities[10]{entity,purpose,relationships}
-Note,Block-based TipTap document; home view default,Has annotations; issue links; discussions
-NoteAnnotation,AI margin suggestion per block,Belongs to Note + block_id; confidence 0-1
-NoteIssueLink,Bidirectional note↔issue connection,CREATED/EXTRACTED/REFERENCED types
-Issue,Work item with state machine,Belongs to Project; has State/Cycle/Labels
-AIContext,Aggregated issue context,Belongs to Issue
-Cycle,Sprint container with velocity metrics,Contains Issues; belongs to Project
-Module,Epic grouping with progress tracking,Contains Issues; optional hierarchy
-ChatSession,Multi-turn conversation; SDK session,Has messages; 24h TTL
-ChatMessage,Role + content + tool_calls + token_usage,Belongs to ChatSession
-TokenUsage,Per-request BYOK cost tracking,prompt/completion/cached tokens; cost_usd
+**Full data model (21 entities)**: See `specs/001-pilot-space-mvp/data-model.md`
 
-**Issue State Machine**: Backlog → Todo → In Progress → In Review → Done. Any → Cancelled. Done → Todo (reopen). No skipping.
+### Quick Summary
+
+**Core Entities**: Note (block-based TipTap), Issue (state machine), Cycle (sprint container), Project, Module (epic grouping)
+
+**AI Entities**: AIContext, ChatSession, ChatMessage, TokenUsage, NoteAnnotation
+
+**Relations**: NoteIssueLink (bidirectional CREATED/EXTRACTED/REFERENCED), IssueLabel, IssueAssignee, IssueWatcher
+
+**Issue State Machine**: Backlog → Todo → In Progress → In Review → Done (any → Cancelled, Done → Todo reopen)
 
 **State-Cycle Constraints**:
-
-state_cycle_rules[7]{state,cycle_requirement,transition_notes}
-Backlog,No Cycle assignment,Issues in backlog are not scheduled
-Todo,Cycle optional,Can be assigned to backlog / current / future cycle
-In Progress,Cycle required,Must be assigned to active cycle
-In Review,Cycle required,Must remain in active cycle
-Done,Leaves active cycle,Archived with cycle completion metrics
-Cancelled,Leaves cycle immediately,No archival; excluded from metrics
-Reopened (Done→Todo),Returns to original cycle or Todo,Cycle reassignment allowed
-
-*Full data model (21 entities): see `specs/001-pilot-space-mvp/data-model.md`*
+- Backlog: No cycle assignment
+- Todo: Cycle optional
+- In Progress/In Review: Cycle required (active cycle)
+- Done: Leaves cycle, archived with metrics
+- Cancelled: Leaves cycle immediately, excluded from metrics
 
 ---
 
@@ -609,92 +413,6 @@ Load order for new features:
 
 ---
 
-## AI Agent Instructions
-
-### For All Agents
-
-- Read this file first before implementation work
-- Load dev patterns in the order above
-- Check `feature-story-mapping.md` for affected components
-- Follow quality gates (see [Quality Standards](#quality-standards))
-- 700 lines max per code file (py, tsx, etc.). Conventional commits.
-
-### For Backend Agents
-
-**See `backend/CLAUDE.md` for complete backend development guide.**
-
-Key principles:
-- CQRS-lite: `Service.execute(Payload) → Result`, not direct DB manipulation
-- Repository pattern for all data access
-- Verify RLS policies for all multi-tenant queries (scoped by `workspace_id`)
-- Async SQLAlchemy only. No blocking I/O.
-- AI features respect DD-003 (human-in-the-loop via PermissionHandler)
-
-### For Frontend Agents
-
-**See `frontend/CLAUDE.md` for complete frontend development guide.**
-
-Key principles:
-- MobX for UI state (`makeAutoObservable`, `observer()`). Never store API data in MobX.
-- TanStack Query for server state (`useQuery`, `useMutation` with optimistic updates)
-- shadcn/ui base components, extend with feature variants
-- WCAG 2.2 AA: keyboard nav, ARIA labels, focus management
-- AI interactions through PilotSpaceStore (unified), not siloed stores
-
-### For AI/Agent Layer Agents
-
-PilotSpaceAgent is the single orchestrator for user-facing conversations. **Exception**: Fast-path independent agents (GhostTextAgent) allowed for latency-critical operations (<2.5s SLA) that require direct provider calls without orchestrator overhead.
-
-**Simple tasks** → skills (`.claude/skills/`)
-**Complex tasks** → subagents (spawned by orchestrator)
-
-Key requirements:
-- All tools return operation payloads (`status: pending_apply`), not direct mutations
-- ContentConverter for TipTap ↔ Markdown with block ID preservation
-- SSE: SDK message → `transform_sdk_message()` → Frontend event
-- Prompt caching enabled (`cache_control: ephemeral`)
-- ResilientExecutor for retries, CircuitBreaker for provider failures
-
-**One-shot query() integration with CQRS-lite**:
-```python
-# Router layer
-@router.post("/enhance")
-async def enhance_text(payload: EnhanceTextPayload, service: IssueService):
-    result = await service.execute(payload)  # CQRS-lite pattern
-    return result
-
-# Service layer
-class IssueService:
-    async def execute(self, payload: EnhanceTextPayload) -> Result:
-        # One-shot query to Claude Sonnet
-        enhanced = await sdk.query(
-            prompt=f"Enhance this text: {payload.text}",
-            provider="claude-sonnet"
-        )
-        # Return domain entity or value object
-        return Result(enhanced_text=enhanced.content)
-```
-
-**Conversational multi-turn with orchestrator**:
-```python
-# SSE streaming endpoint
-@router.post("/chat")
-async def chat_stream(message: str, session_id: str):
-    async def event_generator():
-        async for event in pilot_space_agent.invoke(message, session_id):
-            yield event  # SSE events: text_delta, tool_use, content_update
-    return StreamingResponse(event_generator())
-```
-
-### For Testing Agents
-
-- **Backend**: pytest `--cov=.`, async with pytest-asyncio, fixture-based DB sessions
-- **Frontend**: Vitest unit, Playwright E2E
-- Coverage > 80%
-- E2E critical paths: skill invocation, subagent invocation, approval flow, session resumption, error recovery
-
----
-
 ## Core Principles
 
 **Keep solutions simple and focused.** Only make changes directly requested or clearly necessary. Don't add features, refactor code, or make "improvements" beyond what was asked.
@@ -734,18 +452,6 @@ async def chat_stream(message: str, session_id: str):
 
 - **User Session**: Authentication session. Redis hot cache (30-min sliding expiration) + PostgreSQL durable storage (24h TTL). Used for workspace access control.
 - **Chat Session**: Conversational AI session. PostgreSQL storage (24h TTL), optional Redis cache. Contains message history for multi-turn conversations.
-
-### AI Components
-
-- **MCP Tool**: Python function registered via `create_note_tools_server()`. Exposed to Claude SDK. Returns operation payloads (`status: pending_apply`).
-- **Skill**: YAML-defined behavior. May invoke one or more MCP tools. Example: `extract-issues` skill invokes `extract_issues` MCP tool.
-- **Operation Payload**: Structured response from MCP tool indicating pending changes. Backend applies transformations before DB commit.
-
-### Approval Categories (DD-003)
-
-- **Non-destructive**: Auto-execute, notify user (labels, annotations, auto-transitions). No approval required.
-- **Content creation**: Require approval, configurable (create issues, PR comments). User can enable/disable per operation type.
-- **Destructive**: Always require approval (delete issues, merge PRs, archive workspaces). Cannot be disabled.
 
 ## Browser Automation
 

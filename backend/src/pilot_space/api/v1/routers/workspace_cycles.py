@@ -13,8 +13,12 @@ import logging
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
+from fastapi import APIRouter, HTTPException, Path, Query, status
 
+from pilot_space.api.v1.dependencies import (
+    CycleRepositoryDep,
+    WorkspaceRepositoryDep,
+)
 from pilot_space.api.v1.schemas.cycle import (
     CycleListResponse,
     CycleResponse,
@@ -22,12 +26,6 @@ from pilot_space.api.v1.schemas.cycle import (
 from pilot_space.dependencies import DbSession, SyncedUserId
 from pilot_space.infrastructure.database.models import CycleStatus
 from pilot_space.infrastructure.database.models.workspace import Workspace
-from pilot_space.infrastructure.database.repositories.cycle_repository import (
-    CycleRepository,
-)
-from pilot_space.infrastructure.database.repositories.workspace_repository import (
-    WorkspaceRepository,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -35,22 +33,9 @@ router = APIRouter()
 
 
 # ============================================================================
-# Dependencies
+# Type Aliases
 # ============================================================================
 
-
-def get_workspace_repository(session: DbSession) -> WorkspaceRepository:
-    """Get WorkspaceRepository instance."""
-    return WorkspaceRepository(session)
-
-
-def get_cycle_repository(session: DbSession) -> CycleRepository:
-    """Get CycleRepository instance."""
-    return CycleRepository(session)
-
-
-WorkspaceRepo = Annotated[WorkspaceRepository, Depends(get_workspace_repository)]
-CycleRepo = Annotated[CycleRepository, Depends(get_cycle_repository)]
 WorkspaceIdOrSlug = Annotated[str, Path(description="Workspace ID (UUID) or slug")]
 
 
@@ -70,7 +55,7 @@ def _is_valid_uuid(value: str) -> bool:
 
 async def _resolve_workspace(
     workspace_id_or_slug: str,
-    workspace_repo: WorkspaceRepository,
+    workspace_repo: WorkspaceRepositoryDep,
 ) -> Workspace:
     """Resolve workspace by UUID or slug."""
     if _is_valid_uuid(workspace_id_or_slug):
@@ -99,7 +84,8 @@ async def _resolve_workspace(
 async def list_workspace_cycles(
     workspace_id: WorkspaceIdOrSlug,
     current_user_id: SyncedUserId,
-    workspace_repo: WorkspaceRepo,
+    workspace_repo: WorkspaceRepositoryDep,
+    cycle_repo: CycleRepositoryDep,
     session: DbSession,
     project_id: Annotated[UUID, Query(alias="project_id", description="Project ID")],
     status_filter: Annotated[CycleStatus | None, Query(alias="status")] = None,
@@ -115,7 +101,6 @@ async def list_workspace_cycles(
 
     workspace = await _resolve_workspace(workspace_id, workspace_repo)
 
-    cycle_repo = CycleRepository(session)
     get_service = GetCycleService(cycle_repository=cycle_repo)
 
     payload = ListCyclesPayload(
@@ -157,7 +142,8 @@ async def list_workspace_cycles(
 async def get_workspace_active_cycle(
     workspace_id: WorkspaceIdOrSlug,
     current_user_id: SyncedUserId,
-    workspace_repo: WorkspaceRepo,
+    workspace_repo: WorkspaceRepositoryDep,
+    cycle_repo: CycleRepositoryDep,
     session: DbSession,
     project_id: Annotated[UUID, Query(description="Project ID")],
     include_metrics: bool = True,
@@ -167,7 +153,6 @@ async def get_workspace_active_cycle(
 
     await _resolve_workspace(workspace_id, workspace_repo)
 
-    cycle_repo = CycleRepository(session)
     get_service = GetCycleService(cycle_repository=cycle_repo)
 
     result = await get_service.get_active_cycle(
@@ -190,7 +175,8 @@ async def get_workspace_cycle(
     workspace_id: WorkspaceIdOrSlug,
     cycle_id: Annotated[UUID, Path(description="Cycle ID")],
     current_user_id: SyncedUserId,
-    workspace_repo: WorkspaceRepo,
+    workspace_repo: WorkspaceRepositoryDep,
+    cycle_repo: CycleRepositoryDep,
     session: DbSession,
     include_metrics: bool = True,
 ) -> CycleResponse:
@@ -199,7 +185,6 @@ async def get_workspace_cycle(
 
     workspace = await _resolve_workspace(workspace_id, workspace_repo)
 
-    cycle_repo = CycleRepository(session)
     get_service = GetCycleService(cycle_repository=cycle_repo)
 
     payload = GetCyclePayload(

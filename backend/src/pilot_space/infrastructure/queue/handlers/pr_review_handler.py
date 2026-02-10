@@ -13,21 +13,48 @@ Handles:
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
-from enum import StrEnum
+
+# TODO: These classes need to be properly defined in pr_review_subagent.py
+# For now, creating stubs to allow the module to import
+from dataclasses import (
+    dataclass,
+    dataclass as _dc,
+    field,
+)
+from enum import (
+    Enum as _Enum,
+    StrEnum,
+)
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from pilot_space.ai.agents.agent_base import AgentContext
-from pilot_space.ai.agents.pr_review_agent import (
-    PRReviewAgent,
+from pilot_space.ai.agents.subagents.pr_review_subagent import (
     PRReviewInput,
     PRReviewOutput,
-    ReviewComment,
-    ReviewSeverity,
+    PRReviewSubagent,
 )
 from pilot_space.ai.prompts.pr_review import format_review_as_markdown
 from pilot_space.infrastructure.queue.models import QueueName
+
+
+class ReviewSeverity(_Enum):
+    """Temporary stub for ReviewSeverity."""
+
+    CRITICAL = "critical"
+    WARNING = "warning"
+    INFO = "info"
+
+
+@_dc
+class ReviewComment:
+    """Temporary stub for ReviewComment."""
+
+    severity: ReviewSeverity
+    message: str
+    file_path: str | None = None
+    line_number: int | None = None
+
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -203,7 +230,7 @@ class PRReviewJobHandler:
         self._queue = queue_client
         self._integration_repo = integration_repo
         self._ai_config_repo = ai_config_repo
-        self._agent = PRReviewAgent(
+        self._agent = PRReviewSubagent(
             tool_registry=tool_registry,
             provider_selector=provider_selector,
             cost_tracker=cost_tracker,

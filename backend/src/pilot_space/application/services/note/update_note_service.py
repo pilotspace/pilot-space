@@ -17,6 +17,9 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from pilot_space.infrastructure.database.models.note import Note
+    from pilot_space.infrastructure.database.repositories.note_repository import (
+        NoteRepository,
+    )
 
 
 class OptimisticLockError(Exception):
@@ -73,13 +76,19 @@ class UpdateNoteService:
     recalculates word count and reading time when content changes.
     """
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        note_repository: NoteRepository,
+    ) -> None:
         """Initialize UpdateNoteService.
 
         Args:
             session: The async database session.
+            note_repository: Repository for note operations.
         """
         self._session = session
+        self._note_repo = note_repository
 
     async def execute(self, payload: UpdateNotePayload) -> UpdateNoteResult:
         """Execute note update.
@@ -94,14 +103,8 @@ class UpdateNoteService:
             ValueError: If note not found or validation fails.
             OptimisticLockError: If expected_updated_at doesn't match.
         """
-        from pilot_space.infrastructure.database.repositories.note_repository import (
-            NoteRepository,
-        )
-
-        note_repo = NoteRepository(self._session)
-
         # Fetch existing note
-        note = await note_repo.get_by_id(payload.note_id)
+        note = await self._note_repo.get_by_id(payload.note_id)
         if not note:
             msg = f"Note with ID {payload.note_id} not found"
             raise ValueError(msg)
@@ -149,7 +152,7 @@ class UpdateNoteService:
 
         # Save changes
         if fields_updated:
-            updated_note = await note_repo.update(note)
+            updated_note = await self._note_repo.update(note)
         else:
             updated_note = note
 

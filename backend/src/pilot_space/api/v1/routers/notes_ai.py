@@ -19,11 +19,19 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from pilot_space.ai.agents.agent_base import AgentContext
+from pilot_space.ai.agents.pilotspace_agent import ChatInput, PilotSpaceAgent
 from pilot_space.api.v1.streaming import create_sse_response
-from pilot_space.dependencies import get_current_user_id, get_pilotspace_agent, get_session
+from pilot_space.container import Container
+from pilot_space.dependencies.auth import SessionDep, get_current_user_id
 from pilot_space.infrastructure.database.models.note import Note
 
 router = APIRouter(prefix="/notes", tags=["notes-ai"])
+
+# Type alias for dependency injection
+PilotSpaceAgentDep = Annotated[
+    PilotSpaceAgent,
+    Depends(lambda: Container.pilotspace_agent()),
+]
 
 
 class GhostTextRequest(BaseModel):
@@ -69,9 +77,9 @@ async def ghost_text_stream(
     note_id: Annotated[UUID, Path(description="Note UUID")],
     request_body: GhostTextRequest,
     request: Request,
-    agent: Annotated[..., Depends(get_pilotspace_agent)],
+    session: SessionDep,
     user_id: Annotated[UUID, Depends(get_current_user_id)],
-    session: Annotated[..., Depends(get_session)],
+    agent: PilotSpaceAgentDep,
 ):
     """Stream ghost text suggestions for note editing.
 
@@ -109,15 +117,19 @@ async def ghost_text_stream(
         user_id=user_id,
     )
 
-    # Prepare input data for ghost_text agent
-    input_data = {
-        "note_id": str(note_id),
-        "context": request_body.context,
-        "cursor_position": request_body.cursor_position,
-    }
+    # Prepare chat input for ghost text via PilotSpaceAgent
+    chat_input = ChatInput(
+        message=f"Generate ghost text completion after this context:\n\n{request_body.context}\n\nCursor position: {request_body.cursor_position}",
+        context={
+            "note_id": str(note_id),
+            "cursor_position": request_body.cursor_position,
+        },
+        workspace_id=workspace_id,
+        user_id=user_id,
+    )
 
     # Stream ghost text suggestions
-    stream = agent.stream("ghost_text", input_data, context)
+    stream = agent.stream(chat_input, context)
     return create_sse_response(stream, request)
 
 

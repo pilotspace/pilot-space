@@ -22,6 +22,12 @@ if TYPE_CHECKING:
     from pilot_space.infrastructure.database.models.note_annotation import (
         NoteAnnotation,
     )
+    from pilot_space.infrastructure.database.repositories.note_annotation_repository import (
+        NoteAnnotationRepository,
+    )
+    from pilot_space.infrastructure.database.repositories.note_repository import (
+        NoteRepository,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,13 +73,22 @@ class CreateAnnotationService:
     Used by AI agents during note analysis.
     """
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        note_repository: NoteRepository,
+        annotation_repository: NoteAnnotationRepository,
+    ) -> None:
         """Initialize CreateAnnotationService.
 
         Args:
             session: The async database session.
+            note_repository: Repository for note queries.
+            annotation_repository: Repository for annotation persistence.
         """
         self._session = session
+        self._note_repo = note_repository
+        self._annotation_repo = annotation_repository
 
     async def execute(self, payload: CreateAnnotationPayload) -> CreateAnnotationResult:
         """Execute annotation creation.
@@ -89,12 +104,6 @@ class CreateAnnotationService:
         """
         from pilot_space.infrastructure.database.models.note_annotation import (
             NoteAnnotation,
-        )
-        from pilot_space.infrastructure.database.repositories.note_annotation_repository import (
-            NoteAnnotationRepository,
-        )
-        from pilot_space.infrastructure.database.repositories.note_repository import (
-            NoteRepository,
         )
 
         # Validate content
@@ -113,8 +122,7 @@ class CreateAnnotationService:
             raise ValueError(msg)
 
         # Verify note exists
-        note_repo = NoteRepository(self._session)
-        note = await note_repo.get_by_id(payload.note_id)
+        note = await self._note_repo.get_by_id(payload.note_id)
         if not note:
             msg = f"Note with ID {payload.note_id} not found"
             raise ValueError(msg)
@@ -141,8 +149,7 @@ class CreateAnnotationService:
             ai_metadata=ai_metadata,
         )
 
-        annotation_repo = NoteAnnotationRepository(self._session)
-        created_annotation = await annotation_repo.create(annotation)
+        created_annotation = await self._annotation_repo.create(annotation)
 
         return CreateAnnotationResult(
             annotation=created_annotation,

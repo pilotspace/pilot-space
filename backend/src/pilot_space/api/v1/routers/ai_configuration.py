@@ -14,6 +14,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
+from pilot_space.api.v1.dependencies import WorkspaceRepositoryDep
 from pilot_space.api.v1.schemas.ai_configuration import (
     AIConfigurationCreate,
     AIConfigurationListResponse,
@@ -30,9 +31,6 @@ from pilot_space.infrastructure.database.models.ai_configuration import (
 from pilot_space.infrastructure.database.models.workspace_member import WorkspaceRole
 from pilot_space.infrastructure.database.repositories.ai_configuration_repository import (
     AIConfigurationRepository,
-)
-from pilot_space.infrastructure.database.repositories.workspace_repository import (
-    WorkspaceRepository,
 )
 from pilot_space.infrastructure.encryption import (
     EncryptionError,
@@ -53,19 +51,13 @@ def get_ai_config_repository(session: DbSession) -> AIConfigurationRepository:
     return AIConfigurationRepository(session=session)
 
 
-def get_workspace_repository(session: DbSession) -> WorkspaceRepository:
-    """Get workspace repository with session."""
-    return WorkspaceRepository(session=session)
-
-
 AIConfigRepo = Annotated[AIConfigurationRepository, Depends(get_ai_config_repository)]
-WorkspaceRepo = Annotated[WorkspaceRepository, Depends(get_workspace_repository)]
 
 
 async def _verify_workspace_membership(
     workspace_id: UUID,
     user_id: UUID,
-    workspace_repo: WorkspaceRepository,
+    workspace_repo: WorkspaceRepositoryDep,
     *,
     require_admin: bool = False,
 ) -> WorkspaceRole:
@@ -139,7 +131,7 @@ async def list_ai_configurations(
     workspace_id: UUID,
     current_user: CurrentUser,
     ai_config_repo: AIConfigRepo,
-    workspace_repo: WorkspaceRepo,
+    workspace_repo: WorkspaceRepositoryDep,
 ) -> AIConfigurationListResponse:
     """List AI configurations for a workspace.
 
@@ -172,7 +164,7 @@ async def create_ai_configuration(
     request: AIConfigurationCreate,
     current_user: CurrentUser,
     ai_config_repo: AIConfigRepo,
-    workspace_repo: WorkspaceRepo,
+    workspace_repo: WorkspaceRepositoryDep,
     session: DbSession,
 ) -> AIConfigurationResponse:
     """Create an AI configuration for a workspace.
@@ -248,7 +240,7 @@ async def get_ai_configuration(
     config_id: UUID,
     current_user: CurrentUser,
     ai_config_repo: AIConfigRepo,
-    workspace_repo: WorkspaceRepo,
+    workspace_repo: WorkspaceRepositoryDep,
 ) -> AIConfigurationResponse:
     """Get a specific AI configuration.
 
@@ -289,7 +281,7 @@ async def update_ai_configuration(
     request: AIConfigurationUpdate,
     current_user: CurrentUser,
     ai_config_repo: AIConfigRepo,
-    workspace_repo: WorkspaceRepo,
+    workspace_repo: WorkspaceRepositoryDep,
     session: DbSession,
 ) -> AIConfigurationResponse:
     """Update an AI configuration.
@@ -365,7 +357,7 @@ async def delete_ai_configuration(
     config_id: UUID,
     current_user: CurrentUser,
     ai_config_repo: AIConfigRepo,
-    workspace_repo: WorkspaceRepo,
+    workspace_repo: WorkspaceRepositoryDep,
     session: DbSession,
 ) -> DeleteResponse:
     """Delete an AI configuration.
@@ -421,7 +413,7 @@ async def test_ai_configuration(
     config_id: UUID,
     current_user: CurrentUser,
     ai_config_repo: AIConfigRepo,
-    workspace_repo: WorkspaceRepo,
+    workspace_repo: WorkspaceRepositoryDep,
 ) -> AIConfigurationTestResponse:
     """Test an AI configuration by validating the API key.
 

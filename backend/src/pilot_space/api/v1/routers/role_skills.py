@@ -12,6 +12,13 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, status
 
+from pilot_space.api.v1.dependencies import (
+    CreateRoleSkillServiceDep,
+    DeleteRoleSkillServiceDep,
+    GenerateRoleSkillServiceDep,
+    ListRoleSkillsServiceDep,
+    UpdateRoleSkillServiceDep,
+)
 from pilot_space.api.v1.schemas.role_skill import (
     CreateRoleSkillRequest,
     GenerateRoleSkillRequest,
@@ -26,20 +33,15 @@ from pilot_space.api.v1.schemas.role_skill import (
 )
 from pilot_space.application.services.role_skill import (
     CreateRoleSkillPayload,
-    CreateRoleSkillService,
     DeleteRoleSkillPayload,
-    DeleteRoleSkillService,
     GenerateRoleSkillPayload,
-    GenerateRoleSkillService,
     ListRoleSkillsPayload,
-    ListRoleSkillsService,
     UpdateRoleSkillPayload,
-    UpdateRoleSkillService,
 )
 from pilot_space.application.services.role_skill.generate_role_skill_service import (
     SkillGenerationRateLimitError,
 )
-from pilot_space.dependencies import CurrentUser, CurrentUserId, DbSession, WorkspaceMemberId
+from pilot_space.dependencies.auth import CurrentUser, CurrentUserId, SessionDep, WorkspaceMemberId
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +60,7 @@ role_templates_router = APIRouter(prefix="/role-templates", tags=["role-skills"]
     description="Returns predefined SDLC role templates for the role selection UI.",
 )
 async def list_role_templates(
-    session: DbSession,
+    session: SessionDep,
     _current_user: CurrentUser,
 ) -> RoleTemplateListResponse:
     """List all role templates.
@@ -104,15 +106,15 @@ router = APIRouter(prefix="/workspaces/{workspace_id}/role-skills", tags=["role-
 )
 async def list_role_skills(
     workspace_id: UUID,
-    session: DbSession,
+    _session: SessionDep,
     _member_id: WorkspaceMemberId,
     current_user_id: CurrentUserId,
+    service: ListRoleSkillsServiceDep,
 ) -> RoleSkillListResponse:
     """List role skills for current user in workspace.
 
     FR-009: View configured role skills.
     """
-    service = ListRoleSkillsService(session)
     result = await service.execute(
         ListRoleSkillsPayload(user_id=current_user_id, workspace_id=workspace_id)
     )
@@ -147,9 +149,10 @@ async def list_role_skills(
 async def create_role_skill(
     workspace_id: UUID,
     request: CreateRoleSkillRequest,
-    session: DbSession,
+    _session: SessionDep,
     _member_id: WorkspaceMemberId,
     current_user_id: CurrentUserId,
+    service: CreateRoleSkillServiceDep,
 ) -> RoleSkillResponse:
     """Create a new role skill.
 
@@ -157,8 +160,6 @@ async def create_role_skill(
     FR-018: Max 3 roles per user-workspace.
     FR-020: Guests cannot create skills.
     """
-    service = CreateRoleSkillService(session)
-
     try:
         skill = await service.execute(
             CreateRoleSkillPayload(
@@ -213,17 +214,16 @@ async def update_role_skill(
     workspace_id: UUID,
     skill_id: UUID,
     request: UpdateRoleSkillRequest,
-    session: DbSession,
+    _session: SessionDep,
     _member_id: WorkspaceMemberId,
     current_user_id: CurrentUserId,
+    service: UpdateRoleSkillServiceDep,
 ) -> RoleSkillResponse:
     """Update a role skill.
 
     FR-009: Edit role skill content.
     FR-010: Update skill metadata.
     """
-    service = UpdateRoleSkillService(session)
-
     try:
         skill = await service.execute(
             UpdateRoleSkillPayload(
@@ -276,16 +276,15 @@ async def update_role_skill(
 async def delete_role_skill(
     workspace_id: UUID,
     skill_id: UUID,
-    session: DbSession,
+    _session: SessionDep,
     _member_id: WorkspaceMemberId,
     current_user_id: CurrentUserId,
+    service: DeleteRoleSkillServiceDep,
 ) -> None:
     """Delete a role skill.
 
     FR-009: Remove configured role skill.
     """
-    service = DeleteRoleSkillService(session)
-
     try:
         await service.execute(
             DeleteRoleSkillPayload(
@@ -321,17 +320,16 @@ async def delete_role_skill(
 async def generate_role_skill(
     workspace_id: UUID,
     request: GenerateRoleSkillRequest,
-    session: DbSession,
+    _session: SessionDep,
     _member_id: WorkspaceMemberId,
     current_user_id: CurrentUserId,
+    service: GenerateRoleSkillServiceDep,
 ) -> GenerateRoleSkillResponse:
     """Generate role skill content via AI.
 
     FR-003: AI-powered skill generation.
     FR-004: Experience-based personalization.
     """
-    service = GenerateRoleSkillService(session)
-
     try:
         result = await service.execute(
             GenerateRoleSkillPayload(
@@ -372,9 +370,10 @@ async def regenerate_role_skill(
     workspace_id: UUID,
     skill_id: UUID,
     request: RegenerateRoleSkillRequest,
-    session: DbSession,
+    session: SessionDep,
     _member_id: WorkspaceMemberId,
     current_user_id: CurrentUserId,
+    service: GenerateRoleSkillServiceDep,
 ) -> RegenerateRoleSkillResponse:
     """Regenerate an existing role skill via AI.
 
@@ -407,7 +406,6 @@ async def regenerate_role_skill(
     previous_content = skill.skill_content
     previous_name = skill.role_name
 
-    service = GenerateRoleSkillService(session)
     try:
         result = await service.execute(
             GenerateRoleSkillPayload(

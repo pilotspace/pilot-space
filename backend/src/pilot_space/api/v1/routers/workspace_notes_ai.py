@@ -13,13 +13,15 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Path, status
 from pydantic import BaseModel, Field
 
+from pilot_space.api.v1.dependencies import (
+    CreateIssueServiceDep,
+    NoteAIUpdateServiceDep,
+    WorkspaceRepositoryDep,
+)
 from pilot_space.api.v1.schemas.note import AIUpdateRequest, AIUpdateResponse
-from pilot_space.dependencies import CurrentUserId, DbSession
+from pilot_space.dependencies.auth import CurrentUserId, SessionDep
 from pilot_space.infrastructure.database.repositories.note_repository import (
     NoteRepository,
-)
-from pilot_space.infrastructure.database.repositories.workspace_repository import (
-    WorkspaceRepository,
 )
 
 logger = logging.getLogger(__name__)
@@ -27,18 +29,12 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def get_note_repository(session: DbSession) -> NoteRepository:
+def get_note_repository(session: SessionDep) -> NoteRepository:
     """Get note repository with session."""
     return NoteRepository(session=session)
 
 
-def get_workspace_repository(session: DbSession) -> WorkspaceRepository:
-    """Get workspace repository with session."""
-    return WorkspaceRepository(session=session)
-
-
 NoteRepo = Annotated[NoteRepository, Depends(get_note_repository)]
-WorkspaceRepo = Annotated[WorkspaceRepository, Depends(get_workspace_repository)]
 
 WorkspaceIdOrSlug = Annotated[str, Path(description="Workspace ID (UUID) or slug")]
 NoteIdPath = Annotated[UUID, Path(description="Note ID")]
@@ -55,7 +51,7 @@ def _is_valid_uuid(value: str) -> bool:
 
 async def _resolve_workspace(
     workspace_id_or_slug: str,
-    workspace_repo: WorkspaceRepository,
+    workspace_repo: WorkspaceRepositoryDep,
 ):
     """Resolve workspace by UUID or slug."""
     from pilot_space.infrastructure.database.models.workspace import Workspace
@@ -84,10 +80,11 @@ async def ai_update_workspace_note(
     workspace_id: WorkspaceIdOrSlug,
     note_id: NoteIdPath,
     update_data: AIUpdateRequest,
+    session: SessionDep,
     current_user_id: CurrentUserId,
-    session: DbSession,
     note_repo: NoteRepo,
-    workspace_repo: WorkspaceRepo,
+    ai_update_service: NoteAIUpdateServiceDep,
+    workspace_repo: WorkspaceRepositoryDep,
 ) -> AIUpdateResponse:
     """Apply AI-generated content update to a note.
 
@@ -115,7 +112,6 @@ async def ai_update_workspace_note(
     from pilot_space.application.services.note.ai_update_service import (
         AIUpdateOperation,
         AIUpdatePayload,
-        NoteAIUpdateService,
     )
 
     workspace = await _resolve_workspace(workspace_id, workspace_repo)
@@ -151,9 +147,8 @@ async def ai_update_workspace_note(
     )
 
     # Execute update
-    service = NoteAIUpdateService(session=session)
     try:
-        result = await service.execute(payload)
+        result = await ai_update_service.execute(payload)
         await session.commit()
 
         logger.info(
@@ -221,10 +216,11 @@ async def create_extracted_issues(
     workspace_id: WorkspaceIdOrSlug,
     note_id: NoteIdPath,
     body: CreateExtractedIssuesRequest,
+    session: SessionDep,
     current_user_id: CurrentUserId,
-    session: DbSession,
     note_repo: NoteRepo,
-    workspace_repo: WorkspaceRepo,
+    create_issue_service: CreateIssueServiceDep,
+    workspace_repo: WorkspaceRepositoryDep,
 ) -> CreateExtractedIssuesResponse:
     """Create issues from AI extraction and link them to the note.
 
@@ -245,18 +241,8 @@ async def create_extracted_issues(
     """
     from pilot_space.application.services.issue.create_issue_service import (
         CreateIssuePayload,
-        CreateIssueService,
     )
     from pilot_space.infrastructure.database.models.issue import IssuePriority
-    from pilot_space.infrastructure.database.repositories.activity_repository import (
-        ActivityRepository,
-    )
-    from pilot_space.infrastructure.database.repositories.issue_repository import (
-        IssueRepository,
-    )
-    from pilot_space.infrastructure.database.repositories.label_repository import (
-        LabelRepository,
-    )
     from pilot_space.infrastructure.database.repositories.project_repository import (
         ProjectRepository,
     )
@@ -291,15 +277,6 @@ async def create_extracted_issues(
         "none": IssuePriority.NONE,
     }
 
-    issue_repo = IssueRepository(session=session)
-    activity_repo = ActivityRepository(session=session)
-    label_repo = LabelRepository(session=session)
-    service = CreateIssueService(
-        session=session,
-        issue_repository=issue_repo,
-        activity_repository=activity_repo,
-        label_repository=label_repo,
-    )
     created_ids: list[str] = []
 
     for extracted in body.issues:
@@ -312,7 +289,7 @@ async def create_extracted_issues(
             priority=priority_map.get(extracted.priority, IssuePriority.MEDIUM),
             ai_enhanced=False,
         )
-        result = await service.execute(payload)
+        result = await create_issue_service.execute(payload)
         created_ids.append(str(result.issue.id))
 
     await session.commit()

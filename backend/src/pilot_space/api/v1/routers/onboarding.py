@@ -14,6 +14,11 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, status
 
+from pilot_space.api.v1.dependencies import (
+    CreateGuidedNoteServiceDep,
+    GetOnboardingServiceDep,
+    UpdateOnboardingServiceDep,
+)
 from pilot_space.api.v1.schemas.onboarding import (
     GuidedNoteResponse,
     OnboardingResponse,
@@ -24,12 +29,9 @@ from pilot_space.api.v1.schemas.onboarding import (
 )
 from pilot_space.application.services.onboarding import (
     CreateGuidedNotePayload,
-    CreateGuidedNoteService,
-    GetOnboardingService,
     UpdateOnboardingPayload,
-    UpdateOnboardingService,
 )
-from pilot_space.dependencies import DbSession, WorkspaceAdminId
+from pilot_space.dependencies.auth import SessionDep, WorkspaceAdminId
 
 router = APIRouter(prefix="/workspaces/{workspace_id}", tags=["onboarding"])
 
@@ -42,15 +44,15 @@ router = APIRouter(prefix="/workspaces/{workspace_id}", tags=["onboarding"])
 )
 async def get_onboarding_state(
     workspace_id: UUID,
-    session: DbSession,
+    _session: SessionDep,
     _admin_id: WorkspaceAdminId,
+    service: GetOnboardingServiceDep,
 ) -> OnboardingResponse:
     """Get onboarding state for workspace.
 
     FR-001: Display onboarding checklist (owner/admin only).
     FR-002: Persist onboarding state per workspace.
     """
-    service = GetOnboardingService(session)
     result = await service.execute(workspace_id)
 
     return OnboardingResponse(
@@ -80,8 +82,9 @@ async def get_onboarding_state(
 async def update_onboarding_state(
     workspace_id: UUID,
     request: OnboardingUpdateRequest,
-    session: DbSession,
+    _session: SessionDep,
     _admin_id: WorkspaceAdminId,
+    service: UpdateOnboardingServiceDep,
 ) -> OnboardingResponse:
     """Update onboarding state for workspace.
 
@@ -95,8 +98,6 @@ async def update_onboarding_state(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="completed is required when step is provided",
         )
-
-    service = UpdateOnboardingService(session)
 
     try:
         result = await service.execute(
@@ -140,7 +141,7 @@ async def update_onboarding_state(
 async def validate_provider_key(
     _workspace_id: UUID,
     request: ValidateKeyRequest,
-    _session: DbSession,
+    _session: SessionDep,
     _admin_id: WorkspaceAdminId,
 ) -> ValidateKeyResponse:
     """Validate AI provider API key.
@@ -183,8 +184,9 @@ async def validate_provider_key(
 )
 async def create_guided_note(
     workspace_id: UUID,
-    session: DbSession,
+    _session: SessionDep,
     user_id: WorkspaceAdminId,
+    service: CreateGuidedNoteServiceDep,
 ) -> GuidedNoteResponse:
     """Create guided first note for onboarding.
 
@@ -192,8 +194,6 @@ async def create_guided_note(
 
     Returns existing note if already created.
     """
-    service = CreateGuidedNoteService(session)
-
     try:
         result = await service.execute(
             CreateGuidedNotePayload(

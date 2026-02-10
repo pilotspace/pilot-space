@@ -12,6 +12,13 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from pilot_space.api.v1.dependencies import (
+    ActivityServiceDep,
+    CreateIssueServiceDep,
+    GetIssueServiceDep,
+    ListIssuesServiceDep,
+    UpdateIssueServiceDep,
+)
 from pilot_space.api.v1.schemas.issue import (
     ActivityResponse,
     ActivityTimelineResponse,
@@ -21,16 +28,8 @@ from pilot_space.api.v1.schemas.issue import (
     IssueResponse,
     IssueUpdateRequest,
 )
-from pilot_space.dependencies import (
-    get_activity_service,
-    get_create_issue_service,
-    get_current_user_id,
-    get_current_workspace_id,
-    get_db_session_dep,
-    get_get_issue_service,
-    get_list_issues_service,
-    get_update_issue_service,
-)
+from pilot_space.dependencies.auth import SessionDep, get_current_user_id
+from pilot_space.dependencies.workspace import get_current_workspace_id
 
 logger = logging.getLogger(__name__)
 
@@ -81,9 +80,10 @@ and technical considerations.
 )
 async def create_issue(
     request: IssueCreateRequest,
+    session: SessionDep,
     workspace_id: Annotated[UUID, Depends(get_current_workspace_id)],
     user_id: Annotated[UUID, Depends(get_current_user_id)],
-    create_service: Annotated[..., Depends(get_create_issue_service)],
+    create_service: CreateIssueServiceDep,
 ) -> IssueResponse:
     """Create a new issue in the specified project with optional AI enhancement.
 
@@ -144,8 +144,9 @@ Retrieve a paginated list of issues in the workspace with optional filtering.
     },
 )
 async def list_issues(
+    session: SessionDep,
     workspace_id: Annotated[UUID, Depends(get_current_workspace_id)],
-    list_service: Annotated[..., Depends(get_list_issues_service)],
+    list_service: ListIssuesServiceDep,
     project_id: Annotated[UUID | None, Query(description="Filter by project ID")] = None,
     state_ids: Annotated[list[UUID] | None, Query(description="Filter by state IDs")] = None,
     assignee_ids: Annotated[list[UUID] | None, Query(description="Filter by assignee IDs")] = None,
@@ -216,7 +217,8 @@ async def list_issues(
 )
 async def get_issue(
     issue_id: Annotated[UUID, "Issue UUID"],
-    get_service: Annotated[..., Depends(get_get_issue_service)],
+    session: SessionDep,
+    get_service: GetIssueServiceDep,
 ) -> IssueResponse:
     """Get a specific issue by its UUID.
 
@@ -248,8 +250,9 @@ The identifier format is `{PROJECT_IDENTIFIER}-{SEQUENCE_NUMBER}`.
 )
 async def get_issue_by_identifier(
     identifier: Annotated[str, "Human-readable identifier (e.g., PILOT-123)"],
+    session: SessionDep,
     workspace_id: Annotated[UUID, Depends(get_current_workspace_id)],
-    get_service: Annotated[..., Depends(get_get_issue_service)],
+    get_service: GetIssueServiceDep,
 ) -> IssueResponse:
     """Get an issue by human-readable identifier (e.g., PILOT-123).
 
@@ -300,8 +303,9 @@ Use `clear_*` flags to explicitly remove optional values.
 async def update_issue(
     issue_id: Annotated[UUID, "Issue UUID to update"],
     request: IssueUpdateRequest,
+    session: SessionDep,
     user_id: Annotated[UUID, Depends(get_current_user_id)],
-    update_service: Annotated[..., Depends(get_update_issue_service)],
+    update_service: UpdateIssueServiceDep,
 ) -> IssueResponse:
     """Update an existing issue with partial data.
 
@@ -376,8 +380,8 @@ Deleted issues can be restored by an administrator if needed.
 )
 async def delete_issue(
     issue_id: Annotated[UUID, "Issue UUID to delete"],
+    session: SessionDep,
     user_id: Annotated[UUID, Depends(get_current_user_id)],
-    session: Annotated[..., Depends(get_db_session_dep)],
 ) -> None:
     """Soft delete an issue by marking it as deleted."""
     from pilot_space.infrastructure.database.repositories import IssueRepository
@@ -420,7 +424,8 @@ Activities are ordered by creation time (newest first).
 )
 async def get_issue_activities(
     issue_id: Annotated[UUID, "Issue UUID"],
-    activity_service: Annotated[..., Depends(get_activity_service)],
+    session: SessionDep,
+    activity_service: ActivityServiceDep,
     limit: Annotated[
         int, Query(ge=1, le=100, description="Maximum number of activities to return")
     ] = 50,
@@ -463,9 +468,10 @@ async def get_issue_activities(
 async def add_comment(
     issue_id: UUID,
     request: CommentCreateRequest,
+    session: SessionDep,
     workspace_id: Annotated[UUID, Depends(get_current_workspace_id)],
     user_id: Annotated[UUID, Depends(get_current_user_id)],
-    activity_service: Annotated[..., Depends(get_activity_service)],
+    activity_service: ActivityServiceDep,
 ) -> ActivityResponse:
     """Add a comment to an issue.
 

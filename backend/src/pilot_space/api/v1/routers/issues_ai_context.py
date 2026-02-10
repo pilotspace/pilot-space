@@ -21,6 +21,11 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from pilot_space.api.v1.dependencies import (
+    ExportAIContextServiceDep,
+    GenerateAIContextServiceDep,
+    RefineAIContextServiceDep,
+)
 from pilot_space.api.v1.schemas.ai_context import (
     AIContextResponse,
     ChatMessageResponse,
@@ -30,13 +35,8 @@ from pilot_space.api.v1.schemas.ai_context import (
     RefineContextRequest,
     RefineContextResponse,
 )
-from pilot_space.dependencies import (
-    get_ai_context_service,
-    get_current_user_id,
-    get_current_workspace_id,
-    get_db_session_dep,
-    get_refine_ai_context_service,
-)
+from pilot_space.dependencies.auth import SessionDep, get_current_user_id
+from pilot_space.dependencies.workspace import get_current_workspace_id
 
 logger = logging.getLogger(__name__)
 
@@ -90,10 +90,10 @@ def _check_rate_limit(user_id: str, limit: int = 5, window_hours: int = 1) -> bo
 )
 async def get_ai_context(
     issue_id: UUID,
+    session: SessionDep,
     workspace_id: Annotated[UUID, Depends(get_current_workspace_id)],
     user_id: Annotated[UUID, Depends(get_current_user_id)],
-    session: Annotated[..., Depends(get_db_session_dep)],
-    service: Annotated[..., Depends(get_ai_context_service)],
+    service: GenerateAIContextServiceDep,
     generate_if_missing: bool = Query(default=True),
 ) -> AIContextResponse:
     """Get AI context for an issue, optionally generating if missing.
@@ -184,10 +184,10 @@ async def get_ai_context(
 )
 async def regenerate_ai_context(
     issue_id: UUID,
+    session: SessionDep,
     workspace_id: Annotated[UUID, Depends(get_current_workspace_id)],
     user_id: Annotated[UUID, Depends(get_current_user_id)],
-    session: Annotated[..., Depends(get_db_session_dep)],
-    service: Annotated[..., Depends(get_ai_context_service)],
+    service: GenerateAIContextServiceDep,
 ) -> GenerateContextResponse:
     """Force regenerate AI context, bypassing cache.
 
@@ -258,10 +258,10 @@ async def regenerate_ai_context(
 async def refine_ai_context(
     issue_id: UUID,
     request: RefineContextRequest,
+    session: SessionDep,
     workspace_id: Annotated[UUID, Depends(get_current_workspace_id)],
     user_id: Annotated[UUID, Depends(get_current_user_id)],
-    session: Annotated[..., Depends(get_db_session_dep)],
-    service: Annotated[..., Depends(get_refine_ai_context_service)],
+    service: RefineAIContextServiceDep,
 ) -> RefineContextResponse:
     """Refine AI context with a chat message.
 
@@ -320,9 +320,10 @@ async def refine_ai_context(
 )
 async def export_ai_context(
     issue_id: UUID,
+    session: SessionDep,
     workspace_id: Annotated[UUID, Depends(get_current_workspace_id)],
     user_id: Annotated[UUID, Depends(get_current_user_id)],
-    session: Annotated[..., Depends(get_db_session_dep)],
+    service: ExportAIContextServiceDep,
     format: str = Query(default="markdown", pattern="^(markdown|json)$"),
     include_conversation: bool = Query(default=False),
 ) -> ExportContextResponse:
@@ -333,6 +334,7 @@ async def export_ai_context(
         workspace_id: Current workspace.
         user_id: Current user.
         session: Database session.
+        service: Export AI context service.
         format: Export format (markdown or json).
         include_conversation: Include conversation history.
 
@@ -341,21 +343,7 @@ async def export_ai_context(
     """
     from pilot_space.application.services.ai_context import (
         ExportAIContextPayload,
-        ExportAIContextService,
         ExportFormat,
-    )
-    from pilot_space.infrastructure.database.repositories import (
-        AIContextRepository,
-        IssueRepository,
-    )
-
-    context_repo = AIContextRepository(session)
-    issue_repo = IssueRepository(session)
-
-    service = ExportAIContextService(
-        session=session,
-        ai_context_repository=context_repo,
-        issue_repository=issue_repo,
     )
 
     export_format = ExportFormat.MARKDOWN if format == "markdown" else ExportFormat.JSON
@@ -391,7 +379,7 @@ async def export_ai_context(
 )
 async def get_conversation_history(
     issue_id: UUID,
-    session: Annotated[..., Depends(get_db_session_dep)],
+    session: SessionDep,
 ) -> ConversationHistoryResponse:
     """Get conversation history for AI context.
 
@@ -435,7 +423,7 @@ async def get_conversation_history(
 )
 async def clear_conversation_history(
     issue_id: UUID,
-    session: Annotated[..., Depends(get_db_session_dep)],
+    session: SessionDep,
 ) -> None:
     """Clear conversation history for AI context.
 
@@ -465,7 +453,7 @@ async def clear_conversation_history(
 async def mark_task_completed(
     issue_id: UUID,
     task_id: str,
-    session: Annotated[..., Depends(get_db_session_dep)],
+    session: SessionDep,
 ) -> None:
     """Mark an implementation task as completed.
 

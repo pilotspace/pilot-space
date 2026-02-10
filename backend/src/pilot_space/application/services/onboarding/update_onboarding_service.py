@@ -18,6 +18,10 @@ from pilot_space.application.services.onboarding.types import OnboardingStepsRes
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
+    from pilot_space.infrastructure.database.repositories.onboarding_repository import (
+        OnboardingRepository,
+    )
+
 
 StepName = Literal["ai_providers", "invite_members", "first_note", "role_setup"]
 
@@ -75,13 +79,19 @@ class UpdateOnboardingService:
     Tracks when all steps complete for celebration trigger.
     """
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        onboarding_repository: OnboardingRepository,
+    ) -> None:
         """Initialize UpdateOnboardingService.
 
         Args:
             session: The async database session.
+            onboarding_repository: Repository for onboarding operations.
         """
         self._session = session
+        self._repo = onboarding_repository
 
     async def execute(
         self,
@@ -98,14 +108,9 @@ class UpdateOnboardingService:
         Raises:
             ValueError: If validation fails.
         """
-        from pilot_space.infrastructure.database.repositories.onboarding_repository import (
-            OnboardingRepository,
-        )
-
-        repo = OnboardingRepository(self._session)
 
         # Get or create onboarding record
-        onboarding = await repo.upsert_for_workspace(payload.workspace_id)
+        onboarding = await self._repo.upsert_for_workspace(payload.workspace_id)
 
         was_complete = onboarding.is_complete
         just_completed = False
@@ -116,7 +121,7 @@ class UpdateOnboardingService:
                 msg = "completed is required when step is provided"
                 raise ValueError(msg)
 
-            onboarding = await repo.update_step(
+            onboarding = await self._repo.update_step(
                 workspace_id=payload.workspace_id,
                 step_name=payload.step,
                 completed=payload.completed,
@@ -128,7 +133,7 @@ class UpdateOnboardingService:
 
         # Update dismissed state if provided
         if payload.dismissed is not None:
-            onboarding = await repo.set_dismissed(
+            onboarding = await self._repo.set_dismissed(
                 workspace_id=payload.workspace_id,
                 dismissed=payload.dismissed,
             )

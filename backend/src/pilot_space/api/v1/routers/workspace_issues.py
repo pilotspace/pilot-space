@@ -16,10 +16,14 @@ from datetime import datetime
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
+from fastapi import APIRouter, HTTPException, Path, Query, status
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 
+from pilot_space.api.v1.dependencies import (
+    IssueRepositoryDep,
+    WorkspaceRepositoryDep,
+)
 from pilot_space.api.v1.schemas.base import BaseSchema, DeleteResponse, PaginatedResponse
 from pilot_space.api.v1.schemas.issue import IssueResponse
 from pilot_space.dependencies import DbSession, SyncedUserId
@@ -29,10 +33,6 @@ from pilot_space.infrastructure.database.models.state import State
 from pilot_space.infrastructure.database.models.workspace import Workspace
 from pilot_space.infrastructure.database.repositories.issue_repository import (
     IssueFilters,
-    IssueRepository,
-)
-from pilot_space.infrastructure.database.repositories.workspace_repository import (
-    WorkspaceRepository,
 )
 
 logger = logging.getLogger(__name__)
@@ -126,18 +126,7 @@ class StateUpdateRequest(BaseModel):
 # ============================================================================
 
 
-def get_issue_repository(session: DbSession) -> IssueRepository:
-    """Get issue repository with session."""
-    return IssueRepository(session=session)
-
-
-def get_workspace_repository(session: DbSession) -> WorkspaceRepository:
-    """Get workspace repository with session."""
-    return WorkspaceRepository(session=session)
-
-
-IssueRepo = Annotated[IssueRepository, Depends(get_issue_repository)]
-WorkspaceRepo = Annotated[WorkspaceRepository, Depends(get_workspace_repository)]
+# Repository dependencies are now centralized in api/v1/dependencies.py
 
 # Accept string to support both UUID and slug
 WorkspaceIdOrSlug = Annotated[str, Path(description="Workspace ID (UUID) or slug")]
@@ -155,7 +144,7 @@ def _is_valid_uuid(value: str) -> bool:
 
 async def _resolve_workspace(
     workspace_id_or_slug: str,
-    workspace_repo: WorkspaceRepository,
+    workspace_repo: WorkspaceRepositoryDep,
 ) -> Workspace:
     """Resolve workspace by UUID or slug (scalar-only, no relationships).
 
@@ -218,8 +207,8 @@ def _issue_to_response(issue: Issue) -> WorkspaceIssueResponse:
 async def list_workspace_issues(
     workspace_id: WorkspaceIdOrSlug,
     current_user_id: SyncedUserId,
-    issue_repo: IssueRepo,
-    workspace_repo: WorkspaceRepo,
+    issue_repo: IssueRepositoryDep,
+    workspace_repo: WorkspaceRepositoryDep,
     project_id: Annotated[UUID | None, Query(description="Filter by project")] = None,
     state: Annotated[str | None, Query(description="Filter by state")] = None,
     priority: Annotated[str | None, Query(description="Filter by priority")] = None,
@@ -269,8 +258,8 @@ async def get_workspace_issue(
     workspace_id: WorkspaceIdOrSlug,
     issue_id: IssueIdPath,
     current_user_id: SyncedUserId,
-    issue_repo: IssueRepo,
-    workspace_repo: WorkspaceRepo,
+    issue_repo: IssueRepositoryDep,
+    workspace_repo: WorkspaceRepositoryDep,
 ) -> IssueResponse:
     """Get a specific issue by ID."""
     workspace = await _resolve_workspace(workspace_id, workspace_repo)
@@ -297,8 +286,8 @@ async def create_workspace_issue(
     issue_data: WorkspaceIssueCreateRequest,
     current_user_id: SyncedUserId,
     session: DbSession,
-    issue_repo: IssueRepo,
-    workspace_repo: WorkspaceRepo,
+    issue_repo: IssueRepositoryDep,
+    workspace_repo: WorkspaceRepositoryDep,
 ) -> WorkspaceIssueResponse:
     """Create a new issue in the workspace."""
     workspace = await _resolve_workspace(workspace_id, workspace_repo)
@@ -414,8 +403,8 @@ async def update_workspace_issue(
     issue_data: WorkspaceIssueUpdateRequest,
     current_user_id: SyncedUserId,
     session: DbSession,
-    issue_repo: IssueRepo,
-    workspace_repo: WorkspaceRepo,
+    issue_repo: IssueRepositoryDep,
+    workspace_repo: WorkspaceRepositoryDep,
 ) -> IssueResponse:
     """Update an existing issue."""
     workspace = await _resolve_workspace(workspace_id, workspace_repo)
@@ -517,8 +506,8 @@ async def update_workspace_issue_state(
     body: StateUpdateRequest,
     current_user_id: SyncedUserId,
     session: DbSession,
-    issue_repo: IssueRepo,
-    workspace_repo: WorkspaceRepo,
+    issue_repo: IssueRepositoryDep,
+    workspace_repo: WorkspaceRepositoryDep,
 ) -> WorkspaceIssueResponse:
     """Update issue state (for Kanban drag/drop)."""
     workspace = await _resolve_workspace(workspace_id, workspace_repo)
@@ -582,8 +571,8 @@ async def delete_workspace_issue(
     issue_id: IssueIdPath,
     current_user_id: SyncedUserId,
     session: DbSession,
-    issue_repo: IssueRepo,
-    workspace_repo: WorkspaceRepo,
+    issue_repo: IssueRepositoryDep,
+    workspace_repo: WorkspaceRepositoryDep,
 ) -> DeleteResponse:
     """Soft delete an issue."""
     workspace = await _resolve_workspace(workspace_id, workspace_repo)

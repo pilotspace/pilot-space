@@ -16,6 +16,9 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from pilot_space.infrastructure.database.models.note import Note
+    from pilot_space.infrastructure.database.repositories.note_repository import (
+        NoteRepository,
+    )
 
 
 class AIUpdateOperation(str, Enum):
@@ -85,13 +88,19 @@ class NoteAIUpdateService:
     providing audit trail and conflict detection.
     """
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        note_repository: NoteRepository,
+    ) -> None:
         """Initialize NoteAIUpdateService.
 
         Args:
             session: The async database session.
+            note_repository: Repository for note operations.
         """
         self._session = session
+        self._note_repo = note_repository
 
     async def execute(self, payload: AIUpdatePayload) -> AIUpdateResult:
         """Execute AI update operation.
@@ -105,25 +114,19 @@ class NoteAIUpdateService:
         Raises:
             ValueError: If note not found, validation fails, or invalid operation.
         """
-        from pilot_space.infrastructure.database.repositories.note_repository import (
-            NoteRepository,
-        )
-
-        note_repo = NoteRepository(self._session)
-
         # Fetch note
-        note = await note_repo.get_by_id(payload.note_id)
+        note = await self._note_repo.get_by_id(payload.note_id)
         if not note:
             msg = f"Note with ID {payload.note_id} not found"
             raise ValueError(msg)
 
         # Route to operation handler
         if payload.operation == AIUpdateOperation.REPLACE_BLOCK:
-            return await self._replace_block(note, payload, note_repo)
+            return await self._replace_block(note, payload)
         if payload.operation == AIUpdateOperation.APPEND_BLOCKS:
-            return await self._append_blocks(note, payload, note_repo)
+            return await self._append_blocks(note, payload)
         if payload.operation == AIUpdateOperation.INSERT_INLINE_ISSUE:
-            return await self._insert_inline_issue(note, payload, note_repo)
+            return await self._insert_inline_issue(note, payload)
         msg = f"Unknown operation: {payload.operation}"
         raise ValueError(msg)
 
@@ -131,14 +134,12 @@ class NoteAIUpdateService:
         self,
         note: Note,
         payload: AIUpdatePayload,
-        note_repo: Any,
     ) -> AIUpdateResult:
         """Replace a block's content.
 
         Args:
             note: The note to update.
             payload: The update payload.
-            note_repo: Note repository.
 
         Returns:
             AIUpdateResult.
@@ -179,7 +180,7 @@ class NoteAIUpdateService:
         note.content = updated_content
 
         # Save
-        await note_repo.update(note)
+        await self._note_repo.update(note)
 
         return AIUpdateResult(
             success=True,
@@ -193,14 +194,12 @@ class NoteAIUpdateService:
         self,
         note: Note,
         payload: AIUpdatePayload,
-        note_repo: Any,
     ) -> AIUpdateResult:
         """Append blocks after a specified position.
 
         Args:
             note: The note to update.
             payload: The update payload.
-            note_repo: Note repository.
 
         Returns:
             AIUpdateResult.
@@ -251,7 +250,7 @@ class NoteAIUpdateService:
         note.content = updated_content
 
         # Save
-        await note_repo.update(note)
+        await self._note_repo.update(note)
 
         return AIUpdateResult(
             success=True,
@@ -265,14 +264,12 @@ class NoteAIUpdateService:
         self,
         note: Note,
         payload: AIUpdatePayload,
-        note_repo: Any,
     ) -> AIUpdateResult:
         """Insert an inline issue node into a block.
 
         Args:
             note: The note to update.
             payload: The update payload.
-            note_repo: Note repository.
 
         Returns:
             AIUpdateResult.
@@ -316,7 +313,7 @@ class NoteAIUpdateService:
         note.content = updated_content
 
         # Save
-        await note_repo.update(note)
+        await self._note_repo.update(note)
 
         return AIUpdateResult(
             success=True,

@@ -131,15 +131,51 @@ Pattern: `Service.execute(Payload) → Result`
 
 ### Dependency Injection (DD-064)
 
+**Pattern**: FastAPI + dependency-injector integration with ContextVar session scoping (Updated 2026-02-10)
+
 **All dependencies explicitly declared and injected. No global state.**
 
 **Complete DI container setup and injection patterns**: See [api/CLAUDE.md](src/pilot_space/api/CLAUDE.md) - Section "Dependency Injection Pattern"
 
-**Quick Summary**:
-- dependency-injector DSL for container definition
-- FastAPI Depends() for request-scoped injection
-- Singletons: config, engine, session_factory
-- Factories: repositories, services (new instance per request)
+**Session Management**: ContextVar with token-based cleanup
+```python
+from pilot_space.dependencies.auth import get_current_session, SessionDep
+
+# In routers: SessionDep triggers ContextVar session context
+async def handler(session: SessionDep, ...):
+    # session is available in ContextVar for container providers
+
+# In container: Callable provider retrieves ContextVar session
+repository = providers.Factory(
+    IssueRepository,
+    session=providers.Callable(get_current_session),
+)
+```
+
+**Router Pattern**:
+```python
+from dependency_injector.wiring import inject
+from pilot_space.api.v1.dependencies import CreateIssueServiceDep
+from pilot_space.dependencies.auth import SessionDep
+
+@router.post("/issues")
+@inject  # Only needed when using ServiceDep/RepositoryDep
+async def create_issue(
+    request: IssueCreateRequest,
+    session: SessionDep,  # Trigger ContextVar session context
+    service: CreateIssueServiceDep,  # Auto-injected from container
+):
+    result = await service.execute(CreateIssuePayload(...))
+    return IssueResponse.from_issue(result.issue)
+```
+
+**Testing**: Use `app.dependency_overrides` for mocking
+```python
+from pilot_space.container import Container
+
+# Override service in tests
+app.dependency_overrides[Container.create_issue_service] = mock_service
+```
 
 ### Error Handling (RFC 7807)
 
@@ -257,9 +293,9 @@ All services follow CQRS-lite pattern: `Service.execute(Payload) → Result`
 
 **MCP Tools** (33 total across 6 servers): note, note_content, issue, issue_relation, project, comment
 
-**Provider Routing** (DD-011): Task-based selection (PR review→Opus, context→Sonnet, ghost text→Flash) + fallback chain
+**Provider Routing** (DD-011): Task-based selection (PR review→Opus, AI context→Opus, code gen→Sonnet, ghost text→Flash) + per-task fallback chains
 
-**Resilience**: ResilientExecutor + CircuitBreaker per provider (5 failures → OPEN, 60s recovery)
+**Resilience**: ResilientExecutor + CircuitBreaker per provider (3 failures → OPEN, 30s recovery)
 
 **Cost Tracking**: Per-request token logging with provider-specific pricing and budget alerts at 90%
 

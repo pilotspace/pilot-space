@@ -18,6 +18,10 @@ from uuid import UUID
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
+    from pilot_space.infrastructure.database.repositories.digest_repository import (
+        DismissalRepository,
+    )
+
 logger = logging.getLogger(__name__)
 
 
@@ -49,13 +53,19 @@ class DismissSuggestionService:
     exclude this (entity_id, category) combination for the user.
     """
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        dismissal_repository: DismissalRepository,
+    ) -> None:
         """Initialize DismissSuggestionService.
 
         Args:
             session: The async database session.
+            dismissal_repository: Repository for dismissal persistence.
         """
         self._session = session
+        self._repo = dismissal_repository
 
     async def execute(self, payload: DismissSuggestionPayload) -> None:
         """Execute dismissal.
@@ -66,11 +76,6 @@ class DismissSuggestionService:
         from pilot_space.infrastructure.database.models.digest_dismissal import (
             DigestDismissal,
         )
-        from pilot_space.infrastructure.database.repositories.digest_repository import (
-            DismissalRepository,
-        )
-
-        repo = DismissalRepository(self._session)
 
         dismissal = DigestDismissal(
             workspace_id=payload.workspace_id,
@@ -80,7 +85,7 @@ class DismissSuggestionService:
             entity_type=payload.entity_type,
         )
 
-        await repo.add_dismissal(dismissal)
+        await self._repo.add_dismissal(dismissal)
         await self._session.flush()
 
         logger.info(

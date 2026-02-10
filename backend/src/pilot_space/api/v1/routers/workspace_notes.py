@@ -8,6 +8,11 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 
+from pilot_space.api.v1.dependencies import (
+    CreateNoteServiceDep,
+    UpdateNoteServiceDep,
+    WorkspaceRepositoryDep,
+)
 from pilot_space.api.v1.schemas.annotation import (
     AnnotationResponse,
     AnnotationStatus,
@@ -23,7 +28,7 @@ from pilot_space.api.v1.schemas.note import (
     NoteUpdate,
     TipTapContentSchema,
 )
-from pilot_space.dependencies import CurrentUserId, DbSession, SyncedUserId
+from pilot_space.dependencies.auth import CurrentUserId, SessionDep, SyncedUserId
 from pilot_space.infrastructure.database.models.note import Note
 from pilot_space.infrastructure.database.models.note_annotation import NoteAnnotation
 from pilot_space.infrastructure.database.models.workspace import Workspace
@@ -33,32 +38,23 @@ from pilot_space.infrastructure.database.repositories.note_annotation_repository
 from pilot_space.infrastructure.database.repositories.note_repository import (
     NoteRepository,
 )
-from pilot_space.infrastructure.database.repositories.workspace_repository import (
-    WorkspaceRepository,
-)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 
-def get_note_repository(session: DbSession) -> NoteRepository:
+def get_note_repository(session: SessionDep) -> NoteRepository:
     """Get note repository with session."""
     return NoteRepository(session=session)
 
 
-def get_workspace_repository(session: DbSession) -> WorkspaceRepository:
-    """Get workspace repository with session."""
-    return WorkspaceRepository(session=session)
-
-
-def get_annotation_repository(session: DbSession) -> NoteAnnotationRepository:
+def get_annotation_repository(session: SessionDep) -> NoteAnnotationRepository:
     """Get annotation repository with session."""
     return NoteAnnotationRepository(session=session)
 
 
 NoteRepo = Annotated[NoteRepository, Depends(get_note_repository)]
-WorkspaceRepo = Annotated[WorkspaceRepository, Depends(get_workspace_repository)]
 AnnotationRepo = Annotated[NoteAnnotationRepository, Depends(get_annotation_repository)]
 
 # Accept string to support both UUID and slug
@@ -77,7 +73,7 @@ def _is_valid_uuid(value: str) -> bool:
 
 async def _resolve_workspace(
     workspace_id_or_slug: str,
-    workspace_repo: WorkspaceRepository,
+    workspace_repo: WorkspaceRepositoryDep,
 ) -> Workspace:
     """Resolve workspace by UUID or slug.
 
@@ -157,8 +153,9 @@ def _note_to_detail_response(note: Note) -> NoteDetailResponse:
 async def list_workspace_notes(
     workspace_id: WorkspaceIdOrSlug,
     current_user_id: CurrentUserId,
+    session: SessionDep,
     note_repo: NoteRepo,
-    workspace_repo: WorkspaceRepo,
+    workspace_repo: WorkspaceRepositoryDep,
     project_id: Annotated[UUID | None, Query(description="Filter by project")] = None,
     is_pinned: Annotated[bool | None, Query(description="Filter by pin status")] = None,
     search: Annotated[str | None, Query(description="Search query")] = None,
@@ -230,8 +227,9 @@ async def get_workspace_note(
     workspace_id: WorkspaceIdOrSlug,
     note_id: NoteIdPath,
     current_user_id: CurrentUserId,
+    session: SessionDep,
     note_repo: NoteRepo,
-    workspace_repo: WorkspaceRepo,
+    workspace_repo: WorkspaceRepositoryDep,
 ) -> NoteDetailResponse:
     """Get a specific note by ID.
 
@@ -239,6 +237,7 @@ async def get_workspace_note(
         workspace_id: The workspace ID (UUID) or slug.
         note_id: The note ID.
         current_user_id: Current user ID.
+        session: Database session.
         note_repo: Note repository.
         workspace_repo: Workspace repository.
 
@@ -272,9 +271,9 @@ async def create_workspace_note(
     workspace_id: WorkspaceIdOrSlug,
     note_data: NoteCreate,
     current_user_id: SyncedUserId,
-    session: DbSession,
-    note_repo: NoteRepo,
-    workspace_repo: WorkspaceRepo,
+    session: SessionDep,
+    create_service: CreateNoteServiceDep,
+    workspace_repo: WorkspaceRepositoryDep,
 ) -> NoteResponse:
     """Create a new note in the workspace.
 
@@ -283,37 +282,38 @@ async def create_workspace_note(
         note_data: Note creation data.
         current_user_id: Current user ID.
         session: Database session.
-        note_repo: Note repository.
+        create_service: Create note service.
         workspace_repo: Workspace repository.
 
     Returns:
         Created note.
     """
+    from pilot_space.application.services.note.create_note_service import CreateNotePayload
+
     workspace = await _resolve_workspace(workspace_id, workspace_repo)
 
-    # Create note
-    content: dict[str, Any] = {}
+    # Prepare content
+    content_dict: dict[str, Any] | None = None
     if note_data.content:
-        content = {"type": note_data.content.type, "content": note_data.content.content}
+        content_dict = {"type": note_data.content.type, "content": note_data.content.content}
 
-    note = Note(
+    # Execute service
+    payload = CreateNotePayload(
         workspace_id=workspace.id,
-        project_id=note_data.project_id,
-        title=note_data.title,
-        content=content,
-        is_pinned=note_data.is_pinned,
         owner_id=current_user_id,
-        word_count=0,
+        title=note_data.title,
+        content=content_dict,
+        project_id=note_data.project_id,
+        is_pinned=note_data.is_pinned,
     )
-    note = await note_repo.create(note)
-    await session.commit()
+    result = await create_service.execute(payload)
 
     logger.info(
         "Note created",
-        extra={"note_id": str(note.id), "workspace_id": str(workspace.id)},
+        extra={"note_id": str(result.note.id), "workspace_id": str(workspace.id)},
     )
 
-    return _note_to_response(note)
+    return _note_to_response(result.note)
 
 
 @router.patch(
@@ -327,9 +327,9 @@ async def update_workspace_note(
     note_id: NoteIdPath,
     note_data: NoteUpdate,
     current_user_id: CurrentUserId,
-    session: DbSession,
-    note_repo: NoteRepo,
-    workspace_repo: WorkspaceRepo,
+    session: SessionDep,
+    update_service: UpdateNoteServiceDep,
+    workspace_repo: WorkspaceRepositoryDep,
 ) -> NoteResponse:
     """Update an existing note.
 
@@ -339,43 +339,44 @@ async def update_workspace_note(
         note_data: Note update data.
         current_user_id: Current user ID.
         session: Database session.
-        note_repo: Note repository.
+        update_service: Update note service.
         workspace_repo: Workspace repository.
 
     Returns:
         Updated note.
     """
+    from pilot_space.application.services.note.update_note_service import UpdateNotePayload
+
     workspace = await _resolve_workspace(workspace_id, workspace_repo)
 
-    # Get note
-    note = await note_repo.get_by_id(note_id)
-    if not note or note.workspace_id != workspace.id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Note not found",
-        )
-
-    # Update fields
+    # Prepare update fields
     update_data = note_data.model_dump(exclude_unset=True)
+    content_dict: dict[str, Any] | None = None
     if update_data.get("content"):
         content = update_data["content"]
         # Content is already a dict after model_dump
-        update_data["content"] = {
+        content_dict = {
             "type": content.get("type", "doc"),
             "content": content.get("content", []),
         }
-    for key, value in update_data.items():
-        setattr(note, key, value)
 
-    note = await note_repo.update(note)
-    await session.commit()
+    # Execute service
+    payload = UpdateNotePayload(
+        note_id=note_id,
+        title=update_data.get("title"),
+        content=content_dict,
+        summary=update_data.get("summary"),
+        is_pinned=update_data.get("is_pinned"),
+        project_id=update_data.get("project_id"),
+    )
+    result = await update_service.execute(payload)
 
     logger.info(
         "Note updated",
         extra={"note_id": str(note_id), "workspace_id": str(workspace.id)},
     )
 
-    return _note_to_response(note)
+    return _note_to_response(result.note)
 
 
 @router.delete(
@@ -388,9 +389,9 @@ async def delete_workspace_note(
     workspace_id: WorkspaceIdOrSlug,
     note_id: NoteIdPath,
     current_user_id: CurrentUserId,
-    session: DbSession,
+    session: SessionDep,
     note_repo: NoteRepo,
-    workspace_repo: WorkspaceRepo,
+    workspace_repo: WorkspaceRepositoryDep,
 ) -> DeleteResponse:
     """Soft delete a note.
 
@@ -437,9 +438,9 @@ async def pin_workspace_note(
     workspace_id: WorkspaceIdOrSlug,
     note_id: NoteIdPath,
     current_user_id: CurrentUserId,
-    session: DbSession,
+    session: SessionDep,
     note_repo: NoteRepo,
-    workspace_repo: WorkspaceRepo,
+    workspace_repo: WorkspaceRepositoryDep,
 ) -> NoteResponse:
     """Pin a note for quick access.
 
@@ -482,9 +483,9 @@ async def unpin_workspace_note(
     workspace_id: WorkspaceIdOrSlug,
     note_id: NoteIdPath,
     current_user_id: CurrentUserId,
-    session: DbSession,
+    session: SessionDep,
     note_repo: NoteRepo,
-    workspace_repo: WorkspaceRepo,
+    workspace_repo: WorkspaceRepositoryDep,
 ) -> NoteResponse:
     """Unpin a note.
 
@@ -552,9 +553,10 @@ async def get_note_annotations(
     workspace_id: WorkspaceIdOrSlug,
     note_id: NoteIdPath,
     current_user_id: CurrentUserId,
+    session: SessionDep,
     note_repo: NoteRepo,
     annotation_repo: AnnotationRepo,
-    workspace_repo: WorkspaceRepo,
+    workspace_repo: WorkspaceRepositoryDep,
 ) -> list[AnnotationResponse]:
     """Get all annotations for a note.
 
@@ -595,10 +597,10 @@ async def update_annotation_status(
     annotation_id: Annotated[UUID, Path(description="Annotation ID")],
     status_update: AnnotationStatusUpdate,
     current_user_id: CurrentUserId,
-    session: DbSession,
+    session: SessionDep,
     note_repo: NoteRepo,
     annotation_repo: AnnotationRepo,
-    workspace_repo: WorkspaceRepo,
+    workspace_repo: WorkspaceRepositoryDep,
 ) -> AnnotationResponse:
     """Update annotation status (accept/reject/dismiss).
 
@@ -665,8 +667,9 @@ async def get_note_versions(
     workspace_id: WorkspaceIdOrSlug,
     note_id: NoteIdPath,
     current_user_id: CurrentUserId,
+    session: SessionDep,
     note_repo: NoteRepo,
-    workspace_repo: WorkspaceRepo,
+    workspace_repo: WorkspaceRepositoryDep,
 ) -> list[Any]:
     """Get version history for a note.
 

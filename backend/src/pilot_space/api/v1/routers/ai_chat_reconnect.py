@@ -13,7 +13,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
-from pilot_space.api.v1.dependencies import get_current_user
+from pilot_space.dependencies.auth import get_current_user
 from pilot_space.infrastructure.database.repositories import (
     AgentSessionRepository,
     ApprovalRequestRepository,
@@ -287,7 +287,9 @@ async def get_stream_events(
     if owner_raw is not None:
         owner_str = owner_raw.decode() if isinstance(owner_raw, bytes) else str(owner_raw)
         if owner_str != str(user.id):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to this stream")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to this stream"
+            )
 
     try:
         # Get events from Redis (we store them for 5 minutes)

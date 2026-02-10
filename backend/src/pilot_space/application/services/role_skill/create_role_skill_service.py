@@ -50,8 +50,13 @@ class CreateRoleSkillService:
     Validates max roles, duplicate role_type, and handles primary demotion.
     """
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        role_skill_repository: RoleSkillRepository,
+    ) -> None:
         self._session = session
+        self._repo = role_skill_repository
 
     async def execute(self, payload: CreateRoleSkillPayload) -> UserRoleSkill:
         """Create a new role skill.
@@ -69,11 +74,9 @@ class CreateRoleSkillService:
             UserRoleSkill,
         )
         from pilot_space.infrastructure.database.repositories.role_skill_repository import (
-            RoleSkillRepository,
             RoleTemplateRepository,
         )
 
-        repo = RoleSkillRepository(self._session)
         template_repo = RoleTemplateRepository(self._session)
 
         # Validate role_type
@@ -82,13 +85,13 @@ class CreateRoleSkillService:
             raise ValueError(msg)
 
         # Check max roles constraint
-        count = await repo.count_by_user_workspace(payload.user_id, payload.workspace_id)
+        count = await self._repo.count_by_user_workspace(payload.user_id, payload.workspace_id)
         if count >= MAX_ROLES_PER_USER_WORKSPACE:
             msg = f"Maximum {MAX_ROLES_PER_USER_WORKSPACE} roles per workspace"
             raise ValueError(msg)
 
         # Check duplicate role_type
-        existing = await repo.get_by_user_workspace_role_type(
+        existing = await self._repo.get_by_user_workspace_role_type(
             payload.user_id, payload.workspace_id, payload.role_type
         )
         if existing is not None:
@@ -104,7 +107,7 @@ class CreateRoleSkillService:
 
         # Handle primary demotion
         if payload.is_primary:
-            await self._demote_existing_primary(repo, payload.user_id, payload.workspace_id)
+            await self._demote_existing_primary(self._repo, payload.user_id, payload.workspace_id)
 
         skill = UserRoleSkill(
             user_id=payload.user_id,
@@ -117,7 +120,7 @@ class CreateRoleSkillService:
             template_version=template_version,
         )
 
-        created = await repo.create(skill)
+        created = await self._repo.create(skill)
 
         logger.info(
             "Role skill created",
