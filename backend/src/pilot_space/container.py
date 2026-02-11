@@ -24,6 +24,7 @@ from pilot_space.application.services.ai_context import (
     RefineAIContextService,
 )
 from pilot_space.application.services.annotation import CreateAnnotationService
+from pilot_space.application.services.auth import AuthService
 from pilot_space.application.services.cycle import (
     AddIssueToCycleService,
     CreateCycleService,
@@ -232,6 +233,7 @@ class Container(containers.DeclarativeContainer):
             # Dependencies
             "pilot_space.dependencies",
             "pilot_space.api.v1.dependencies",
+            "pilot_space.api.v1.repository_deps",
         ],
     )
 
@@ -889,6 +891,31 @@ class Container(containers.DeclarativeContainer):
         WorkspaceInvitationService,
         workspace_repo=workspace_repository,
         invitation_repo=invitation_repository,
+    )
+
+    # Auth Service
+    @staticmethod
+    def _get_default_redirect_origin(settings: Settings) -> str:
+        """Get default redirect origin from CORS origins.
+
+        Args:
+            settings: Application settings.
+
+        Returns:
+            First CORS origin or localhost fallback.
+        """
+        if settings.cors_origins:
+            return settings.cors_origins[0]
+        return "http://localhost:3000"
+
+    auth_service = providers.Factory(
+        AuthService,
+        user_repo=user_repository,
+        supabase_url=providers.Callable(lambda s: s.supabase_url, config),
+        default_redirect_origin=providers.Callable(
+            _get_default_redirect_origin,
+            config,
+        ),
     )
 
     # AI Services (PR Review)

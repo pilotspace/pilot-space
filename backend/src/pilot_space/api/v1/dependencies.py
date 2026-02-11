@@ -23,6 +23,17 @@ from typing import Annotated
 from dependency_injector.wiring import Provide, inject
 from fastapi import Depends
 
+from pilot_space.api.v1.repository_deps import (
+    ActivityRepositoryDep,
+    CycleRepositoryDep,
+    InvitationRepositoryDep,
+    IssueRepositoryDep,
+    NoteIssueLinkRepositoryDep,
+    NoteRepositoryDep,
+    ProjectRepositoryDep,
+    UserRepositoryDep,
+    WorkspaceRepositoryDep,
+)
 from pilot_space.application.services.ai_context import (
     ExportAIContextService,
     GenerateAIContextService,
@@ -31,6 +42,7 @@ from pilot_space.application.services.ai_context import (
 from pilot_space.application.services.annotation import (
     CreateAnnotationService,
 )
+from pilot_space.application.services.auth import AuthService
 from pilot_space.application.services.cycle import (
     AddIssueToCycleService,
     CreateCycleService,
@@ -93,127 +105,6 @@ from pilot_space.application.services.workspace_invitation import (
 from pilot_space.application.services.workspace_member import WorkspaceMemberService
 from pilot_space.container import Container
 from pilot_space.dependencies.auth import SessionDep
-from pilot_space.infrastructure.database.repositories.activity_repository import (
-    ActivityRepository,
-)
-from pilot_space.infrastructure.database.repositories.cycle_repository import (
-    CycleRepository,
-)
-from pilot_space.infrastructure.database.repositories.invitation_repository import (
-    InvitationRepository,
-)
-from pilot_space.infrastructure.database.repositories.issue_repository import (
-    IssueRepository,
-)
-from pilot_space.infrastructure.database.repositories.note_issue_link_repository import (
-    NoteIssueLinkRepository,
-)
-from pilot_space.infrastructure.database.repositories.note_repository import (
-    NoteRepository,
-)
-from pilot_space.infrastructure.database.repositories.project_repository import (
-    ProjectRepository,
-)
-from pilot_space.infrastructure.database.repositories.user_repository import (
-    UserRepository,
-)
-from pilot_space.infrastructure.database.repositories.workspace_repository import (
-    WorkspaceRepository,
-)
-
-# ===== Repository Dependencies =====
-
-
-@inject
-def _get_activity_repository(
-    repo: ActivityRepository = Depends(Provide[Container.activity_repository]),
-) -> ActivityRepository:
-    return repo
-
-
-ActivityRepositoryDep = Annotated[ActivityRepository, Depends(_get_activity_repository)]
-
-
-@inject
-def _get_cycle_repository(
-    repo: CycleRepository = Depends(Provide[Container.cycle_repository]),
-) -> CycleRepository:
-    return repo
-
-
-CycleRepositoryDep = Annotated[CycleRepository, Depends(_get_cycle_repository)]
-
-
-@inject
-def _get_invitation_repository(
-    repo: InvitationRepository = Depends(Provide[Container.invitation_repository]),
-) -> InvitationRepository:
-    return repo
-
-
-InvitationRepositoryDep = Annotated[InvitationRepository, Depends(_get_invitation_repository)]
-
-
-@inject
-def _get_issue_repository(
-    repo: IssueRepository = Depends(Provide[Container.issue_repository]),
-) -> IssueRepository:
-    return repo
-
-
-IssueRepositoryDep = Annotated[IssueRepository, Depends(_get_issue_repository)]
-
-
-@inject
-def _get_note_issue_link_repository(
-    repo: NoteIssueLinkRepository = Depends(Provide[Container.note_issue_link_repository]),
-) -> NoteIssueLinkRepository:
-    return repo
-
-
-NoteIssueLinkRepositoryDep = Annotated[
-    NoteIssueLinkRepository, Depends(_get_note_issue_link_repository)
-]
-
-
-@inject
-def _get_note_repository(
-    repo: NoteRepository = Depends(Provide[Container.note_repository]),
-) -> NoteRepository:
-    return repo
-
-
-NoteRepositoryDep = Annotated[NoteRepository, Depends(_get_note_repository)]
-
-
-@inject
-def _get_project_repository(
-    repo: ProjectRepository = Depends(Provide[Container.project_repository]),
-) -> ProjectRepository:
-    return repo
-
-
-ProjectRepositoryDep = Annotated[ProjectRepository, Depends(_get_project_repository)]
-
-
-@inject
-def _get_user_repository(
-    repo: UserRepository = Depends(Provide[Container.user_repository]),
-) -> UserRepository:
-    return repo
-
-
-UserRepositoryDep = Annotated[UserRepository, Depends(_get_user_repository)]
-
-
-@inject
-def _get_workspace_repository(
-    repo: WorkspaceRepository = Depends(Provide[Container.workspace_repository]),
-) -> WorkspaceRepository:
-    return repo
-
-
-WorkspaceRepositoryDep = Annotated[WorkspaceRepository, Depends(_get_workspace_repository)]
 
 # ===== Issue Service Dependencies =====
 
@@ -718,6 +609,18 @@ WorkspaceInvitationServiceDep = Annotated[
     WorkspaceInvitationService, Depends(_get_workspace_invitation_service)
 ]
 
+# ===== Auth Service Dependencies =====
+
+
+@inject
+def _get_auth_service(
+    svc: AuthService = Depends(Provide[Container.auth_service]),
+) -> AuthService:
+    return svc
+
+
+AuthServiceDep = Annotated[AuthService, Depends(_get_auth_service)]
+
 __all__ = [  # noqa: RUF022
     # Repository Dependencies
     "ActivityRepositoryDep",
@@ -730,6 +633,7 @@ __all__ = [  # noqa: RUF022
     "UserRepositoryDep",
     "WorkspaceRepositoryDep",
     # Service Dependencies
+    "AuthServiceDep",
     "ActivityServiceDep",
     "AddIssueToCycleServiceDep",
     "AutoTransitionServiceDep",

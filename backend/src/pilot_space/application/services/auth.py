@@ -1,0 +1,209 @@
+"""Authentication service for Pilot Space (CQRS-lite).
+
+Handles OAuth login URL construction, user profile retrieval/update, and logout.
+Migrated from direct repo/settings usage in auth router per DD-064.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from uuid import UUID
+
+from pilot_space.infrastructure.database.models.user import User
+from pilot_space.infrastructure.database.repositories.user_repository import (
+    UserRepository,
+)
+from pilot_space.infrastructure.logging import get_logger
+
+logger = get_logger(__name__)
+
+
+@dataclass
+class GetLoginUrlPayload:
+    """Payload for building OAuth login URL."""
+
+    provider: str
+    redirect_url: str | None = None
+
+
+@dataclass
+class GetLoginUrlResult:
+    """Result containing the OAuth redirect URL."""
+
+    url: str
+    provider: str
+
+
+@dataclass
+class GetProfilePayload:
+    """Payload for retrieving user profile."""
+
+    user_id: UUID
+
+
+@dataclass
+class GetProfileResult:
+    """Result containing the user profile entity."""
+
+    user: User
+
+
+@dataclass
+class UpdateProfilePayload:
+    """Payload for updating user profile fields."""
+
+    user_id: UUID
+    full_name: str | None = None
+    avatar_url: str | None = None
+    default_sdlc_role: str | None = None
+
+
+@dataclass
+class UpdateProfileResult:
+    """Result containing updated user and list of changed fields."""
+
+    user: User
+    changed_fields: list[str] = field(default_factory=list)
+
+
+@dataclass
+class LogoutPayload:
+    """Payload for user logout."""
+
+    user_id: UUID
+
+
+@dataclass
+class LogoutResult:
+    """Result confirming logout success."""
+
+    success: bool
+
+
+class AuthService:
+    """Service for authentication operations.
+
+    Follows CQRS-lite pattern per DD-064.
+    """
+
+    def __init__(
+        self,
+        user_repo: UserRepository,
+        supabase_url: str,
+        default_redirect_origin: str,
+    ) -> None:
+        self._user_repo = user_repo
+        self._supabase_url = supabase_url
+        self._default_redirect_origin = default_redirect_origin
+
+    async def get_login_url(
+        self,
+        payload: GetLoginUrlPayload,
+    ) -> GetLoginUrlResult:
+        """Build Supabase OAuth redirect URL.
+
+        Args:
+            payload: Login URL payload with provider and optional redirect.
+
+        Returns:
+            Result containing the constructed OAuth URL.
+        """
+        redirect_to = payload.redirect_url or f"{self._default_redirect_origin}/auth/callback"
+        auth_url = (
+            f"{self._supabase_url}/auth/v1/authorize"
+            f"?provider={payload.provider}&redirect_to={redirect_to}"
+        )
+
+        return GetLoginUrlResult(url=auth_url, provider=payload.provider)
+
+    async def get_profile(
+        self,
+        payload: GetProfilePayload,
+    ) -> GetProfileResult:
+        """Retrieve user profile by ID.
+
+        Args:
+            payload: Profile retrieval payload.
+
+        Returns:
+            Result containing the user entity.
+
+        Raises:
+            ValueError: If user not found.
+        """
+        user = await self._user_repo.get_by_id(payload.user_id)
+        if not user:
+            msg = "User not found"
+            raise ValueError(msg)
+
+        return GetProfileResult(user=user)
+
+    async def update_profile(
+        self,
+        payload: UpdateProfilePayload,
+    ) -> UpdateProfileResult:
+        """Update user profile fields.
+
+        Only updates explicitly provided (non-None) fields.
+
+        Args:
+            payload: Profile update payload.
+
+        Returns:
+            Result containing updated user and list of changed field names.
+
+        Raises:
+            ValueError: If user not found.
+        """
+        user = await self._user_repo.get_by_id(payload.user_id)
+        if not user:
+            msg = "User not found"
+            raise ValueError(msg)
+
+        changed_fields: list[str] = []
+
+        if payload.full_name is not None:
+            user.full_name = payload.full_name
+            changed_fields.append("full_name")
+        if payload.avatar_url is not None:
+            user.avatar_url = payload.avatar_url
+            changed_fields.append("avatar_url")
+        if payload.default_sdlc_role is not None:
+            user.default_sdlc_role = payload.default_sdlc_role
+            changed_fields.append("default_sdlc_role")
+
+        if changed_fields:
+            user = await self._user_repo.update(user)
+
+        return UpdateProfileResult(user=user, changed_fields=changed_fields)
+
+    async def logout(
+        self,
+        payload: LogoutPayload,
+    ) -> LogoutResult:
+        """Process user logout.
+
+        With JWT-based auth, server-side logout is a no-op.
+        Client should discard the token.
+
+        Args:
+            payload: Logout payload.
+
+        Returns:
+            Result confirming success.
+        """
+        logger.info("User logout", extra={"user_id": str(payload.user_id)})
+        return LogoutResult(success=True)
+
+
+__all__ = [
+    "AuthService",
+    "GetLoginUrlPayload",
+    "GetLoginUrlResult",
+    "GetProfilePayload",
+    "GetProfileResult",
+    "LogoutPayload",
+    "LogoutResult",
+    "UpdateProfilePayload",
+    "UpdateProfileResult",
+]
