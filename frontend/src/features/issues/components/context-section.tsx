@@ -32,9 +32,12 @@ export function ContextSection({
   return (
     <div className={cn('space-y-3', className)}>
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Icon className="size-4 text-foreground-muted" aria-hidden="true" />
-          <h3 className="text-sm font-medium">{title}</h3>
+        <div className="flex items-center gap-2.5">
+          <div className="w-1 h-5 rounded-full bg-ai/40" aria-hidden="true" />
+          <Icon className="size-4 text-ai" aria-hidden="true" />
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            {title}
+          </h3>
         </div>
         {onCopy && (
           <Button

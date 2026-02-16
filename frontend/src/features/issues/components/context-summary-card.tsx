@@ -3,11 +3,19 @@
 import type { ElementType } from 'react';
 import { FileText, Link2, BookOpen, Code, ListChecks } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 import type { ContextSummary } from '@/stores/ai/AIContextStore';
 
 export interface ContextSummaryCardProps {
   summary: ContextSummary;
 }
+
+const STAT_STYLES: Record<string, string> = {
+  Issues: 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
+  Docs: 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
+  Files: 'bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-300',
+  Tasks: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300',
+};
 
 export function ContextSummaryCard({ summary }: ContextSummaryCardProps) {
   return (
@@ -21,11 +29,11 @@ export function ContextSummaryCard({ summary }: ContextSummaryCardProps) {
               <h3 className="text-base font-semibold leading-snug">{summary.title}</h3>
             </div>
             <p className="text-sm text-muted-foreground leading-relaxed">{summary.summaryText}</p>
-            <div className="flex items-center gap-4 pt-1">
-              <StatItem icon={Link2} label="Issues" count={summary.stats.relatedCount} />
-              <StatItem icon={BookOpen} label="Docs" count={summary.stats.docsCount} />
-              <StatItem icon={Code} label="Files" count={summary.stats.filesCount} />
-              <StatItem icon={ListChecks} label="Tasks" count={summary.stats.tasksCount} />
+            <div className="flex items-center gap-3 pt-1">
+              <StatPill icon={Link2} label="Issues" count={summary.stats.relatedCount} />
+              <StatPill icon={BookOpen} label="Docs" count={summary.stats.docsCount} />
+              <StatPill icon={Code} label="Files" count={summary.stats.filesCount} />
+              <StatPill icon={ListChecks} label="Tasks" count={summary.stats.tasksCount} />
             </div>
           </div>
         </div>
@@ -34,7 +42,7 @@ export function ContextSummaryCard({ summary }: ContextSummaryCardProps) {
   );
 }
 
-function StatItem({
+function StatPill({
   icon: Icon,
   label,
   count,
@@ -45,12 +53,15 @@ function StatItem({
 }) {
   return (
     <div
-      className="flex items-center gap-1.5 text-xs text-muted-foreground"
+      className={cn(
+        'flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium',
+        STAT_STYLES[label] ?? 'bg-muted text-muted-foreground'
+      )}
       aria-label={`${count} ${label}`}
     >
       <Icon className="size-3.5" aria-hidden="true" />
-      <span className="font-medium text-foreground">{count}</span>
-      <span>{label}</span>
+      <span>{count}</span>
+      <span className="opacity-70">{label}</span>
     </div>
   );
 }

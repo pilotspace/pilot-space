@@ -1,9 +1,9 @@
 """Fix ai_sessions RLS policy enum case and add session_data GIN index.
 
-The ai_sessions_admin_select policy uses UPPERCASE role values ('OWNER', 'ADMIN')
-but workspace_members.role stores lowercase values ('owner', 'admin'). This causes
-admin users to see zero sessions. Also adds a GIN index on session_data for JSONB
-search performance (context_history lookups).
+Recreate ai_sessions_admin_select policy with correct UPPERCASE enum values
+matching the workspace_role enum type (OWNER, ADMIN, MEMBER, GUEST).
+Also adds a GIN index on session_data for JSONB search performance
+(context_history lookups).
 
 Revision ID: 036_fix_ai_sessions_rls_enum_case
 Revises: 035_fix_digest_cron_security
@@ -24,7 +24,7 @@ def upgrade() -> None:
     # Drop the broken policy with UPPERCASE enum values
     op.execute('DROP POLICY IF EXISTS "ai_sessions_admin_select" ON ai_sessions')
 
-    # Recreate with lowercase enum values matching workspace_members.role
+    # Recreate with correct UPPERCASE enum values matching workspace_role type
     op.execute("""
         CREATE POLICY "ai_sessions_admin_select"
         ON ai_sessions
@@ -34,7 +34,7 @@ def upgrade() -> None:
                 SELECT wm.workspace_id
                 FROM workspace_members wm
                 WHERE wm.user_id = current_setting('app.current_user_id', true)::uuid
-                AND wm.role IN ('owner', 'admin')
+                AND wm.role IN ('OWNER', 'ADMIN')
                 AND wm.is_deleted = false
             )
         )
@@ -42,18 +42,18 @@ def upgrade() -> None:
 
     # Add GIN index on session_data for JSONB search performance
     op.execute("""
-        CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_ai_sessions_session_data_gin
+        CREATE INDEX IF NOT EXISTS ix_ai_sessions_session_data_gin
         ON ai_sessions USING gin (session_data)
     """)
 
 
 def downgrade() -> None:
     """Revert RLS policy to uppercase and drop GIN index."""
-    op.execute("DROP INDEX CONCURRENTLY IF EXISTS ix_ai_sessions_session_data_gin")
+    op.execute("DROP INDEX IF EXISTS ix_ai_sessions_session_data_gin")
 
     op.execute('DROP POLICY IF EXISTS "ai_sessions_admin_select" ON ai_sessions')
 
-    # Restore original (broken) UPPERCASE policy
+    # Restore original policy (same UPPERCASE values, no functional change in downgrade)
     op.execute("""
         CREATE POLICY "ai_sessions_admin_select"
         ON ai_sessions
