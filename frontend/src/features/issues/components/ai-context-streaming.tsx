@@ -7,15 +7,11 @@
  * - pending: circle outline
  * - in_progress: Loader2 spinning
  * - complete: Check icon
- *
- * @example
- * ```tsx
- * <AIContextStreaming phases={phases} />
- * ```
  */
 
 import { observer } from 'mobx-react-lite';
-import { Circle, Loader2, Check } from 'lucide-react';
+import { Circle, Loader2, Check, Sparkles } from 'lucide-react';
+import { motion } from 'motion/react';
 import { cn } from '@/lib/utils';
 import type { AIContextPhase } from '@/stores/ai/AIContextStore';
 
@@ -37,9 +33,10 @@ export interface AIContextStreamingProps {
 
 interface PhaseItemProps {
   phase: AIContextPhase;
+  index: number;
 }
 
-const PhaseItem = observer(function PhaseItem({ phase }: PhaseItemProps) {
+const PhaseItem = observer(function PhaseItem({ phase, index }: PhaseItemProps) {
   let Icon = Circle;
   let iconClassName = 'text-muted-foreground/40';
   let textClassName = 'text-muted-foreground';
@@ -58,7 +55,12 @@ const PhaseItem = observer(function PhaseItem({ phase }: PhaseItemProps) {
   }
 
   return (
-    <div className="flex items-center gap-3">
+    <motion.div
+      className="flex items-center gap-3"
+      initial={{ opacity: 0, x: -12 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ duration: 0.25, delay: index * 0.08, ease: 'easeOut' }}
+    >
       <Icon className={cn('size-5 shrink-0', iconClassName)} />
       <div className="flex-1 min-w-0">
         <p className={cn('text-sm transition-all', textClassName)}>{phase.name}</p>
@@ -66,7 +68,7 @@ const PhaseItem = observer(function PhaseItem({ phase }: PhaseItemProps) {
           <p className="text-xs text-muted-foreground mt-0.5 truncate">{phase.content}</p>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 });
 
@@ -78,22 +80,35 @@ export const AIContextStreaming = observer(function AIContextStreaming({
   phases,
   className,
 }: AIContextStreamingProps) {
+  const completedCount = phases.filter((p) => p.status === 'complete').length;
+
   return (
-    <div className={cn('space-y-4 p-6', className)} aria-live="polite">
-      <div className="flex items-center gap-2">
-        <Loader2 className="size-5 text-ai motion-safe:animate-spin" />
-        <h3 className="text-base font-medium">Generating AI Context</h3>
+    <div
+      className={cn(
+        'rounded-lg border border-ai/20 bg-gradient-to-br from-ai/5 to-ai/10 p-6',
+        className
+      )}
+      aria-live="polite"
+    >
+      <div className="flex items-center gap-2.5 mb-4">
+        <Sparkles className="size-5 text-ai animate-ai-pulse" aria-hidden="true" />
+        <div className="flex-1">
+          <h3 className="text-base font-medium">Generating AI Context</h3>
+          <p className="text-xs text-muted-foreground">
+            Step {completedCount} of {phases.length}
+          </p>
+        </div>
       </div>
 
       <div className="space-y-3">
         {phases.map((phase, index) => (
-          <PhaseItem key={`${phase.name}-${index}`} phase={phase} />
+          <PhaseItem key={`${phase.name}-${index}`} phase={phase} index={index} />
         ))}
       </div>
 
-      <p className="text-xs text-muted-foreground pt-2">
-        This may take a few moments. We are analyzing your issue, searching documentation, codebase,
-        and related issues to provide comprehensive context.
+      <p className="text-xs text-muted-foreground pt-3 mt-3 border-t border-ai/10">
+        Analyzing your issue, searching documentation, codebase, and related issues to provide
+        comprehensive context.
       </p>
     </div>
   );
