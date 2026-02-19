@@ -206,7 +206,7 @@ def upgrade() -> None:
             workspace_id IN (
                 SELECT workspace_id FROM workspace_members
                 WHERE user_id = current_setting('app.current_user_id', true)::uuid
-                AND role IN ('owner', 'admin')
+                AND role IN ('OWNER', 'ADMIN')
             )
         )
     """)

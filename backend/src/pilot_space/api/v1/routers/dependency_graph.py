@@ -16,8 +16,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Path, Query, status
 from pydantic import BaseModel
 
-from pilot_space.dependencies import get_current_user_id
-from pilot_space.dependencies.auth import SessionDep
+from pilot_space.dependencies.auth import CurrentUserId, SessionDep
 
 router = APIRouter(prefix="/projects", tags=["dependency-graph"])
 
@@ -59,7 +58,7 @@ async def get_dependency_graph(
     project_id: Annotated[UUID, Path()],
     session: SessionDep,
     workspace_id: Annotated[str, Query(description="Workspace UUID for RLS enforcement")],
-    current_user_id: UUID = get_current_user_id,  # type: ignore[assignment]
+    current_user_id: CurrentUserId,
 ) -> DependencyGraphResponse:
     """Return DAG nodes, edges, critical path, and circular dep detection for a project.
 

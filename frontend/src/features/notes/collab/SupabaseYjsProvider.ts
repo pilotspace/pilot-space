@@ -27,7 +27,6 @@
 import * as Y from 'yjs';
 import * as encoding from 'lib0/encoding';
 import * as decoding from 'lib0/decoding';
-import * as syncProtocol from 'y-protocols/sync';
 import * as awarenessProtocol from 'y-protocols/awareness';
 import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
 import type { Awareness } from 'y-protocols/awareness';
@@ -189,7 +188,7 @@ export class SupabaseYjsProvider {
   private _broadcastSyncStep1(): void {
     const encoder = encoding.createEncoder();
     encoding.writeVarUint(encoder, MSG_SYNC_STEP1);
-    syncProtocol.writeSyncStep1(encoder, this.ydoc);
+    encoding.writeVarUint8Array(encoder, Y.encodeStateVector(this.ydoc));
     this._broadcast(encoding.toUint8Array(encoder));
   }
 
@@ -200,38 +199,30 @@ export class SupabaseYjsProvider {
 
     switch (msgType) {
       case MSG_SYNC_STEP1: {
-        // Peer sent their state vector — send them our diff
+        // Peer sent their state vector — respond with our diff
+        const sv = decoding.readVarUint8Array(decoder);
+        const diff = Y.encodeStateAsUpdate(this.ydoc, sv);
         const encoder = encoding.createEncoder();
         encoding.writeVarUint(encoder, MSG_SYNC_STEP2);
-        syncProtocol.writeSyncStep2(
-          encoder,
-          this.ydoc,
-          decoding.readUint8Array(decoder, decoder.arr.length - decoder.pos)
-        );
+        encoding.writeVarUint8Array(encoder, diff);
         this._broadcast(encoding.toUint8Array(encoder));
         break;
       }
       case MSG_SYNC_STEP2: {
         // Peer sent us their diff — apply it
-        Y.applyUpdate(
-          this.ydoc,
-          decoding.readUint8Array(decoder, decoder.arr.length - decoder.pos)
-        );
+        Y.applyUpdate(this.ydoc, decoding.readVarUint8Array(decoder));
         break;
       }
       case MSG_UPDATE: {
         // Incremental update
-        Y.applyUpdate(
-          this.ydoc,
-          decoding.readUint8Array(decoder, decoder.arr.length - decoder.pos)
-        );
+        Y.applyUpdate(this.ydoc, decoding.readVarUint8Array(decoder));
         break;
       }
       case MSG_AWARENESS: {
         // Awareness update from peer
         awarenessProtocol.applyAwarenessUpdate(
           this.awareness,
-          decoding.readUint8Array(decoder, decoder.arr.length - decoder.pos),
+          decoding.readVarUint8Array(decoder),
           this
         );
         break;

@@ -26,8 +26,7 @@ from pilot_space.api.v1.routers.pm_capacity import router as pm_capacity_router
 from pilot_space.api.v1.routers.pm_dependency_graph import router as pm_dependency_graph_router
 from pilot_space.api.v1.routers.pm_release_notes import router as pm_release_notes_router
 from pilot_space.api.v1.routers.pm_sprint_board import router as pm_sprint_board_router
-from pilot_space.dependencies import get_current_user_id
-from pilot_space.dependencies.auth import SessionDep
+from pilot_space.dependencies.auth import CurrentUserId, SessionDep
 from pilot_space.domain.pm_block_insight import InsightSeverity, PMBlockType
 from pilot_space.infrastructure.database.models.pm_block_insight import (
     PMBlockInsight as PMBlockInsightModel,
@@ -108,8 +107,8 @@ async def list_pm_block_insights(
     session: SessionDep,
     workspace_repo: WorkspaceRepositoryDep,
     block_id: Annotated[str, Query(description="TipTap block ID")],
+    current_user_id: CurrentUserId,
     include_dismissed: Annotated[bool, Query()] = False,
-    current_user_id: UUID = get_current_user_id,  # type: ignore[assignment]
 ) -> list[PMBlockInsightResponse]:
     """Return AI-generated insights for a PM block (FR-056)."""
     repo = PMBlockInsightRepository(session)
@@ -146,7 +145,7 @@ async def dismiss_pm_block_insight(
     workspace_id: Annotated[UUID, Path()],
     insight_id: Annotated[UUID, Path()],
     session: SessionDep,
-    current_user_id: UUID = get_current_user_id,  # type: ignore[assignment]
+    current_user_id: CurrentUserId,
 ) -> None:
     """Dismiss a single insight (FR-059)."""
     repo = PMBlockInsightRepository(session)
@@ -166,7 +165,7 @@ async def dismiss_all_pm_block_insights(
     workspace_id: Annotated[UUID, Path()],
     session: SessionDep,
     block_id: Annotated[str, Query(description="TipTap block ID")],
-    current_user_id: UUID = get_current_user_id,  # type: ignore[assignment]
+    current_user_id: CurrentUserId,
 ) -> None:
     """Batch-dismiss all active insights for a block (FR-059)."""
     repo = PMBlockInsightRepository(session)
@@ -187,7 +186,7 @@ async def refresh_pm_block_insights(
     body: RefreshInsightsRequest,
     session: SessionDep,
     workspace_repo: WorkspaceRepositoryDep,
-    current_user_id: UUID = get_current_user_id,  # type: ignore[assignment]
+    current_user_id: CurrentUserId,
 ) -> list[PMBlockInsightResponse]:
     """Generate fresh AI insights for a PM block (T-252).
 
