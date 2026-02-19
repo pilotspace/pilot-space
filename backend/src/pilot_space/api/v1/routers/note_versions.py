@@ -25,7 +25,7 @@ from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Path, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 
 from pilot_space.api.v1.schemas.base import DeleteResponse
 from pilot_space.api.v1.schemas.note_version import (
@@ -56,7 +56,7 @@ from pilot_space.application.services.version.snapshot_service import (
     VersionSnapshotService,
 )
 from pilot_space.config import get_settings
-from pilot_space.dependencies.auth import CurrentUserId, SessionDep
+from pilot_space.dependencies.auth import CurrentUserId, SessionDep, require_workspace_member
 from pilot_space.domain.note_version import VersionTrigger
 from pilot_space.infrastructure.database.models.note_version import (
     NoteVersion as NoteVersionModel,
@@ -153,6 +153,7 @@ async def create_version(
     request: CreateVersionRequest,
     session: SessionDep,
     user_id: CurrentUserId,
+    _: Annotated[UUID, Depends(require_workspace_member)],
 ) -> NoteVersionResponse:
     """Manually create a point-in-time version snapshot of the note."""
     workspace_repo = WorkspaceRepository(session)
@@ -205,6 +206,7 @@ async def list_versions(
     note_id: NoteIdPath,
     session: SessionDep,
     user_id: CurrentUserId,
+    _: Annotated[UUID, Depends(require_workspace_member)],
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ) -> NoteVersionListResponse:
@@ -250,6 +252,7 @@ async def get_version(
     version_id: VersionIdPath,
     session: SessionDep,
     user_id: CurrentUserId,
+    _: Annotated[UUID, Depends(require_workspace_member)],
 ) -> NoteVersionResponse:
     """Get a single version by ID."""
     workspace_repo = WorkspaceRepository(session)
@@ -277,6 +280,7 @@ async def diff_versions(
     version2_id: Annotated[UUID, Path(description="Newer version UUID")],
     session: SessionDep,
     user_id: CurrentUserId,
+    _: Annotated[UUID, Depends(require_workspace_member)],
 ) -> DiffResponse:
     """Compute block-level diff between two versions."""
     workspace_repo = WorkspaceRepository(session)
@@ -323,6 +327,7 @@ async def restore_version(
     request: RestoreVersionRequest,
     session: SessionDep,
     user_id: CurrentUserId,
+    _: Annotated[UUID, Depends(require_workspace_member)],
 ) -> RestoreResponse:
     """Restore note to a historical version.
 
@@ -392,6 +397,7 @@ async def get_digest(
     version_id: VersionIdPath,
     session: SessionDep,
     user_id: CurrentUserId,
+    _: Annotated[UUID, Depends(require_workspace_member)],
 ) -> DigestResponse:
     """Get AI-generated change digest for a version (cached, <3s for 95%)."""
     workspace_repo = WorkspaceRepository(session)
@@ -434,6 +440,7 @@ async def get_impact(
     version_id: VersionIdPath,
     session: SessionDep,
     user_id: CurrentUserId,
+    _: Annotated[UUID, Depends(require_workspace_member)],
 ) -> ImpactResponse:
     """Scan version content for entity references (issues, notes)."""
     workspace_repo = WorkspaceRepository(session)
@@ -476,6 +483,7 @@ async def pin_version(
     request: PinVersionRequest,
     session: SessionDep,
     user_id: CurrentUserId,
+    _: Annotated[UUID, Depends(require_workspace_member)],
 ) -> NoteVersionResponse:
     """Pin or unpin a version. Pinned versions are exempt from retention cleanup."""
     workspace_repo = WorkspaceRepository(session)
@@ -507,6 +515,7 @@ async def delete_version(
     version_id: VersionIdPath,
     session: SessionDep,
     user_id: CurrentUserId,
+    _: Annotated[UUID, Depends(require_workspace_member)],
 ) -> DeleteResponse:
     """Delete a version. Pinned versions cannot be deleted."""
     workspace_repo = WorkspaceRepository(session)
@@ -542,6 +551,7 @@ async def undo_ai_changes(
     request: UndoAiRequest,
     session: SessionDep,
     user_id: CurrentUserId,
+    _: Annotated[UUID, Depends(require_workspace_member)],
 ) -> UndoAiResponse:
     """Fast-path: restore the note to the most recent ai_before snapshot.
 

@@ -16,12 +16,17 @@
  * - Convert to Shared: change to "shared", unlocks human editing
  *
  * FR-003: AI blocks non-editable by humans (approve/reject only)
+ *
+ * Integration: Wire into NoteCanvasEditor via OwnershipExtension.onGuardBlock callback.
+ * Pass editor.commands.undo as onUndo prop when rendering this component.
+ * (Deferred: tracked in T-114 — requires NoteCanvasEditor layout changes)
  */
 import { useState, useRef, useEffect } from 'react';
 import { Bot, Users, Check, X, Share2, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { apiClient } from '@/services/api/client';
 import type { BlockOwner } from '@/features/notes/editor/extensions/OwnershipExtension';
 
 export interface OwnershipPopoverProps {
@@ -31,6 +36,8 @@ export interface OwnershipPopoverProps {
   owner: BlockOwner;
   /** Called after successful approve/reject/convert to trigger editor refresh */
   onOwnershipChange?: (blockId: string, newOwner: BlockOwner | null) => void;
+  /** Called when user triggers undo after block rejection */
+  onUndo?: () => void;
   className?: string;
 }
 
@@ -41,20 +48,10 @@ async function fetchBlockAction(
   action: 'approve' | 'reject',
   body?: Record<string, unknown>
 ): Promise<{ owner?: string; removed?: boolean }> {
-  const resp = await fetch(
-    `/api/v1/workspaces/${workspaceId}/notes/${noteId}/blocks/${blockId}/${action}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: body ? JSON.stringify(body) : undefined,
-      credentials: 'include',
-    }
+  return apiClient.post<{ owner?: string; removed?: boolean }>(
+    `/workspaces/${workspaceId}/notes/${noteId}/blocks/${blockId}/${action}`,
+    body
   );
-  if (!resp.ok) {
-    const err = await resp.json().catch(() => ({ detail: resp.statusText }));
-    throw new Error((err.detail as string) || resp.statusText);
-  }
-  return resp.json() as Promise<{ owner?: string; removed?: boolean }>;
 }
 
 function extractSkillName(owner: BlockOwner): string {
@@ -67,6 +64,7 @@ export function OwnershipPopover({
   workspaceId,
   owner,
   onOwnershipChange,
+  onUndo,
   className,
 }: OwnershipPopoverProps) {
   const [loading, setLoading] = useState<'approve' | 'reject' | 'convert' | null>(null);
@@ -147,8 +145,7 @@ export function OwnershipPopover({
         action: {
           label: 'Undo',
           onClick: () => {
-            // Undo is handled by the editor's undo mechanism
-            document.execCommand('undo');
+            onUndo?.();
           },
         },
         duration: 5000,

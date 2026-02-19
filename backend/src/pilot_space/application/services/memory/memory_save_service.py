@@ -9,16 +9,12 @@ Feature 015: AI Workforce Platform — Memory Engine
 
 from __future__ import annotations
 
-import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from pilot_space.domain.memory_entry import MemoryEntry, MemorySourceType
-from pilot_space.infrastructure.database.models.memory_entry import (
-    MemoryEntry as MemoryEntryModel,
-)
 from pilot_space.infrastructure.logging import get_logger
 from pilot_space.infrastructure.queue.models import QueueName
 
@@ -124,21 +120,16 @@ class MemorySaveService:
             expires_at=payload.expires_at,
         )
 
-        # Convert keywords list to space-separated string for tsvector storage
-        keywords_str = " ".join(domain_entry.keywords or [])
-
-        # Persist synchronously — embedding is null until worker fills it
-        model = MemoryEntryModel(
-            id=uuid.uuid4(),
+        # Persist synchronously using to_tsvector so full-text search works immediately
+        created = await self._memory_repo.create_with_keywords(
             workspace_id=payload.workspace_id,
             content=payload.content,
-            keywords=keywords_str,
+            keywords=domain_entry.keywords or [],
             source_type=payload.source_type,
             source_id=payload.source_id,
             pinned=payload.pinned,
             expires_at=payload.expires_at,
         )
-        created = await self._memory_repo.create(model)
         await self._session.commit()
 
         entry_id = created.id  # type: ignore[assignment]

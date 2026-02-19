@@ -133,6 +133,8 @@ class MemoryEmbeddingJobHandler:
         row = result.first()
         return row[0] if row else None
 
+    _ALLOWED_TABLES: frozenset[str] = frozenset({_MEMORY_TABLE, _CONSTITUTION_TABLE})
+
     async def _store_embedding(
         self,
         entry_id: UUID,
@@ -146,6 +148,8 @@ class MemoryEmbeddingJobHandler:
             table: Table name.
             embedding_str: Embedding as '[0.1,0.2,...]' string.
         """
+        if table not in self._ALLOWED_TABLES:
+            raise ValueError(f"Disallowed table: {table!r}")
         update_sql = text(
             f"UPDATE {table} SET embedding = CAST(:embedding AS vector(768)) WHERE id = :id"
         )

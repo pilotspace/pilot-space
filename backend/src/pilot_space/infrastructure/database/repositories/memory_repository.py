@@ -8,11 +8,14 @@ Feature 015: AI Workforce Platform — Memory Engine
 
 from __future__ import annotations
 
+import uuid as _uuid
+from datetime import datetime
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
-from sqlalchemy import desc, select, text
+from sqlalchemy import desc, func, insert, select, text
 
+from pilot_space.domain.memory_entry import MemorySourceType
 from pilot_space.infrastructure.database.models.memory_entry import MemoryEntry
 from pilot_space.infrastructure.database.repositories.base import BaseRepository
 
@@ -81,6 +84,54 @@ class MemoryEntryRepository(BaseRepository[MemoryEntry]):
         )
         result = await self.session.execute(query)
         return result.scalars().all()
+
+    async def create_with_keywords(
+        self,
+        *,
+        workspace_id: UUID,
+        content: str,
+        keywords: list[str],
+        source_type: MemorySourceType,
+        source_id: UUID | None = None,
+        pinned: bool = False,
+        expires_at: datetime | None = None,
+    ) -> MemoryEntry:
+        """Insert a MemoryEntry with keywords stored as tsvector.
+
+        Uses ``to_tsvector('english', ...)`` so full-text search via
+        ``ts_rank`` works correctly against a tsvector column.
+
+        Args:
+            workspace_id: Owning workspace UUID.
+            content: Memory text content.
+            keywords: List of keyword strings to convert to tsvector.
+            source_type: Origin of this memory entry.
+            source_id: Optional originating entity UUID.
+            pinned: Whether entry is pinned (excluded from TTL expiry).
+            expires_at: Optional expiry timestamp.
+
+        Returns:
+            The freshly-inserted MemoryEntry ORM model.
+        """
+        entry_id = _uuid.uuid4()
+        keywords_text = " ".join(keywords)
+
+        stmt = (
+            insert(MemoryEntry)
+            .values(
+                id=entry_id,
+                workspace_id=workspace_id,
+                content=content,
+                keywords=func.to_tsvector("english", keywords_text),
+                source_type=source_type,
+                source_id=source_id,
+                pinned=pinned,
+                expires_at=expires_at,
+            )
+            .returning(MemoryEntry)
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar_one()
 
     async def hybrid_search(
         self,

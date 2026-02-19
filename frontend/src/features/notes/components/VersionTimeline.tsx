@@ -100,118 +100,120 @@ const VersionEntry = observer(function VersionEntry({
   const authorLabel = getAuthorLabel(version.trigger, version.createdBy);
 
   return (
-    <li
-      role="button"
-      data-selected={isSelected}
-      className={cn(
-        'group relative flex gap-3 rounded-lg px-3 py-2 cursor-pointer motion-safe:transition-colors',
-        isSelected
-          ? 'bg-primary/10 border-l-2 border-primary'
-          : 'hover:bg-muted/40 border-l-2 border-transparent'
-      )}
-      onClick={onSelect}
-      onDoubleClick={onDiff}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') onSelect();
-        if (e.key === ' ') {
-          e.preventDefault();
-          onDiff();
-        }
-      }}
-      tabIndex={0}
-    >
-      {/* Timeline dot */}
-      <div className="flex flex-col items-center pt-0.5 shrink-0">
-        <div className={cn('w-2 h-2 rounded-full shrink-0', cfg.dotClass)} />
-        <div className="w-0.5 flex-1 bg-border mt-1" />
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 min-w-0 pb-1">
-        <div className="flex items-center justify-between gap-1">
-          <div className="flex items-center gap-1.5 min-w-0">
-            <cfg.Icon className="w-3 h-3 text-muted-foreground shrink-0" aria-hidden />
-            <span className="text-sm font-medium truncate">{cfg.label}</span>
-          </div>
-
-          {/* Pin button — T-220 */}
-          <button
-            type="button"
-            aria-label={version.pinned ? 'Unpin version' : 'Pin version'}
-            aria-pressed={version.pinned}
-            disabled={isPinning}
-            className={cn(
-              'p-0.5 rounded motion-safe:transition-opacity',
-              version.pinned
-                ? 'text-primary opacity-100'
-                : 'text-muted-foreground opacity-0 group-hover:opacity-100 focus:opacity-100'
-            )}
-            onClick={(e) => {
-              e.stopPropagation();
-              onPin(!version.pinned);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                e.stopPropagation();
-                onPin(!version.pinned);
-              }
-            }}
-          >
-            <Pin
-              className="w-3.5 h-3.5"
-              fill={version.pinned ? 'currentColor' : 'none'}
-              aria-hidden
-            />
-          </button>
+    <li data-selected={isSelected} className="group relative">
+      <div
+        role="button"
+        tabIndex={0}
+        aria-pressed={isSelected}
+        className={cn(
+          'flex gap-3 rounded-lg px-3 py-2 cursor-pointer motion-safe:transition-colors',
+          isSelected
+            ? 'bg-primary/10 border-l-2 border-primary'
+            : 'hover:bg-muted/40 border-l-2 border-transparent'
+        )}
+        onClick={onSelect}
+        onDoubleClick={onDiff}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') onSelect();
+          if (e.key === ' ') {
+            e.preventDefault();
+            onDiff();
+          }
+        }}
+      >
+        {/* Timeline dot */}
+        <div className="flex flex-col items-center pt-0.5 shrink-0">
+          <div className={cn('w-2 h-2 rounded-full shrink-0', cfg.dotClass)} />
+          <div className="w-0.5 flex-1 bg-border mt-1" />
         </div>
 
-        {/* User label */}
-        {version.label && (
-          <p className="text-xs text-muted-foreground truncate mt-0.5">
-            &ldquo;{version.label}&rdquo;
-          </p>
-        )}
+        {/* Content */}
+        <div className="flex-1 min-w-0 pb-1">
+          <div className="flex items-center justify-between gap-1">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <cfg.Icon className="w-3 h-3 text-muted-foreground shrink-0" aria-hidden />
+              <span className="text-sm font-medium truncate">{cfg.label}</span>
+            </div>
 
-        <p className="text-xs text-muted-foreground tabular-nums mt-0.5">
-          {timeAgo} · {authorLabel}
-          {version.pinned && (
-            <span className="ml-1.5 inline-flex items-center gap-0.5 text-primary font-medium">
-              <Pin className="w-2.5 h-2.5" fill="currentColor" aria-hidden />
-              Pinned
-            </span>
-          )}
-        </p>
-
-        {/* Action row — visible when selected */}
-        {isSelected && (
-          <div className="flex gap-1.5 mt-2" role="group" aria-label="Version actions">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 px-2 text-xs gap-1"
+            {/* Pin button — T-220 */}
+            <button
+              type="button"
+              aria-label={version.pinned ? 'Unpin version' : 'Pin version'}
+              aria-pressed={version.pinned}
+              disabled={isPinning}
+              className={cn(
+                'p-0.5 rounded motion-safe:transition-opacity',
+                version.pinned
+                  ? 'text-primary opacity-100'
+                  : 'text-muted-foreground opacity-0 group-hover:opacity-100 focus:opacity-100'
+              )}
               onClick={(e) => {
                 e.stopPropagation();
-                onDiff();
+                onPin(!version.pinned);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onPin(!version.pinned);
+                }
               }}
             >
-              <GitCompare className="w-3 h-3" aria-hidden />
-              Compare
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 px-2 text-xs gap-1"
-              onClick={(e) => {
-                e.stopPropagation();
-                onRestore();
-              }}
-            >
-              <Undo2 className="w-3 h-3" aria-hidden />
-              Restore
-            </Button>
+              <Pin
+                className="w-3.5 h-3.5"
+                fill={version.pinned ? 'currentColor' : 'none'}
+                aria-hidden
+              />
+            </button>
           </div>
-        )}
+
+          {/* User label */}
+          {version.label && (
+            <p className="text-xs text-muted-foreground truncate mt-0.5">
+              &ldquo;{version.label}&rdquo;
+            </p>
+          )}
+
+          <p className="text-xs text-muted-foreground tabular-nums mt-0.5">
+            {timeAgo} · {authorLabel}
+            {version.pinned && (
+              <span className="ml-1.5 inline-flex items-center gap-0.5 text-primary font-medium">
+                <Pin className="w-2.5 h-2.5" fill="currentColor" aria-hidden />
+                Pinned
+              </span>
+            )}
+          </p>
+
+          {/* Action row — visible when selected */}
+          {isSelected && (
+            <div className="flex gap-1.5 mt-2" role="group" aria-label="Version actions">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-xs gap-1"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDiff();
+                }}
+              >
+                <GitCompare className="w-3 h-3" aria-hidden />
+                Compare
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-xs gap-1"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRestore();
+                }}
+              >
+                <Undo2 className="w-3 h-3" aria-hidden />
+                Restore
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
     </li>
   );

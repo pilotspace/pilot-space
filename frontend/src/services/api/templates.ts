@@ -5,7 +5,7 @@
  *   GET    /templates             — list (member access; includes system templates)
  *   POST   /templates             — create custom template (admin/owner only)
  *   GET    /templates/{id}        — get one
- *   PUT    /templates/{id}        — update (admin/owner or creator)
+ *   PATCH  /templates/{id}        — update (admin/owner or creator)
  *   DELETE /templates/{id}        — delete (admin/owner or creator; system templates forbidden)
  */
 import { apiClient } from './client';
@@ -59,7 +59,10 @@ export const templatesApi = {
 
   /** Update a template (admin/owner or creator; system templates forbidden). */
   update(workspaceId: string, templateId: string, data: UpdateTemplateData): Promise<NoteTemplate> {
-    return apiClient.put<NoteTemplate>(`/workspaces/${workspaceId}/templates/${templateId}`, data);
+    return apiClient.patch<NoteTemplate>(
+      `/workspaces/${workspaceId}/templates/${templateId}`,
+      data
+    );
   },
 
   /** Delete a template (admin/owner or creator; system templates forbidden). */

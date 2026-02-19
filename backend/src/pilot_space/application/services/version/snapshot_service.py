@@ -12,6 +12,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 from uuid import UUID
 
+from sqlalchemy.exc import IntegrityError
+
 from pilot_space.domain.note_version import NoteVersion, VersionTrigger
 from pilot_space.infrastructure.database.repositories.note_repository import NoteRepository
 from pilot_space.infrastructure.database.repositories.note_version_repository import (
@@ -20,6 +22,8 @@ from pilot_space.infrastructure.database.repositories.note_version_repository im
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
+
+_MAX_VERSION_RETRIES = 3
 
 
 @dataclass
@@ -77,59 +81,58 @@ class VersionSnapshotService:
             msg = f"Note {payload.note_id} not found in workspace {payload.workspace_id}"
             raise ValueError(msg)
 
-        # Compute next version_number (optimistic lock token, C-9)
-        max_version = await self._version_repo.get_max_version_number(
-            payload.note_id, payload.workspace_id
-        )
-        next_version_number = max_version + 1
-
-        # Build label if not provided
         label = payload.label or _default_label(payload.trigger)
 
-        version = NoteVersion(
-            note_id=payload.note_id,
-            workspace_id=payload.workspace_id,
-            trigger=payload.trigger,
-            content=note.content,
-            label=label,
-            created_by=payload.created_by,
-            version_number=next_version_number,
-        )
-
-        # Persist via repository
         from pilot_space.infrastructure.database.models.note_version import (
             NoteVersion as NoteVersionModel,
             VersionTrigger as ModelTrigger,
         )
 
-        db_version = NoteVersionModel(
-            note_id=version.note_id,
-            workspace_id=version.workspace_id,
-            trigger=ModelTrigger(version.trigger.value),
-            content=version.content,
-            label=version.label,
-            pinned=version.pinned,
-            created_by=version.created_by,
-            version_number=version.version_number,
-        )
-        self._session.add(db_version)
-        await self._session.flush()
-        await self._session.refresh(db_version)
+        for attempt in range(_MAX_VERSION_RETRIES):
+            # Re-read max_version on each retry to handle concurrent inserts
+            max_version = await self._version_repo.get_max_version_number(
+                payload.note_id, payload.workspace_id
+            )
+            next_version_number = max_version + 1
 
-        # Map back to domain entity
-        saved = NoteVersion(
-            id=db_version.id,
-            note_id=db_version.note_id,
-            workspace_id=db_version.workspace_id,
-            trigger=VersionTrigger(db_version.trigger.value),
-            content=db_version.content,
-            label=db_version.label,
-            pinned=db_version.pinned,
-            created_by=db_version.created_by,
-            version_number=db_version.version_number,
-            created_at=db_version.created_at,
-        )
-        return SnapshotResult(version=saved)
+            db_version = NoteVersionModel(
+                note_id=payload.note_id,
+                workspace_id=payload.workspace_id,
+                trigger=ModelTrigger(payload.trigger.value),
+                content=note.content,
+                label=label,
+                pinned=False,
+                created_by=payload.created_by,
+                version_number=next_version_number,
+            )
+            self._session.add(db_version)
+            try:
+                await self._session.flush()
+            except IntegrityError:
+                await self._session.rollback()
+                if attempt >= _MAX_VERSION_RETRIES - 1:
+                    raise
+                continue
+
+            await self._session.refresh(db_version)
+
+            return SnapshotResult(
+                version=NoteVersion(
+                    id=db_version.id,
+                    note_id=db_version.note_id,
+                    workspace_id=db_version.workspace_id,
+                    trigger=VersionTrigger(db_version.trigger.value),
+                    content=db_version.content,
+                    label=db_version.label,
+                    pinned=db_version.pinned,
+                    created_by=db_version.created_by,
+                    version_number=db_version.version_number,
+                    created_at=db_version.created_at,
+                )
+            )
+
+        msg = f"Failed to create snapshot for note {payload.note_id} after {_MAX_VERSION_RETRIES} retries"
+        raise RuntimeError(msg)
 
 
 def _default_label(trigger: VersionTrigger) -> str:

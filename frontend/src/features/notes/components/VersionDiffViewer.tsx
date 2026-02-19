@@ -14,7 +14,8 @@
  * T-217: Visual diff view
  * T-219: Version digest display
  */
-import { useState } from 'react';
+import { useState, Component } from 'react';
+import type { ReactNode, ErrorInfo } from 'react';
 import { observer } from 'mobx-react-lite';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { X, Expand, Shrink, ArrowLeft, Undo2, Sparkles } from 'lucide-react';
@@ -43,8 +44,33 @@ function blockText(content: Record<string, unknown> | null): string {
   if (!content) return '(empty)';
   const type = content.type as string | undefined;
   if (type === 'text') return (content.text as string | undefined) ?? '';
-  const children = (content.content as Record<string, unknown>[] | undefined) ?? [];
+  const rawChildren = content.content;
+  const children = Array.isArray(rawChildren) ? (rawChildren as Record<string, unknown>[]) : [];
   return children.map(blockText).join('').slice(0, 120) || `[${type ?? 'block'}]`;
+}
+
+/** Catches rendering errors in the diff view and shows a fallback message. */
+class DiffErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
+  state = { hasError: false };
+
+  static getDerivedStateFromError(): { hasError: boolean } {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo): void {
+    console.error('[VersionDiffViewer] render error:', error, info);
+  }
+
+  render(): ReactNode {
+    if (this.state.hasError) {
+      return (
+        <p className="text-xs text-destructive px-3 py-3">
+          Failed to render diff. Please try again.
+        </p>
+      );
+    }
+    return this.props.children;
+  }
 }
 
 /** One row in the diff display */
@@ -342,7 +368,9 @@ export const VersionDiffViewer = observer(function VersionDiffViewer(
   return (
     <>
       <div className="flex flex-col h-full relative">
-        <DiffContent {...props} isModal={false} />
+        <DiffErrorBoundary>
+          <DiffContent {...props} isModal={false} />
+        </DiffErrorBoundary>
 
         {/* Expand button — top-right overlay */}
         <button
@@ -392,7 +420,9 @@ export const VersionDiffViewer = observer(function VersionDiffViewer(
           </div>
 
           <div className="flex-1 overflow-hidden">
-            <DiffContent {...props} isModal={true} />
+            <DiffErrorBoundary>
+              <DiffContent {...props} isModal={true} />
+            </DiffErrorBoundary>
           </div>
         </DialogContent>
       </Dialog>

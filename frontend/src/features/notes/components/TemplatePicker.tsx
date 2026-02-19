@@ -179,6 +179,7 @@ export function TemplatePicker({ workspaceId, isAdmin, onConfirm, onClose }: Tem
   const [selected, setSelected] = useState<TemplateId>('blank');
   const blankRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const dialogRef = useRef<HTMLDivElement>(null);
 
   // Fetch workspace templates (system + custom)
   const { data, isLoading, isError } = useQuery({
@@ -193,6 +194,38 @@ export function TemplatePicker({ workspaceId, isAdmin, onConfirm, onClose }: Tem
   // Focus blank on mount
   useEffect(() => {
     blankRef.current?.focus();
+  }, []);
+
+  // Focus trap: keep focus within dialog while open
+  useEffect(() => {
+    const el = dialogRef.current;
+    if (!el) return;
+    const focusable = el.querySelectorAll<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+
+    function handleKeyDown(e: globalThis.KeyboardEvent) {
+      if (e.key !== 'Tab') return;
+      if (focusable.length === 0) {
+        e.preventDefault();
+        return;
+      }
+      if (e.shiftKey) {
+        if (document.activeElement === first) {
+          e.preventDefault();
+          last?.focus();
+        }
+      } else {
+        if (document.activeElement === last) {
+          e.preventDefault();
+          first?.focus();
+        }
+      }
+    }
+    el.addEventListener('keydown', handleKeyDown);
+    return () => el.removeEventListener('keydown', handleKeyDown);
   }, []);
 
   const selectedTemplate =
@@ -260,6 +293,7 @@ export function TemplatePicker({ workspaceId, isAdmin, onConfirm, onClose }: Tem
       }}
     >
       <div
+        ref={dialogRef}
         className="relative flex max-h-[80vh] w-full max-w-[560px] flex-col overflow-hidden rounded-xl bg-background shadow-xl mx-4"
         onKeyDown={handleKeyDown}
       >

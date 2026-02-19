@@ -70,7 +70,9 @@ from pilot_space.infrastructure.database.models.note_issue_link import (
     NoteIssueLink,
     NoteLinkType,
 )
+from pilot_space.infrastructure.database.models.note_version import NoteVersion, VersionTrigger
 from pilot_space.infrastructure.database.models.onboarding import WorkspaceOnboarding
+from pilot_space.infrastructure.database.models.pm_block_insight import PMBlockInsight
 from pilot_space.infrastructure.database.models.project import Project
 from pilot_space.infrastructure.database.models.skill_execution import (
     SkillApprovalRole,
@@ -156,6 +158,8 @@ __all__ = [
     "NoteAnnotation",
     "NoteIssueLink",
     "NoteLinkType",
+    "NoteVersion",
+    "PMBlockInsight",
     "Project",
     "RoleTemplate",
     "SkillApprovalRole",
@@ -173,6 +177,7 @@ __all__ = [
     "ToolCallStatus",
     "User",
     "UserRoleSkill",
+    "VersionTrigger",
     "WorkIntent",
     "Workspace",
     "WorkspaceAPIKey",

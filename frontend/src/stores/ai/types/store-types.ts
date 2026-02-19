@@ -59,6 +59,7 @@ export interface NoteContext {
 
 export interface IssueContext {
   issueId: string;
+  projectId?: string;
   issueTitle?: string;
   issueStatus?: string;
 }

@@ -18,7 +18,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Path, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from pilot_space.api.v1.dependencies import WorkspaceRepositoryDep
@@ -26,7 +26,7 @@ from pilot_space.api.v1.routers.pm_capacity import router as pm_capacity_router
 from pilot_space.api.v1.routers.pm_dependency_graph import router as pm_dependency_graph_router
 from pilot_space.api.v1.routers.pm_release_notes import router as pm_release_notes_router
 from pilot_space.api.v1.routers.pm_sprint_board import router as pm_sprint_board_router
-from pilot_space.dependencies.auth import CurrentUserId, SessionDep
+from pilot_space.dependencies.auth import CurrentUserId, SessionDep, require_workspace_member
 from pilot_space.domain.pm_block_insight import InsightSeverity, PMBlockType
 from pilot_space.infrastructure.database.models.pm_block_insight import (
     PMBlockInsight as PMBlockInsightModel,
@@ -108,6 +108,7 @@ async def list_pm_block_insights(
     workspace_repo: WorkspaceRepositoryDep,
     block_id: Annotated[str, Query(description="TipTap block ID")],
     current_user_id: CurrentUserId,
+    _: Annotated[UUID, Depends(require_workspace_member)],
     include_dismissed: Annotated[bool, Query()] = False,
 ) -> list[PMBlockInsightResponse]:
     """Return AI-generated insights for a PM block (FR-056)."""
@@ -146,6 +147,7 @@ async def dismiss_pm_block_insight(
     insight_id: Annotated[UUID, Path()],
     session: SessionDep,
     current_user_id: CurrentUserId,
+    _: Annotated[UUID, Depends(require_workspace_member)],
 ) -> None:
     """Dismiss a single insight (FR-059)."""
     repo = PMBlockInsightRepository(session)
@@ -154,6 +156,7 @@ async def dismiss_pm_block_insight(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Insight not found")
     insight.dismissed = True
     await session.flush()
+    await session.commit()
 
 
 @router.post(
@@ -166,10 +169,12 @@ async def dismiss_all_pm_block_insights(
     session: SessionDep,
     block_id: Annotated[str, Query(description="TipTap block ID")],
     current_user_id: CurrentUserId,
+    _: Annotated[UUID, Depends(require_workspace_member)],
 ) -> None:
     """Batch-dismiss all active insights for a block (FR-059)."""
     repo = PMBlockInsightRepository(session)
     await repo.batch_dismiss(block_id=block_id, workspace_id=workspace_id)
+    await session.commit()
 
 
 # ── Refresh Insights Endpoint (T-252) ────────────────────────────────────────
@@ -187,6 +192,7 @@ async def refresh_pm_block_insights(
     session: SessionDep,
     workspace_repo: WorkspaceRepositoryDep,
     current_user_id: CurrentUserId,
+    _: Annotated[UUID, Depends(require_workspace_member)],
 ) -> list[PMBlockInsightResponse]:
     """Generate fresh AI insights for a PM block (T-252).
 

@@ -87,8 +87,17 @@ from pilot_space.infrastructure.database.repositories.note_issue_link_repository
 from pilot_space.infrastructure.database.repositories.note_repository import (
     NoteRepository,
 )
+from pilot_space.infrastructure.database.repositories.note_version_repository import (
+    NoteVersionRepository,
+)
 from pilot_space.infrastructure.database.repositories.onboarding_repository import (
     OnboardingRepository,
+)
+from pilot_space.infrastructure.database.repositories.pm_block_insight_repository import (
+    PMBlockInsightRepository,
+)
+from pilot_space.infrastructure.database.repositories.pm_block_queries_repository import (
+    PMBlockQueriesRepository,
 )
 from pilot_space.infrastructure.database.repositories.project_repository import (
     ProjectRepository,
@@ -231,6 +240,21 @@ class InfraContainer(containers.DeclarativeContainer):
 
     note_annotation_repository = providers.Factory(
         NoteAnnotationRepository,
+        session=providers.Callable(get_current_session),
+    )
+
+    note_version_repository = providers.Factory(
+        NoteVersionRepository,
+        session=providers.Callable(get_current_session),
+    )
+
+    pm_block_insight_repository = providers.Factory(
+        PMBlockInsightRepository,
+        session=providers.Callable(get_current_session),
+    )
+
+    pm_block_queries_repository = providers.Factory(
+        PMBlockQueriesRepository,
         session=providers.Callable(get_current_session),
     )
 

@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import os
 import shutil
+import sys
 import time
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
@@ -333,6 +335,7 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
             query_session_id = session_id_str or "default"
             stream_completed = False
             content_blocks: dict[str, dict[str, Any]] = {}
+            _stream_error: BaseException | None = None
 
             try:
                 skill_count = await materialize_role_skills(
@@ -536,6 +539,7 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
                                 yield flush_event
                                 capture_content_from_sse(flush_event, content_blocks)
                 except Exception as stream_err:
+                    _stream_error = stream_err
                     partial_flush = delta_buffer.flush()
                     if partial_flush:
                         yield partial_flush
@@ -584,18 +588,10 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
 
             finally:
                 self._active_clients.pop(query_session_id, None)
-
                 if client is not None:
                     if not stream_completed:
-                        try:
+                        with contextlib.suppress(TimeoutError, Exception):
                             await asyncio.wait_for(client.interrupt(), timeout=2.0)
-                            logger.info(
-                                "[SDK/Space] Sent interrupt to Claude process (session=%s)",
-                                query_session_id,
-                            )
-                        except (TimeoutError, Exception) as e:
-                            logger.debug("[SDK/Space] Interrupt during cleanup failed: %s", e)
-
                     if stream_completed:
                         await self._save_session_messages(input_data, content_blocks)
 
@@ -616,8 +612,15 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
                     await client.disconnect()
 
                 clear_context()
+                # Propagate error info so db_session_cm rolls back on failure (D-1 fix).
+                active_err = _stream_error or sys.exc_info()[1]
                 try:
-                    await db_session_cm.__aexit__(None, None, None)
+                    if active_err is not None:
+                        await db_session_cm.__aexit__(
+                            type(active_err), active_err, active_err.__traceback__
+                        )
+                    else:
+                        await db_session_cm.__aexit__(None, None, None)
                 except Exception as db_err:
                     logger.warning("[SDK/Space] DB session cleanup error: %s", db_err)
 

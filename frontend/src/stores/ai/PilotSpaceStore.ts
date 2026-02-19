@@ -196,6 +196,10 @@ export class PilotSpaceStore {
     return this.pendingApprovals.length > 0;
   }
 
+  get agentTaskList(): TaskState[] {
+    return Array.from(this.tasks.values());
+  }
+
   get activeTasks(): TaskState[] {
     return Array.from(this.tasks.values()).filter(
       (task) => task.status === 'pending' || task.status === 'in_progress'

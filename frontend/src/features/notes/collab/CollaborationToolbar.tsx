@@ -89,6 +89,11 @@ export function CollaborationToolbar({
           {editingLabel}
         </span>
       )}
+
+      {/* Screen reader live region for collaborator count changes */}
+      <span role="status" aria-live="polite" className="sr-only">
+        {humanCount > 0 ? `${humanCount} collaborator${humanCount !== 1 ? 's' : ''} editing` : ''}
+      </span>
     </div>
   );
 }
