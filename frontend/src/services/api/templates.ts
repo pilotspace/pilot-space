@@ -44,42 +44,26 @@ export interface UpdateTemplateData {
 export const templatesApi = {
   /** List all templates visible to the user (system + workspace custom). */
   list(workspaceId: string): Promise<NoteTemplateListResponse> {
-    return apiClient.get<NoteTemplateListResponse>(
-      `/workspaces/${workspaceId}/templates`
-    );
+    return apiClient.get<NoteTemplateListResponse>(`/workspaces/${workspaceId}/templates`);
   },
 
   /** Get a single template by ID. */
   get(workspaceId: string, templateId: string): Promise<NoteTemplate> {
-    return apiClient.get<NoteTemplate>(
-      `/workspaces/${workspaceId}/templates/${templateId}`
-    );
+    return apiClient.get<NoteTemplate>(`/workspaces/${workspaceId}/templates/${templateId}`);
   },
 
   /** Create a custom workspace template (admin/owner only). */
   create(workspaceId: string, data: CreateTemplateData): Promise<NoteTemplate> {
-    return apiClient.post<NoteTemplate>(
-      `/workspaces/${workspaceId}/templates`,
-      data
-    );
+    return apiClient.post<NoteTemplate>(`/workspaces/${workspaceId}/templates`, data);
   },
 
   /** Update a template (admin/owner or creator; system templates forbidden). */
-  update(
-    workspaceId: string,
-    templateId: string,
-    data: UpdateTemplateData
-  ): Promise<NoteTemplate> {
-    return apiClient.put<NoteTemplate>(
-      `/workspaces/${workspaceId}/templates/${templateId}`,
-      data
-    );
+  update(workspaceId: string, templateId: string, data: UpdateTemplateData): Promise<NoteTemplate> {
+    return apiClient.put<NoteTemplate>(`/workspaces/${workspaceId}/templates/${templateId}`, data);
   },
 
   /** Delete a template (admin/owner or creator; system templates forbidden). */
   delete(workspaceId: string, templateId: string): Promise<void> {
-    return apiClient.delete<void>(
-      `/workspaces/${workspaceId}/templates/${templateId}`
-    );
+    return apiClient.delete<void>(`/workspaces/${workspaceId}/templates/${templateId}`);
   },
 };

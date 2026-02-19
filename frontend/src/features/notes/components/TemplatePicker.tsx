@@ -74,6 +74,8 @@ function getTemplateDescription(template: NoteTemplate): string {
 
 interface TemplateCardProps {
   template: NoteTemplate;
+  /** Icon component to render — resolved outside the component to satisfy React Compiler. */
+  icon: React.ElementType;
   selected: boolean;
   isAdmin: boolean;
   tabIndex: number;
@@ -84,6 +86,7 @@ interface TemplateCardProps {
 
 function TemplateCard({
   template,
+  icon: Icon,
   selected,
   isAdmin,
   tabIndex,
@@ -91,7 +94,6 @@ function TemplateCard({
   onEditClick,
   cardRef,
 }: TemplateCardProps) {
-  const templateIcon = getTemplateIcon(template);
   const description = getTemplateDescription(template);
 
   return (
@@ -116,10 +118,10 @@ function TemplateCard({
         }
       }}
     >
-      {React.createElement(templateIcon, {
-        className: cn('h-8 w-8 shrink-0', selected ? 'text-primary' : 'text-muted-foreground'),
-        'aria-hidden': 'true',
-      })}
+      <Icon
+        className={cn('h-8 w-8 shrink-0', selected ? 'text-primary' : 'text-muted-foreground')}
+        aria-hidden="true"
+      />
       <span className="text-center text-xs font-medium text-foreground leading-snug">
         {template.name}
       </span>
@@ -185,8 +187,8 @@ export function TemplatePicker({ workspaceId, isAdmin, onConfirm, onClose }: Tem
     staleTime: 5 * 60_000,
   });
 
-  const systemTemplates = useMemo(() => data?.templates.filter((t) => t.isSystem) ?? [], [data]);
-  const customTemplates = useMemo(() => data?.templates.filter((t) => !t.isSystem) ?? [], [data]);
+  const systemTemplates = data?.templates.filter((t) => t.isSystem) ?? [];
+  const customTemplates = data?.templates.filter((t) => !t.isSystem) ?? [];
 
   // Focus blank on mount
   useEffect(() => {
@@ -338,6 +340,7 @@ export function TemplatePicker({ workspaceId, isAdmin, onConfirm, onClose }: Tem
                   <TemplateCard
                     key={template.id}
                     template={template}
+                    icon={getTemplateIcon(template)}
                     selected={selected === template.id}
                     isAdmin={isAdmin}
                     tabIndex={selected === template.id ? 0 : -1}
@@ -366,6 +369,7 @@ export function TemplatePicker({ workspaceId, isAdmin, onConfirm, onClose }: Tem
                   <TemplateCard
                     key={template.id}
                     template={template}
+                    icon={getTemplateIcon(template)}
                     selected={selected === template.id}
                     isAdmin={isAdmin}
                     tabIndex={selected === template.id ? 0 : -1}

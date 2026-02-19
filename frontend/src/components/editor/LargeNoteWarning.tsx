@@ -54,9 +54,7 @@ export function LargeNoteWarning({ noteId, blockCount, className }: LargeNoteWar
       )}
     >
       <TriangleAlert className="h-4 w-4 shrink-0 text-amber-500" aria-hidden="true" />
-      <p className="flex-1 text-xs">
-        This note is very large. Consider splitting into sub-notes.
-      </p>
+      <p className="flex-1 text-xs">This note is very large. Consider splitting into sub-notes.</p>
       <Button
         variant="ghost"
         size="icon"

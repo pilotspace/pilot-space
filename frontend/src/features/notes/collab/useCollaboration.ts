@@ -95,11 +95,7 @@ export function useCollaboration(options: UseCollaborationOptions): UseCollabora
     (status: ProviderStatus) => {
       // Invalidate note cache when reconnecting after offline: CRDT may have
       // merged remote changes that the cached note doesn't reflect.
-      if (
-        status === 'connected' &&
-        prevStatusRef.current === 'disconnected' &&
-        noteQueryKey
-      ) {
+      if (status === 'connected' && prevStatusRef.current === 'disconnected' && noteQueryKey) {
         void queryClient.invalidateQueries({ queryKey: noteQueryKey });
       }
       prevStatusRef.current = status;

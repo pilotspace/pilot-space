@@ -64,11 +64,7 @@ const STATUS_CONFIG: Record<ConnectionStatusValue, StatusConfig> = {
 /**
  * Small status pill showing CRDT sync state for collaborative note editing.
  */
-export function ConnectionStatus({
-  status,
-  showLabel = true,
-  className,
-}: ConnectionStatusProps) {
+export function ConnectionStatus({ status, showLabel = true, className }: ConnectionStatusProps) {
   const config = STATUS_CONFIG[status];
 
   return (

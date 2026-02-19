@@ -39,11 +39,7 @@ function makeQueryClient() {
 }
 
 function wrapper({ children }: { children: React.ReactNode }) {
-  return (
-    <QueryClientProvider client={makeQueryClient()}>
-      {children}
-    </QueryClientProvider>
-  );
+  return <QueryClientProvider client={makeQueryClient()}>{children}</QueryClientProvider>;
 }
 
 const WORKSPACE_ID = 'ws-123';
@@ -128,9 +124,7 @@ describe('SprintBoardRenderer config missing', () => {
         />
       </QueryClientProvider>
     );
-    expect(
-      screen.getByText(/Configure workspace and cycle/i)
-    ).toBeInTheDocument();
+    expect(screen.getByText(/Configure workspace and cycle/i)).toBeInTheDocument();
   });
 
   it('shows config prompt when cycleId is missing', () => {
@@ -142,9 +136,7 @@ describe('SprintBoardRenderer config missing', () => {
         />
       </QueryClientProvider>
     );
-    expect(
-      screen.getByText(/Configure workspace and cycle/i)
-    ).toBeInTheDocument();
+    expect(screen.getByText(/Configure workspace and cycle/i)).toBeInTheDocument();
   });
 });
 

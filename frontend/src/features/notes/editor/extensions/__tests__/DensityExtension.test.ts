@@ -42,11 +42,7 @@ function createEditor(opts: Partial<DensityOptions> = {}, content?: string) {
   });
 }
 
-function makePMNode(
-  type: string,
-  attrs: Record<string, unknown> = {},
-  text = ''
-): ProseMirrorNode {
+function makePMNode(type: string, attrs: Record<string, unknown> = {}, text = ''): ProseMirrorNode {
   return {
     type: { name: type },
     attrs,
@@ -255,10 +251,7 @@ describe('collapse persistence via localStorage (T-134)', () => {
   });
 
   it('collapse state is saved to localStorage on setBlockCollapsed', () => {
-    const editor = createEditor(
-      {},
-      '<p data-block-id="block-abc">Some content</p>'
-    );
+    const editor = createEditor({}, '<p data-block-id="block-abc">Some content</p>');
     editor.commands.setBlockCollapsed('block-abc', true);
     expect(localStorageMock.setItem).toHaveBeenCalledWith(
       LOCAL_STORAGE_KEY,

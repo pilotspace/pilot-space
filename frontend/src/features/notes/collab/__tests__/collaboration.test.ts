@@ -29,10 +29,7 @@ function deriveUserColor(userId: string): string {
 type ProviderStatus = 'connected' | 'connecting' | 'disconnected';
 type ConnectionStatusValue = 'online' | 'offline' | 'syncing' | 'error';
 
-function toConnectionStatus(
-  status: ProviderStatus,
-  hasError: boolean
-): ConnectionStatusValue {
+function toConnectionStatus(status: ProviderStatus, hasError: boolean): ConnectionStatusValue {
   if (hasError) return 'error';
   switch (status) {
     case 'connected':
