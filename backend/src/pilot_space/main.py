@@ -40,6 +40,7 @@ from pilot_space.api.v1.routers import (
     projects_router,
     role_skills_router,
     role_templates_router,
+    skill_approvals_router,
     skills_router,
     webhooks_router,
     workspace_ai_settings_router,
@@ -97,17 +98,33 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Start digest worker for homepage digest generation
     digest_worker_task: asyncio.Task[None] | None = None
     digest_worker = None
+    # T-069: Start memory worker for memory engine jobs (intent_dedup, embedding, DLQ)
+    memory_worker_task: asyncio.Task[None] | None = None
+    memory_worker = None
     queue_client = app.state.container.queue_client()
     if queue_client and redis_client:
         from pilot_space.infrastructure.queue.models import QueueName
 
         await queue_client.create_queue(QueueName.AI_LOW)
+        await queue_client.create_queue(QueueName.AI_NORMAL)
+
+        session_factory = app.state.container.session_factory()
 
         from pilot_space.ai.workers.digest_worker import DigestWorker
 
-        session_factory = app.state.container.session_factory()
         digest_worker = DigestWorker(queue_client, session_factory)
         digest_worker_task = asyncio.create_task(digest_worker.start())
+
+        from pilot_space.ai.workers.memory_worker import MemoryWorker
+
+        _google_secret = getattr(settings, "google_api_key", None)
+        _google_api_key: str | None = _google_secret.get_secret_value() if _google_secret else None
+        memory_worker = MemoryWorker(
+            queue=queue_client,
+            session_factory=session_factory,
+            google_api_key=_google_api_key,
+        )
+        memory_worker_task = asyncio.create_task(memory_worker.start())
 
     # Start question adapter cleanup task (FR-015: 5-min timeout enforcement)
     from pilot_space.ai.sdk.question_adapter import get_question_adapter
@@ -131,6 +148,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.info("digest_worker_stopped")
     if digest_worker_task:
         digest_worker_task.cancel()
+    # T-069: Graceful shutdown of memory worker
+    if memory_worker:
+        await memory_worker.stop()
+        logger.info("memory_worker_stopped")
+    if memory_worker_task:
+        memory_worker_task.cancel()
     if redis_client is not None:
         await redis_client.disconnect()
         logger.info("redis_disconnected")
@@ -233,5 +256,6 @@ app.include_router(homepage_notes_from_chat_router, prefix=API_V1_PREFIX)
 app.include_router(role_templates_router, prefix=API_V1_PREFIX)
 app.include_router(role_skills_router, prefix=API_V1_PREFIX)
 app.include_router(skills_router, prefix=API_V1_PREFIX)
+app.include_router(skill_approvals_router, prefix=f"{API_V1_PREFIX}/workspaces")
 if debug_router:
     app.include_router(debug_router, prefix=API_V1_PREFIX)

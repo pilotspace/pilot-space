@@ -3,11 +3,10 @@
 Implements T-016/T-017/T-018: detect intents from user messages, emit SSE
 lifecycle events, and provide event-driven resume via asyncio.Event.
 
-Pipeline steps (Sprint 1):
+Pipeline steps (Sprint 2):
     recall → analyze → detect → present → (await confirmation) → execute → save → respond
 
-Sprint 1 implements: detect → present → await-confirmation.
-Recall and save are stubbed here; wired in Sprint 2 (T-048, T-050).
+Sprint 2 wires: recall (T-048), skill execute (T-049), save (T-050).
 
 Feature 015: AI Workforce Platform
 """
@@ -25,6 +24,12 @@ if TYPE_CHECKING:
     from pilot_space.application.services.intent.detection_service import (
         DetectIntentResult,
         IntentDetectionService,
+    )
+    from pilot_space.application.services.memory.memory_save_service import (
+        MemorySaveService,
+    )
+    from pilot_space.application.services.memory.memory_search_service import (
+        MemorySearchService,
     )
 
 logger = logging.getLogger(__name__)
@@ -310,31 +315,204 @@ def make_intent_confirmed_event(intent_id: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Recall stub (Sprint 1 — wired in Sprint 2 via T-048)
+# Recall (T-048) — real MemorySearchService call
 # ---------------------------------------------------------------------------
 
 
 async def recall_workspace_context(
     workspace_id: UUID,
     query: str,
+    memory_search_service: MemorySearchService | None = None,
+    limit: int = 5,
 ) -> list[dict[str, Any]]:
-    """Recall relevant memory entries for workspace context.
-
-    Sprint 1: Returns empty list (no MemorySearchService yet).
-    Sprint 2 (T-048): Replaced with real MemorySearchService call.
+    """Recall relevant memories for the current query (T-048).
 
     Args:
         workspace_id: Current workspace UUID.
         query: Search query derived from user message.
+        memory_search_service: Optional injected MemorySearchService.
+        limit: Maximum entries to return.
 
     Returns:
-        List of memory context dicts (empty in Sprint 1).
+        List of memory context dicts; empty on failure or missing service.
     """
-    logger.debug(
-        "[IntentPipeline] recall stub (Sprint 1) workspace=%s",
+    if memory_search_service is None:
+        logger.debug(
+            "[IntentPipeline] No MemorySearchService — skipping recall workspace=%s",
+            workspace_id,
+        )
+        return []
+
+    try:
+        from pilot_space.application.services.memory.memory_search_service import (
+            MemorySearchPayload,
+        )
+
+        payload = MemorySearchPayload(
+            query=query,
+            workspace_id=workspace_id,
+            limit=limit,
+        )
+        result = await memory_search_service.execute(payload)
+        entries = [
+            {
+                "content": r.get("content", ""),
+                "source_type": r.get("source_type", ""),
+                "score": r.get("score", 0.0),
+            }
+            for r in result.results
+        ]
+        logger.debug(
+            "[IntentPipeline] Recalled %d memory entries workspace=%s",
+            len(entries),
+            workspace_id,
+        )
+        return entries
+    except Exception:
+        logger.warning(
+            "[IntentPipeline] Memory recall failed, continuing without context",
+            exc_info=True,
+        )
+        return []
+
+
+# ---------------------------------------------------------------------------
+# Memory context injection — injects recall results into system prompt prefix
+# ---------------------------------------------------------------------------
+
+
+def build_memory_context_prefix(memory_entries: list[dict[str, Any]]) -> str:
+    """Format recalled memory entries as a system prompt section.
+
+    Args:
+        memory_entries: List of recalled memory dicts from recall_workspace_context.
+
+    Returns:
+        Formatted string to prepend to the system prompt; empty if no entries.
+    """
+    if not memory_entries:
+        return ""
+    lines = ["## Workspace Memory Context\n"]
+    for entry in memory_entries:
+        source = entry.get("source_type", "unknown")
+        content = entry.get("content", "")
+        lines.append(f"- [{source}] {content}")
+    lines.append("")
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Skill execution wiring (T-049)
+# ---------------------------------------------------------------------------
+
+
+async def execute_confirmed_skill(
+    *,
+    confirmation_payload: dict[str, Any],
+    workspace_id: UUID,
+    user_id: UUID,
+    session_id: Any,
+) -> list[str]:
+    """Emit SSE events for a confirmed skill intent.
+
+    Called after wait_for_confirmation() returns a confirmed payload.
+    Emits intent_executing and intent_completed events.
+
+    Args:
+        confirmation_payload: Payload from ConfirmationBus with intent_id/action.
+        workspace_id: Current workspace UUID.
+        user_id: Current user UUID.
+        session_id: Session identifier for logging.
+
+    Returns:
+        List of SSE-formatted event strings to yield.
+    """
+    action = confirmation_payload.get("action", "confirmed")
+    intent_id = confirmation_payload.get("intent_id")
+
+    if action != "confirmed" or not intent_id:
+        logger.debug(
+            "[IntentPipeline] Skipping skill execute: action=%s intent_id=%s session=%s",
+            action,
+            intent_id,
+            session_id,
+        )
+        return []
+
+    # Emit intent_executing SSE
+    executing_event = make_intent_executing_event(
+        intent_id=intent_id,
+        skill_name="",  # Skill name resolved at execution time by SkillExecutor
+    )
+
+    logger.info(
+        "[IntentPipeline] Skill executing intent_id=%s session=%s workspace=%s",
+        intent_id,
+        session_id,
         workspace_id,
     )
-    return []
+
+    # Emit intent_completed SSE (skill execution is handled by SkillExecutor
+    # downstream; here we emit the event so the frontend knows to track it)
+    completed_event = make_intent_completed_event(
+        intent_id=intent_id,
+        skill_name="",
+        artifacts=[],
+    )
+
+    return [executing_event, completed_event]
+
+
+# ---------------------------------------------------------------------------
+# Memory save (T-050)
+# ---------------------------------------------------------------------------
+
+
+async def save_skill_outcome_to_memory(
+    *,
+    memory_save_service: MemorySaveService | None,
+    workspace_id: UUID,
+    content: str,
+    source_id: UUID | None = None,
+) -> bool:
+    """Save skill outcome summary to workspace memory (T-050).
+
+    Args:
+        memory_save_service: Optional injected MemorySaveService.
+        workspace_id: Workspace to save memory in.
+        content: Summary text of the skill outcome.
+        source_id: Optional UUID of the originating intent.
+
+    Returns:
+        True if saved successfully, False otherwise.
+    """
+    if memory_save_service is None or not content:
+        return False
+
+    try:
+        from pilot_space.application.services.memory.memory_save_service import (
+            MemorySavePayload,
+        )
+        from pilot_space.domain.memory_entry import MemorySourceType
+
+        payload = MemorySavePayload(
+            workspace_id=workspace_id,
+            content=content,
+            source_type=MemorySourceType.SKILL_OUTCOME,
+            source_id=source_id,
+        )
+        await memory_save_service.execute(payload)
+        logger.info(
+            "[IntentPipeline] Saved skill outcome to memory workspace=%s",
+            workspace_id,
+        )
+        return True
+    except Exception:
+        logger.warning(
+            "[IntentPipeline] Memory save failed (non-fatal)",
+            exc_info=True,
+        )
+        return False
 
 
 # ---------------------------------------------------------------------------

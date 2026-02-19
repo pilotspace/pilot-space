@@ -25,8 +25,10 @@ from pilot_space.ai.agents.pilotspace_agent_helpers import (
 from pilot_space.ai.agents.pilotspace_intent_pipeline import (
     PILOTSPACE_SYSTEM_PROMPT_BASE,
     ConfirmationBus,
+    build_memory_context_prefix,
     recall_workspace_context,
     run_intent_pipeline_step,
+    save_skill_outcome_to_memory,
 )
 from pilot_space.ai.agents.pilotspace_stream_utils import (
     build_dynamic_system_prompt,
@@ -55,6 +57,12 @@ if TYPE_CHECKING:
     from pilot_space.ai.tools.mcp_server import ToolRegistry
     from pilot_space.application.services.intent.detection_service import (
         IntentDetectionService,
+    )
+    from pilot_space.application.services.memory.memory_save_service import (
+        MemorySaveService,
+    )
+    from pilot_space.application.services.memory.memory_search_service import (
+        MemorySearchService,
     )
 
 
@@ -110,6 +118,8 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
         subagents: dict[str, Any] | None = None,
         key_storage: SecureKeyStorage | None = None,
         intent_detection_service: IntentDetectionService | None = None,
+        memory_search_service: MemorySearchService | None = None,
+        memory_save_service: MemorySaveService | None = None,
     ) -> None:
         super().__init__(
             provider_selector=provider_selector,
@@ -122,6 +132,8 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
         self._subagents = subagents or {}
         self._key_storage = key_storage
         self._intent_detection_service = intent_detection_service
+        self._memory_search_service = memory_search_service
+        self._memory_save_service = memory_save_service
         self._message_id_holder: dict[str, str | None] = {"_current_message_id": None}
         self._active_clients: dict[str, ClaudeSDKClient] = {}
 
@@ -187,19 +199,7 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
         intent_id: str | None = None,
         action: str = "confirmed",
     ) -> bool:
-        """Signal the intent pipeline for session_id (T-018).
-
-        Called by the Intent API router after a user confirms/rejects an intent.
-        Unblocks ``wait_for_confirmation()`` in the active pipeline if present.
-
-        Args:
-            session_id: The chat session identifier.
-            intent_id: UUID of the intent that was confirmed/rejected.
-            action: "confirmed" or "rejected".
-
-        Returns:
-            True if a waiting pipeline was unblocked, False otherwise.
-        """
+        """Signal the intent pipeline for session_id (T-018)."""
         return ConfirmationBus.signal(
             session_id,
             intent_id=intent_id,
@@ -467,12 +467,18 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
 
                 self._active_clients[query_session_id] = client
 
-                # T-016/T-017: recall context (Sprint 1 stub) + detect intents
-                await recall_workspace_context(
+                # T-048: recall memory context and inject into system prompt
+                memory_entries = await recall_workspace_context(
                     workspace_id=context.workspace_id,
                     query=input_data.message,
+                    memory_search_service=self._memory_search_service,
                 )
+                memory_prefix = build_memory_context_prefix(memory_entries)
+                if memory_prefix:
+                    existing = sdk_config.system_prompt_base or ""
+                    sdk_config.system_prompt_base = memory_prefix + existing
 
+                # T-016/T-017: detect intents
                 intent_events = await self._detect_and_emit_intents(input_data, context)
 
                 enriched_message = build_contextual_message(
@@ -592,6 +598,20 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
 
                     if stream_completed:
                         await self._save_session_messages(input_data, content_blocks)
+
+                        # T-050: save conversation outcome to workspace memory
+                        if content_blocks:
+                            outcome_summary = " ".join(
+                                block.get("text", "")[:200]
+                                for block in content_blocks.values()
+                                if block.get("text")
+                            )[:500]
+                            if outcome_summary and context.workspace_id:
+                                await save_skill_outcome_to_memory(
+                                    memory_save_service=self._memory_save_service,
+                                    workspace_id=context.workspace_id,
+                                    content=outcome_summary,
+                                )
 
                     await client.disconnect()
 
