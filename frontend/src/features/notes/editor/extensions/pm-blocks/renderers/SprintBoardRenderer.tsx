@@ -18,6 +18,7 @@
 import { useCallback, useMemo, useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Loader2, RefreshCw, Lock, CheckCircle, XCircle } from 'lucide-react';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { pmBlocksApi } from '@/services/api/pm-blocks';
 import { issuesApi } from '@/services/api/issues';
@@ -556,13 +557,13 @@ export function SprintBoardRenderer({ data: rawData, readOnly }: PMRendererProps
                 onProposeTransition={
                   readOnly || boardData.isReadOnly
                     ? undefined
-                    : (issueId, state) => {
-                        // FR-050: Dispatch AI propose transition event for the orchestrator
-                        document.dispatchEvent(
-                          new CustomEvent('pm-block:propose-transition', {
-                            detail: { issueId, currentState: state, cycleId },
-                          })
-                        );
+                    : async (issueId, state) => {
+                        try {
+                          await pmBlocksApi.proposeTransition(workspaceId, issueId, state);
+                          toast.success('Transition proposed');
+                        } catch (err) {
+                          toast.error(`Transition failed: ${(err as Error).message}`);
+                        }
                       }
                 }
               />

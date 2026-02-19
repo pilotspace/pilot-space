@@ -349,6 +349,7 @@ export const DensityExtension = Extension.create<DensityOptions, DensityStorage>
                   Decoration.node(pos, pos + node.nodeSize, {
                     class: 'density-focus-hidden',
                     'aria-hidden': 'true',
+                    inert: '',
                   })
                 );
                 return;

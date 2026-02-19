@@ -492,8 +492,11 @@ class IntentDetectionService:
                 key = await storage.get_api_key(workspace_id, "anthropic")
                 if key:
                     return key
+        except (ValueError, AttributeError) as e:
+            logger.warning("Workspace API key config error: %s", e)
         except Exception:
-            logger.debug("Could not retrieve workspace API key", exc_info=True)
+            logger.error("Unexpected error fetching workspace API key", exc_info=True)
+            raise
 
         try:
             from pilot_space.config import get_settings
@@ -501,7 +504,10 @@ class IntentDetectionService:
             settings = get_settings()
             if settings.anthropic_api_key:
                 return settings.anthropic_api_key.get_secret_value()
+        except (ValueError, AttributeError) as e:
+            logger.warning("App-level API key config error: %s", e)
         except Exception:
-            logger.debug("Could not retrieve app-level API key", exc_info=True)
+            logger.error("Unexpected error fetching app-level API key", exc_info=True)
+            raise
 
         return None

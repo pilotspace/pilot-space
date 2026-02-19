@@ -11,7 +11,7 @@
  * @module pm-blocks/shared/AIInsightBadge
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useId } from 'react';
 import { CheckCircle, AlertTriangle, AlertOctagon, Info, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { PMBlockInsight, InsightSeverity } from '@/services/api/pm-blocks';
@@ -66,12 +66,13 @@ export interface AIInsightBadgeProps {
 // ── Tooltip ──────────────────────────────────────────────────────────────────
 
 interface InsightTooltipProps {
+  id: string;
   insight: PMBlockInsight;
   onDismiss?: (id: string) => void;
   onClose: () => void;
 }
 
-function InsightTooltip({ insight, onDismiss, onClose }: InsightTooltipProps) {
+function InsightTooltip({ id, insight, onDismiss, onClose }: InsightTooltipProps) {
   const handleDismiss = useCallback(() => {
     onDismiss?.(insight.id);
     onClose();
@@ -89,6 +90,7 @@ function InsightTooltip({ insight, onDismiss, onClose }: InsightTooltipProps) {
 
   return (
     <div
+      id={id}
       role="tooltip"
       className="absolute right-0 top-full z-50 mt-1 w-72 rounded-lg border bg-background shadow-md"
       onClick={(e) => e.stopPropagation()}
@@ -150,6 +152,7 @@ export function AIInsightBadge({
   className,
 }: AIInsightBadgeProps) {
   const [open, setOpen] = useState(false);
+  const tooltipId = useId();
 
   const severityKey: InsightSeverity | 'insufficient' =
     insufficientData || !insight ? 'insufficient' : insight.severity;
@@ -163,6 +166,7 @@ export function AIInsightBadge({
       <button
         type="button"
         aria-label={`AI insight: ${severityKey} - ${label}`}
+        aria-describedby={open ? tooltipId : undefined}
         onClick={() => setOpen((v) => !v)}
         onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}
         className={cn(
@@ -175,7 +179,12 @@ export function AIInsightBadge({
       </button>
 
       {open && insight && !insufficientData && (
-        <InsightTooltip insight={insight} onDismiss={onDismiss} onClose={() => setOpen(false)} />
+        <InsightTooltip
+          id={tooltipId}
+          insight={insight}
+          onDismiss={onDismiss}
+          onClose={() => setOpen(false)}
+        />
       )}
 
       {open && insufficientData && (

@@ -82,6 +82,16 @@ def upgrade() -> None:
                 AND wm.is_deleted = false
             )
         )
+        WITH CHECK (
+            EXISTS (
+                SELECT 1
+                FROM notes n
+                JOIN workspace_members wm ON wm.workspace_id = n.workspace_id
+                WHERE n.id = note_yjs_states.note_id
+                AND wm.user_id = current_setting('app.current_user_id', true)::uuid
+                AND wm.is_deleted = false
+            )
+        )
     """)
 
 

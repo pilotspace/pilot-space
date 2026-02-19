@@ -35,9 +35,10 @@ def upgrade() -> None:
         ),
     )
     # HNSW index for cosine distance — matches the existing embedding strategy
+    # NOTE: CONCURRENTLY cannot be used inside a transaction (Alembic runs in a transaction).
     op.execute(
         """
-        CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_work_intents_embedding_hnsw
+        CREATE INDEX IF NOT EXISTS ix_work_intents_embedding_hnsw
         ON work_intents
         USING hnsw (embedding vector_cosine_ops)
         WITH (m = 16, ef_construction = 64)

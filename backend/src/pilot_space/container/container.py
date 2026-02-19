@@ -47,6 +47,11 @@ from pilot_space.application.services.issue import (
     ListIssuesService,
     UpdateIssueService,
 )
+from pilot_space.application.services.memory.constitution_service import (
+    ConstitutionIngestService,
+)
+from pilot_space.application.services.memory.memory_save_service import MemorySaveService
+from pilot_space.application.services.memory.memory_search_service import MemorySearchService
 from pilot_space.application.services.note import (
     CreateNoteFromChatService,
     CreateNoteService,
@@ -67,6 +72,7 @@ from pilot_space.application.services.onboarding import (
     GetOnboardingService,
     UpdateOnboardingService,
 )
+from pilot_space.application.services.pm_block_insight_service import PMBlockInsightService
 from pilot_space.application.services.role_skill import (
     CreateRoleSkillService,
     DeleteRoleSkillService,
@@ -77,6 +83,12 @@ from pilot_space.application.services.role_skill import (
 from pilot_space.application.services.skill.concurrency_manager import SkillConcurrencyManager
 from pilot_space.application.services.skill.skill_execution_service import SkillExecutionService
 from pilot_space.application.services.task_service import TaskService
+from pilot_space.application.services.version.diff_service import VersionDiffService
+from pilot_space.application.services.version.digest_service import VersionDigestService
+from pilot_space.application.services.version.impact_service import ImpactAnalysisService
+from pilot_space.application.services.version.restore_service import VersionRestoreService
+from pilot_space.application.services.version.retention_service import RetentionService
+from pilot_space.application.services.version.snapshot_service import VersionSnapshotService
 from pilot_space.application.services.workspace import WorkspaceService
 from pilot_space.application.services.workspace_invitation import (
     WorkspaceInvitationService,
@@ -556,6 +568,73 @@ class Container(InfraContainer):
         skill_exec_repo=InfraContainer.skill_execution_repository,
         intent_repo=InfraContainer.work_intent_repository,
         concurrency_manager=skill_concurrency_manager,
+    )
+
+    # Note Version Services (Feature 017)
+    version_snapshot_service = providers.Factory(
+        VersionSnapshotService,
+        session=providers.Callable(get_current_session),
+        note_repo=InfraContainer.note_repository,
+        version_repo=InfraContainer.note_version_repository,
+    )
+
+    version_diff_service = providers.Factory(
+        VersionDiffService,
+        session=providers.Callable(get_current_session),
+        version_repo=InfraContainer.note_version_repository,
+    )
+
+    version_digest_service = providers.Factory(
+        VersionDigestService,
+        session=providers.Callable(get_current_session),
+        version_repo=InfraContainer.note_version_repository,
+    )
+
+    version_restore_service = providers.Factory(
+        VersionRestoreService,
+        session=providers.Callable(get_current_session),
+        note_repo=InfraContainer.note_repository,
+        version_repo=InfraContainer.note_version_repository,
+    )
+
+    version_retention_service = providers.Factory(
+        RetentionService,
+        session=providers.Callable(get_current_session),
+        version_repo=InfraContainer.note_version_repository,
+    )
+
+    version_impact_service = providers.Factory(
+        ImpactAnalysisService,
+        session=providers.Callable(get_current_session),
+        version_repo=InfraContainer.note_version_repository,
+    )
+
+    # PM Block Insight Service (Feature 016)
+    pm_block_insight_service = providers.Factory(
+        PMBlockInsightService,
+        session=providers.Callable(get_current_session),
+        repository=InfraContainer.pm_block_insight_repository,
+    )
+
+    # Memory Services (Feature 015)
+    memory_search_service = providers.Factory(
+        MemorySearchService,
+        session=providers.Callable(get_current_session),
+        memory_repository=InfraContainer.memory_entry_repository,
+    )
+
+    memory_save_service = providers.Factory(
+        MemorySaveService,
+        session=providers.Callable(get_current_session),
+        memory_repository=InfraContainer.memory_entry_repository,
+        queue=InfraContainer.queue_client,
+    )
+
+    constitution_service = providers.Factory(
+        ConstitutionIngestService,
+        session=providers.Callable(get_current_session),
+        constitution_repository=InfraContainer.constitution_rule_repository,
+        queue=InfraContainer.queue_client,
     )
 
 

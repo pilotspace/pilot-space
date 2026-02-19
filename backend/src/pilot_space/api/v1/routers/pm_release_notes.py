@@ -11,11 +11,11 @@ from datetime import UTC, datetime
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Path, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from pydantic import BaseModel
 
 from pilot_space.api.v1.dependencies import WorkspaceRepositoryDep
-from pilot_space.dependencies.auth import CurrentUserId, SessionDep
+from pilot_space.dependencies.auth import CurrentUserId, SessionDep, require_workspace_member
 from pilot_space.infrastructure.database.repositories.pm_block_queries_repository import (
     PMBlockQueriesRepository,
 )
@@ -80,6 +80,7 @@ async def get_release_notes(
     workspace_repo: WorkspaceRepositoryDep,
     cycle_id: Annotated[str, Query(description="Cycle UUID")],
     current_user_id: CurrentUserId,
+    _: Annotated[UUID, Depends(require_workspace_member)],
 ) -> ReleaseNotesResponse:
     """Return completed issues classified into release note categories (FR-054)."""
     cycle_uuid = UUID(cycle_id)

@@ -26,7 +26,7 @@ from pilot_space.api.v1.schemas.block_ownership import (
     BlockOwnerResponse,
     BlockRejectResponse,
 )
-from pilot_space.dependencies.auth import SessionDep, SyncedUserId
+from pilot_space.dependencies.auth import SessionDep, WorkspaceMemberId
 from pilot_space.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
@@ -105,7 +105,7 @@ async def get_block_owner(
     block_id: BlockIdPath,
     session: SessionDep,
     workspace_repo: WorkspaceRepositoryDep,
-    current_user: SyncedUserId,
+    current_user: WorkspaceMemberId,
 ) -> BlockOwnerResponse:
     """Get the current owner of a specific block.
 
@@ -153,7 +153,7 @@ async def approve_block(
     request: BlockApproveRequest,
     session: SessionDep,
     workspace_repo: WorkspaceRepositoryDep,
-    current_user: SyncedUserId,
+    current_user: WorkspaceMemberId,
 ) -> BlockApproveResponse:
     """Approve an AI-owned block.
 
@@ -226,7 +226,7 @@ async def reject_block(
     block_id: BlockIdPath,
     session: SessionDep,
     workspace_repo: WorkspaceRepositoryDep,
-    current_user: SyncedUserId,
+    current_user: WorkspaceMemberId,
 ) -> BlockRejectResponse:
     """Reject an AI-owned block.
 

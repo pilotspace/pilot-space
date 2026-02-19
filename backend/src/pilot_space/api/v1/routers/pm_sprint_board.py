@@ -12,11 +12,11 @@ from collections import defaultdict
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Path, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from pydantic import BaseModel, Field
 
 from pilot_space.api.v1.dependencies import WorkspaceRepositoryDep
-from pilot_space.dependencies.auth import CurrentUserId, SessionDep
+from pilot_space.dependencies.auth import CurrentUserId, SessionDep, require_workspace_member
 from pilot_space.infrastructure.database.repositories.pm_block_queries_repository import (
     PMBlockQueriesRepository,
 )
@@ -87,6 +87,7 @@ async def get_sprint_board(
     workspace_repo: WorkspaceRepositoryDep,
     cycle_id: Annotated[str, Query(description="Cycle UUID")],
     current_user_id: CurrentUserId,
+    _: Annotated[UUID, Depends(require_workspace_member)],
 ) -> SprintBoardResponse:
     """Return issues for a cycle grouped into 6 state lanes (FR-049)."""
     workspace = await workspace_repo.get_by_id(workspace_id)
@@ -161,6 +162,7 @@ async def propose_state_transition(
     body: ProposeTransitionRequest,
     session: SessionDep,
     current_user_id: CurrentUserId,
+    _: Annotated[UUID, Depends(require_workspace_member)],
 ) -> ProposeTransitionResponse:
     """Create an approval request for an AI-proposed state transition (FR-050).
 

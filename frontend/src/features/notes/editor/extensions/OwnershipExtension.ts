@@ -264,7 +264,7 @@ export const OwnershipExtension = Extension.create<OwnershipOptions, OwnershipSt
                   'data-owner': owner,
                   'data-skill': skill,
                   'aria-label': buildAriaLabel(owner),
-                  role: 'img',
+                  role: 'region',
                 })
               );
             });

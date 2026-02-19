@@ -44,8 +44,7 @@ def upgrade() -> None:
                 updated_at = NOW()
             WHERE
                 approval_status = 'pending_approval'
-                AND created_at < NOW() - INTERVAL '24 hours'
-                AND is_deleted = false;
+                AND created_at < NOW() - INTERVAL '24 hours';
 
             GET DIAGNOSTICS expired_count = ROW_COUNT;
 

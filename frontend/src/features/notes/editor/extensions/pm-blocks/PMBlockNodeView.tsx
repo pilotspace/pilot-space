@@ -21,6 +21,7 @@ import {
 } from 'react';
 import { NodeViewWrapper, type NodeViewProps } from '@tiptap/react';
 import { AlertTriangle, RotateCcw, Code } from 'lucide-react';
+import { toast } from 'sonner';
 import { pmBlockStyles } from './pm-block-styles';
 import type { PMBlockType } from './PMBlockExtension';
 import { useBlockEditGuard } from './shared/useBlockEditGuard';
@@ -207,12 +208,10 @@ export function PMBlockNodeView({ node, updateAttributes, editor }: NodeViewProp
   );
 
   const onCreateIssue = useCallback(
-    (context: { blockType: PMBlockType; data: Record<string, unknown> }) => {
-      document.dispatchEvent(
-        new CustomEvent('pm-block:create-issue', { detail: { ...context, blockId } })
-      );
+    (_context: { blockType: PMBlockType; data: Record<string, unknown> }) => {
+      toast.info('Issue creation from PM blocks coming soon');
     },
-    [blockId]
+    []
   );
 
   const Renderer = RENDERER_MAP[blockType];

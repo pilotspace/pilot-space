@@ -100,6 +100,9 @@ def upgrade() -> None:
             server_default=sa.text("now()"),
             nullable=False,
         ),
+        # BaseModel soft-delete columns (D-3 fix)
+        sa.Column("is_deleted", sa.Boolean(), server_default=sa.text("false"), nullable=False),
+        sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
     )
 
     # 4. Indexes

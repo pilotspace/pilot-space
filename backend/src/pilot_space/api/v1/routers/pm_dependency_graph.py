@@ -12,11 +12,11 @@ from itertools import pairwise
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Path, Query
+from fastapi import APIRouter, Depends, Path, Query
 from pydantic import BaseModel
 
 from pilot_space.api.v1.dependencies import WorkspaceRepositoryDep
-from pilot_space.dependencies.auth import CurrentUserId, SessionDep
+from pilot_space.dependencies.auth import CurrentUserId, SessionDep, require_workspace_member
 from pilot_space.infrastructure.database.repositories.pm_block_queries_repository import (
     PMBlockQueriesRepository,
 )
@@ -133,6 +133,7 @@ async def get_dependency_map(
     workspace_repo: WorkspaceRepositoryDep,
     cycle_id: Annotated[str, Query(description="Cycle UUID")],
     current_user_id: CurrentUserId,
+    _: Annotated[UUID, Depends(require_workspace_member)],
 ) -> DependencyMapResponse:
     """Return DAG nodes, edges, critical path, and circular dep detection (FR-051)."""
     cycle_uuid = UUID(cycle_id)

@@ -121,6 +121,7 @@ class MemoryDLQJobHandler:
                     entry.id,
                     entry.attempts,
                 )
+                await self._session.commit()
                 continue
 
             # Re-enqueue embedding job
@@ -132,14 +133,14 @@ class MemoryDLQJobHandler:
                 entry.attempts = (entry.attempts or 0) + 1  # type: ignore[operator]
                 entry.next_retry_at = _next_retry_at(entry.attempts)  # type: ignore[assignment]
                 retried += 1
+                await self._session.commit()
             except Exception:
                 logger.error(
                     "MemoryDLQJobHandler: failed to re-enqueue entry %s",
                     entry.id,
                     exc_info=True,
                 )
-
-        await self._session.commit()
+                await self._session.rollback()
 
         # Detect orphaned skill executions
         orphans = await self._detect_orphans(workspace_id)

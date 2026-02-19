@@ -521,9 +521,12 @@ _INJECTED_RULES = ("issues.md", "notes.md", "pm_blocks.md")
 # Max characters per rule file to prevent prompt bloat
 _MAX_RULE_CHARS = 4000
 
+# Module-level template cache; populated on first load per role_type
+_template_cache: dict[str, str] = {}
+
 
 async def _load_role_template(role_type: str) -> str | None:
-    """Load a role template markdown file by role type.
+    """Load a role template markdown file by role type (cached after first read).
 
     Args:
         role_type: Role type string (e.g., 'developer', 'architect').
@@ -531,6 +534,9 @@ async def _load_role_template(role_type: str) -> str | None:
     Returns:
         Template content (body only, YAML frontmatter stripped) or None.
     """
+    if role_type in _template_cache:
+        return _template_cache[role_type]
+
     template_path = _ROLE_TEMPLATES_DIR / f"{role_type}.md"
     if not template_path.is_file():
         logger.debug("Role template not found: %s", template_path)
@@ -544,6 +550,7 @@ async def _load_role_template(role_type: str) -> str | None:
         if end_idx != -1:
             content = content[end_idx + 3 :].strip()
 
+    _template_cache[role_type] = content
     return content
 
 

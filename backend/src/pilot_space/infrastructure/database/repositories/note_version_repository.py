@@ -209,20 +209,20 @@ class NoteVersionRepository(BaseRepository[NoteVersion]):
             )
             .order_by(desc(NoteVersion.created_at))
         )
-        # Sort descending by created_at for efficient greedy pairing
-        ai_befores = sorted(
+        # Two-pointer merge: O(N log N) sort + O(N) scan instead of O(N²) nested loop
+        ai_befores_sorted = sorted(
             all_ai_before_result.scalars().all(),
             key=lambda v: v.created_at,
-            reverse=True,
         )
+        timestamps_sorted = sorted(ai_after_timestamps)
 
-        # For each ai_after timestamp, pick the most recent ai_before before it
         result_map: dict[datetime, UUID] = {}
-        for ts in ai_after_timestamps:
-            for ab in ai_befores:
-                if ab.created_at < ts:
-                    result_map[ts] = ab.id
-                    break
+        bi = len(ai_befores_sorted) - 1
+        for ts in reversed(timestamps_sorted):
+            while bi >= 0 and ai_befores_sorted[bi].created_at >= ts:
+                bi -= 1
+            if bi >= 0:
+                result_map[ts] = ai_befores_sorted[bi].id
 
         return result_map
 
