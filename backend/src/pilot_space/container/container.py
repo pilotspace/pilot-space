@@ -155,6 +155,7 @@ class Container(InfraContainer):
             "pilot_space.dependencies",
             "pilot_space.api.v1.dependencies",
             "pilot_space.api.v1.repository_deps",
+            "pilot_space.api.v1.intent_deps",
         ],
     )
 

@@ -385,7 +385,7 @@ class IntentDetectionService:
         config = selector.select_with_config(TaskType.ISSUE_EXTRACTION)
         model = config.model
 
-        prompt = _DETECTION_PROMPT.format(source=source.value, text=text[:8000])
+        prompt = _DETECTION_PROMPT.replace("{source}", source.value).replace("{text}", text[:8000])
 
         executor = ResilientExecutor()
         retry_config = RetryConfig(max_retries=2, base_delay_seconds=1.0)
