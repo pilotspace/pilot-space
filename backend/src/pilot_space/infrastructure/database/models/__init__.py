@@ -54,6 +54,11 @@ from pilot_space.infrastructure.database.models.issue import Issue, IssuePriorit
 from pilot_space.infrastructure.database.models.issue_label import issue_labels
 from pilot_space.infrastructure.database.models.issue_link import IssueLink, IssueLinkType
 from pilot_space.infrastructure.database.models.label import Label
+from pilot_space.infrastructure.database.models.memory_entry import (
+    ConstitutionRule,
+    MemoryDLQ,
+    MemoryEntry,
+)
 from pilot_space.infrastructure.database.models.module import Module, ModuleStatus
 from pilot_space.infrastructure.database.models.note import Note
 from pilot_space.infrastructure.database.models.note_annotation import (
@@ -67,6 +72,11 @@ from pilot_space.infrastructure.database.models.note_issue_link import (
 )
 from pilot_space.infrastructure.database.models.onboarding import WorkspaceOnboarding
 from pilot_space.infrastructure.database.models.project import Project
+from pilot_space.infrastructure.database.models.skill_execution import (
+    SkillApprovalRole,
+    SkillApprovalStatus,
+    SkillExecution,
+)
 from pilot_space.infrastructure.database.models.state import (
     DEFAULT_STATES,
     State,
@@ -82,6 +92,10 @@ from pilot_space.infrastructure.database.models.user import User
 from pilot_space.infrastructure.database.models.user_role_skill import (
     RoleTemplate,
     UserRoleSkill,
+)
+from pilot_space.infrastructure.database.models.work_intent import (
+    IntentArtifact,
+    WorkIntent,
 )
 from pilot_space.infrastructure.database.models.workspace import Workspace
 from pilot_space.infrastructure.database.models.workspace_api_key import WorkspaceAPIKey
@@ -112,6 +126,7 @@ __all__ = [
     "ApprovalStatus",
     "Base",
     "BaseModel",
+    "ConstitutionRule",
     "Cycle",
     "CycleStatus",
     "DigestDismissal",
@@ -124,6 +139,7 @@ __all__ = [
     "IntegrationLink",
     "IntegrationLinkType",
     "IntegrationProvider",
+    "IntentArtifact",
     "InvitationStatus",
     "Issue",
     "IssueLink",
@@ -131,6 +147,8 @@ __all__ = [
     "IssuePriority",
     "LLMProvider",
     "Label",
+    "MemoryDLQ",
+    "MemoryEntry",
     "MessageRole",
     "Module",
     "ModuleStatus",
@@ -140,6 +158,9 @@ __all__ = [
     "NoteLinkType",
     "Project",
     "RoleTemplate",
+    "SkillApprovalRole",
+    "SkillApprovalStatus",
+    "SkillExecution",
     "SlugMixin",
     "SoftDeleteMixin",
     "State",
@@ -152,6 +173,7 @@ __all__ = [
     "ToolCallStatus",
     "User",
     "UserRoleSkill",
+    "WorkIntent",
     "Workspace",
     "WorkspaceAPIKey",
     "WorkspaceDigest",

@@ -36,6 +36,9 @@ from pilot_space.infrastructure.database.repositories.ai_task_repository import 
 from pilot_space.infrastructure.database.repositories.approval_repository import (
     ApprovalRepository,
 )
+from pilot_space.infrastructure.database.repositories.constitution_repository import (
+    ConstitutionRuleRepository,
+)
 from pilot_space.infrastructure.database.repositories.cycle_repository import (
     CycleRepository,
 )
@@ -71,6 +74,9 @@ from pilot_space.infrastructure.database.repositories.issue_repository import (
 )
 from pilot_space.infrastructure.database.repositories.label_repository import (
     LabelRepository,
+)
+from pilot_space.infrastructure.database.repositories.memory_repository import (
+    MemoryEntryRepository,
 )
 from pilot_space.infrastructure.database.repositories.note_annotation_repository import (
     NoteAnnotationRepository,
@@ -265,6 +271,16 @@ class InfraContainer(containers.DeclarativeContainer):
 
     skill_execution_repository = providers.Factory(
         SkillExecutionRepository,
+        session=providers.Callable(get_current_session),
+    )
+
+    memory_entry_repository = providers.Factory(
+        MemoryEntryRepository,
+        session=providers.Callable(get_current_session),
+    )
+
+    constitution_rule_repository = providers.Factory(
+        ConstitutionRuleRepository,
         session=providers.Callable(get_current_session),
     )
 

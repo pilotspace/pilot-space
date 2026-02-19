@@ -45,6 +45,7 @@ from pilot_space.api.v1.routers.role_skills import (
     role_templates_router,
     router as role_skills_router,
 )
+from pilot_space.api.v1.routers.skill_approvals import router as skill_approvals_router
 from pilot_space.api.v1.routers.skills import router as skills_router
 from pilot_space.api.v1.routers.webhooks import router as webhooks_router
 from pilot_space.api.v1.routers.workspace_ai_settings import router as workspace_ai_settings_router
@@ -129,6 +130,7 @@ __all__ = [
     "projects_router",
     "role_skills_router",
     "role_templates_router",
+    "skill_approvals_router",
     "skills_router",
     "webhooks_router",
     "workspace_ai_settings_router",
