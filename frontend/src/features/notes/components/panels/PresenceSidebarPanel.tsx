@@ -71,7 +71,7 @@ function HumanRow({ entry }: { entry: HumanPresenceEntry }) {
         </Avatar>
         {/* Online dot */}
         <span
-          className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-background bg-green-500"
+          className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-background bg-primary"
           aria-hidden="true"
         />
       </div>

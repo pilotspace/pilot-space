@@ -17,6 +17,7 @@
  */
 'use client';
 
+import { useEffect, useRef, useState } from 'react';
 import { Bot } from 'lucide-react';
 import type { PeerState } from './useYjsProvider';
 
@@ -61,13 +62,48 @@ export function PresenceIndicator({
   const visibleHumans = humanPeers.slice(0, humanSlots);
   const overflowCount = humanPeers.length - visibleHumans.length;
 
+  // COL-C5: overflow popover state
+  const [overflowOpen, setOverflowOpen] = useState(false);
+  const overflowRef = useRef<HTMLDivElement>(null);
+  const overflowBtnRef = useRef<HTMLButtonElement>(null);
+
+  // COL-C5: close overflow popover on Escape and outside click
+  useEffect(() => {
+    if (!overflowOpen) return;
+
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        setOverflowOpen(false);
+        overflowBtnRef.current?.focus();
+      }
+    }
+
+    function onPointerDown(e: PointerEvent) {
+      if (
+        overflowRef.current &&
+        !overflowRef.current.contains(e.target as Node) &&
+        !overflowBtnRef.current?.contains(e.target as Node)
+      ) {
+        setOverflowOpen(false);
+      }
+    }
+
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('pointerdown', onPointerDown);
+    };
+  }, [overflowOpen]);
+
   if (filtered.length === 0) return null;
 
   const allNames = filtered.map((p) => p.name).join(', ');
+  const hiddenPeers = humanPeers.slice(humanSlots);
 
   return (
     <div
-      className={`flex items-center gap-0.5 ${className}`}
+      className={`relative flex items-center gap-0.5 ${className}`}
       aria-label={`${filtered.length} people editing: ${allNames}`}
       role="group"
     >
@@ -91,18 +127,40 @@ export function PresenceIndicator({
         </button>
       ))}
 
-      {/* Overflow badge */}
+      {/* COL-C5: Overflow badge — converted to button with inline popover */}
       {overflowCount > 0 && (
-        <span
-          className="-ml-1 flex h-7 w-7 items-center justify-center rounded-full bg-[var(--muted)] ring-2 ring-white text-[10px] font-semibold text-[var(--muted-foreground)] select-none"
-          aria-label={`${overflowCount} more people editing`}
-          title={humanPeers
-            .slice(humanSlots)
-            .map((p) => p.name)
-            .join(', ')}
-        >
-          +{overflowCount}
-        </span>
+        <div className="relative -ml-1">
+          <button
+            ref={overflowBtnRef}
+            type="button"
+            tabIndex={0}
+            aria-expanded={overflowOpen}
+            aria-haspopup="true"
+            aria-label={`${overflowCount} more people editing — click to see names`}
+            title={hiddenPeers.map((p) => p.name).join(', ')}
+            onClick={() => setOverflowOpen((v) => !v)}
+            className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--muted)] ring-2 ring-white text-[10px] font-semibold text-[var(--muted-foreground)] select-none focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:ring-offset-1"
+          >
+            +{overflowCount}
+          </button>
+
+          {overflowOpen && (
+            <div
+              ref={overflowRef}
+              role="tooltip"
+              className="absolute top-full left-0 z-50 mt-1 min-w-[140px] rounded-lg border border-border bg-background px-3 py-2 shadow-lg text-xs text-foreground"
+            >
+              <p className="mb-1 font-medium text-muted-foreground">Also editing:</p>
+              <ul className="space-y-0.5">
+                {hiddenPeers.map((p) => (
+                  <li key={p.id} className="truncate">
+                    {p.name}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
       )}
 
       {/* AI presence slots */}

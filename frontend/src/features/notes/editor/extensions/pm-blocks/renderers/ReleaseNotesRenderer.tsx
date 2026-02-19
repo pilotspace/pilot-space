@@ -153,6 +153,7 @@ export function ReleaseNotesRenderer({ data: rawData, readOnly }: PMRendererProp
     data: notesData,
     isLoading,
     isError,
+    isRefetching,
     refetch,
   } = useQuery({
     queryKey: QUERY_KEYS.notes(workspaceId, cycleId),
@@ -260,9 +261,10 @@ export function ReleaseNotesRenderer({ data: rawData, readOnly }: PMRendererProp
             type="button"
             className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
             onClick={() => refetch()}
+            disabled={isRefetching}
             aria-label="Refresh release notes"
           >
-            <RefreshCw className="size-3.5" />
+            <RefreshCw className={cn('size-3.5', isRefetching && 'animate-spin')} />
           </button>
         </div>
       </div>
@@ -297,7 +299,7 @@ export function ReleaseNotesRenderer({ data: rawData, readOnly }: PMRendererProp
               )}
             </p>
             {/* FR-055: filter to show only human-edited entries */}
-            {humanEditedCount > 0 && !readOnly && (
+            {humanEditedCount > 0 && (
               <button
                 type="button"
                 className={cn(

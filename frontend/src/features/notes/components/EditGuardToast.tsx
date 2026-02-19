@@ -51,7 +51,7 @@ export function showEditGuardToast(blockId: string, owner: BlockOwner): void {
       </div>
     ),
     {
-      duration: 3000,
+      duration: 6000,
       position: 'bottom-center',
     }
   );

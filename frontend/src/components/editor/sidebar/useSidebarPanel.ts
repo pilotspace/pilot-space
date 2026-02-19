@@ -13,14 +13,17 @@ export interface SidebarPanelState {
 const DEFAULT_WIDTH = 320;
 const MIN_WIDTH = 240;
 const MAX_WIDTH = 480;
+const KEYBOARD_RESIZE_STEP = 16;
 
 export interface UseSidebarPanelReturn {
   isOpen: boolean;
   activePanel: SidebarPanelId | null;
   width: number;
-  openSidebar: (panel: SidebarPanelId) => void;
+  openSidebar: (panel: SidebarPanelId, triggerEl?: HTMLElement | null) => void;
   closeSidebar: () => void;
   setWidth: (width: number) => void;
+  /** Attach to the drag handle for keyboard resize (COL-C1). */
+  dragHandleKeyDown: (e: React.KeyboardEvent) => void;
 }
 
 export function useSidebarPanel(): UseSidebarPanelReturn {
@@ -30,18 +33,41 @@ export function useSidebarPanel(): UseSidebarPanelReturn {
     width: DEFAULT_WIDTH,
   });
 
-  const openSidebar = useCallback((panel: SidebarPanelId) => {
+  // COL-C2: store the element that triggered open so focus can return on close
+  const triggerElementRef = useRef<HTMLElement | null>(null);
+
+  const openSidebar = useCallback((panel: SidebarPanelId, triggerEl?: HTMLElement | null) => {
+    if (triggerEl !== undefined) {
+      triggerElementRef.current = triggerEl;
+    }
     setState((prev) => ({ ...prev, isOpen: true, activePanel: panel }));
   }, []);
 
   const closeSidebar = useCallback(() => {
     setState((prev) => ({ ...prev, isOpen: false, activePanel: null }));
+    // COL-C2: return focus to the element that opened the sidebar
+    triggerElementRef.current?.focus();
+    triggerElementRef.current = null;
   }, []);
 
   const setWidth = useCallback((width: number) => {
     const clamped = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, width));
     setState((prev) => ({ ...prev, width: clamped }));
   }, []);
+
+  // COL-C1: keyboard resize — ArrowLeft/Right on drag handle adjust width ±16px
+  const dragHandleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        setWidth(state.width - KEYBOARD_RESIZE_STEP);
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        setWidth(state.width + KEYBOARD_RESIZE_STEP);
+      }
+    },
+    [state.width, setWidth]
+  );
 
   // Close on Escape key
   useEffect(() => {
@@ -64,12 +90,14 @@ export function useSidebarPanel(): UseSidebarPanelReturn {
     openSidebar,
     closeSidebar,
     setWidth,
+    dragHandleKeyDown,
   };
 }
 
 export const SIDEBAR_DEFAULTS = { DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH };
 
 export type { UseSidebarPanelReturn as SidebarPanelControls };
+export { KEYBOARD_RESIZE_STEP };
 
 // Drag-resize hook extracted for testability
 export function useSidebarDrag(

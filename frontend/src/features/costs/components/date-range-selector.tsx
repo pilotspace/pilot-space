@@ -1,10 +1,10 @@
 'use client';
 
 /**
- * Date Range Selector - Preset and custom date range selection.
+ * Date Range Selector - Preset date range selection.
  *
  * T206: Provides preset ranges (Today, 7d, 30d, 90d, This Month)
- * and custom date picker for flexible cost analytics filtering.
+ * for cost analytics filtering.
  *
  * @example
  * ```tsx

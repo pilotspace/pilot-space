@@ -5,6 +5,7 @@
  *
  * - Shown at 1000+ blocks
  * - Dismissable per session (sessionStorage key: 'pilot-large-note-dismissed-{noteId}')
+ * - Stores dismissed-at block count; re-shows if block count grows by 1.5x (COL-M9)
  * - Yellow warning style, non-blocking
  */
 
@@ -14,9 +15,23 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 const BLOCK_THRESHOLD = 1000;
+/** Re-show the warning once block count reaches dismissedAt * REGROWTH_FACTOR */
+const REGROWTH_FACTOR = 1.5;
 
 function getDismissKey(noteId: string): string {
   return `pilot-large-note-dismissed-${noteId}`;
+}
+
+/**
+ * Returns the block count at dismiss time stored in sessionStorage,
+ * or null if not dismissed.
+ */
+function readDismissedCount(noteId: string): number | null {
+  if (typeof sessionStorage === 'undefined') return null;
+  const raw = sessionStorage.getItem(getDismissKey(noteId));
+  if (raw === null) return null;
+  const parsed = parseInt(raw, 10);
+  return isNaN(parsed) ? null : parsed;
 }
 
 export interface LargeNoteWarningProps {
@@ -26,18 +41,22 @@ export interface LargeNoteWarningProps {
 }
 
 export function LargeNoteWarning({ noteId, blockCount, className }: LargeNoteWarningProps) {
-  const [dismissed, setDismissed] = useState(() => {
-    // Read sessionStorage lazily during initial render (client-only)
-    if (typeof sessionStorage === 'undefined') return false;
-    return sessionStorage.getItem(getDismissKey(noteId)) === '1';
+  const [dismissedAt, setDismissedAt] = useState<number | null>(() => {
+    return readDismissedCount(noteId);
   });
 
   const dismiss = useCallback(() => {
-    sessionStorage.setItem(getDismissKey(noteId), '1');
-    setDismissed(true);
-  }, [noteId]);
+    sessionStorage.setItem(getDismissKey(noteId), String(blockCount));
+    setDismissedAt(blockCount);
+  }, [noteId, blockCount]);
 
-  if (dismissed || blockCount < BLOCK_THRESHOLD) {
+  // Below threshold — never show
+  if (blockCount < BLOCK_THRESHOLD) {
+    return null;
+  }
+
+  // Dismissed previously: hide unless block count has grown by the regrowth factor
+  if (dismissedAt !== null && blockCount < dismissedAt * REGROWTH_FACTOR) {
     return null;
   }
 

@@ -26,12 +26,9 @@ interface SkillProgressCardProps {
 function StatusBadge({ status }: { status: WorkIntentState['status'] }) {
   if (status === 'executing') {
     return (
-      <Badge
-        variant="secondary"
-        className="bg-[#6B8FAD]/15 text-[#6B8FAD] border-0 gap-1.5 text-xs font-medium"
-      >
+      <Badge variant="secondary" className="bg-ai/15 text-ai border-0 gap-1.5 text-xs font-medium">
         <span
-          className="h-1.5 w-1.5 rounded-full bg-[#6B8FAD] animate-pulse inline-block"
+          className="h-1.5 w-1.5 rounded-full bg-ai animate-pulse inline-block"
           aria-hidden="true"
         />
         Running…
@@ -123,7 +120,7 @@ export const SkillProgressCard = memo<SkillProgressCardProps>(function SkillProg
   ) : isFailed ? (
     <AlertTriangle className="h-4 w-4 text-destructive" aria-hidden="true" />
   ) : (
-    <Cpu className="h-4 w-4 text-[#6B8FAD]" aria-hidden="true" />
+    <Cpu className="h-4 w-4 text-ai" aria-hidden="true" />
   );
 
   return (
@@ -213,7 +210,7 @@ export const SkillProgressCard = memo<SkillProgressCardProps>(function SkillProg
             size="sm"
             variant="ghost"
             onClick={handleRevise}
-            className="gap-1.5 text-xs text-[#6B8FAD] hover:text-[#6B8FAD]"
+            className="gap-1.5 text-xs text-ai hover:text-ai/80"
           >
             <RefreshCw className="h-3 w-3" aria-hidden="true" />
             Revise

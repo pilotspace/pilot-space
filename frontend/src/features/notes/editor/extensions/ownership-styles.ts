@@ -15,8 +15,12 @@ export const ownershipStyles = `
   border-left: 3px solid var(--ai, #6B8FAD);
   background-color: color-mix(in srgb, var(--ai, #6B8FAD) 8%, transparent);
   padding-left: 0.75rem;
+  /* AI-M6: reserve space on the right for the skill label */
+  padding-right: 5rem;
   margin-left: 0;
   border-radius: 0 6px 6px 0;
+  /* AI-C2: indicate non-editable state */
+  cursor: not-allowed;
 }
 
 /* Dark mode: slightly more visible background */

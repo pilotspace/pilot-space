@@ -35,8 +35,8 @@ import type {
 
 const LANE_COLORS: Record<string, string> = {
   backlog: 'bg-muted/40',
-  todo: 'bg-[#5B8FC9]/8',
-  in_progress: 'bg-[#D9853F]/8',
+  todo: 'bg-ai/8',
+  in_progress: 'bg-[var(--warning)]/8',
   in_review: 'bg-primary/8',
   done: 'bg-primary/12',
   cancelled: 'bg-muted/20',
@@ -44,8 +44,8 @@ const LANE_COLORS: Record<string, string> = {
 
 const LANE_LABEL_COLORS: Record<string, string> = {
   backlog: 'text-muted-foreground',
-  todo: 'text-[#5B8FC9] dark:text-[#7DA4C4]',
-  in_progress: 'text-[#D9853F]',
+  todo: 'text-ai',
+  in_progress: 'text-[var(--warning)]',
   in_review: 'text-primary',
   done: 'text-primary',
   cancelled: 'text-muted-foreground/60',
@@ -343,6 +343,7 @@ export function SprintBoardRenderer({ data: rawData, readOnly }: PMRendererProps
     data: boardData,
     isLoading,
     isError,
+    isRefetching,
     refetch,
   } = useQuery({
     queryKey: boardQueryKey,
@@ -507,9 +508,10 @@ export function SprintBoardRenderer({ data: rawData, readOnly }: PMRendererProps
             type="button"
             className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors motion-reduce:transition-none"
             onClick={() => refetch()}
+            disabled={isRefetching}
             aria-label="Refresh sprint board"
           >
-            <RefreshCw className="size-3.5" />
+            <RefreshCw className={cn('size-3.5', isRefetching && 'animate-spin')} />
           </button>
         </div>
       </div>

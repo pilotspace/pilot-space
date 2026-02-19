@@ -214,7 +214,7 @@ export function ConversationSidebarPanel({
           aria-label="Conversation threads"
         >
           {filtered.map((thread) => (
-            <div key={thread.id} role="listitem">
+            <div key={thread.id} role="listitem" className="relative">
               {thread.unreadCount > 0 && !thread.resolvedAt && (
                 <Circle
                   className="h-1.5 w-1.5 text-primary fill-primary absolute left-2"

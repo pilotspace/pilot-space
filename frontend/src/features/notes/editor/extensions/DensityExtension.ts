@@ -321,12 +321,28 @@ export const DensityExtension = Extension.create<DensityOptions, DensityStorage>
 
   addProseMirrorPlugins() {
     const { storage } = this;
+    // AI-C1: capture editor reference so keydown handler can call commands
+    const getEditor = () => this.editor;
 
     return [
       new Plugin({
         key: DENSITY_PLUGIN_KEY,
 
         props: {
+          // AI-C1: keyboard handler — Enter/Space on a collapsed block expands it
+          handleDOMEvents: {
+            keydown(_view, event) {
+              if (event.key !== 'Enter' && event.key !== ' ') return false;
+              const target = event.target as HTMLElement | null;
+              if (!target) return false;
+              const blockId = target.getAttribute('data-density-block-id');
+              if (!blockId) return false;
+              event.preventDefault();
+              getEditor()?.commands.toggleBlockCollapse(blockId);
+              return true;
+            },
+          },
+
           // T-133: Focus Mode — hide all ai:-owned blocks via CSS class
           // T-129/T-130/T-131/T-132: Collapse decorations
           decorations(state) {
@@ -358,10 +374,16 @@ export const DensityExtension = Extension.create<DensityOptions, DensityStorage>
               // Collapsed state: add summary class
               if (collapsed) {
                 const summary = buildCollapseSummary(node);
+                const blockId = (node.attrs[ATTR_BLOCK_ID] as string | undefined) ?? '';
                 decos.push(
                   Decoration.node(pos, pos + node.nodeSize, {
                     class: 'density-collapsed',
                     'data-summary': summary,
+                    // AI-C1: keyboard accessibility for collapsed block
+                    tabindex: '0',
+                    role: 'button',
+                    'aria-label': `Expand block: ${summary}`,
+                    'data-density-block-id': blockId,
                   })
                 );
               }

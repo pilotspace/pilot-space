@@ -14,6 +14,7 @@ import { ShieldAlert, Check, X, Loader2, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 import type { WorkIntentState } from '@/stores/ai/PilotSpaceStore';
 
 interface SkillApprovalCardProps {
@@ -98,6 +99,7 @@ export const SkillApprovalCard = memo<SkillApprovalCardProps>(function SkillAppr
       setTerminalState('approved');
     } catch {
       setTerminalState(null);
+      toast.error('Approval failed', { description: 'Please try again.' });
     }
   }, [intent.intentId, intent.approvalId, cardState, onApprove]);
 
@@ -119,6 +121,7 @@ export const SkillApprovalCard = memo<SkillApprovalCardProps>(function SkillAppr
       setTerminalState('rejected');
     } catch {
       setTerminalState('rejecting');
+      toast.error('Rejection failed', { description: 'Please try again.' });
     }
   }, [intent.intentId, intent.approvalId, reason, onReject]);
 
@@ -179,7 +182,11 @@ export const SkillApprovalCard = memo<SkillApprovalCardProps>(function SkillAppr
   // Minute-scale color thresholds per spec (GAP-01):
   // >5min → muted, 1-5min → amber, <1min → red
   const countdownColor =
-    urgent || expired ? 'text-[#D9534F]' : nearExpiry ? 'text-[#D9853F]' : 'text-muted-foreground';
+    urgent || expired
+      ? 'text-destructive'
+      : nearExpiry
+        ? 'text-[var(--warning)]'
+        : 'text-muted-foreground';
 
   return (
     <div
@@ -187,14 +194,17 @@ export const SkillApprovalCard = memo<SkillApprovalCardProps>(function SkillAppr
       aria-label={`Approval required: ${actionLabel}`}
       className={cn(
         'mx-4 my-3 rounded-[18px] border-2 bg-background p-4 shadow',
-        urgent ? 'animate-pulse border-[#D9534F]' : 'border-[#D9853F]',
+        urgent ? 'animate-pulse border-destructive' : 'border-[var(--warning)]',
         className
       )}
     >
       {/* Header */}
       <div className="flex items-center justify-between gap-2 mb-3">
         <div className="flex items-center gap-2">
-          <ShieldAlert className="h-[18px] w-[18px] text-[#D9853F] shrink-0" aria-hidden="true" />
+          <ShieldAlert
+            className="h-[18px] w-[18px] text-[var(--warning)] shrink-0"
+            aria-hidden="true"
+          />
           <span className="text-sm font-semibold text-foreground">Approval Required</span>
         </div>
         <span

@@ -28,6 +28,7 @@ import { toast } from 'sonner';
 interface IntentMessageRendererProps {
   store: PilotSpaceStore;
   onNavigateToArtifact?: (id: string, type: string) => void;
+  onPrefillInput?: (text: string) => void;
 }
 
 /**
@@ -35,7 +36,7 @@ interface IntentMessageRendererProps {
  * Called once per ChatView render — renders all intent cards in intent insertion order.
  */
 export const IntentMessageRenderer = observer<IntentMessageRendererProps>(
-  function IntentMessageRenderer({ store, onNavigateToArtifact }) {
+  function IntentMessageRenderer({ store, onNavigateToArtifact, onPrefillInput }) {
     const handleConfirm = useCallback(
       async (intentId: string) => {
         if (!store.workspaceId) return;
@@ -156,14 +157,14 @@ export const IntentMessageRenderer = observer<IntentMessageRendererProps>(
 
     const handleRevise = useCallback(
       (intentId: string) => {
-        // Start a new intent cycle: clear the current intent and prompt user
+        // Start a new intent cycle: clear the current intent and pre-fill input
         const intent = store.intents.get(intentId);
         if (intent) {
           store.updateIntentStatus(intentId, 'rejected');
-          // Optionally pre-fill chat input — we just remove the card
+          onPrefillInput?.(intent.what);
         }
       },
-      [store]
+      [store, onPrefillInput]
     );
 
     const handleDismissCard = useCallback(
@@ -187,6 +188,7 @@ export const IntentMessageRenderer = observer<IntentMessageRendererProps>(
             onRevise: handleRevise,
             onDismissCard: handleDismissCard,
             onNavigateToArtifact,
+            onPrefillInput,
           })
         )}
       </>
@@ -206,6 +208,7 @@ interface Handlers {
   onRevise: (id: string) => void;
   onDismissCard: (id: string) => void;
   onNavigateToArtifact?: (id: string, type: string) => void;
+  onPrefillInput?: (text: string) => void;
 }
 
 function renderIntent(intent: WorkIntentState, handlers: Handlers): React.ReactNode {

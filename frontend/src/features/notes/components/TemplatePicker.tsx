@@ -182,7 +182,7 @@ export function TemplatePicker({ workspaceId, isAdmin, onConfirm, onClose }: Tem
   const dialogRef = useRef<HTMLDivElement>(null);
 
   // Fetch workspace templates (system + custom)
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['templates', workspaceId],
     queryFn: () => templatesApi.list(workspaceId),
     staleTime: 5 * 60_000,
@@ -356,7 +356,16 @@ export function TemplatePicker({ workspaceId, isAdmin, onConfirm, onClose }: Tem
 
           {/* Error state */}
           {isError && (
-            <p className="text-xs text-destructive text-center py-2">Failed to load templates.</p>
+            <div className="flex items-center justify-center gap-2 py-2">
+              <p className="text-xs text-destructive">Failed to load templates.</p>
+              <button
+                type="button"
+                className="text-xs text-primary underline"
+                onClick={() => void refetch()}
+              >
+                Retry
+              </button>
+            </div>
           )}
 
           {/* SDLC Templates */}

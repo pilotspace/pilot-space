@@ -89,15 +89,15 @@ export const ConversationBlock = memo<ConversationBlockProps>(function Conversat
       aria-label="AI clarification question"
       className={cn(
         'mx-4 my-3 rounded-[14px] border bg-background p-4 animate-fade-up',
-        !isAnswered && 'border-l-[3px] border-l-[#6B8FAD]',
+        !isAnswered && 'border-l-[3px] border-l-ai',
         isAnswered && 'border-border',
         className
       )}
     >
       {/* Header */}
       <div className="flex items-center gap-2 mb-2">
-        <MessageCircle className="h-4 w-4 text-[#6B8FAD] shrink-0" aria-hidden="true" />
-        <span className="text-sm font-medium text-[#6B8FAD]">AI Question</span>
+        <MessageCircle className="h-4 w-4 text-ai shrink-0" aria-hidden="true" />
+        <span className="text-sm font-medium text-ai">AI Question</span>
       </div>
 
       {/* Question text */}

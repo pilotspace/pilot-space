@@ -105,7 +105,7 @@ export const VersionPanel = observer(function VersionPanel({
   if (store.view === 'diff') {
     if (!diffV1 || !diffV2) {
       return (
-        <div className="flex items-center justify-center h-full">
+        <div className="flex items-center justify-center h-full" role="status" aria-live="polite">
           <p className="text-xs text-muted-foreground">Loading versions…</p>
         </div>
       );
@@ -128,7 +128,7 @@ export const VersionPanel = observer(function VersionPanel({
   if (store.view === 'restore') {
     if (!restoreVersion || currentVersionNumber === undefined) {
       return (
-        <div className="flex items-center justify-center h-full">
+        <div className="flex items-center justify-center h-full" role="status" aria-live="polite">
           <p className="text-xs text-muted-foreground">Loading version…</p>
         </div>
       );

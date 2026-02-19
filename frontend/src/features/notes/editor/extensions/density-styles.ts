@@ -62,7 +62,8 @@ export const DENSITY_STYLES = `
   top: 0;
   z-index: 10;
   padding: 2px 8px;
-  font-size: 0.625rem;
+  /* AI-L6: corrected font size from 0.625rem (10px) to 0.6875rem (11px) */
+  font-size: 0.6875rem;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -70,6 +71,19 @@ export const DENSITY_STYLES = `
   background: var(--ai-muted, rgba(107,143,173,0.08));
   border-bottom: 1px solid var(--ai-border, rgba(107,143,173,0.2));
   text-align: center;
+}
+
+/* AI-M5: visually-hidden live region for Focus Mode announcements */
+.density-focus-mode-announcement {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
 }
 ` as const;
 
