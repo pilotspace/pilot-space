@@ -22,17 +22,21 @@ from pilot_space.ai.agents.pilotspace_agent_helpers import (
     has_skill_files,
     transform_sdk_message as transform_sdk_message_helper,
 )
+from pilot_space.ai.agents.pilotspace_intent_pipeline import (
+    PILOTSPACE_SYSTEM_PROMPT_BASE,
+    ConfirmationBus,
+    recall_workspace_context,
+    run_intent_pipeline_step,
+)
 from pilot_space.ai.agents.pilotspace_stream_utils import (
     build_dynamic_system_prompt,
     build_mcp_servers,
-    build_structured_content,
     capture_content_from_sse,
     classify_effort,
     detect_skill_from_message,
     estimate_tokens,
-    extract_question_data_from_blocks,
-    extract_tool_calls_from_blocks,
     merge_sdk_and_queue,
+    save_session_messages,
 )
 from pilot_space.ai.agents.role_skill_materializer import materialize_role_skills
 from pilot_space.ai.agents.sse_delta_buffer import DeltaBuffer
@@ -49,6 +53,9 @@ if TYPE_CHECKING:
     from pilot_space.ai.sdk.permission_handler import PermissionHandler
     from pilot_space.ai.sdk.session_handler import SessionHandler
     from pilot_space.ai.tools.mcp_server import ToolRegistry
+    from pilot_space.application.services.intent.detection_service import (
+        IntentDetectionService,
+    )
 
 
 logger = get_logger(__name__)
@@ -83,57 +90,7 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
     AGENT_NAME = "pilotspace_agent"
     DEFAULT_MODEL_TIER: ClassVar[ModelTier] = ModelTier.SONNET
 
-    SYSTEM_PROMPT_BASE: ClassVar[str] = (
-        "You are PilotSpace AI, an embedded assistant in a Note-First SDLC platform. "
-        "You help teams capture ideas in notes, extract issues, review PRs, and manage workflows.\n\n"
-        "## Note writing vs. chat response\n"
-        "- <note_context> present + user asks to write/draft/document/add content → "
-        "use note tools, then summarize in chat.\n"
-        "- Questions, analysis, or conversation → respond in chat only.\n\n"
-        "## Batch writing (IMPORTANT)\n"
-        "For long content (>3 paragraphs), use MULTIPLE sequential tool calls with 2-4 paragraphs each "
-        "instead of one large call. First batch: `write_to_note`. Subsequent: `insert_block` with "
-        "`after_block_id` from previous batch. Break at natural boundaries. "
-        "See injected notes.md rules for details.\n\n"
-        "## Tool categories\n"
-        "**Notes** (9 tools): write_to_note, update_note_block, enhance_text, "
-        "extract_issues, create_issue_from_note, link_existing_issues, search_notes, create_note, update_note.\n"
-        "**Note content** (5 tools): search_note_content, insert_block, remove_block, remove_content, replace_content.\n"
-        "**Issues** (4 CRUD + 6 relations): get_issue, search_issues, create_issue, update_issue, "
-        "link_issue_to_note, unlink_issue_from_note, link_issues, unlink_issues, add_sub_issue, transition_issue_state.\n"
-        "**Projects** (5 tools): get_project, search_projects, create_project, update_project, update_project_settings.\n"
-        "**Comments** (4 tools): create_comment, update_comment, search_comments, get_comments.\n\n"
-        "## PM blocks\n"
-        "See injected pm_blocks.md rules for structured block types (decision, form, raci, risk, timeline, dashboard), "
-        "mermaid diagrams, smart checklists, and insert/update operations.\n\n"
-        "## Entity resolution\n"
-        "Issue/project tools accept UUID or human-readable identifiers (e.g., PILOT-123, PILOT).\n"
-        "Note blocks use ¶N references (e.g., ¶1, ¶2). Use these in block_id parameters. "
-        "Never expose raw block UUIDs to users.\n\n"
-        "## Tool selection (notes)\n"
-        "- New content at end of note → `write_to_note`\n"
-        "- New content at specific position → `insert_block` (with after_block_id/before_block_id)\n"
-        "- Replace entire block → `update_note_block` (operation=replace)\n"
-        "- Find-and-replace text within blocks → `replace_content` (supports regex)\n"
-        "- Remove a block entirely → `remove_block`\n"
-        "- Remove text within a block → `remove_content`\n\n"
-        "## Execution mode\n"
-        "Read-only tools (search, get) auto-execute. "
-        "Content creation/mutation follows workspace approval settings. "
-        "Destructive actions (remove, unlink, delete) always require approval.\n"
-        "Operations return payloads that the frontend applies via content_update events.\n\n"
-        "Subagents: pr-review, ai-context, doc-generator.\n"
-        "Return operation payloads; never mutate DB directly.\n\n"
-        "## User interaction (ask_user tool)\n"
-        "When you need user input, clarification, or a decision, use the ask_user MCP tool.\n"
-        "- questions: array (max 4 items), each with:\n"
-        "  - question: string (the question text)\n"
-        "  - header: string (short label, max 12 chars, e.g. 'Auth method')\n"
-        "  - options: array of {label: string, description: string} (2-4 options per question)\n"
-        "  - multiSelect: boolean (default false)\n"
-        "After calling ask_user, do NOT add any commentary — just end your response.\n"
-        "The user's answer will arrive as the next message in the conversation."
-    )
+    SYSTEM_PROMPT_BASE: ClassVar[str] = PILOTSPACE_SYSTEM_PROMPT_BASE
 
     SUBAGENT_MAP: ClassVar[dict[str, str]] = {
         "pr-review": "PRReviewSubagent",
@@ -152,6 +109,7 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
         space_manager: SpaceManager | None = None,
         subagents: dict[str, Any] | None = None,
         key_storage: SecureKeyStorage | None = None,
+        intent_detection_service: IntentDetectionService | None = None,
     ) -> None:
         super().__init__(
             provider_selector=provider_selector,
@@ -163,6 +121,7 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
         self._space_manager = space_manager
         self._subagents = subagents or {}
         self._key_storage = key_storage
+        self._intent_detection_service = intent_detection_service
         self._message_id_holder: dict[str, str | None] = {"_current_message_id": None}
         self._active_clients: dict[str, ClaudeSDKClient] = {}
 
@@ -220,6 +179,62 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
         answer_msg = f"[Answer to question {tool_call_id}]: {result}"
         await client.query(answer_msg, session_id=session_id)
         logger.info("[SDK/Answer] tool_call=%s session=%s", tool_call_id, session_id)
+
+    @staticmethod
+    def confirm_intent_event(
+        session_id: str,
+        *,
+        intent_id: str | None = None,
+        action: str = "confirmed",
+    ) -> bool:
+        """Signal the intent pipeline for session_id (T-018).
+
+        Called by the Intent API router after a user confirms/rejects an intent.
+        Unblocks ``wait_for_confirmation()`` in the active pipeline if present.
+
+        Args:
+            session_id: The chat session identifier.
+            intent_id: UUID of the intent that was confirmed/rejected.
+            action: "confirmed" or "rejected".
+
+        Returns:
+            True if a waiting pipeline was unblocked, False otherwise.
+        """
+        return ConfirmationBus.signal(
+            session_id,
+            intent_id=intent_id,
+            action=action,
+        )
+
+    async def _detect_and_emit_intents(
+        self,
+        input_data: ChatInput,
+        context: AgentContext,
+    ) -> list[str]:
+        """Run intent detection and return SSE strings (T-016/T-017).
+
+        Delegates to run_intent_pipeline_step; no-ops if service not injected.
+        """
+        return await run_intent_pipeline_step(
+            detection_service=self._intent_detection_service,
+            message=input_data.message,
+            workspace_id=context.workspace_id,
+            user_id=context.user_id,
+            session_id=input_data.session_id,
+        )
+
+    async def _save_session_messages(
+        self,
+        input_data: ChatInput,
+        content_blocks: dict[str, dict[str, Any]],
+    ) -> None:
+        """Persist user + assistant messages to session store (T-016)."""
+        await save_session_messages(
+            session_handler=self._session_handler,
+            session_id=input_data.session_id,
+            message=input_data.message,
+            content_blocks=content_blocks,
+        )
 
     def transform_sdk_message(
         self,
@@ -452,11 +467,24 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
 
                 self._active_clients[query_session_id] = client
 
+                # T-016/T-017: recall context (Sprint 1 stub) + detect intents
+                await recall_workspace_context(
+                    workspace_id=context.workspace_id,
+                    query=input_data.message,
+                )
+
+                intent_events = await self._detect_and_emit_intents(input_data, context)
+
                 enriched_message = build_contextual_message(
                     input_data,
                     block_ref_map=ref_map,
                 )
                 await client.query(enriched_message, session_id=query_session_id)
+
+                # Yield intent_detected events after query is dispatched
+                for intent_sse in intent_events:
+                    yield intent_sse
+                    capture_content_from_sse(intent_sse, content_blocks)
 
                 sdk_event_count = 0
                 transformed_count = 0
@@ -562,34 +590,8 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
                         except (TimeoutError, Exception) as e:
                             logger.debug("[SDK/Space] Interrupt during cleanup failed: %s", e)
 
-                    if stream_completed and self._session_handler and input_data.session_id:
-                        try:
-                            await self._session_handler.add_message(
-                                session_id=input_data.session_id,
-                                role="user",
-                                content=input_data.message,
-                            )
-                            structured_content = build_structured_content(content_blocks)
-                            if structured_content:
-                                question_data = extract_question_data_from_blocks(content_blocks)
-                                tool_calls = extract_tool_calls_from_blocks(content_blocks)
-                                await self._session_handler.add_message(
-                                    session_id=input_data.session_id,
-                                    role="assistant",
-                                    content=structured_content,
-                                    question_data=question_data,
-                                    tool_calls=tool_calls,
-                                )
-                            logger.debug(
-                                "[SDK/Space] Persisted messages to session %s (%d blocks)",
-                                input_data.session_id,
-                                len(content_blocks),
-                            )
-                        except Exception as e:
-                            logger.warning(
-                                "[SDK/Space] Failed to persist session messages: %s",
-                                e,
-                            )
+                    if stream_completed:
+                        await self._save_session_messages(input_data, content_blocks)
 
                     await client.disconnect()
 

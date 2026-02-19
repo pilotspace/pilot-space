@@ -613,3 +613,52 @@ def build_dynamic_system_prompt(
         sections.append(f"\n\n## Operational Rules\n{rules}")
 
     return "".join(sections)
+
+
+async def save_session_messages(
+    *,
+    session_handler: Any,
+    session_id: Any,
+    message: str,
+    content_blocks: dict[str, dict[str, Any]],
+) -> None:
+    """Persist user + assistant messages to session store.
+
+    Extracted from PilotSpaceAgent._stream_with_space finally block (T-016).
+
+    Args:
+        session_handler: SessionHandler instance (or None).
+        session_id: Session UUID (or None — no-ops if falsy).
+        message: Original user message content.
+        content_blocks: Accumulated content blocks from the stream.
+    """
+    if not (session_handler and session_id):
+        return
+
+    try:
+        await session_handler.add_message(
+            session_id=session_id,
+            role="user",
+            content=message,
+        )
+        structured_content = build_structured_content(content_blocks)
+        if structured_content:
+            question_data = extract_question_data_from_blocks(content_blocks)
+            tool_calls = extract_tool_calls_from_blocks(content_blocks)
+            await session_handler.add_message(
+                session_id=session_id,
+                role="assistant",
+                content=structured_content,
+                question_data=question_data,
+                tool_calls=tool_calls,
+            )
+        logger.debug(
+            "[SDK/Space] Persisted messages to session %s (%d blocks)",
+            session_id,
+            len(content_blocks),
+        )
+    except Exception as exc:
+        logger.warning(
+            "[SDK/Space] Failed to persist session messages: %s",
+            exc,
+        )
