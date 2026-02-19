@@ -125,7 +125,10 @@ export const VersionRestoreConfirm = observer(function VersionRestoreConfirm({
               variant="outline"
               size="sm"
               className="w-full h-7 text-xs gap-1.5"
-              onClick={() => window.location.reload()}
+              onClick={() => {
+                void qc.invalidateQueries({ queryKey: ['note', workspaceId, noteId] });
+                void qc.invalidateQueries({ queryKey: ['versions', workspaceId, noteId] });
+              }}
             >
               <RefreshCw className="w-3 h-3" aria-hidden />
               Reload page

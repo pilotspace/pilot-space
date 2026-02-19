@@ -74,16 +74,20 @@ export const QueueDepthIndicator = observer<QueueDepthIndicatorProps>(function Q
         </div>
       )}
 
-      {/* Max label */}
-      <span className="text-muted-foreground ml-auto tabular-nums">max {maxConcurrent}</span>
+      {/* Max label — decorative, screen readers skip it */}
+      <span className="text-muted-foreground ml-auto tabular-nums" aria-hidden="true">
+        max {maxConcurrent}
+      </span>
 
       {/* Queue full warning */}
-      {isQueueFull && (
-        <div className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
-          <AlertTriangle className="h-3 w-3" aria-hidden="true" />
-          <span>Queue full — new skills will wait</span>
-        </div>
-      )}
+      <div aria-live="assertive" role="alert">
+        {isQueueFull && (
+          <div className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
+            <AlertTriangle className="h-3 w-3" aria-hidden="true" />
+            <span>Queue full — new skills will wait</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 });

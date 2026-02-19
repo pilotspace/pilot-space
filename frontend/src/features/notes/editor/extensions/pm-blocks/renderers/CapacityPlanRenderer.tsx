@@ -108,7 +108,7 @@ function MemberRow({ member }: { member: CapacityMember }) {
             member.isOverAllocated
               ? 'text-destructive'
               : member.utilizationPct >= 85
-                ? 'text-[#D9853F]'
+                ? 'text-[var(--warning)]'
                 : 'text-foreground'
           )}
         >
@@ -183,6 +183,7 @@ export function CapacityPlanRenderer({ data: rawData }: PMRendererProps) {
     data: planData,
     isLoading,
     isError,
+    isRefetching,
     refetch,
   } = useQuery({
     queryKey: QUERY_KEYS.plan(workspaceId, cycleId),
@@ -265,9 +266,10 @@ export function CapacityPlanRenderer({ data: rawData }: PMRendererProps) {
             type="button"
             className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
             onClick={() => refetch()}
+            disabled={isRefetching}
             aria-label="Refresh capacity plan"
           >
-            <RefreshCw className="size-3.5" />
+            <RefreshCw className={cn('size-3.5', isRefetching && 'animate-spin')} />
           </button>
         </div>
       </div>

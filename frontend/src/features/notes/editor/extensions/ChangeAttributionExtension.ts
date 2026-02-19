@@ -32,8 +32,8 @@ export interface BlockAttribution {
 export interface ChangeAttributionOptions {
   /** Current authenticated user id. */
   userId: string;
-  /** Display name for the current user. */
-  userName: string;
+  /** Display name for the current user. null when unknown (AI-M9: guard against 'Unknown'). */
+  userName: string | null;
 }
 
 export interface ChangeAttributionStorage {
@@ -80,7 +80,9 @@ export const ChangeAttributionExtension = Extension.create<
   name: 'changeAttribution',
 
   addOptions(): ChangeAttributionOptions {
-    return { userId: '', userName: 'Unknown' };
+    // AI-M9: default userName is null so that attribution is skipped until
+    // a real user name is provided, avoiding spurious 'Unknown' attributions.
+    return { userId: '', userName: null };
   },
 
   addStorage(): ChangeAttributionStorage {
@@ -130,7 +132,8 @@ export const ChangeAttributionExtension = Extension.create<
         (blockId: string) =>
         ({ tr, state, dispatch }) => {
           const { userId, userName } = this.options;
-          if (!userId) return false;
+          // AI-M9: guard — skip stamp when userId or userName is not set
+          if (!userId || !userName) return false;
 
           const now = new Date().toISOString();
           let found = false;
@@ -179,7 +182,8 @@ export const ChangeAttributionExtension = Extension.create<
           if (docChangingTrs.length === 0) return null;
 
           const options = getOptions();
-          if (!options.userId) return null;
+          // AI-M9: guard — skip attribution when userId or userName is not set
+          if (!options.userId || !options.userName) return null;
 
           // Skip remote CRDT syncs (y-prosemirror tags these)
           // Skip history (undo/redo) and explicit attribution stamps
@@ -194,7 +198,8 @@ export const ChangeAttributionExtension = Extension.create<
           if (!hasUserEdit) return null;
 
           const now = new Date().toISOString();
-          const { userId, userName } = options;
+          // AI-M9: userName is guaranteed non-null here (guarded above)
+          const { userId, userName } = options as { userId: string; userName: string };
           const storage = getStorage();
 
           // Collect positions of changed blocks

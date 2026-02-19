@@ -28,9 +28,9 @@ interface IntentCardProps {
 
 /** Confidence bar color and label based on score. */
 function getConfidenceColor(confidence: number): string {
-  if (confidence >= 0.8) return '#29A386'; // primary teal
-  if (confidence >= 0.7) return '#D9853F'; // amber
-  return '#D9534F'; // warm red
+  if (confidence >= 0.8) return 'hsl(var(--primary))'; // primary teal
+  if (confidence >= 0.7) return 'var(--warning)'; // amber
+  return 'hsl(var(--destructive))'; // warm red
 }
 
 function getConfidenceLabel(confidence: number): string {
@@ -82,7 +82,7 @@ function ConfidenceBar({ confidence }: { confidence: number }) {
         />
       </div>
       {confidence < 0.7 && (
-        <p className="text-xs italic text-[var(--ai,#6B8FAD)]">
+        <p className="text-xs italic text-ai">
           AI needs clarification before proceeding with this intent.
         </p>
       )}
@@ -217,55 +217,72 @@ export const IntentCard = memo<IntentCardProps>(function IntentCard({
       role="article"
       aria-label={`Work intent: ${intent.what}`}
       className={cn(
-        'mx-4 my-3 rounded-[14px] border p-4 animate-fade-up',
+        'mx-4 my-3 rounded-[14px] border p-4 animate-fade-up flex flex-col',
         'border-[var(--color-ai-border,hsl(var(--ai)/0.3))] bg-[var(--color-ai-bg,hsl(var(--ai)/0.06))]',
-        'max-h-80 overflow-y-auto',
         className
       )}
     >
-      {/* Header */}
-      <div className="flex items-center gap-2 mb-3">
-        <Lightbulb className="h-4 w-4 text-[var(--ai,#6B8FAD)] shrink-0" aria-hidden="true" />
-        <span className="text-sm font-medium text-[var(--ai,#6B8FAD)]">Intent Detected</span>
-      </div>
-
       {isEditing ? (
         /* Edit mode */
-        <div className="space-y-3" onKeyDown={handleKeyDown}>
-          <div>
-            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">WHAT</p>
-            <Textarea
-              ref={whatRef}
-              value={editWhat}
-              onChange={(e) => setEditWhat(e.target.value)}
-              rows={2}
-              className="resize-none text-sm"
-              aria-label="Intent description"
-            />
+        <>
+          <div
+            className="max-h-64 overflow-y-auto space-y-3"
+            tabIndex={-1}
+            onKeyDown={handleKeyDown}
+          >
+            {/* Header */}
+            <div className="flex items-center gap-2 mb-3">
+              <Lightbulb className="h-4 w-4 text-ai shrink-0" aria-hidden="true" />
+              <span className="text-sm font-medium text-ai">Edit Intent</span>
+            </div>
+            <div>
+              <label
+                htmlFor="intent-edit-what"
+                className="text-xs uppercase tracking-wider text-muted-foreground mb-1 block"
+              >
+                WHAT
+              </label>
+              <Textarea
+                id="intent-edit-what"
+                ref={whatRef}
+                value={editWhat}
+                onChange={(e) => setEditWhat(e.target.value)}
+                rows={2}
+                className="resize-none text-sm"
+              />
+            </div>
+            <div>
+              <label
+                htmlFor="intent-edit-why"
+                className="text-xs uppercase tracking-wider text-muted-foreground mb-1 block"
+              >
+                WHY
+              </label>
+              <Textarea
+                id="intent-edit-why"
+                value={editWhy}
+                onChange={(e) => setEditWhy(e.target.value)}
+                rows={2}
+                className="resize-none text-sm"
+              />
+            </div>
+            <div>
+              <label
+                htmlFor="intent-edit-constraints"
+                className="text-xs uppercase tracking-wider text-muted-foreground mb-1 block"
+              >
+                CONSTRAINTS (one per line)
+              </label>
+              <Textarea
+                id="intent-edit-constraints"
+                value={editConstraints}
+                onChange={(e) => setEditConstraints(e.target.value)}
+                rows={3}
+                className="resize-none text-sm font-mono"
+              />
+            </div>
           </div>
-          <div>
-            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">WHY</p>
-            <Textarea
-              value={editWhy}
-              onChange={(e) => setEditWhy(e.target.value)}
-              rows={2}
-              className="resize-none text-sm"
-              aria-label="Intent motivation"
-            />
-          </div>
-          <div>
-            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">
-              CONSTRAINTS (one per line)
-            </p>
-            <Textarea
-              value={editConstraints}
-              onChange={(e) => setEditConstraints(e.target.value)}
-              rows={3}
-              className="resize-none text-sm font-mono"
-              aria-label="Intent constraints"
-            />
-          </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 mt-3">
             <Button
               size="sm"
               onClick={handleSaveEdit}
@@ -282,43 +299,50 @@ export const IntentCard = memo<IntentCardProps>(function IntentCard({
               Cancel
             </Button>
           </div>
-        </div>
+        </>
       ) : (
         /* Display mode */
         <>
-          <div className="space-y-3 mb-3">
-            <div>
-              <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">WHAT</p>
-              <p className="text-sm text-foreground">{intent.what}</p>
+          <div className="max-h-64 overflow-y-auto" tabIndex={-1}>
+            {/* Header */}
+            <div className="flex items-center gap-2 mb-3">
+              <Lightbulb className="h-4 w-4 text-ai shrink-0" aria-hidden="true" />
+              <span className="text-sm font-medium text-ai">Intent Detected</span>
+            </div>
+            <div className="space-y-3 mb-3">
+              <div>
+                <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">WHAT</p>
+                <p className="text-sm text-foreground">{intent.what}</p>
+              </div>
+
+              {intent.why && (
+                <div>
+                  <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">WHY</p>
+                  <p className="text-sm text-foreground">{intent.why}</p>
+                </div>
+              )}
+
+              {intent.constraints && intent.constraints.length > 0 && (
+                <div>
+                  <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">
+                    CONSTRAINTS
+                  </p>
+                  <ul className="text-sm text-muted-foreground space-y-0.5 list-disc list-inside">
+                    {intent.constraints.map((c, i) => (
+                      <li key={i}>{c}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
 
-            {intent.why && (
-              <div>
-                <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">WHY</p>
-                <p className="text-sm text-foreground">{intent.why}</p>
-              </div>
-            )}
-
-            {intent.constraints && intent.constraints.length > 0 && (
-              <div>
-                <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">
-                  CONSTRAINTS
-                </p>
-                <ul className="text-sm text-muted-foreground space-y-0.5 list-disc list-inside">
-                  {intent.constraints.map((c, i) => (
-                    <li key={i}>{c}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
+            <div className="mb-4">
+              <ConfidenceBar confidence={intent.confidence} />
+            </div>
           </div>
 
-          <div className="mb-4">
-            <ConfidenceBar confidence={intent.confidence} />
-          </div>
-
-          {/* Actions — focus order: Confirm > Edit > Dismiss */}
-          <div className="flex items-center gap-2">
+          {/* Actions — outside scroll, focus order: Confirm > Edit > Dismiss */}
+          <div className="flex items-center gap-2 mt-3">
             <Button
               size="sm"
               onClick={handleConfirm}

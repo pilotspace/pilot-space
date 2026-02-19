@@ -90,10 +90,12 @@ export function CollaborationToolbar({
         </span>
       )}
 
-      {/* Screen reader live region for collaborator count changes */}
-      <span role="status" aria-live="polite" className="sr-only">
-        {humanCount > 0 ? `${humanCount} collaborator${humanCount !== 1 ? 's' : ''} editing` : ''}
-      </span>
+      {/*
+        COL-H3: Single live region — ConnectionStatus above already owns
+        role="status" aria-live="polite" for connection-state announcements.
+        Collaborator count is conveyed via the group aria-label on this container.
+        No duplicate aria-live region here.
+      */}
     </div>
   );
 }

@@ -11,7 +11,7 @@
  * @module pm-blocks/shared/AIInsightBadge
  */
 
-import { useState, useCallback, useId } from 'react';
+import { useState, useCallback, useId, useEffect, useRef } from 'react';
 import { CheckCircle, AlertTriangle, AlertOctagon, Info, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { PMBlockInsight, InsightSeverity } from '@/services/api/pm-blocks';
@@ -73,35 +73,84 @@ interface InsightTooltipProps {
 }
 
 function InsightTooltip({ id, insight, onDismiss, onClose }: InsightTooltipProps) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+
   const handleDismiss = useCallback(() => {
     onDismiss?.(insight.id);
     onClose();
   }, [insight.id, onDismiss, onClose]);
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
+  // Focus trap + Escape key close
+  useEffect(() => {
+    const el = dialogRef.current;
+    if (!el) return;
+
+    // Focus the dialog on open
+    el.focus();
+
+    const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopPropagation();
         onClose();
+        return;
       }
-    },
-    [onClose]
-  );
+      // Focus trap
+      if (e.key === 'Tab') {
+        const focusable = el.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        if (!focusable.length) {
+          e.preventDefault();
+          return;
+        }
+        const first = focusable[0] as HTMLElement;
+        const last = focusable[focusable.length - 1] as HTMLElement;
+        if (e.shiftKey) {
+          if (document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          }
+        } else {
+          if (document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      }
+    };
+
+    el.addEventListener('keydown', handleKeyDown);
+    return () => el.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  // Click-outside close
+  useEffect(() => {
+    const handlePointerDown = (e: PointerEvent) => {
+      if (dialogRef.current && !dialogRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => document.removeEventListener('pointerdown', handlePointerDown);
+  }, [onClose]);
 
   return (
     <div
       id={id}
-      role="tooltip"
-      className="absolute right-0 top-full z-50 mt-1 w-72 rounded-lg border bg-background shadow-md"
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label={insight.title}
+      tabIndex={-1}
+      className="absolute right-0 top-full z-50 mt-1 w-72 rounded-lg border bg-background shadow-md focus:outline-none"
       onClick={(e) => e.stopPropagation()}
-      onKeyDown={handleKeyDown}
     >
       <div className="p-3">
         <div className="mb-2 flex items-start justify-between gap-2">
           <p className="text-sm font-medium leading-tight">{insight.title}</p>
           <button
             type="button"
-            aria-label="Close insight tooltip"
+            aria-label="Close insight dialog"
             className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground"
             onClick={onClose}
           >
@@ -153,6 +202,7 @@ export function AIInsightBadge({
 }: AIInsightBadgeProps) {
   const [open, setOpen] = useState(false);
   const tooltipId = useId();
+  const insufficientTooltipId = useId();
 
   const severityKey: InsightSeverity | 'insufficient' =
     insufficientData || !insight ? 'insufficient' : insight.severity;
@@ -161,12 +211,16 @@ export function AIInsightBadge({
 
   const label = insight?.title ?? config.label;
 
+  const handleClose = useCallback(() => setOpen(false), []);
+
   return (
     <div className={cn('relative inline-flex', className)}>
       <button
         type="button"
         aria-label={`AI insight: ${severityKey} - ${label}`}
-        aria-describedby={open ? tooltipId : undefined}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-describedby={insufficientData && !open ? insufficientTooltipId : undefined}
         onClick={() => setOpen((v) => !v)}
         onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}
         className={cn(
@@ -183,13 +237,16 @@ export function AIInsightBadge({
           id={tooltipId}
           insight={insight}
           onDismiss={onDismiss}
-          onClose={() => setOpen(false)}
+          onClose={handleClose}
         />
       )}
 
       {open && insufficientData && (
         <div
-          role="tooltip"
+          id={insufficientTooltipId}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Insufficient data information"
           className="absolute right-0 top-full z-50 mt-1 w-64 rounded-lg border bg-background p-3 shadow-md"
         >
           <p className="text-sm text-muted-foreground">

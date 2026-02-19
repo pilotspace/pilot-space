@@ -38,6 +38,8 @@ export interface OwnershipPopoverProps {
   onOwnershipChange?: (blockId: string, newOwner: BlockOwner | null) => void;
   /** Called when user triggers undo after block rejection */
   onUndo?: () => void;
+  /** Called when popover should close (Escape, X button, or click-outside) */
+  onClose?: () => void;
   className?: string;
 }
 
@@ -65,6 +67,7 @@ export function OwnershipPopover({
   owner,
   onOwnershipChange,
   onUndo,
+  onClose,
   className,
 }: OwnershipPopoverProps) {
   const [loading, setLoading] = useState<'approve' | 'reject' | 'convert' | null>(null);
@@ -82,6 +85,12 @@ export function OwnershipPopover({
     first?.focus();
 
     function handleKeyDown(e: KeyboardEvent) {
+      // COL-C3: Escape closes the popover
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose?.();
+        return;
+      }
       if (e.key !== 'Tab') return;
       if (focusable.length === 0) {
         e.preventDefault();
@@ -101,7 +110,18 @@ export function OwnershipPopover({
     }
     el.addEventListener('keydown', handleKeyDown);
     return () => el.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [onClose]);
+
+  // COL-C3: click-outside closes the popover
+  useEffect(() => {
+    function handlePointerDown(e: PointerEvent) {
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+        onClose?.();
+      }
+    }
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => document.removeEventListener('pointerdown', handlePointerDown);
+  }, [onClose]);
 
   const isAIBlock = owner.startsWith('ai:');
   const isShared = owner === 'shared';
@@ -174,7 +194,16 @@ export function OwnershipPopover({
       <div className="mb-2 flex items-center gap-2">
         {isAIBlock && <Bot size={14} className="text-[var(--ai,#6B8FAD)]" aria-hidden="true" />}
         {isShared && <Users size={14} className="text-primary" aria-hidden="true" />}
-        <span className="text-sm font-medium text-foreground">Block Ownership</span>
+        <span className="flex-1 text-sm font-medium text-foreground">Block Ownership</span>
+        {/* COL-C3: visible X close button */}
+        <button
+          type="button"
+          aria-label="Close"
+          onClick={() => onClose?.()}
+          className="ml-auto rounded p-0.5 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <X size={14} aria-hidden="true" />
+        </button>
       </div>
 
       {/* Owner info */}

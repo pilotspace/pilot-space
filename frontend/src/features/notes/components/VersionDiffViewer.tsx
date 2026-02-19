@@ -18,7 +18,7 @@ import { useState, Component } from 'react';
 import type { ReactNode, ErrorInfo } from 'react';
 import { observer } from 'mobx-react-lite';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { X, Expand, Shrink, ArrowLeft, Undo2, Sparkles } from 'lucide-react';
+import { X, Expand, Shrink, ArrowLeft, Check, Sparkles } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 import { Button } from '@/components/ui/button';
@@ -332,26 +332,36 @@ const DiffContent = observer(function DiffContent({
         </div>
       </div>
 
-      {/* Restore footer */}
+      {/* Restore footer (COL-M7: differentiated buttons) */}
       <div className="flex items-center justify-between gap-2 px-3 py-2 border-t border-border shrink-0">
+        {/* v1: revert-style, ArrowLeft icon */}
         <Button
           variant="ghost"
           size="sm"
           className="h-7 px-2 text-xs gap-1"
           onClick={() => onRestore(v1.id)}
           disabled={store.isUndoingAI}
+          title={store.isUndoingAI ? 'Undo in progress' : `Restore to v${v1.versionNumber}`}
+          aria-label={`Restore note to version ${v1.versionNumber}`}
         >
-          <Undo2 className="w-3 h-3" aria-hidden />
+          <ArrowLeft className="w-3 h-3" aria-hidden />
           Restore v{v1.versionNumber}
         </Button>
+        {/* v2: accept/confirm style, Check icon */}
         <Button
           variant="outline"
           size="sm"
           className="h-7 px-2 text-xs gap-1"
           onClick={() => onRestore(v2.id)}
           disabled={currentVersionNumber !== undefined && v2.versionNumber === currentVersionNumber}
+          title={
+            currentVersionNumber !== undefined && v2.versionNumber === currentVersionNumber
+              ? 'Already the current version'
+              : `Restore to v${v2.versionNumber}`
+          }
+          aria-label={`Restore note to version ${v2.versionNumber}`}
         >
-          <Undo2 className="w-3 h-3" aria-hidden />
+          <Check className="w-3 h-3" aria-hidden />
           Restore v{v2.versionNumber}
         </Button>
       </div>
@@ -372,7 +382,7 @@ export const VersionDiffViewer = observer(function VersionDiffViewer(
           <DiffContent {...props} isModal={false} />
         </DiffErrorBoundary>
 
-        {/* Expand button — top-right overlay */}
+        {/* Expand button — top-right overlay (COL-H6) */}
         <button
           type="button"
           aria-label="Expand to full screen"
@@ -380,7 +390,9 @@ export const VersionDiffViewer = observer(function VersionDiffViewer(
           className={cn(
             'absolute top-2 right-2 p-1 rounded motion-safe:transition-opacity',
             'text-muted-foreground hover:text-foreground',
-            'bg-background/80 hover:bg-muted'
+            'bg-background/80 hover:bg-muted',
+            'min-w-[32px] min-h-[32px] flex items-center justify-center',
+            'focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none'
           )}
         >
           <Expand className="w-3.5 h-3.5" aria-hidden />

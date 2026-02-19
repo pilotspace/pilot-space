@@ -48,8 +48,14 @@ import { useNoteCanvasEditor, EditorErrorFallback, EditorSkeleton } from './Note
 /** Sidebar tabs definition (T-136 framework, T-137/T-138/T-139 panels) */
 const SIDEBAR_TABS: SidebarTab[] = [
   { id: 'versions', label: 'Versions', icon: <History className="h-3.5 w-3.5" /> },
-  { id: 'presence', label: 'Presence', icon: <Users className="h-3.5 w-3.5" /> },
-  { id: 'conversation', label: 'Threads', icon: <MessageSquare className="h-3.5 w-3.5" /> },
+  // COL-M8: Presence and Conversation panels not yet wired — mark as comingSoon
+  { id: 'presence', label: 'Presence', icon: <Users className="h-3.5 w-3.5" />, comingSoon: true },
+  {
+    id: 'conversation',
+    label: 'Threads',
+    icon: <MessageSquare className="h-3.5 w-3.5" />,
+    comingSoon: true,
+  },
 ];
 
 /**

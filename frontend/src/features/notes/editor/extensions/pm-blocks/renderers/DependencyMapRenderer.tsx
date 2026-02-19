@@ -255,6 +255,7 @@ export function DependencyMapRenderer({ data: rawData, readOnly: _readOnly }: PM
     data: mapData,
     isLoading,
     isError,
+    isRefetching,
     refetch,
   } = useQuery({
     queryKey: QUERY_KEYS.map(workspaceId, cycleId),
@@ -381,9 +382,10 @@ export function DependencyMapRenderer({ data: rawData, readOnly: _readOnly }: PM
             type="button"
             className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
             onClick={() => refetch()}
+            disabled={isRefetching}
             aria-label="Refresh dependency map"
           >
-            <RefreshCw className="size-3.5" />
+            <RefreshCw className={cn('size-3.5', isRefetching && 'animate-spin')} />
           </button>
         </div>
       </div>

@@ -502,7 +502,9 @@ const ChatViewInternal = observer<ChatViewProps>(
           </AnimatePresence>
 
           {/* T-056/T-057: Intent lifecycle message renderer */}
-          {store.intents.size > 0 && <IntentMessageRenderer store={store} />}
+          {store.intents.size > 0 && (
+            <IntentMessageRenderer store={store} onPrefillInput={setInputValue} />
+          )}
 
           {/* Task panel */}
           {store.tasks.size > 0 && (

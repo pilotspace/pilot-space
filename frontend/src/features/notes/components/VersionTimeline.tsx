@@ -184,6 +184,14 @@ const VersionEntry = observer(function VersionEntry({
             )}
           </p>
 
+          {/* Expand hint — visible on hover when not selected */}
+          {!isSelected && (
+            <p className="text-[10px] text-muted-foreground/50 mt-0.5 opacity-0 group-hover:opacity-100 motion-safe:transition-opacity flex items-center gap-0.5">
+              <ChevronRight className="w-2.5 h-2.5" aria-hidden />
+              Click to expand
+            </p>
+          )}
+
           {/* Action row — visible when selected */}
           {isSelected && (
             <div className="flex gap-1.5 mt-2" role="group" aria-label="Version actions">

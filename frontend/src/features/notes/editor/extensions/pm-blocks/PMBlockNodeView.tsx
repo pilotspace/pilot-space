@@ -88,8 +88,10 @@ const BLOCK_TYPE_LABELS: Record<PMBlockType, string> = {
 /** Loading skeleton shown while renderer chunk loads. */
 function RendererSkeleton() {
   return (
-    <div className="flex items-center justify-center p-8 text-xs text-muted-foreground">
-      Loading block...
+    <div className="p-4 space-y-2 animate-pulse" aria-busy="true" aria-label="Loading block">
+      <div className="h-3 w-2/5 rounded bg-muted" />
+      <div className="h-3 w-full rounded bg-muted" />
+      <div className="h-3 w-4/5 rounded bg-muted" />
     </div>
   );
 }

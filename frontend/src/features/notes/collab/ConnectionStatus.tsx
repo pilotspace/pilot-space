@@ -37,8 +37,8 @@ interface StatusConfig {
 const STATUS_CONFIG: Record<ConnectionStatusValue, StatusConfig> = {
   online: {
     label: 'Live',
-    dotClass: 'bg-green-500',
-    textClass: 'text-green-700 dark:text-green-400',
+    dotClass: 'bg-primary',
+    textClass: 'text-primary',
     ariaLabel: 'Connected — changes sync in real time',
   },
   syncing: {
