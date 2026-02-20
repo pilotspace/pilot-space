@@ -59,7 +59,7 @@ describe('RACIRenderer basic rendering', () => {
 
   it('renders a table structure', () => {
     render(<RACIRenderer {...defaultProps} />);
-    const table = screen.getByRole('table');
+    const table = screen.getByRole('grid');
     expect(table).toBeInTheDocument();
   });
 });
@@ -96,7 +96,7 @@ describe('RACIRenderer cell cycling', () => {
     const { rerender } = render(<RACIRenderer {...defaultProps} onDataChange={onDataChange} />);
 
     const getCellByDeliverableStakeholder = (deliverable: string, stakeholder: string) =>
-      screen.getByRole('button', { name: new RegExp(`${deliverable} - ${stakeholder}:`) });
+      screen.getByRole('gridcell', { name: new RegExp(`${deliverable} - ${stakeholder}:`) });
 
     const cell = getCellByDeliverableStakeholder('Deliverable 1', 'Person A');
 
@@ -442,7 +442,7 @@ describe('RACIRenderer keyboard accessibility', () => {
     render(<RACIRenderer {...defaultProps} />);
 
     const cell = screen.getByLabelText('Deliverable 1 - Person A: unassigned');
-    expect(cell).toHaveAttribute('role', 'button');
+    expect(cell).toHaveAttribute('role', 'gridcell');
   });
 
   it('has descriptive aria-label on cells', () => {
@@ -479,8 +479,8 @@ describe('RACIRenderer role styling', () => {
     );
 
     const cell = screen.getByLabelText('Deliverable 1 - Person A: R');
-    expect(cell).toHaveClass('bg-blue-500/10');
-    expect(cell).toHaveClass('text-blue-700');
+    expect(cell).toHaveClass('bg-[#5B8FC9]/10');
+    expect(cell).toHaveClass('text-[#5B8FC9]');
   });
 
   it('applies A role styling to cells with A', () => {
@@ -516,8 +516,8 @@ describe('RACIRenderer role styling', () => {
     );
 
     const cell = screen.getByLabelText('Deliverable 1 - Person A: C');
-    expect(cell).toHaveClass('bg-amber-500/10');
-    expect(cell).toHaveClass('text-amber-700');
+    expect(cell).toHaveClass('bg-[var(--warning)]/10');
+    expect(cell).toHaveClass('text-[var(--warning)]');
   });
 
   it('applies I role styling to cells with I', () => {

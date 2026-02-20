@@ -26,9 +26,9 @@ from pilot_space.application.services.note import (
 from pilot_space.container import create_container
 from pilot_space.dependencies.auth import _request_session_ctx
 from pilot_space.infrastructure.database.models import (
-    IssueState,
     Project,
     State,
+    StateGroup,
     User,
     Workspace,
 )
@@ -120,8 +120,8 @@ class TestCreateIssueServiceInjection:
             workspace_id=sample_workspace.id,
             project_id=sample_project.id,
             name="Backlog",
-            state_type=IssueState.BACKLOG,
-            order=0,
+            group=StateGroup.UNSTARTED,
+            sequence=0,
         )
         db_session.add(backlog_state)
         await db_session.commit()

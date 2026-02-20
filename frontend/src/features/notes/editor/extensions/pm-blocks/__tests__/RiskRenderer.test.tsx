@@ -224,24 +224,24 @@ describe('RiskRenderer score color coding (FR-033)', () => {
     );
 
     const scoreCell = screen.getByText('6').closest('td');
-    expect(scoreCell).toHaveClass('bg-green-500/15');
-    expect(scoreCell).toHaveClass('text-green-700');
+    expect(scoreCell).toHaveClass('bg-primary/15');
+    expect(scoreCell).toHaveClass('text-primary');
   });
 
   it('applies yellow color to scores >6 and ≤12 (medium severity)', () => {
     render(<RiskRenderer {...defaultProps} />);
 
     const scoreCell = screen.getByText('12').closest('td');
-    expect(scoreCell).toHaveClass('bg-amber-500/15');
-    expect(scoreCell).toHaveClass('text-amber-700');
+    expect(scoreCell).toHaveClass('bg-[var(--warning)]/15');
+    expect(scoreCell).toHaveClass('text-[var(--warning)]');
   });
 
   it('applies red color to scores >12 (high severity)', () => {
     render(<RiskRenderer {...defaultProps} />);
 
     const scoreCell = screen.getByText('20').closest('td');
-    expect(scoreCell).toHaveClass('bg-red-500/15');
-    expect(scoreCell).toHaveClass('text-red-700');
+    expect(scoreCell).toHaveClass('bg-destructive/15');
+    expect(scoreCell).toHaveClass('text-destructive');
   });
 
   it('applies correct color to boundary score of 6', () => {
@@ -264,7 +264,7 @@ describe('RiskRenderer score color coding (FR-033)', () => {
     );
 
     const scoreCell = screen.getByText('6').closest('td');
-    expect(scoreCell).toHaveClass('bg-green-500/15'); // ≤6 is green
+    expect(scoreCell).toHaveClass('bg-primary/15'); // ≤6 is green
   });
 
   it('applies correct color to boundary score of 12', () => {
@@ -287,7 +287,7 @@ describe('RiskRenderer score color coding (FR-033)', () => {
     );
 
     const scoreCell = screen.getByText('12').closest('td');
-    expect(scoreCell).toHaveClass('bg-amber-500/15'); // ≤12 is yellow
+    expect(scoreCell).toHaveClass('bg-[var(--warning)]/15'); // ≤12 is yellow
   });
 
   it('applies correct color to score just above 12', () => {
@@ -310,7 +310,7 @@ describe('RiskRenderer score color coding (FR-033)', () => {
     );
 
     const scoreCell = screen.getByText('15').closest('td');
-    expect(scoreCell).toHaveClass('bg-red-500/15'); // >12 is red
+    expect(scoreCell).toHaveClass('bg-destructive/15'); // >12 is red
   });
 });
 

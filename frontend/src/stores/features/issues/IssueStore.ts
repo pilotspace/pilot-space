@@ -9,7 +9,7 @@ import type {
   AIContext,
 } from '@/types';
 
-import { stateNameToKey } from '@/lib/issue-helpers';
+import { getIssueStateKey } from '@/lib/issue-helpers';
 import { issuesApi } from '@/services/api';
 
 // AI Suggestion types
@@ -132,7 +132,7 @@ export class IssueStore {
 
     // Apply filters
     if (this.filters.state && this.filters.state !== 'all') {
-      issues = issues.filter((i) => stateNameToKey(i.state?.name) === this.filters.state);
+      issues = issues.filter((i) => getIssueStateKey(i.state) === this.filters.state);
     }
     if (this.filters.priority && this.filters.priority !== 'all') {
       issues = issues.filter((i) => i.priority === this.filters.priority);
@@ -176,7 +176,7 @@ export class IssueStore {
     const grouped: Record<IssueState, Issue[]> = {} as Record<IssueState, Issue[]>;
 
     states.forEach((state) => {
-      grouped[state] = this.filteredIssues.filter((i) => stateNameToKey(i.state?.name) === state);
+      grouped[state] = this.filteredIssues.filter((i) => getIssueStateKey(i.state) === state);
     });
 
     return grouped;
@@ -560,7 +560,7 @@ export class IssueStore {
   // ============================================================================
 
   /**
-   * Set save status for a specific field. Auto-clears to 'idle' after 2s when 'saved'.
+   * Set save status for a specific field. Auto-clears to 'idle' after 2s when 'saved', 5s when 'error'.
    */
   setSaveStatus(field: string, status: 'idle' | 'saving' | 'saved' | 'error') {
     this.saveStatus.set(field, status);
@@ -572,14 +572,15 @@ export class IssueStore {
       this._saveStatusTimers.delete(field);
     }
 
-    // Auto-clear to 'idle' after 2s when status is 'saved'
-    if (status === 'saved') {
+    // Auto-clear to 'idle' after timeout (2s for saved, 5s for error)
+    if (status === 'saved' || status === 'error') {
+      const timeout = status === 'saved' ? 2000 : 5000;
       const timer = setTimeout(() => {
         runInAction(() => {
           this.saveStatus.set(field, 'idle');
         });
         this._saveStatusTimers.delete(field);
-      }, 2000);
+      }, timeout);
       this._saveStatusTimers.set(field, timer);
     }
   }

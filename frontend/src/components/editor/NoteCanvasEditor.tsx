@@ -12,6 +12,7 @@
  * - NoteCanvasProps: Props interface for the NoteCanvas component.
  */
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { useEditor } from '@tiptap/react';
 import type { Content, Editor } from '@tiptap/core';
 import { AlertTriangle } from 'lucide-react';
@@ -23,6 +24,8 @@ import { useSelectionContext } from '@/features/notes/editor/hooks/useSelectionC
 import { useContentUpdates } from '@/features/notes/editor/hooks/useContentUpdates';
 import { cn } from '@/lib/utils';
 import { createEditorExtensions } from '@/features/notes/editor/extensions';
+import '@/features/notes/editor/extensions/note-link.css';
+import { notesApi } from '@/services/api/notes';
 import { useResponsive } from '@/hooks/useMediaQuery';
 import type { JSONContent, User, LinkedIssueBrief } from '@/types';
 import { useAIAutoScroll } from '@/hooks/useAIAutoScroll';
@@ -86,6 +89,13 @@ export interface NoteCanvasProps {
   onVersionHistory?: () => void;
   projectId?: string;
   linkedIssues?: LinkedIssueBrief[];
+  /** Callback to trigger issue extraction from note content */
+  onExtractIssues?: (params: {
+    noteId: string;
+    noteTitle: string;
+    noteContent: Record<string, unknown>;
+    selectedText?: string;
+  }) => void;
 }
 
 /**
@@ -159,6 +169,7 @@ export interface NoteCanvasEditorState {
  * Returns state and handlers needed by the layout component.
  */
 export function useNoteCanvasEditor(props: NoteCanvasProps): NoteCanvasEditorState {
+  const router = useRouter();
   const {
     noteId,
     content,
@@ -169,6 +180,7 @@ export function useNoteCanvasEditor(props: NoteCanvasProps): NoteCanvasEditorSta
     title = 'Untitled',
     workspaceSlug = '',
     onTitleChange,
+    onExtractIssues,
   } = props;
 
   const [editorError, setEditorError] = useState<string | null>(null);
@@ -184,12 +196,15 @@ export function useNoteCanvasEditor(props: NoteCanvasProps): NoteCanvasEditorSta
   const titleRef = useRef(title);
   const onTitleChangeRef = useRef(onTitleChange);
 
+  const onExtractIssuesRef = useRef(onExtractIssues);
+
   // Sync refs in effect to avoid ref updates during render
   useEffect(() => {
     noteIdRef.current = noteId;
     titleRef.current = title;
     onTitleChangeRef.current = onTitleChange;
-  }, [noteId, title, onTitleChange]);
+    onExtractIssuesRef.current = onExtractIssues;
+  }, [noteId, title, onTitleChange, onExtractIssues]);
 
   const aiStore = getAIStore();
 
@@ -292,16 +307,47 @@ export function useNoteCanvasEditor(props: NoteCanvasProps): NoteCanvasEditorSta
             // Annotations handled via ChatView now
           },
         },
+        enableNoteLinks: !readOnly && !!resolvedWorkspaceId,
+        noteLink: {
+          workspaceSlug,
+          currentNoteId: noteId,
+          onSearch: async (query: string) => {
+            if (!resolvedWorkspaceId) return [];
+            return notesApi.searchNotes(resolvedWorkspaceId, query);
+          },
+          onLinkCreated: (targetNoteId: string, blockId?: string) => {
+            if (!resolvedWorkspaceId) return;
+            notesApi
+              .linkNote(resolvedWorkspaceId, noteId, targetNoteId, 'inline', blockId)
+              .catch(() => {
+                toast.error('Failed to save note link');
+              });
+          },
+          onClick: (targetNoteId: string) => {
+            if (workspaceSlug) router.push(`/${workspaceSlug}/notes/${targetNoteId}`);
+          },
+        },
         slashCommand: {
           onAICommand: async (command: string, cmdEditor: Editor) => {
-            setIsChatViewOpen(true);
-
             const selectedText = cmdEditor.state.selection.empty
               ? undefined
               : cmdEditor.state.doc.textBetween(
                   cmdEditor.state.selection.from,
                   cmdEditor.state.selection.to
                 );
+
+            // Route extract-issues to the dedicated extraction pipeline
+            if (command === 'extract-issues' && onExtractIssuesRef.current && noteIdRef.current) {
+              onExtractIssuesRef.current({
+                noteId: noteIdRef.current,
+                noteTitle: titleRef.current || 'Untitled',
+                noteContent: cmdEditor.getJSON() as Record<string, unknown>,
+                selectedText: selectedText || undefined,
+              });
+              return;
+            }
+
+            setIsChatViewOpen(true);
 
             if (noteIdRef.current) {
               const selectedBlockIds: string[] = [];
@@ -325,7 +371,6 @@ export function useNoteCanvasEditor(props: NoteCanvasProps): NoteCanvasEditorSta
             }
 
             const commandMessages: Record<string, string> = {
-              'extract-issues': `Extract issues from this note${selectedText ? `: "${selectedText}"` : ''}`,
               improve: `Improve this text${selectedText ? `: "${selectedText}"` : ''}`,
               summarize: `Summarize this note${selectedText ? `: "${selectedText}"` : ''}`,
             };
@@ -338,7 +383,15 @@ export function useNoteCanvasEditor(props: NoteCanvasProps): NoteCanvasEditorSta
           },
         },
       }),
-    [readOnly, handleGhostTextTrigger, aiStore.pilotSpace]
+    [
+      readOnly,
+      handleGhostTextTrigger,
+      aiStore.pilotSpace,
+      resolvedWorkspaceId,
+      noteId,
+      workspaceSlug,
+      router,
+    ]
   );
 
   // Initialize TipTap editor
@@ -406,6 +459,36 @@ export function useNoteCanvasEditor(props: NoteCanvasProps): NoteCanvasEditorSta
   // Auto-scroll to AI-focused blocks
   const { hasOffScreenUpdate, offScreenDirection, scrollToBlock, dismissIndicator } =
     useAIAutoScroll(scrollRef, processingBlockIds, userEditingBlockId);
+
+  // Populate noteTitles storage from existing links on mount (C-3 fix)
+  useEffect(() => {
+    if (!resolvedWorkspaceId || !noteId || !editor || editor.isDestroyed) return;
+    let cancelled = false;
+    notesApi
+      .getNoteLinks(resolvedWorkspaceId, noteId)
+      .then((links) => {
+        if (cancelled || !editor || editor.isDestroyed) return;
+        const storage = (editor.storage as unknown as Record<string, unknown>).noteLink as
+          | { noteTitles?: Map<string, string> }
+          | undefined;
+        if (!storage?.noteTitles) return;
+        for (const link of links) {
+          if (link.targetNoteTitle) {
+            storage.noteTitles.set(link.targetNoteId, link.targetNoteTitle);
+          }
+        }
+        // Trigger re-render of NoteLinkComponents via a no-op transaction
+        if (!editor.isDestroyed) {
+          editor.view.dispatch(editor.state.tr);
+        }
+      })
+      .catch(() => {
+        /* silently ignore — titles will show "Loading..." */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [editor, resolvedWorkspaceId, noteId]);
 
   // Update AIBlockProcessingExtension with current processing block IDs
   useEffect(() => {
