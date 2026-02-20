@@ -214,7 +214,7 @@ export interface Project {
   identifier: string;
   workspaceId: string;
   leadId?: string;
-  lead?: User;
+  lead?: { id: string; email: string; displayName?: string | null };
   icon?: string;
   issueCount: number;
   openIssueCount: number;

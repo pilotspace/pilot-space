@@ -102,6 +102,7 @@ export function ProjectSidebar({ project, workspaceSlug }: ProjectSidebarProps) 
                   : 'border-transparent text-muted-foreground hover:text-foreground'
               )}
               aria-current={isActive ? 'page' : undefined}
+              aria-label={item.label}
             >
               <Icon className="h-4 w-4 flex-shrink-0" />
               <span className="hidden sm:inline">{item.label}</span>

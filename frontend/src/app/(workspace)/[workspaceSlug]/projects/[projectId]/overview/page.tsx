@@ -93,11 +93,14 @@ export default function ProjectOverviewPage() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="font-medium text-sm">{activeCycle.name}</span>
-                  {activeCycle.endDate && (
-                    <span className="text-xs text-muted-foreground">
-                      {differenceInDays(new Date(activeCycle.endDate), new Date())} days left
-                    </span>
-                  )}
+                  {activeCycle.endDate && (() => {
+                    const daysLeft = differenceInDays(new Date(activeCycle.endDate), new Date());
+                    return (
+                      <span className={`text-xs ${daysLeft < 0 ? 'text-destructive' : 'text-muted-foreground'}`}>
+                        {daysLeft < 0 ? `${Math.abs(daysLeft)} days overdue` : `${daysLeft} days left`}
+                      </span>
+                    );
+                  })()}
                 </div>
                 <div className="h-2 rounded-full bg-muted overflow-hidden">
                   <div

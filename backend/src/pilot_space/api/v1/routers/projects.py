@@ -16,6 +16,7 @@ from pilot_space.api.v1.dependencies import (
 )
 from pilot_space.api.v1.schemas.base import DeleteResponse, PaginatedResponse
 from pilot_space.api.v1.schemas.project import (
+    LeadBriefResponse,
     ProjectCreate,
     ProjectDetailResponse,
     ProjectResponse,
@@ -49,6 +50,14 @@ async def _project_to_response(
 
     total_count, open_count = await project_repo.get_issue_counts(project.id)
 
+    lead = None
+    if project.lead:
+        lead = LeadBriefResponse(
+            id=project.lead.id,
+            email=project.lead.email,
+            display_name=project.lead.full_name,
+        )
+
     return ProjectDetailResponse(
         id=project.id,
         created_at=project.created_at,
@@ -58,6 +67,7 @@ async def _project_to_response(
         description=project.description,
         workspace_id=project.workspace_id,
         lead_id=project.lead_id,
+        lead=lead,
         icon=project.icon,
         issue_count=total_count,
         open_issue_count=open_count,
@@ -151,6 +161,13 @@ async def list_projects(
             description=proj.description,
             workspace_id=proj.workspace_id,
             lead_id=proj.lead_id,
+            lead=LeadBriefResponse(
+                id=proj.lead.id,
+                email=proj.lead.email,
+                display_name=proj.lead.full_name,
+            )
+            if proj.lead
+            else None,
             icon=proj.icon,
             issue_count=batch_counts.get(proj.id, (0, 0))[0],
             open_issue_count=batch_counts.get(proj.id, (0, 0))[1],

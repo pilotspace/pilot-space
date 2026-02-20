@@ -17,7 +17,6 @@ const STATE_TABS: { label: string; value: StateGroup | 'all' }[] = [
   { label: 'Backlog', value: 'backlog' },
   { label: 'Todo', value: 'unstarted' },
   { label: 'In Progress', value: 'started' },
-  { label: 'In Review', value: 'started' },
   { label: 'Done', value: 'completed' },
 ];
 
@@ -36,7 +35,7 @@ export default function ProjectIssuesPage() {
   const [stateFilter, setStateFilter] = useState<StateGroup | 'all'>('all');
 
   const { data, isLoading } = useQuery({
-    queryKey: ['projects', 'issues', params.projectId, stateFilter],
+    queryKey: ['projects', 'issues', params.projectId],
     queryFn: () => issuesApi.list(workspaceId, { projectId: params.projectId }),
     enabled: !!workspaceId,
     staleTime: 1000 * 60 * 2,
@@ -93,7 +92,11 @@ export default function ProjectIssuesPage() {
               <Badge
                 variant="secondary"
                 className="text-[10px] flex-shrink-0"
-                style={{ backgroundColor: issue.state?.color + '20', color: issue.state?.color }}
+                style={
+                  issue.state?.color
+                    ? { backgroundColor: issue.state.color + '20', color: issue.state.color }
+                    : undefined
+                }
               >
                 {issue.state?.name}
               </Badge>

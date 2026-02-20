@@ -89,7 +89,7 @@ export default function ProjectsPage() {
     const uniqueLeads = new Map<string, string>();
     for (const p of allProjects) {
       if (p.leadId && p.lead) {
-        uniqueLeads.set(p.leadId, p.lead.name ?? p.leadId);
+        uniqueLeads.set(p.leadId, p.lead.displayName ?? p.leadId);
       }
     }
     return Array.from(uniqueLeads.entries());

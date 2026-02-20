@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useReducer, useCallback } from 'react';
+import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -11,53 +11,23 @@ import { Separator } from '@/components/ui/separator';
 import { AlertTriangle } from 'lucide-react';
 import { useProject, useUpdateProject, useDeleteProject } from '@/features/projects/hooks';
 import { useWorkspaceStore } from '@/stores/RootStore';
+import type { Project } from '@/types';
 
-interface FormState {
-  name: string;
-  identifier: string;
-  description: string;
-  icon: string;
-}
-
-type FormAction =
-  | { type: 'SET_NAME'; value: string }
-  | { type: 'SET_IDENTIFIER'; value: string }
-  | { type: 'SET_DESCRIPTION'; value: string }
-  | { type: 'SET_ICON'; value: string };
-
-function formReducer(state: FormState, action: FormAction): FormState {
-  switch (action.type) {
-    case 'SET_NAME':
-      return { ...state, name: action.value };
-    case 'SET_IDENTIFIER':
-      return { ...state, identifier: action.value };
-    case 'SET_DESCRIPTION':
-      return { ...state, description: action.value };
-    case 'SET_ICON':
-      return { ...state, icon: action.value };
-  }
-}
-
-function initForm(
-  project: { name: string; identifier: string; description?: string; icon?: string } | undefined
-): FormState {
-  return {
-    name: project?.name ?? '',
-    identifier: project?.identifier ?? '',
-    description: project?.description ?? '',
-    icon: project?.icon ?? '',
-  };
-}
-
-export default function ProjectSettingsPage() {
-  const params = useParams<{ workspaceSlug: string; projectId: string }>();
+function ProjectSettingsForm({
+  project,
+  workspaceSlug,
+}: {
+  project: Project;
+  workspaceSlug: string;
+}) {
   const router = useRouter();
   const workspaceStore = useWorkspaceStore();
   const workspaceId = workspaceStore.currentWorkspaceId ?? '';
 
-  const { data: project } = useProject({ projectId: params.projectId });
-
-  const [form, dispatch] = useReducer(formReducer, project, initForm);
+  const [name, setName] = useState(project.name);
+  const [identifier, setIdentifier] = useState(project.identifier);
+  const [description, setDescription] = useState(project.description ?? '');
+  const [icon, setIcon] = useState(project.icon ?? '');
   const [deleteConfirm, setDeleteConfirm] = useState('');
 
   const { mutate: updateProject, isPending: isUpdating } = useUpdateProject({
@@ -67,42 +37,39 @@ export default function ProjectSettingsPage() {
   const { mutate: deleteProject, isPending: isDeleting } = useDeleteProject({
     workspaceId,
     onSuccess: () => {
-      router.push(`/${params.workspaceSlug}/projects`);
+      router.push(`/${workspaceSlug}/projects`);
     },
   });
 
-  const handleReset = useCallback(() => {
-    if (!project) return;
-    dispatch({ type: 'SET_NAME', value: project.name });
-    dispatch({ type: 'SET_IDENTIFIER', value: project.identifier });
-    dispatch({ type: 'SET_DESCRIPTION', value: project.description ?? '' });
-    dispatch({ type: 'SET_ICON', value: project.icon ?? '' });
-  }, [project]);
-
-  if (!project) return null;
-
   const handleSave = () => {
     updateProject({
-      projectId: params.projectId,
+      projectId: project.id,
       data: {
-        name: form.name.trim(),
-        identifier: form.identifier.trim(),
-        description: form.description.trim() || undefined,
-        icon: form.icon.trim() || undefined,
+        name: name.trim(),
+        identifier: identifier.trim(),
+        description: description.trim() || undefined,
+        icon: icon.trim() || undefined,
       },
     });
   };
 
   const handleDelete = () => {
     if (deleteConfirm !== project.name) return;
-    deleteProject(params.projectId);
+    deleteProject(project.id);
+  };
+
+  const handleReset = () => {
+    setName(project.name);
+    setIdentifier(project.identifier);
+    setDescription(project.description ?? '');
+    setIcon(project.icon ?? '');
   };
 
   const hasChanges =
-    form.name !== project.name ||
-    form.identifier !== project.identifier ||
-    form.description !== (project.description ?? '') ||
-    form.icon !== (project.icon ?? '');
+    name !== project.name ||
+    identifier !== project.identifier ||
+    description !== (project.description ?? '') ||
+    icon !== (project.icon ?? '');
 
   return (
     <div className="p-6 max-w-2xl space-y-6">
@@ -118,8 +85,8 @@ export default function ProjectSettingsPage() {
             <Label htmlFor="settings-name">Name</Label>
             <Input
               id="settings-name"
-              value={form.name}
-              onChange={(e) => dispatch({ type: 'SET_NAME', value: e.target.value })}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -127,15 +94,14 @@ export default function ProjectSettingsPage() {
               <Label htmlFor="settings-identifier">Identifier</Label>
               <Input
                 id="settings-identifier"
-                value={form.identifier}
+                value={identifier}
                 onChange={(e) =>
-                  dispatch({
-                    type: 'SET_IDENTIFIER',
-                    value: e.target.value
+                  setIdentifier(
+                    e.target.value
                       .toUpperCase()
                       .replace(/[^A-Z0-9]/g, '')
-                      .slice(0, 5),
-                  })
+                      .slice(0, 5)
+                  )
                 }
                 className="font-mono"
                 maxLength={5}
@@ -145,8 +111,8 @@ export default function ProjectSettingsPage() {
               <Label htmlFor="settings-icon">Icon</Label>
               <Input
                 id="settings-icon"
-                value={form.icon}
-                onChange={(e) => dispatch({ type: 'SET_ICON', value: e.target.value })}
+                value={icon}
+                onChange={(e) => setIcon(e.target.value)}
                 maxLength={4}
               />
             </div>
@@ -155,8 +121,8 @@ export default function ProjectSettingsPage() {
             <Label htmlFor="settings-description">Description</Label>
             <Textarea
               id="settings-description"
-              value={form.description}
-              onChange={(e) => dispatch({ type: 'SET_DESCRIPTION', value: e.target.value })}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
               rows={3}
             />
           </div>
@@ -209,4 +175,14 @@ export default function ProjectSettingsPage() {
       </Card>
     </div>
   );
+}
+
+export default function ProjectSettingsPage() {
+  const params = useParams<{ workspaceSlug: string; projectId: string }>();
+  const { data: project } = useProject({ projectId: params.projectId });
+
+  if (!project) return null;
+
+  // Key-based reset: form re-mounts with correct initial values when project data changes
+  return <ProjectSettingsForm key={project.id} project={project} workspaceSlug={params.workspaceSlug} />;
 }

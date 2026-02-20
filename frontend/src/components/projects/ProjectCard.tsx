@@ -64,6 +64,17 @@ export function ProjectCard({ project, variant = 'grid', onClick, index = 0 }: P
   const progress = project.issueCount > 0 ? completedCount / project.issueCount : 0;
   const timeAgo = formatDistanceToNow(new Date(project.updatedAt), { addSuffix: true });
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if ((e.key === 'Enter' || e.key === ' ') && onClick) {
+      e.preventDefault();
+      onClick();
+    }
+  };
+
+  const cardA11y = onClick
+    ? { role: 'button' as const, tabIndex: 0, onKeyDown: handleKeyDown, 'aria-label': `Open project ${project.name}` }
+    : {};
+
   if (variant === 'list') {
     return (
       <motion.div
@@ -74,9 +85,11 @@ export function ProjectCard({ project, variant = 'grid', onClick, index = 0 }: P
         <Card
           className={cn(
             'group cursor-pointer transition-all duration-200',
-            'hover:shadow-warm-sm hover:bg-accent/30'
+            'hover:shadow-warm-sm hover:bg-accent/30',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary'
           )}
           onClick={onClick}
+          {...cardA11y}
         >
           <div className="flex items-center gap-4 px-4 py-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 flex-shrink-0">
@@ -96,7 +109,7 @@ export function ProjectCard({ project, variant = 'grid', onClick, index = 0 }: P
             {project.lead && (
               <Avatar className="h-6 w-6 flex-shrink-0">
                 <AvatarFallback className="text-[10px]">
-                  {getInitials(project.lead.name)}
+                  {getInitials(project.lead.displayName ?? undefined)}
                 </AvatarFallback>
               </Avatar>
             )}
@@ -124,9 +137,11 @@ export function ProjectCard({ project, variant = 'grid', onClick, index = 0 }: P
       <Card
         className={cn(
           'group cursor-pointer transition-all duration-200',
-          'hover:shadow-warm-md hover:-translate-y-0.5'
+          'hover:shadow-warm-md hover:-translate-y-0.5',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary'
         )}
         onClick={onClick}
+        {...cardA11y}
       >
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
@@ -159,7 +174,7 @@ export function ProjectCard({ project, variant = 'grid', onClick, index = 0 }: P
               {project.lead && (
                 <Avatar className="h-5 w-5">
                   <AvatarFallback className="text-[9px]">
-                    {getInitials(project.lead.name)}
+                    {getInitials(project.lead.displayName ?? undefined)}
                   </AvatarFallback>
                 </Avatar>
               )}
