@@ -61,7 +61,7 @@ export function NoteMetadata({
       {/* Project reference with progress bar */}
       {project && (
         <Link
-          href={`/${workspaceSlug}/projects/${project.identifier}`}
+          href={`/${workspaceSlug}/projects/${project.id}`}
           className="flex items-center gap-1.5 hover:text-foreground transition-colors"
           data-testid="note-metadata-project"
         >
