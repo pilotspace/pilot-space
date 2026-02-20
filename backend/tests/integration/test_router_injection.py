@@ -21,10 +21,10 @@ from fastapi import status
 
 from pilot_space.infrastructure.auth import TokenPayload
 from pilot_space.infrastructure.database.models import (
-    IssueState,
     Note,
     Project,
     State,
+    StateGroup,
     User,
     Workspace,
     WorkspaceMember,
@@ -120,8 +120,8 @@ async def project_with_state(
         workspace_id=workspace.id,
         project_id=project.id,
         name="Backlog",
-        state_type=IssueState.BACKLOG,
-        order=0,
+        group=StateGroup.UNSTARTED,
+        sequence=0,
     )
     db_session.add(state)
 
