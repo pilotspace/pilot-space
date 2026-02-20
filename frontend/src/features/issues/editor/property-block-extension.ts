@@ -36,7 +36,7 @@ export const PropertyBlockNode = Node.create({
   },
 
   renderHTML({ HTMLAttributes }) {
-    return ['div', { ...HTMLAttributes, 'data-property-block': '' }, 0];
+    return ['div', { ...HTMLAttributes, 'data-property-block': '' }];
   },
 
   addNodeView() {

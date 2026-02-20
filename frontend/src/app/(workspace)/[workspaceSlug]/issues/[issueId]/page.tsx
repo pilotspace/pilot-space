@@ -236,9 +236,11 @@ const IssueDetailPage = observer(function IssueDetailPage() {
 
   const saveDescription = useCallback(
     async (html: string, text: string) => {
-      if (html === lastSavedHtmlRef.current) return;
-      lastSavedHtmlRef.current = html;
-      await updateIssue.mutateAsync({ description: text, descriptionHtml: html });
+      // Strip propertyBlock from saved HTML — it's a UI-only node, not content
+      const cleanHtml = html.replace(/<div[^>]*data-property-block[^>]*><\/div>/g, '').trim();
+      if (cleanHtml === lastSavedHtmlRef.current) return;
+      lastSavedHtmlRef.current = cleanHtml;
+      await updateIssue.mutateAsync({ description: text, descriptionHtml: cleanHtml });
     },
     [updateIssue]
   );
