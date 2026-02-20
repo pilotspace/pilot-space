@@ -15,6 +15,7 @@ import {
   Calendar,
   Sparkles,
   ExternalLink,
+  Circle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -23,6 +24,8 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { Issue, IssuePriority, IssueType } from '@/types';
 
+export type IssueCardDensity = 'comfortable' | 'compact' | 'minimal';
+
 export interface IssueCardProps {
   issue: Issue;
   onClick?: (issue: Issue) => void;
@@ -30,7 +33,9 @@ export interface IssueCardProps {
   onOpenIssue?: (issue: Issue) => void;
   onDragStart?: (e: React.DragEvent, issue: Issue) => void;
   isDragging?: boolean;
+  /** @deprecated Use `density` instead. Maps to density='compact' when true. */
   compact?: boolean;
+  density?: IssueCardDensity;
   className?: string;
 }
 
@@ -39,13 +44,38 @@ export interface IssueCardProps {
  */
 const priorityConfig: Record<
   IssuePriority,
-  { icon: React.ElementType; className: string; label: string }
+  { icon: React.ElementType; className: string; label: string; dotColor: string }
 > = {
-  urgent: { icon: AlertCircle, className: 'text-red-500', label: 'Urgent' },
-  high: { icon: ArrowUp, className: 'text-orange-500', label: 'High' },
-  medium: { icon: Minus, className: 'text-yellow-500', label: 'Medium' },
-  low: { icon: ArrowDown, className: 'text-blue-500', label: 'Low' },
-  none: { icon: Minus, className: 'text-gray-400', label: 'No priority' },
+  urgent: {
+    icon: AlertCircle,
+    className: 'text-red-500',
+    label: 'Urgent',
+    dotColor: 'fill-red-500 text-red-500',
+  },
+  high: {
+    icon: ArrowUp,
+    className: 'text-orange-500',
+    label: 'High',
+    dotColor: 'fill-orange-500 text-orange-500',
+  },
+  medium: {
+    icon: Minus,
+    className: 'text-yellow-500',
+    label: 'Medium',
+    dotColor: 'fill-yellow-500 text-yellow-500',
+  },
+  low: {
+    icon: ArrowDown,
+    className: 'text-blue-500',
+    label: 'Low',
+    dotColor: 'fill-blue-500 text-blue-500',
+  },
+  none: {
+    icon: Minus,
+    className: 'text-gray-400',
+    label: 'No priority',
+    dotColor: 'fill-gray-400 text-gray-400',
+  },
 };
 
 /**
@@ -65,7 +95,8 @@ const typeConfig: Record<IssueType, { icon: React.ElementType; className: string
 function getInitials(name: string): string {
   return name
     .split(' ')
-    .map((n) => n[0])
+    .map((n) => n.charAt(0))
+    .filter(Boolean)
     .join('')
     .toUpperCase()
     .slice(0, 2);
@@ -97,6 +128,7 @@ function formatRelativeDate(dateStr: string): string {
  *   issue={issue}
  *   onClick={(issue) => openIssueModal(issue)}
  *   onDragStart={(e, issue) => handleDragStart(e, issue)}
+ *   density="compact"
  * />
  * ```
  */
@@ -107,8 +139,10 @@ export const IssueCard = observer(function IssueCard({
   onDragStart,
   isDragging = false,
   compact = false,
+  density: densityProp,
   className,
 }: IssueCardProps) {
+  const density: IssueCardDensity = densityProp ?? (compact ? 'compact' : 'comfortable');
   const effectivePriority = issue.priority ?? 'none';
   const PriorityIcon = priorityConfig[effectivePriority].icon;
   const issueType = issue.type ?? 'task';
@@ -129,28 +163,144 @@ export const IssueCard = observer(function IssueCard({
     }
   };
 
+  if (density === 'minimal') {
+    return (
+      <div
+        className={cn(
+          'group flex items-center gap-2 rounded-md border bg-card px-2 py-1 transition-all',
+          'hover:border-primary/50 hover:bg-accent/50',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          isDragging && 'opacity-50 ring-2 ring-primary',
+          onClick && 'cursor-pointer',
+          className
+        )}
+        onClick={handleClick}
+        onDragStart={handleDragStart}
+        onKeyDown={handleKeyDown}
+        draggable={!!onDragStart}
+        tabIndex={onClick ? 0 : undefined}
+        role={onClick ? 'button' : undefined}
+        aria-label={`Issue ${issue.identifier}: ${issue.name}`}
+      >
+        <Circle className={cn('size-2.5 shrink-0', priorityConfig[effectivePriority].dotColor)} />
+        <span className="shrink-0 text-[10px] font-medium text-muted-foreground">
+          {issue.identifier}
+        </span>
+        <span className="truncate text-xs font-medium">{issue.name}</span>
+      </div>
+    );
+  }
+
+  if (density === 'compact') {
+    return (
+      <TooltipProvider>
+        <div
+          className={cn(
+            'group relative rounded-lg border bg-card p-1.5 shadow-sm transition-all',
+            'hover:border-primary/50 hover:shadow-md',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            isDragging && 'opacity-50 ring-2 ring-primary',
+            onClick && 'cursor-pointer',
+            className
+          )}
+          onClick={handleClick}
+          onDragStart={handleDragStart}
+          onKeyDown={handleKeyDown}
+          draggable={!!onDragStart}
+          tabIndex={onClick ? 0 : undefined}
+          role={onClick ? 'button' : undefined}
+          aria-label={`Issue ${issue.identifier}: ${issue.name}`}
+        >
+          {/* Header row: type + identifier + title | priority + AI */}
+          <div className="mb-1 flex items-center gap-1.5">
+            <span className={cn('flex shrink-0 items-center', typeConfig[issueType].className)}>
+              <TypeIcon className="size-3.5" />
+            </span>
+            <span className="shrink-0 text-[10px] font-medium text-muted-foreground">
+              {issue.identifier}
+            </span>
+            <span className="line-clamp-1 min-w-0 flex-1 text-xs font-medium">{issue.name}</span>
+            <div className="flex shrink-0 items-center gap-1">
+              <span
+                className={cn('flex items-center', priorityConfig[effectivePriority].className)}
+              >
+                <PriorityIcon className="size-3.5" />
+              </span>
+              {issue.aiGenerated && (
+                <span className="flex items-center text-ai">
+                  <Sparkles className="size-3" />
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Meta row: assignee + due date + updated */}
+          <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+            <div className="flex items-center gap-2">
+              {issue.assignee ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Avatar className="size-4">
+                      <AvatarImage
+                        src=""
+                        alt={issue.assignee.displayName ?? issue.assignee.email}
+                      />
+                      <AvatarFallback className="text-[8px]">
+                        {getInitials(issue.assignee.displayName ?? issue.assignee.email)}
+                      </AvatarFallback>
+                    </Avatar>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    Assigned to {issue.assignee.displayName ?? issue.assignee.email}
+                  </TooltipContent>
+                </Tooltip>
+              ) : (
+                <span className="flex items-center text-muted-foreground/50">
+                  <User className="size-3.5" />
+                </span>
+              )}
+
+              {issue.targetDate && (
+                <span className="flex items-center gap-0.5">
+                  <Calendar className="size-2.5" />
+                  {new Date(issue.targetDate).toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                  })}
+                </span>
+              )}
+            </div>
+
+            <span className="text-muted-foreground/60">{formatRelativeDate(issue.updatedAt)}</span>
+          </div>
+        </div>
+      </TooltipProvider>
+    );
+  }
+
+  // density === 'comfortable' (default — original layout)
   return (
-    <div
-      className={cn(
-        'group relative rounded-lg border bg-card p-2 shadow-sm transition-all',
-        'hover:border-primary/50 hover:shadow-md',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-        isDragging && 'opacity-50 ring-2 ring-primary',
-        onClick && 'cursor-pointer',
-        className
-      )}
-      onClick={handleClick}
-      onDragStart={handleDragStart}
-      onKeyDown={handleKeyDown}
-      draggable={!!onDragStart}
-      tabIndex={onClick ? 0 : undefined}
-      role={onClick ? 'button' : undefined}
-      aria-label={`Issue ${issue.identifier}: ${issue.name}`}
-    >
-      {/* Header: Identifier + Priority + AI indicator */}
-      <div className="mb-2 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <TooltipProvider>
+    <TooltipProvider>
+      <div
+        className={cn(
+          'group relative rounded-lg border bg-card p-2 shadow-sm transition-all',
+          'hover:border-primary/50 hover:shadow-md',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          isDragging && 'opacity-50 ring-2 ring-primary',
+          onClick && 'cursor-pointer',
+          className
+        )}
+        onClick={handleClick}
+        onDragStart={handleDragStart}
+        onKeyDown={handleKeyDown}
+        draggable={!!onDragStart}
+        tabIndex={onClick ? 0 : undefined}
+        role={onClick ? 'button' : undefined}
+        aria-label={`Issue ${issue.identifier}: ${issue.name}`}
+      >
+        {/* Header: Identifier + Priority + AI indicator */}
+        <div className="mb-2 flex items-center justify-between">
+          <div className="flex items-center gap-2">
             <Tooltip>
               <TooltipTrigger asChild>
                 <span className={cn('flex items-center', typeConfig[issueType].className)}>
@@ -159,27 +309,27 @@ export const IssueCard = observer(function IssueCard({
               </TooltipTrigger>
               <TooltipContent>{typeConfig[issueType].label}</TooltipContent>
             </Tooltip>
-          </TooltipProvider>
-          <span className="text-[10px] font-medium text-muted-foreground">{issue.identifier}</span>
-        </div>
+            <span className="text-[10px] font-medium text-muted-foreground">
+              {issue.identifier}
+            </span>
+          </div>
 
-        <div className="flex items-center gap-1">
-          {onOpenIssue && (
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="size-6 opacity-0 group-hover:opacity-100 transition-opacity"
-              onClick={(e) => {
-                e.stopPropagation();
-                onOpenIssue(issue);
-              }}
-              aria-label={`Open issue ${issue.identifier}`}
-            >
-              <ExternalLink className="size-3.5" />
-            </Button>
-          )}
-          {issue.aiGenerated && (
-            <TooltipProvider>
+          <div className="flex items-center gap-1">
+            {onOpenIssue && (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="size-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenIssue(issue);
+                }}
+                aria-label={`Open issue ${issue.identifier}`}
+              >
+                <ExternalLink className="size-3.5" />
+              </Button>
+            )}
+            {issue.aiGenerated && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span className="flex items-center text-ai">
@@ -188,9 +338,7 @@ export const IssueCard = observer(function IssueCard({
                 </TooltipTrigger>
                 <TooltipContent>AI-generated issue</TooltipContent>
               </Tooltip>
-            </TooltipProvider>
-          )}
-          <TooltipProvider>
+            )}
             <Tooltip>
               <TooltipTrigger asChild>
                 <span
@@ -201,48 +349,46 @@ export const IssueCard = observer(function IssueCard({
               </TooltipTrigger>
               <TooltipContent>{priorityConfig[effectivePriority].label}</TooltipContent>
             </Tooltip>
-          </TooltipProvider>
+          </div>
         </div>
-      </div>
 
-      {/* Title */}
-      <h4 className="mb-1.5 line-clamp-2 text-xs font-medium leading-snug">{issue.name}</h4>
+        {/* Title */}
+        <h4 className="mb-1.5 line-clamp-2 text-xs font-medium leading-snug">{issue.name}</h4>
 
-      {/* Description (if not compact) */}
-      {!compact && issue.description && (
-        <p className="mb-2 line-clamp-2 text-[10px] text-muted-foreground">{issue.description}</p>
-      )}
+        {/* Description */}
+        {issue.description && (
+          <p className="mb-2 line-clamp-2 text-[10px] text-muted-foreground">{issue.description}</p>
+        )}
 
-      {/* Labels */}
-      {issue.labels.length > 0 && (
-        <div className="mb-2 flex flex-wrap gap-1">
-          {issue.labels.slice(0, 3).map((label) => (
-            <Badge
-              key={label.id}
-              variant="secondary"
-              className="text-[10px]"
-              style={{
-                backgroundColor: `${label.color}20`,
-                color: label.color,
-                borderColor: `${label.color}40`,
-              }}
-            >
-              {label.name}
-            </Badge>
-          ))}
-          {issue.labels.length > 3 && (
-            <Badge variant="outline" className="text-[10px]">
-              +{issue.labels.length - 3}
-            </Badge>
-          )}
-        </div>
-      )}
+        {/* Labels */}
+        {issue.labels.length > 0 && (
+          <div className="mb-2 flex flex-wrap gap-1">
+            {issue.labels.slice(0, 3).map((label) => (
+              <Badge
+                key={label.id}
+                variant="secondary"
+                className="text-[10px]"
+                style={{
+                  backgroundColor: `${label.color}20`,
+                  color: label.color,
+                  borderColor: `${label.color}40`,
+                }}
+              >
+                {label.name}
+              </Badge>
+            ))}
+            {issue.labels.length > 3 && (
+              <Badge variant="outline" className="text-[10px]">
+                +{issue.labels.length - 3}
+              </Badge>
+            )}
+          </div>
+        )}
 
-      {/* Footer: Assignee + Due date + Updated */}
-      <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-        <div className="flex items-center gap-2">
-          {issue.assignee ? (
-            <TooltipProvider>
+        {/* Footer: Assignee + Due date + Updated */}
+        <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+          <div className="flex items-center gap-2">
+            {issue.assignee ? (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Avatar className="size-5">
@@ -256,9 +402,7 @@ export const IssueCard = observer(function IssueCard({
                   Assigned to {issue.assignee.displayName ?? issue.assignee.email}
                 </TooltipContent>
               </Tooltip>
-            </TooltipProvider>
-          ) : (
-            <TooltipProvider>
+            ) : (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span className="flex items-center text-muted-foreground/50">
@@ -267,11 +411,9 @@ export const IssueCard = observer(function IssueCard({
                 </TooltipTrigger>
                 <TooltipContent>Unassigned</TooltipContent>
               </Tooltip>
-            </TooltipProvider>
-          )}
+            )}
 
-          {issue.targetDate && (
-            <TooltipProvider>
+            {issue.targetDate && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span className="flex items-center gap-1">
@@ -286,13 +428,13 @@ export const IssueCard = observer(function IssueCard({
                   Due {new Date(issue.targetDate).toLocaleDateString()}
                 </TooltipContent>
               </Tooltip>
-            </TooltipProvider>
-          )}
-        </div>
+            )}
+          </div>
 
-        <span className="text-muted-foreground/60">{formatRelativeDate(issue.updatedAt)}</span>
+          <span className="text-muted-foreground/60">{formatRelativeDate(issue.updatedAt)}</span>
+        </div>
       </div>
-    </div>
+    </TooltipProvider>
   );
 });
 

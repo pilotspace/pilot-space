@@ -58,3 +58,9 @@ export { useIssueKeyboardShortcuts } from './use-issue-keyboard-shortcuts';
 
 // Copy-to-clipboard feedback with auto-reset
 export { useCopyFeedback } from './use-copy-feedback';
+
+// Issue list for views (TanStack Query)
+export { useIssuesList, issuesListKeys } from './use-issues-list';
+
+// Bulk update for multi-select actions
+export { useBulkUpdateIssues } from './use-bulk-update-issues';
