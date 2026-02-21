@@ -110,6 +110,7 @@ const IssueDetailPage = observer(function IssueDetailPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [mobilePropertiesOpen, setMobilePropertiesOpen] = useState(false);
+  const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
 
   // -- Derived data --
   const memberUsers = useMemo<UserBrief[]>(() => {
@@ -186,6 +187,22 @@ const IssueDetailPage = observer(function IssueDetailPage() {
     },
     [workspaceId, issueId]
   );
+
+  const handleGeneratePlan = useCallback(async () => {
+    setIsGeneratingPlan(true);
+    try {
+      const result = await issuesApi.generatePlan(workspaceId, issueId);
+      toast.success('Implementation plan generated', {
+        description: `Plan with ${result.subagentCount} subagent${result.subagentCount !== 1 ? 's' : ''} ready. Open Clone → Plan tab to copy.`,
+      });
+    } catch {
+      toast.error('Failed to generate plan', {
+        description: 'Ensure AI context is generated first, then try again.',
+      });
+    } finally {
+      setIsGeneratingPlan(false);
+    }
+  }, [workspaceId, issueId]);
 
   const handleAiGenerate = useCallback(() => {
     setIsChatOpen(true);
@@ -266,6 +283,8 @@ const IssueDetailPage = observer(function IssueDetailPage() {
       onCopyLink={handleCopyLink}
       onDelete={handleDeleteClick}
       onExport={handleExportContext}
+      onGeneratePlan={handleGeneratePlan}
+      isGeneratingPlan={isGeneratingPlan}
     />
   );
 

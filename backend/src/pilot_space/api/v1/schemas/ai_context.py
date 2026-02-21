@@ -10,6 +10,9 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+# Export format pattern — shared between schema validation and router Query()
+EXPORT_FORMAT_PATTERN = "^(markdown|json|implementation_plan)$"
+
 # =============================================================================
 # Nested Schemas
 # =============================================================================
@@ -92,7 +95,7 @@ class MarkTaskCompletedRequest(BaseModel):
 class ExportContextRequest(BaseModel):
     """Request to export AI context."""
 
-    format: str = Field(default="markdown", pattern="^(markdown|json)$")
+    format: str = Field(default="markdown", pattern=EXPORT_FORMAT_PATTERN)
     include_conversation: bool = False
 
 
@@ -141,6 +144,9 @@ class AIContextResponse(BaseModel):
     conversation_count: int = 0
     has_conversation: bool = False
 
+    # Plan
+    has_plan: bool = False
+
     # Metadata
     generated_at: datetime
     last_refined_at: datetime | None = None
@@ -182,6 +188,7 @@ class AIContextResponse(BaseModel):
             completed_task_count=context.completed_task_count,
             conversation_count=context.conversation_count,
             has_conversation=context.has_conversation,
+            has_plan=bool((context.content or {}).get("implementation_plan")),
             generated_at=context.generated_at,
             last_refined_at=context.last_refined_at,
             version=context.version,
@@ -271,7 +278,19 @@ class ConversationHistoryResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class GeneratePlanResponse(BaseModel):
+    """Response from implementation plan generation."""
+
+    context_id: str
+    issue_id: str
+    subagent_count: int
+    generated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 __all__ = [
+    "EXPORT_FORMAT_PATTERN",
     "AIContextBriefResponse",
     "AIContextContentResponse",
     "AIContextResponse",
@@ -282,6 +301,7 @@ __all__ = [
     "ExportContextResponse",
     "GenerateContextRequest",
     "GenerateContextResponse",
+    "GeneratePlanResponse",
     "MarkTaskCompletedRequest",
     "RefineContextRequest",
     "RefineContextResponse",

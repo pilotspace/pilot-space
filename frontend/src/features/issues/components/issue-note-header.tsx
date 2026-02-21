@@ -10,7 +10,9 @@ import { useCallback } from 'react';
 import { observer } from 'mobx-react-lite';
 import {
   ArrowLeft,
+  Loader2,
   MoreHorizontal,
+  Network,
   Trash2,
   ExternalLink,
   Sparkles,
@@ -32,6 +34,7 @@ import {
 import { cn } from '@/lib/utils';
 import { copyToClipboard } from '@/lib/copy-context';
 import { useIssueStore } from '@/stores';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { CloneContextPanel } from './clone-context-panel';
 import type { ExportFormat } from './clone-context-panel';
 import type { IssueType } from '@/types';
@@ -47,6 +50,8 @@ export interface IssueNoteHeaderProps {
   onCopyLink: () => void;
   onDelete: () => void;
   onExport: (format: ExportFormat) => Promise<string | null>;
+  onGeneratePlan?: () => Promise<void>;
+  isGeneratingPlan?: boolean;
   stats?: {
     tasksCount: number;
     relatedIssuesCount: number;
@@ -72,6 +77,8 @@ export const IssueNoteHeader = observer(function IssueNoteHeader({
   onCopyLink,
   onDelete,
   onExport,
+  onGeneratePlan,
+  isGeneratingPlan = false,
   stats,
 }: IssueNoteHeaderProps) {
   const issueStore = useIssueStore();
@@ -126,6 +133,29 @@ export const IssueNoteHeader = observer(function IssueNoteHeader({
           issueTitle={issueTitle}
           stats={stats}
         />
+
+        {onGeneratePlan && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => void onGeneratePlan()}
+                disabled={isGeneratingPlan}
+                aria-label={
+                  isGeneratingPlan ? 'Generating plan...' : 'Generate implementation plan'
+                }
+              >
+                {isGeneratingPlan ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Network className="size-4" />
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Generate implementation plan</TooltipContent>
+          </Tooltip>
+        )}
 
         <Button
           variant="ghost"

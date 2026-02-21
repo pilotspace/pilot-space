@@ -138,6 +138,9 @@ vi.mock('lucide-react', () => ({
   FileQuestion: ({ className, ...props }: React.SVGProps<SVGSVGElement>) => (
     <svg data-testid="file-question-icon" className={className as string} {...props} />
   ),
+  Network: ({ className, ...props }: React.SVGProps<SVGSVGElement>) => (
+    <svg data-testid="network-icon" className={className as string} {...props} />
+  ),
   X: ({ className, ...props }: React.SVGProps<SVGSVGElement>) => (
     <svg data-testid="x-icon" className={className as string} {...props} />
   ),
@@ -176,7 +179,7 @@ describe('CloneContextPanel', () => {
     expect(button).toHaveAttribute('aria-haspopup', 'dialog');
   });
 
-  it('opens popover on click and shows 3 tabs', async () => {
+  it('opens popover on click and shows 4 tabs', async () => {
     renderPanel();
     fireEvent.click(screen.getByText('Clone'));
 
@@ -185,10 +188,10 @@ describe('CloneContextPanel', () => {
     });
 
     const tabs = screen.getAllByRole('tab');
-    expect(tabs).toHaveLength(3);
+    expect(tabs).toHaveLength(4);
   });
 
-  it('shows Prompt, Markdown, and Checklist tabs', async () => {
+  it('shows Prompt, Markdown, Checklist, and Plan tabs', async () => {
     renderPanel();
     fireEvent.click(screen.getByText('Clone'));
 
@@ -199,6 +202,7 @@ describe('CloneContextPanel', () => {
     expect(screen.getByRole('tab', { name: 'Prompt' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Markdown' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Checklist' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Plan' })).toBeInTheDocument();
   });
 
   it('defaults to Prompt tab (claude_code format) when popover opens', async () => {
@@ -358,6 +362,36 @@ describe('CloneContextPanel', () => {
     });
 
     expect(screen.getByText(/PS-99 · Add dark mode/)).toBeInTheDocument();
+  });
+
+  it('clicking Plan tab sets active format to implementation_plan', async () => {
+    const onExport = vi.fn().mockResolvedValue('plan content');
+    renderPanel({ onExport });
+
+    fireEvent.click(screen.getByText('Clone'));
+
+    await waitFor(() => {
+      expect(onExport).toHaveBeenCalledWith('claude_code');
+    });
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Plan' }));
+
+    await waitFor(() => {
+      expect(onExport).toHaveBeenCalledWith('implementation_plan');
+    });
+  });
+
+  it('Plan tab renders the Network icon', async () => {
+    renderPanel();
+    fireEvent.click(screen.getByText('Clone'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('popover-content')).toBeInTheDocument();
+    });
+
+    const planTab = screen.getByRole('tab', { name: 'Plan' });
+    const networkIcon = planTab.querySelector('[data-testid="network-icon"]');
+    expect(networkIcon).toBeInTheDocument();
   });
 
   it('does not show context summary section when no identifier, title, or stats', async () => {

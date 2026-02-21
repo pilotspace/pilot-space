@@ -41,7 +41,7 @@ export const tasksApi = {
   exportContext(
     workspaceId: string,
     issueId: string,
-    format: 'markdown' | 'claude_code' | 'task_list' = 'markdown'
+    format: 'markdown' | 'claude_code' | 'task_list' | 'implementation_plan' = 'markdown'
   ): Promise<ContextExportResponse> {
     return apiClient.get<ContextExportResponse>(
       `/workspaces/${workspaceId}/issues/${issueId}/context/export`,

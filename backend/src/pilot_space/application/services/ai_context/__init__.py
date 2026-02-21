@@ -14,6 +14,11 @@ from pilot_space.application.services.ai_context.generate_ai_context_service imp
     GenerateAIContextResult,
     GenerateAIContextService,
 )
+from pilot_space.application.services.ai_context.generate_plan_service import (
+    GenerateImplementationPlanService,
+    GeneratePlanPayload,
+    GeneratePlanResult,
+)
 from pilot_space.application.services.ai_context.refine_ai_context_service import (
     RefineAIContextPayload,
     RefineAIContextResult,
@@ -28,6 +33,9 @@ __all__ = [
     "GenerateAIContextPayload",
     "GenerateAIContextResult",
     "GenerateAIContextService",
+    "GenerateImplementationPlanService",
+    "GeneratePlanPayload",
+    "GeneratePlanResult",
     "RefineAIContextPayload",
     "RefineAIContextResult",
     "RefineAIContextService",

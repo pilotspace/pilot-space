@@ -9,6 +9,7 @@ import {
   MessageSquare,
   FileText,
   FileQuestion,
+  Network,
   X,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -21,7 +22,7 @@ import { cn } from '@/lib/utils';
 // Types
 // ============================================================================
 
-export type ExportFormat = 'markdown' | 'claude_code' | 'task_list';
+export type ExportFormat = 'markdown' | 'claude_code' | 'task_list' | 'implementation_plan';
 
 export interface CloneContextPanelProps {
   onExport: (format: ExportFormat) => Promise<string | null>;
@@ -65,6 +66,12 @@ const TABS: TabConfig[] = [
     label: 'Checklist',
     icon: <ListChecks className="size-3.5" aria-hidden="true" />,
     description: 'Step-by-step task list with acceptance criteria',
+  },
+  {
+    format: 'implementation_plan',
+    label: 'Plan',
+    icon: <Network className="size-3.5" aria-hidden="true" />,
+    description: 'Orchestrator-mode plan with subagents for Claude Code',
   },
 ];
 
