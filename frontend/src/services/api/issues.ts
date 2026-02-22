@@ -199,10 +199,17 @@ export const issuesApi = {
     );
   },
 
-  generatePlan(workspaceId: string, issueId: string): Promise<GeneratePlanResponse> {
-    return apiClient.post<GeneratePlanResponse>(
-      `/workspaces/${workspaceId}/issues/${issueId}/ai-context/plan`
-    );
+  generatePlan(_workspaceId: string, issueId: string): Promise<GeneratePlanResponse> {
+    return apiClient.post<GeneratePlanResponse>(`/issues/${issueId}/ai-context/plan`);
+  },
+
+  exportAiContext(
+    issueId: string,
+    format: 'markdown' | 'json' | 'implementation_plan' = 'implementation_plan'
+  ): Promise<{ content: string }> {
+    return apiClient.get<{ content: string }>(`/issues/${issueId}/ai-context/export`, {
+      params: { format },
+    });
   },
 
   recordSuggestionDecision(

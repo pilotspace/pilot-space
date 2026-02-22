@@ -179,6 +179,10 @@ const IssueDetailPage = observer(function IssueDetailPage() {
   const handleExportContext = useCallback(
     async (format: ExportFormat): Promise<string | null> => {
       try {
+        if (format === 'implementation_plan') {
+          const result = await issuesApi.exportAiContext(issueId, 'implementation_plan');
+          return result.content;
+        }
         const result = await tasksApi.exportContext(workspaceId, issueId, format);
         return result.content;
       } catch {
