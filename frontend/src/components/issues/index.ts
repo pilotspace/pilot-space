@@ -25,6 +25,7 @@ export type { AssigneeSelectorProps, AssigneeRecommendation } from './AssigneeSe
 export { DuplicateWarning } from './DuplicateWarning';
 export type { DuplicateWarningProps, DuplicateCandidate } from './DuplicateWarning';
 
+/** @deprecated Use BoardView from @/features/issues/components/views/board instead */
 export { IssueBoard } from './IssueBoard';
 export type { IssueBoardProps } from './IssueBoard';
 

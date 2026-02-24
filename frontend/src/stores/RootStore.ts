@@ -12,6 +12,7 @@ import { AIStore, getAIStore } from './ai';
 import { OnboardingStore } from './OnboardingStore';
 import { RoleSkillStore } from './RoleSkillStore';
 import { TaskStore } from '@/stores/TaskStore';
+import { IssueViewStore } from './features/issues/IssueViewStore';
 
 export class RootStore {
   auth: AuthStore;
@@ -25,6 +26,7 @@ export class RootStore {
   onboarding: OnboardingStore;
   roleSkill: RoleSkillStore;
   tasks: TaskStore;
+  issueView: IssueViewStore;
 
   constructor() {
     this.auth = new AuthStore();
@@ -38,6 +40,7 @@ export class RootStore {
     this.onboarding = new OnboardingStore();
     this.roleSkill = new RoleSkillStore();
     this.tasks = new TaskStore();
+    this.issueView = new IssueViewStore();
 
     // Wire cross-store references
     this.workspace.setAuthStore(this.auth);
@@ -54,12 +57,14 @@ export class RootStore {
     this.onboarding.reset();
     this.roleSkill.reset();
     this.tasks.reset();
+    this.issueView.reset();
   }
 
   dispose(): void {
     this.auth.dispose();
     this.ui.dispose();
     this.onboarding.dispose();
+    this.issueView.dispose();
   }
 }
 
@@ -122,6 +127,11 @@ export function useTaskStore(): TaskStore {
   return useStores().tasks;
 }
 
+/** Hook to access the IssueViewStore from context. */
+export function useIssueViewStore(): IssueViewStore {
+  return useStores().issueView;
+}
+
 /**
  * Convenient hook to access multiple stores at once.
  * Returns an object with named stores for destructuring.
@@ -141,5 +151,6 @@ export function useStore() {
     onboardingStore: store.onboarding,
     roleSkillStore: store.roleSkill,
     taskStore: store.tasks,
+    issueViewStore: store.issueView,
   };
 }
