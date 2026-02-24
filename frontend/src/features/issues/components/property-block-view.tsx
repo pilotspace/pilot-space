@@ -112,7 +112,11 @@ export const PropertyBlockView = observer(function PropertyBlockView() {
     (state: IssueState) => {
       const matched = STATE_GROUP_MAP[issue.state.group] === state ? issue.state : null;
       if (matched) return;
-      wrapState(() => onUpdateState(state)).catch(() => {});
+      // Start the mutation FIRST so onMutate updates the TanStack Query cache (optimistic update)
+      // before wrapState calls setSaveStatus("saving"), which triggers a MobX re-render.
+      // Without this ordering, the MobX re-render sees the stale "In Progress" state → blink.
+      const pending = onUpdateState(state);
+      wrapState(() => pending).catch(() => {});
     },
     [issue.state, wrapState, onUpdateState]
   );
