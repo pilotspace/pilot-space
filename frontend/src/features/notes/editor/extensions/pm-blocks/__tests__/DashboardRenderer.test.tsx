@@ -61,8 +61,8 @@ describe('DashboardRenderer', () => {
       expect(screen.getByDisplayValue('Bug Count')).toBeInTheDocument();
       expect(screen.getByDisplayValue('42')).toBeInTheDocument();
       expect(screen.getByDisplayValue('15')).toBeInTheDocument();
-      expect(screen.getByText('↑ up')).toBeInTheDocument();
-      expect(screen.getByText('↓ down')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Trend: up/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Trend: down/i })).toBeInTheDocument();
     });
   });
 
@@ -382,7 +382,7 @@ describe('DashboardRenderer', () => {
         } as Record<string, unknown>,
       };
       render(<DashboardRenderer {...props} />);
-      expect(screen.getByText('↑ up')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Trend: up/i })).toBeInTheDocument();
     });
 
     it('should display correct arrow for down trend', () => {
@@ -402,7 +402,7 @@ describe('DashboardRenderer', () => {
         } as Record<string, unknown>,
       };
       render(<DashboardRenderer {...props} />);
-      expect(screen.getByText('↓ down')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Trend: down/i })).toBeInTheDocument();
     });
 
     it('should display correct arrow for flat trend', () => {
@@ -422,7 +422,7 @@ describe('DashboardRenderer', () => {
         } as Record<string, unknown>,
       };
       render(<DashboardRenderer {...props} />);
-      expect(screen.getByText('→ flat')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Trend: flat/i })).toBeInTheDocument();
     });
   });
 
@@ -849,7 +849,7 @@ describe('DashboardRenderer', () => {
 
       expect(screen.getByText('Velocity')).toBeInTheDocument();
       expect(screen.getByText('42 pts')).toBeInTheDocument();
-      expect(screen.getByText('↑ up')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Trend: up/i })).toBeInTheDocument();
     });
 
     it('should not render add/remove buttons when readOnly', () => {

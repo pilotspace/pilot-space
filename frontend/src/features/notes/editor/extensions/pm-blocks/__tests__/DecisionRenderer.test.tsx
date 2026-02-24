@@ -239,7 +239,7 @@ describe('DecisionRenderer option cards', () => {
     };
     render(<DecisionRenderer {...defaultProps} data={data} />);
     const card = screen.getByTestId('option-card-opt-1');
-    expect(card).toHaveAttribute('aria-selected', 'true');
+    expect(card).toHaveAttribute('aria-checked', 'true');
   });
 
   it('does not show Select button on selected option', () => {
