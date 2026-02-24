@@ -23,14 +23,17 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pilot_space.api.v1.dependencies import (
     ExportAIContextServiceDep,
     GenerateAIContextServiceDep,
+    GeneratePlanServiceDep,
     RefineAIContextServiceDep,
 )
 from pilot_space.api.v1.schemas.ai_context import (
+    EXPORT_FORMAT_PATTERN,
     AIContextResponse,
     ChatMessageResponse,
     ConversationHistoryResponse,
     ExportContextResponse,
     GenerateContextResponse,
+    GeneratePlanResponse,
     RefineContextRequest,
     RefineContextResponse,
 )
@@ -324,7 +327,7 @@ async def export_ai_context(
     workspace_id: Annotated[UUID, Depends(get_current_workspace_id)],
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     service: ExportAIContextServiceDep,
-    format: str = Query(default="markdown", pattern="^(markdown|json)$"),
+    format: str = Query(default="markdown", pattern=EXPORT_FORMAT_PATTERN),
     include_conversation: bool = Query(default=False),
 ) -> ExportContextResponse:
     """Export AI context as markdown or JSON.
@@ -346,7 +349,12 @@ async def export_ai_context(
         ExportFormat,
     )
 
-    export_format = ExportFormat.MARKDOWN if format == "markdown" else ExportFormat.JSON
+    _format_map = {
+        "markdown": ExportFormat.MARKDOWN,
+        "json": ExportFormat.JSON,
+        "implementation_plan": ExportFormat.IMPLEMENTATION_PLAN,
+    }
+    export_format = _format_map.get(format, ExportFormat.MARKDOWN)
 
     payload = ExportAIContextPayload(
         workspace_id=workspace_id,
@@ -474,6 +482,83 @@ async def mark_task_completed(
         )
 
     await session.commit()
+
+
+@router.post(
+    "/plan",
+    response_model=GeneratePlanResponse,
+    summary="Generate implementation plan",
+)
+async def generate_implementation_plan(
+    issue_id: UUID,
+    session: SessionDep,
+    workspace_id: Annotated[UUID, Depends(get_current_workspace_id)],
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    service: GeneratePlanServiceDep,
+) -> GeneratePlanResponse:
+    """Generate an orchestrator-mode implementation plan for an issue.
+
+    Requires an existing AI context (call GET /ai-context first).
+    The plan is persisted to AIContext.content["implementation_plan"] and
+    can be exported via GET /export?format=implementation_plan.
+
+    Rate limited to 5 generations per hour per user.
+
+    Args:
+        issue_id: Issue UUID.
+        workspace_id: Current workspace.
+        user_id: Current user.
+        session: Database session.
+        service: Generate plan service.
+
+    Returns:
+        GeneratePlanResponse with context_id and subagent_count.
+
+    Raises:
+        HTTPException 404: If AI context not found (generate context first).
+        HTTPException 429: If rate limit exceeded.
+        HTTPException 500: On unexpected failure.
+    """
+    from pilot_space.application.services.ai_context import (
+        GeneratePlanPayload,
+    )
+
+    # Check rate limit (shared with context generation)
+    if not _check_rate_limit(str(user_id)):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Rate limit exceeded. Maximum 5 generations per hour.",
+        )
+
+    import uuid as uuid_module
+
+    payload = GeneratePlanPayload(
+        workspace_id=workspace_id,
+        issue_id=issue_id,
+        user_id=user_id,
+        correlation_id=str(uuid_module.uuid4()),
+    )
+
+    try:
+        result = await service.execute(payload)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        ) from e
+    except Exception as e:
+        logger.exception("Failed to generate implementation plan")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to generate implementation plan. Check server logs for details.",
+        ) from e
+
+    return GeneratePlanResponse(
+        context_id=str(result.context_id),
+        issue_id=str(result.issue_id),
+        subagent_count=result.subagent_count,
+        generated_at=result.generated_at,
+    )
 
 
 __all__ = ["router"]

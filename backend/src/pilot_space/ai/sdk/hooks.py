@@ -191,20 +191,10 @@ class PermissionCheckHook(PreToolUseHook):
         return tool_name
 
     async def should_execute(self, context: ToolCallContext) -> HookResult:
-        """Check if tool execution requires approval.
-
-        Args:
-            context: Tool call context
-
-        Returns:
-            HookResult with permission decision
-        """
+        """Check if tool execution requires approval (DD-003)."""
         bare_name = self.strip_mcp_prefix(context.tool_name)
-
-        # Legacy mapping (old _in_db style names -> action names)
         action_name = self.TOOL_ACTION_MAPPING.get(bare_name, bare_name)
 
-        # Check permission for mapped action
         permission_result = await self._permission_handler.check_permission(
             workspace_id=context.workspace_id,
             user_id=context.user_id,
@@ -216,7 +206,7 @@ class PermissionCheckHook(PreToolUseHook):
 
         if permission_result.requires_approval:
             return HookResult.requires_approval_result(
-                approval_id=permission_result.approval_id,  # type: ignore
+                approval_id=permission_result.approval_id,  # type: ignore[arg-type]
                 reason=permission_result.reason,
             )
 

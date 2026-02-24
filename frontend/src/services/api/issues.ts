@@ -16,6 +16,14 @@ interface IssueFilters {
   labels?: string[];
 }
 
+// Plan generation response
+export interface GeneratePlanResponse {
+  contextId: string;
+  issueId: string;
+  subagentCount: number;
+  generatedAt: string;
+}
+
 // AI Enhancement types
 export interface LabelSuggestion {
   name: string;
@@ -189,6 +197,19 @@ export const issuesApi = {
       `/workspaces/${workspaceId}/issues/ai/recommend-assignee`,
       data
     );
+  },
+
+  generatePlan(_workspaceId: string, issueId: string): Promise<GeneratePlanResponse> {
+    return apiClient.post<GeneratePlanResponse>(`/issues/${issueId}/ai-context/plan`);
+  },
+
+  exportAiContext(
+    issueId: string,
+    format: 'markdown' | 'json' | 'implementation_plan' = 'implementation_plan'
+  ): Promise<{ content: string }> {
+    return apiClient.get<{ content: string }>(`/issues/${issueId}/ai-context/export`, {
+      params: { format },
+    });
   },
 
   recordSuggestionDecision(

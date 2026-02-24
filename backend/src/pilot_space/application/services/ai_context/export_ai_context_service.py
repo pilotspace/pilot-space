@@ -34,6 +34,7 @@ class ExportFormat(str, Enum):
 
     MARKDOWN = "markdown"
     JSON = "json"
+    IMPLEMENTATION_PLAN = "implementation_plan"
 
 
 @dataclass
@@ -139,6 +140,16 @@ class ExportAIContextService:
                 include_conversation=payload.include_conversation,
             )
             filename = f"{issue.identifier}-context.md"
+            content_type = "text/markdown"
+        elif payload.format == ExportFormat.IMPLEMENTATION_PLAN:
+            context_content = getattr(context, "content", {}) or {}
+            plan = context_content.get("implementation_plan", "")
+            if not plan:
+                raise ValueError(
+                    "No implementation plan found. Generate an implementation plan first."
+                )
+            content = plan
+            filename = f"{issue.identifier}-plan.md"
             content_type = "text/markdown"
         else:
             content = self._export_json(
