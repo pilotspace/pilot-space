@@ -388,18 +388,24 @@ async def export_ai_context(
 async def get_conversation_history(
     issue_id: UUID,
     session: SessionDep,
+    workspace_id: Annotated[UUID, Depends(get_current_workspace_id)],
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
 ) -> ConversationHistoryResponse:
     """Get conversation history for AI context.
 
     Args:
         issue_id: Issue UUID.
         session: Database session.
+        workspace_id: Current workspace (auth enforcement).
+        user_id: Current user (auth enforcement).
 
     Returns:
         Conversation history.
     """
     from pilot_space.infrastructure.database.repositories import AIContextRepository
+    from pilot_space.infrastructure.database.rls import set_rls_context
 
+    await set_rls_context(session, user_id, workspace_id)
     context_repo = AIContextRepository(session)
     context = await context_repo.get_by_issue_id(issue_id)
 
@@ -407,6 +413,12 @@ async def get_conversation_history(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"AI context not found for issue: {issue_id}",
+        )
+
+    if context.workspace_id != workspace_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied",
         )
 
     messages = [
@@ -432,16 +444,31 @@ async def get_conversation_history(
 async def clear_conversation_history(
     issue_id: UUID,
     session: SessionDep,
+    workspace_id: Annotated[UUID, Depends(get_current_workspace_id)],
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
 ) -> None:
     """Clear conversation history for AI context.
 
     Args:
         issue_id: Issue UUID.
         session: Database session.
+        workspace_id: Current workspace (auth enforcement).
+        user_id: Current user (auth enforcement).
     """
     from pilot_space.infrastructure.database.repositories import AIContextRepository
+    from pilot_space.infrastructure.database.rls import set_rls_context
 
+    await set_rls_context(session, user_id, workspace_id)
     context_repo = AIContextRepository(session)
+
+    # Verify ownership before mutating
+    context = await context_repo.get_by_issue_id(issue_id)
+    if context and context.workspace_id != workspace_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied",
+        )
+
     result = await context_repo.clear_conversation_history(issue_id)
 
     if not result:
@@ -462,6 +489,8 @@ async def mark_task_completed(
     issue_id: UUID,
     task_id: str,
     session: SessionDep,
+    workspace_id: Annotated[UUID, Depends(get_current_workspace_id)],
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
 ) -> None:
     """Mark an implementation task as completed.
 
@@ -469,10 +498,28 @@ async def mark_task_completed(
         issue_id: Issue UUID.
         task_id: Task ID within the checklist.
         session: Database session.
+        workspace_id: Current workspace (auth enforcement).
+        user_id: Current user (auth enforcement).
     """
     from pilot_space.infrastructure.database.repositories import AIContextRepository
+    from pilot_space.infrastructure.database.rls import set_rls_context
 
+    await set_rls_context(session, user_id, workspace_id)
     context_repo = AIContextRepository(session)
+
+    # Verify ownership before mutating
+    context = await context_repo.get_by_issue_id(issue_id)
+    if not context:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"AI context not found for issue: {issue_id}",
+        )
+    if context.workspace_id != workspace_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied",
+        )
+
     result = await context_repo.mark_task_completed(issue_id, task_id)
 
     if not result:

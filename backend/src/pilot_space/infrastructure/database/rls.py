@@ -30,12 +30,19 @@ async def set_rls_context(
         user_id: Current authenticated user ID.
         workspace_id: Optional workspace ID for scoped queries.
     """
-    # Set user_id for RLS policies
-    await session.execute(text(f"SET LOCAL app.current_user_id = '{user_id}'"))
+    # Set user_id for RLS policies — use set_config() with parameterized value
+    # to avoid f-string interpolation into SQL (injection-safe parameterized form)
+    await session.execute(
+        text("SELECT set_config('app.current_user_id', :uid, true)"),
+        {"uid": str(user_id)},
+    )
 
     # Set workspace_id if provided
     if workspace_id:
-        await session.execute(text(f"SET LOCAL app.current_workspace_id = '{workspace_id}'"))
+        await session.execute(
+            text("SELECT set_config('app.current_workspace_id', :wid, true)"),
+            {"wid": str(workspace_id)},
+        )
 
 
 async def clear_rls_context(session: AsyncSession) -> None:

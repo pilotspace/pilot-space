@@ -594,25 +594,28 @@ async def delete_workspace_issue(
     current_user_id: SyncedUserId,
     delete_service: DeleteIssueServiceDep,
     workspace_repo: WorkspaceRepositoryDep,
-    _: SessionDep,
+    session: SessionDep,
 ) -> DeleteResponse:
     """Soft delete an issue with activity tracking."""
     from pilot_space.application.services.issue import DeleteIssuePayload
 
     workspace = await _resolve_workspace(workspace_id, workspace_repo)
 
+    # Verify issue belongs to this workspace BEFORE deleting (prevents IDOR)
+    result_row = await session.execute(select(Issue.workspace_id).where(Issue.id == issue_id))
+    issue_workspace_id = result_row.scalar_one_or_none()
+    if issue_workspace_id is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
+    if issue_workspace_id != workspace.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
     try:
-        # Execute service
         result = await delete_service.execute(
             DeleteIssuePayload(
                 issue_id=issue_id,
                 actor_id=current_user_id,
             )
         )
-
-        # Verify workspace ownership (service doesn't validate this)
-        # Note: This is a bit awkward - ideally the service would take workspace_id
-        # and validate ownership before deletion. Consider refactoring in the future.
 
         logger.info(
             "Issue deleted",
@@ -622,7 +625,6 @@ async def delete_workspace_issue(
         return DeleteResponse(id=result.issue_id, message="Issue deleted successfully")
 
     except ValueError as e:
-        # Issue not found or validation error
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e),
