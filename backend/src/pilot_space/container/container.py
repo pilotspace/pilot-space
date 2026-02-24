@@ -15,6 +15,7 @@ from pilot_space.application.services.ai import (
 from pilot_space.application.services.ai_context import (
     ExportAIContextService,
     GenerateAIContextService,
+    GenerateImplementationPlanService,
     RefineAIContextService,
 )
 from pilot_space.application.services.annotation import CreateAnnotationService
@@ -371,6 +372,14 @@ class Container(InfraContainer):
         session=providers.Callable(get_current_session),
         ai_context_repository=InfraContainer.ai_context_repository,
         issue_repository=InfraContainer.issue_repository,
+    )
+
+    generate_plan_service = providers.Factory(
+        GenerateImplementationPlanService,
+        session=providers.Callable(get_current_session),
+        ai_context_repository=InfraContainer.ai_context_repository,
+        issue_repository=InfraContainer.issue_repository,
+        pilotspace_agent=pilotspace_agent,
     )
 
     # Annotation Services

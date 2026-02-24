@@ -1,8 +1,8 @@
 'use client';
 
 import { useCallback, useState, type ChangeEvent } from 'react';
+import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { EstimateSelector } from '@/components/issues';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -20,8 +20,10 @@ export interface EffortFieldProps {
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Constants
 // ---------------------------------------------------------------------------
+
+const FIBONACCI_PRESETS = [1, 2, 3, 5, 8, 13] as const;
 
 /** Determine initial mode: prefer whichever field has data, default points. */
 function deriveInitialMode(_points?: number, hours?: number): EffortMode {
@@ -36,10 +38,9 @@ function deriveInitialMode(_points?: number, hours?: number): EffortMode {
 /**
  * Unified effort estimation field with a [Points | Hours] segmented toggle.
  *
- * - Points mode renders the existing `EstimateSelector` (Fibonacci presets).
+ * - Points mode renders inline Fibonacci preset buttons (1, 2, 3, 5, 8, 13).
  * - Hours mode renders a numeric input (step 0.5, 0-9999.9).
- * - Toggling preserves both values independently.
- * - Hours displays "Not set" placeholder when empty (never "0.0").
+ * - Designed to render inside a Popover (no nested popovers).
  */
 export function EffortField({
   estimatePoints,
@@ -70,10 +71,10 @@ export function EffortField({
   );
 
   return (
-    <div className={cn('flex w-full items-center gap-2', className)}>
+    <div className={cn('flex flex-col gap-3 w-full', className)}>
       {/* Segmented toggle */}
       <div
-        className="inline-flex shrink-0 rounded-lg border border-input bg-muted/50 p-0.5"
+        className="inline-flex self-start rounded-lg border border-input bg-muted/50 p-0.5"
         role="radiogroup"
         aria-label="Effort estimation mode"
       >
@@ -84,7 +85,7 @@ export function EffortField({
           onClick={() => setMode('points')}
           disabled={disabled}
           className={cn(
-            'rounded-md px-2 py-0.5 text-xs font-medium transition-colors',
+            'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
             mode === 'points'
               ? 'bg-background shadow-sm'
@@ -100,7 +101,7 @@ export function EffortField({
           onClick={() => setMode('hours')}
           disabled={disabled}
           className={cn(
-            'rounded-md px-2 py-0.5 text-xs font-medium transition-colors',
+            'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
             mode === 'hours'
               ? 'bg-background shadow-sm'
@@ -113,14 +114,49 @@ export function EffortField({
 
       {/* Active field */}
       {mode === 'points' ? (
-        <EstimateSelector
-          value={estimatePoints}
-          onChange={onPointsChange}
-          disabled={disabled}
-          className="h-8 min-w-0 flex-1"
-        />
+        <div>
+          <div className="mb-1.5 text-xs font-medium text-muted-foreground">Story Points</div>
+          <div className="flex flex-wrap gap-1.5">
+            {FIBONACCI_PRESETS.map((points) => (
+              <button
+                key={points}
+                type="button"
+                onClick={() => onPointsChange(points)}
+                disabled={disabled}
+                className={cn(
+                  'inline-flex h-8 w-10 items-center justify-center rounded-md text-sm font-medium transition-colors',
+                  'hover:bg-accent hover:text-accent-foreground',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+                  estimatePoints === points
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'bg-muted/50 text-foreground'
+                )}
+                aria-label={`${points} point${points !== 1 ? 's' : ''}`}
+                aria-pressed={estimatePoints === points}
+              >
+                {points}
+              </button>
+            ))}
+          </div>
+          {estimatePoints != null && (
+            <button
+              type="button"
+              onClick={() => onPointsChange(undefined)}
+              disabled={disabled}
+              className={cn(
+                'mt-2 flex w-full items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-muted-foreground transition-colors',
+                'hover:bg-destructive/10 hover:text-destructive',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2'
+              )}
+              aria-label="Clear estimate"
+            >
+              <X className="size-3" />
+              Clear estimate
+            </button>
+          )}
+        </div>
       ) : (
-        <div className="flex min-w-0 flex-1 items-center gap-1">
+        <div className="flex items-center gap-1">
           <input
             key={estimateHours ?? 'empty'}
             type="number"

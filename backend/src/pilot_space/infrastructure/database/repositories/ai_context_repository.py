@@ -262,6 +262,29 @@ class AIContextRepository(BaseRepository[AIContext]):
         """
         return await self.update_conversation_history(issue_id, [])
 
+    async def update_plan_content(
+        self,
+        issue_id: UUID,
+        new_content: dict[str, Any],
+    ) -> AIContext | None:
+        """Persist updated content dict (with implementation_plan key) to AIContext.
+
+        Does NOT bump version or touch generated_at — plan generation is additive.
+
+        Args:
+            issue_id: Issue UUID.
+            new_content: Full content dict including "implementation_plan" key.
+
+        Returns:
+            Updated AIContext or None if not found.
+        """
+        context = await self.get_by_issue_id(issue_id)
+        if not context:
+            return None
+
+        context.content = new_content
+        return await self.update(context)
+
     async def mark_task_completed(
         self,
         issue_id: UUID,

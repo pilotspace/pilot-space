@@ -1,22 +1,4 @@
-"""Type aliases for service dependency injection.
-
-Provides clean, reusable type hints for FastAPI router endpoints using
-the dependency-injector + FastAPI integration pattern.
-
-Pattern: Each dependency gets an @inject wrapper function that resolves
-the container provider, then an Annotated type alias wrapping it in Depends().
-This eliminates the need for @inject on router endpoints.
-
-Usage:
-    @router.post("/issues")
-    async def create_issue(
-        request: IssueCreateRequest,
-        session: SessionDep,  # Trigger session context
-        service: CreateIssueServiceDep,  # Auto-injected from container
-    ):
-        result = await service.execute(payload)
-        return IssueResponse.from_issue(result.issue)
-"""
+"""Type aliases for service dependency injection via dependency-injector + FastAPI."""
 
 from typing import Annotated
 
@@ -37,6 +19,7 @@ from pilot_space.api.v1.repository_deps import (
 from pilot_space.application.services.ai_context import (
     ExportAIContextService,
     GenerateAIContextService,
+    GenerateImplementationPlanService,
     RefineAIContextService,
 )
 from pilot_space.application.services.annotation import (
@@ -344,6 +327,18 @@ def _get_generate_ai_context_service(
 
 GenerateAIContextServiceDep = Annotated[
     GenerateAIContextService, Depends(_get_generate_ai_context_service)
+]
+
+
+@inject
+def _get_generate_plan_service(
+    svc: GenerateImplementationPlanService = Depends(Provide[Container.generate_plan_service]),
+) -> GenerateImplementationPlanService:
+    return svc
+
+
+GeneratePlanServiceDep = Annotated[
+    GenerateImplementationPlanService, Depends(_get_generate_plan_service)
 ]
 
 
@@ -664,6 +659,7 @@ __all__ = [  # noqa: RUF022
     "DismissSuggestionServiceDep",
     "ExportAIContextServiceDep",
     "GenerateAIContextServiceDep",
+    "GeneratePlanServiceDep",
     "GenerateRoleSkillServiceDep",
     "GetActivityServiceDep",
     "GetCycleServiceDep",
