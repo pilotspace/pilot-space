@@ -44,6 +44,7 @@ import { useIssueExtraction } from '@/features/notes/hooks/useIssueExtraction';
 import { ExtractionPreviewModal } from '@/features/notes/components/ExtractionPreviewModal';
 
 import { NoteHealthBadges } from './NoteHealthBadges';
+import { ProjectContextHeader } from './ProjectContextHeader';
 import type { NoteCanvasProps } from './NoteCanvasEditor';
 import { useNoteCanvasEditor, EditorErrorFallback, EditorSkeleton } from './NoteCanvasEditor';
 
@@ -170,6 +171,9 @@ export function NoteCanvasLayout(props: NoteCanvasProps) {
   // Editor content component - reusable for both resizable and non-resizable layouts
   const editorContent = (
     <div className="flex flex-col min-w-0 overflow-hidden h-full">
+      {/* Project context header — shown only when note belongs to a project */}
+      {projectId && <ProjectContextHeader projectId={projectId} workspaceSlug={workspaceSlug} />}
+
       {/* Inline Note Header - Fixed at top, outside scrollable area */}
       {(title || createdAt) && (
         <InlineNoteHeader
@@ -203,12 +207,8 @@ export function NoteCanvasLayout(props: NoteCanvasProps) {
         className="px-4 py-1"
       />
 
-      {/* Note metadata: project + linked issues */}
-      <NoteMetadata
-        projectId={projectId}
-        linkedIssues={linkedIssues}
-        workspaceSlug={workspaceSlug}
-      />
+      {/* Note metadata: linked issues (project context shown in ProjectContextHeader above) */}
+      <NoteMetadata linkedIssues={linkedIssues} workspaceSlug={workspaceSlug} />
 
       {/* Large note warning banner (>= 1000 blocks) */}
       <LargeNoteWarning noteId={noteId} blockCount={blockCount} />
