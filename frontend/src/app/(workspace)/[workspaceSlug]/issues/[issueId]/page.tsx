@@ -28,6 +28,7 @@ import {
   IssueNoteLayout,
   IssuePropertiesPanel,
 } from '@/features/issues/components';
+import { ProjectContextHeader } from '@/components/editor/ProjectContextHeader';
 import { IssueEditorContent } from '@/features/issues/components/issue-editor-content';
 import { DeleteConfirmDialog } from '@/components/issues/DeleteConfirmDialog';
 import {
@@ -425,20 +426,29 @@ const IssueDetailPage = observer(function IssueDetailPage() {
   );
 
   const header = (
-    <IssueNoteHeader
-      identifier={issue.identifier}
-      issueTitle={issue.name}
-      issueType={issue.type}
-      aiGenerated={issue.aiGenerated ?? false}
-      isChatOpen={isChatOpen}
-      onBack={handleBack}
-      onToggleChat={handleToggleChat}
-      onCopyLink={handleCopyLink}
-      onDelete={handleDeleteClick}
-      onExport={handleExportContext}
-      onGeneratePlan={handleGeneratePlan}
-      isGeneratingPlan={isGeneratingPlan}
-    />
+    <>
+      {issue.projectId && (
+        <ProjectContextHeader
+          projectId={issue.projectId}
+          workspaceSlug={workspaceSlug}
+          activeTab="issues"
+        />
+      )}
+      <IssueNoteHeader
+        identifier={issue.identifier}
+        issueTitle={issue.name}
+        issueType={issue.type}
+        aiGenerated={issue.aiGenerated ?? false}
+        isChatOpen={isChatOpen}
+        onBack={handleBack}
+        onToggleChat={handleToggleChat}
+        onCopyLink={handleCopyLink}
+        onDelete={handleDeleteClick}
+        onExport={handleExportContext}
+        onGeneratePlan={handleGeneratePlan}
+        isGeneratingPlan={isGeneratingPlan}
+      />
+    </>
   );
 
   return (

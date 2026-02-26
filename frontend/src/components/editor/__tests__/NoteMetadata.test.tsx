@@ -1,22 +1,17 @@
 /**
  * Unit tests for NoteMetadata component.
  *
- * Tests rendering of project reference with progress bar,
- * linked issue badges with state colors, overflow handling,
- * and empty-state null rendering.
+ * Tests rendering of linked issue badges with state colors,
+ * overflow handling, and empty-state null rendering.
+ *
+ * Project context (name, progress) is tested in ProjectContextHeader.test.tsx.
  *
  * @module components/editor/__tests__/NoteMetadata.test
  */
-import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { useQuery } from '@tanstack/react-query';
 import { NoteMetadata } from '../NoteMetadata';
 import type { LinkedIssueBrief, StateBrief, IssuePriority } from '@/types';
-
-// Mock TanStack Query
-vi.mock('@tanstack/react-query', () => ({
-  useQuery: vi.fn(),
-}));
 
 // Mock next/link
 vi.mock('next/link', () => ({
@@ -66,11 +61,7 @@ function makeIssue(overrides: Partial<LinkedIssueBrief> = {}): LinkedIssueBrief 
 }
 
 describe('NoteMetadata', () => {
-  beforeEach(() => {
-    (useQuery as Mock).mockReturnValue({ data: undefined, isLoading: false });
-  });
-
-  it('returns null when no projectId and no linkedIssues', () => {
+  it('returns null when no linkedIssues', () => {
     const { container } = render(<NoteMetadata linkedIssues={[]} workspaceSlug="my-ws" />);
     expect(container.innerHTML).toBe('');
   });
@@ -120,88 +111,6 @@ describe('NoteMetadata', () => {
     expect(screen.queryByTestId('note-metadata-issue-PS-6')).not.toBeInTheDocument();
     // Overflow indicator
     expect(screen.getByTestId('note-metadata-more')).toHaveTextContent('+3 more');
-  });
-
-  it('renders project name and progress bar when project data is loaded', () => {
-    (useQuery as Mock).mockReturnValue({
-      data: {
-        id: 'proj-1',
-        name: 'Alpha Project',
-        identifier: 'alpha-project',
-        workspaceId: 'w1',
-        issueCount: 10,
-        openIssueCount: 2,
-        createdAt: '2025-01-01T00:00:00Z',
-        updatedAt: '2025-01-01T00:00:00Z',
-      },
-      isLoading: false,
-    });
-
-    render(<NoteMetadata projectId="proj-1" linkedIssues={[]} workspaceSlug="acme" />);
-
-    const projectLink = screen.getByTestId('note-metadata-project');
-    expect(projectLink).toBeInTheDocument();
-    expect(projectLink).toHaveAttribute('href', '/acme/projects/alpha-project');
-    expect(screen.getByText('Alpha Project')).toBeInTheDocument();
-    expect(screen.getByText('8/10')).toBeInTheDocument();
-  });
-
-  it('shows progress bar with correct width percentage', () => {
-    (useQuery as Mock).mockReturnValue({
-      data: {
-        id: 'proj-2',
-        name: 'Beta',
-        identifier: 'beta',
-        workspaceId: 'w1',
-        issueCount: 4,
-        openIssueCount: 1,
-        createdAt: '2025-01-01T00:00:00Z',
-        updatedAt: '2025-01-01T00:00:00Z',
-      },
-      isLoading: false,
-    });
-
-    render(<NoteMetadata projectId="proj-2" linkedIssues={[]} workspaceSlug="ws" />);
-
-    const progressBar = screen.getByRole('progressbar');
-    expect(progressBar).toHaveAttribute('aria-valuenow', '3');
-    expect(progressBar).toHaveAttribute('aria-valuemax', '4');
-    // Inner bar should be 75% wide (3 completed out of 4)
-    const innerBar = progressBar.querySelector('div');
-    expect(innerBar).toHaveStyle({ width: '75%' });
-  });
-
-  it('renders separator dot when both project and issues are present', () => {
-    (useQuery as Mock).mockReturnValue({
-      data: {
-        id: 'proj-1',
-        name: 'Proj',
-        identifier: 'proj',
-        workspaceId: 'w1',
-        issueCount: 5,
-        openIssueCount: 3,
-        createdAt: '2025-01-01T00:00:00Z',
-        updatedAt: '2025-01-01T00:00:00Z',
-      },
-      isLoading: false,
-    });
-
-    const issues = [makeIssue({ id: 'i1', identifier: 'PS-1' })];
-
-    render(<NoteMetadata projectId="proj-1" linkedIssues={issues} workspaceSlug="ws" />);
-
-    // Both sections present
-    expect(screen.getByTestId('note-metadata-project')).toBeInTheDocument();
-    expect(screen.getByTestId('note-metadata-issues')).toBeInTheDocument();
-  });
-
-  it('does not render project section when projectId is provided but data not yet loaded', () => {
-    (useQuery as Mock).mockReturnValue({ data: undefined, isLoading: true });
-
-    render(<NoteMetadata projectId="proj-1" linkedIssues={[]} workspaceSlug="ws" />);
-
-    // The component renders the wrapper (projectId is truthy) but no project link
-    expect(screen.queryByTestId('note-metadata-project')).not.toBeInTheDocument();
   });
 
   it('applies custom className', () => {
