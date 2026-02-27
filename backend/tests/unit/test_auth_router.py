@@ -40,11 +40,17 @@ def test_auth_router_no_refresh_endpoint() -> None:
     assert "/auth/refresh" not in _get_route_paths()
 
 
+def test_auth_router_has_config_endpoint() -> None:
+    """Verify /auth/config endpoint is registered (US-03: frontend auth routing)."""
+    assert "/auth/config" in _get_route_paths()
+
+
 def test_auth_router_expected_route_count() -> None:
     """Verify auth router has exactly the expected number of routes.
 
-    Expected: /auth/login (GET), /auth/me (GET, PATCH), /auth/logout (POST).
+    Expected: /auth/login (GET), /auth/me (GET, PATCH), /auth/logout (POST),
+              /auth/config (GET — JWT provider config for frontend).
     """
     paths = _get_route_paths()
-    expected_paths = {"/auth/login", "/auth/me", "/auth/logout"}
+    expected_paths = {"/auth/login", "/auth/me", "/auth/logout", "/auth/config"}
     assert paths == expected_paths

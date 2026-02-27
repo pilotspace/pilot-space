@@ -6,7 +6,7 @@ Supports both HS256 (legacy/local) and ES256 (Supabase Cloud) algorithms.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from functools import lru_cache
 from typing import Any
@@ -42,21 +42,24 @@ class TokenPayload:
         sub: Subject (user ID).
         email: User email address.
         role: User role (authenticated, anon, etc.).
-        aud: Audience (expected to be "authenticated").
+        aud: Audience (expected to be "authenticated"). Optional — AuthCore
+             tokens do not include this claim.
         exp: Expiration timestamp.
         iat: Issued at timestamp.
-        app_metadata: Application-level metadata.
-        user_metadata: User-level metadata.
+        app_metadata: Application-level metadata. Defaults to empty dict for
+                      providers (e.g. AuthCore) that do not include this claim.
+        user_metadata: User-level metadata. Defaults to empty dict for
+                       providers (e.g. AuthCore) that do not include this claim.
     """
 
     sub: str
-    email: str | None
-    role: str
-    aud: str
     exp: int
     iat: int
-    app_metadata: dict[str, Any]
-    user_metadata: dict[str, Any]
+    email: str | None = None
+    role: str = "authenticated"
+    aud: str = "authenticated"
+    app_metadata: dict[str, Any] = field(default_factory=dict)
+    user_metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
     def user_id(self) -> UUID:

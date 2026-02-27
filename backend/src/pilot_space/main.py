@@ -99,6 +99,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         log_level=settings.log_level,
     )
 
+    # Fail-fast: validate JWT provider config before accepting traffic
+    from pilot_space.dependencies.jwt_providers import get_jwt_provider
+
+    get_jwt_provider(settings)  # raises ValueError for invalid/incomplete config
+    logger.info("jwt_provider_validated", auth_provider=settings.auth_provider or "supabase")
+
     # Initialize DI container and connections
     app.state.container = get_container()
 

@@ -1,6 +1,9 @@
 """JWT Provider Abstraction — supports Supabase (default) and AuthCore.
 
 Controlled by AUTH_PROVIDER env var (default: "supabase").
+
+PO trade-off (MVP): AuthCore path validates RS256 signature + expiry only.
+JTI blacklist is NOT checked — access tokens are short-lived (15 min).
 """
 
 from __future__ import annotations
@@ -15,6 +18,7 @@ from pilot_space.infrastructure.auth import (
     SupabaseAuth,
     SupabaseAuthError,
     TokenExpiredError as SupabaseTokenExpiredError,
+    TokenPayload,
 )
 from pilot_space.infrastructure.logging import get_logger
 
@@ -25,7 +29,7 @@ logger = get_logger(__name__)
 
 
 class JWTValidationError(Exception):
-    """Token failed validation (expired, invalid signature, blacklisted JTI)."""
+    """Token failed validation (invalid signature, missing claims, etc.)."""
 
 
 class JWTExpiredError(JWTValidationError):
@@ -36,18 +40,18 @@ class JWTExpiredError(JWTValidationError):
 class JWTProvider(Protocol):
     """Protocol for JWT validation providers.
 
-    Each implementation validates a raw Bearer token and returns the
-    authenticated user's UUID or raises JWTValidationError / JWTExpiredError.
+    Each implementation validates a raw Bearer token and returns a
+    TokenPayload or raises JWTValidationError / JWTExpiredError.
     """
 
-    def validate_token(self, token: str) -> UUID:
-        """Validate token and return user UUID.
+    def verify_token(self, token: str) -> TokenPayload:
+        """Validate token and return TokenPayload.
 
         Args:
             token: Raw JWT Bearer token string.
 
         Returns:
-            User UUID extracted from the validated token.
+            Validated TokenPayload with user identity and claims.
 
         Raises:
             JWTExpiredError: If the token has expired.
@@ -66,22 +70,21 @@ class SupabaseJWTProvider:
     def __init__(self, auth: SupabaseAuth | None = None) -> None:
         self._auth = auth or SupabaseAuth()
 
-    def validate_token(self, token: str) -> UUID:
-        """Validate Supabase JWT and return user UUID.
+    def verify_token(self, token: str) -> TokenPayload:
+        """Validate Supabase JWT and return TokenPayload.
 
         Args:
             token: Raw JWT Bearer token string.
 
         Returns:
-            User UUID from the validated sub claim.
+            Validated TokenPayload from Supabase claims.
 
         Raises:
             JWTExpiredError: If the token has expired.
             JWTValidationError: If the token is invalid.
         """
         try:
-            payload = self._auth.validate_token(token)
-            return payload.user_id
+            return self._auth.validate_token(token)
         except SupabaseTokenExpiredError as e:
             raise JWTExpiredError(str(e)) from e
         except SupabaseAuthError as e:
@@ -91,43 +94,45 @@ class SupabaseJWTProvider:
 class AuthCoreJWTProvider:
     """Validates AuthCore RS256 JWT tokens.
 
-    Verifies the RS256 signature using the configured public key, checks
-    the JTI against the Redis blacklist, and extracts the sub claim as
-    the user UUID.
+    Verifies the RS256 signature using the configured PEM public key,
+    enforces required claims (sub, jti, exp, iat), and constructs a
+    TokenPayload compatible with all downstream Pilot Space code.
+
+    JTI blacklist is NOT checked (PO-approved MVP trade-off).
+    Access tokens are short-lived (15 min), making revocation less critical.
     """
 
     ALGORITHM = "RS256"
 
-    def __init__(self, public_key_pem: str, redis_client: object | None = None) -> None:
+    def __init__(self, public_key_pem: str) -> None:
         """Initialise AuthCore JWT provider.
 
         Args:
             public_key_pem: PEM-encoded RSA public key for RS256 verification.
-            redis_client: Optional RedisClient instance for JTI blacklist checks.
-                          If None, blacklist checking is skipped (not recommended
-                          for production without a Redis connection).
         """
         self._public_key_pem = public_key_pem
-        self._redis = redis_client
 
-    def validate_token(self, token: str) -> UUID:
-        """Validate AuthCore RS256 JWT and return user UUID.
+    def verify_token(self, token: str) -> TokenPayload:
+        """Validate AuthCore RS256 JWT and return TokenPayload.
 
-        Performs three checks in order:
+        Performs:
         1. RS256 signature verification with the configured public key.
-        2. Standard claim validation (exp, iat, sub, jti are required).
-        3. JTI blacklist check via Redis (if Redis client is configured).
+        2. Required claim validation (sub, jti, exp, iat).
+        3. UUID parsing of the sub claim.
+
+        AuthCore tokens do not carry email, aud, app_metadata, or
+        user_metadata — TokenPayload handles these with safe defaults.
 
         Args:
             token: Raw JWT Bearer token string.
 
         Returns:
-            User UUID from the validated sub claim.
+            TokenPayload with user_id populated from sub claim.
 
         Raises:
             JWTExpiredError: If the token has expired.
-            JWTValidationError: If the token signature is invalid, claims are
-                                missing, or the JTI has been revoked.
+            JWTValidationError: If the token signature is invalid or claims
+                                are missing/malformed.
         """
         try:
             claims = jwt.decode(
@@ -141,75 +146,26 @@ class AuthCoreJWTProvider:
         except PyJWTError as e:
             raise JWTValidationError(f"AuthCore token is invalid: {e}") from e
 
-        jti: str = claims["jti"]
-        if self._is_jti_blacklisted(jti):
-            raise JWTValidationError(f"Token JTI {jti!r} has been revoked")
-
+        sub = claims.get("sub")
         try:
-            return UUID(claims["sub"])
-        except (ValueError, AttributeError) as e:
-            raise JWTValidationError(f"Invalid sub claim: {claims.get('sub')!r}") from e
+            UUID(str(sub))  # validate UUID format before passing to TokenPayload
+        except (ValueError, TypeError) as e:
+            raise JWTValidationError(f"Invalid sub claim: {sub!r}") from e
 
-    def _is_jti_blacklisted(self, jti: str) -> bool:
-        """Check Redis blacklist for the given JTI.
-
-        The blacklist key pattern is ``authcore:jti:revoked:<jti>``.
-        Returns False (not blacklisted) when Redis is unavailable so that
-        a Redis outage does not prevent valid logins.
-
-        Args:
-            jti: JWT ID claim from the token.
-
-        Returns:
-            True if the JTI is blacklisted, False otherwise.
-        """
-        if self._redis is None:
-            return False
-
-        import asyncio
-
-        key = f"authcore:jti:revoked:{jti}"
-
-        # Support both sync (Protocol .exists) and async RedisClient
-        # The Pilot Space RedisClient is async; we run it in the current loop
-        # if one is running, else use asyncio.run().
-        exists_method = getattr(self._redis, "exists", None)
-        if exists_method is None:
-            logger.warning("Redis client has no 'exists' method; skipping JTI check")
-            return False
-
-        try:
-            result = exists_method(key)
-            # If the result is a coroutine, schedule it synchronously
-            if asyncio.iscoroutine(result):
-                try:
-                    loop = asyncio.get_event_loop()
-                    if loop.is_running():
-                        # Running inside an event loop (FastAPI dependency context)
-                        # Use run_coroutine_threadsafe or create a task — but since
-                        # validate_token is sync by design (Protocol constraint),
-                        # we run it via a new thread-safe future.
-                        from concurrent.futures import Future as _Future
-
-                        future: _Future[int] = asyncio.run_coroutine_threadsafe(result, loop)
-                        count = future.result(timeout=1.0)
-                    else:
-                        count = loop.run_until_complete(result)
-                except Exception as exc:
-                    logger.warning("JTI blacklist check failed (async): %s", exc)
-                    return False
-            else:
-                count = result
-            return bool(count)
-        except Exception as exc:
-            logger.warning("JTI blacklist check failed: %s", exc)
-            return False
+        return TokenPayload(
+            sub=str(sub),
+            exp=int(claims["exp"]),
+            iat=int(claims["iat"]),
+            role=str(claims.get("role", "authenticated")),
+            # email, aud, app_metadata, user_metadata use TokenPayload defaults
+        )
 
 
 def get_jwt_provider(settings: Settings) -> JWTProvider:
     """Factory: return the correct JWTProvider based on settings.auth_provider.
 
     Default is "supabase" for full backward compatibility.
+    Fails-fast at startup for authcore mode when AUTHCORE_PUBLIC_KEY is absent.
 
     Args:
         settings: Application settings instance.
@@ -218,7 +174,8 @@ def get_jwt_provider(settings: Settings) -> JWTProvider:
         A JWTProvider implementation for the configured auth provider.
 
     Raises:
-        ValueError: If auth_provider has an unrecognised value.
+        ValueError: If auth_provider is unrecognised OR if auth_provider is
+                    "authcore" and AUTHCORE_PUBLIC_KEY is not set.
     """
     provider = (settings.auth_provider or "supabase").lower().strip()
 
@@ -228,23 +185,12 @@ def get_jwt_provider(settings: Settings) -> JWTProvider:
     if provider == "authcore":
         public_key = settings.authcore_public_key
         if not public_key:
-            raise ValueError("AUTH_PROVIDER=authcore requires AUTHCORE_PUBLIC_KEY to be set")
-
-        # Lazily import to avoid circular deps; RedisClient is optional
-        try:
-            from pilot_space.infrastructure.cache.redis import RedisClient
-
-            redis_url = getattr(settings, "redis_url", None)
-            redis_client: object | None = RedisClient(redis_url) if redis_url else None
-        except Exception:
-            redis_client = None
-            logger.warning("Could not initialise Redis for JTI blacklist; skipping")
-
-        return AuthCoreJWTProvider(
-            public_key_pem=public_key,
-            redis_client=redis_client,
-        )
+            raise ValueError(
+                "AUTH_PROVIDER=authcore requires AUTHCORE_PUBLIC_KEY to be set. "
+                "Set AUTHCORE_PUBLIC_KEY to the PEM-encoded RSA public key."
+            )
+        return AuthCoreJWTProvider(public_key_pem=public_key)
 
     raise ValueError(
-        f"Unknown AUTH_PROVIDER {provider!r}. Supported values: 'supabase', 'authcore'."
+        f"Unknown AUTH_PROVIDER {provider!r}. Supported values: 'supabase' (default), 'authcore'."
     )

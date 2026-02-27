@@ -1,9 +1,8 @@
 """Unit tests for JWT provider abstraction (AuthCore JWT bridge).
 
 Covers:
-- SupabaseJWTProvider extracts UUID from sub claim
-- AuthCoreJWTProvider validates RS256 token
-- AuthCoreJWTProvider rejects tokens with blacklisted JTI
+- SupabaseJWTProvider returns TokenPayload from Supabase claims
+- AuthCoreJWTProvider validates RS256 token (signature + expiry only; no JTI blacklist)
 - Factory returns correct provider based on config
 - Backward compat: missing/empty AUTH_PROVIDER defaults to supabase
 """
@@ -13,7 +12,7 @@ from __future__ import annotations
 import time
 import uuid
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import jwt
 import pytest
@@ -80,18 +79,20 @@ def _make_valid_authcore_claims(user_id: uuid.UUID | None = None) -> dict[str, A
 
 
 class TestSupabaseJWTProvider:
-    def test_extracts_uuid_from_valid_sub(self) -> None:
+    def test_returns_token_payload_from_supabase(self) -> None:
+        from pilot_space.infrastructure.auth.supabase_auth import TokenPayload
+
         user_id = uuid.uuid4()
-        mock_payload = MagicMock()
+        mock_payload = MagicMock(spec=TokenPayload)
         mock_payload.user_id = user_id
 
         mock_auth = MagicMock()
         mock_auth.validate_token.return_value = mock_payload
 
         provider = SupabaseJWTProvider(auth=mock_auth)
-        result = provider.validate_token("dummy.token.here")
+        result = provider.verify_token("dummy.token.here")
 
-        assert result == user_id
+        assert result.user_id == user_id
         mock_auth.validate_token.assert_called_once_with("dummy.token.here")
 
     def test_raises_jwt_expired_error_on_expired_token(self) -> None:
@@ -102,7 +103,7 @@ class TestSupabaseJWTProvider:
 
         provider = SupabaseJWTProvider(auth=mock_auth)
         with pytest.raises(JWTExpiredError):
-            provider.validate_token("expired.token")
+            provider.verify_token("expired.token")
 
     def test_raises_jwt_validation_error_on_invalid_token(self) -> None:
         from pilot_space.infrastructure.auth import SupabaseAuthError
@@ -112,7 +113,7 @@ class TestSupabaseJWTProvider:
 
         provider = SupabaseJWTProvider(auth=mock_auth)
         with pytest.raises(JWTValidationError):
-            provider.validate_token("bad.token")
+            provider.verify_token("bad.token")
 
     def test_satisfies_jwt_provider_protocol(self) -> None:
         provider = SupabaseJWTProvider(auth=MagicMock())
@@ -125,16 +126,18 @@ class TestSupabaseJWTProvider:
 
 
 class TestAuthCoreJWTProviderValid:
-    def test_validates_rs256_token_and_returns_uuid(self, rsa_keypair: tuple[str, str]) -> None:
+    def test_validates_rs256_token_and_returns_token_payload(
+        self, rsa_keypair: tuple[str, str]
+    ) -> None:
         private_pem, public_pem = rsa_keypair
         user_id = uuid.uuid4()
         claims = _make_valid_authcore_claims(user_id)
         token = _sign_rs256(claims, private_pem)
 
         provider = AuthCoreJWTProvider(public_key_pem=public_pem)
-        result = provider.validate_token(token)
+        result = provider.verify_token(token)
 
-        assert result == user_id
+        assert result.user_id == user_id
 
     def test_satisfies_jwt_provider_protocol(self, rsa_keypair: tuple[str, str]) -> None:
         _, public_pem = rsa_keypair
@@ -156,7 +159,7 @@ class TestAuthCoreJWTProviderRejections:
 
         provider = AuthCoreJWTProvider(public_key_pem=public_pem)
         with pytest.raises(JWTExpiredError):
-            provider.validate_token(token)
+            provider.verify_token(token)
 
     def test_raises_jwt_validation_error_for_wrong_key(self, rsa_keypair: tuple[str, str]) -> None:
         private_pem, _ = rsa_keypair
@@ -166,13 +169,13 @@ class TestAuthCoreJWTProviderRejections:
 
         provider = AuthCoreJWTProvider(public_key_pem=wrong_public_pem)
         with pytest.raises(JWTValidationError):
-            provider.validate_token(token)
+            provider.verify_token(token)
 
     def test_raises_jwt_validation_error_for_missing_required_claims(
         self, rsa_keypair: tuple[str, str]
     ) -> None:
         private_pem, public_pem = rsa_keypair
-        # Missing jti
+        # Missing jti — still required in claims even though not blacklist-checked
         claims = {
             "sub": str(uuid.uuid4()),
             "iat": int(time.time()),
@@ -182,7 +185,7 @@ class TestAuthCoreJWTProviderRejections:
 
         provider = AuthCoreJWTProvider(public_key_pem=public_pem)
         with pytest.raises(JWTValidationError):
-            provider.validate_token(token)
+            provider.verify_token(token)
 
     def test_raises_jwt_validation_error_for_malformed_sub(
         self, rsa_keypair: tuple[str, str]
@@ -194,51 +197,19 @@ class TestAuthCoreJWTProviderRejections:
 
         provider = AuthCoreJWTProvider(public_key_pem=public_pem)
         with pytest.raises(JWTValidationError):
-            provider.validate_token(token)
+            provider.verify_token(token)
 
-    def test_raises_jwt_validation_error_for_blacklisted_jti(
-        self, rsa_keypair: tuple[str, str]
-    ) -> None:
-        private_pem, public_pem = rsa_keypair
-        jti = str(uuid.uuid4())
-        claims = _make_valid_authcore_claims()
-        claims["jti"] = jti
-        token = _sign_rs256(claims, private_pem)
-
-        # Mock Redis returning 1 (key exists) for the blacklist key
-        mock_redis = MagicMock()
-        mock_redis.exists.return_value = 1  # sync int — not a coroutine
-
-        provider = AuthCoreJWTProvider(public_key_pem=public_pem, redis_client=mock_redis)
-        with pytest.raises(JWTValidationError, match="revoked"):
-            provider.validate_token(token)
-
-        mock_redis.exists.assert_called_once_with(f"authcore:jti:revoked:{jti}")
-
-    def test_allows_token_when_jti_not_blacklisted(self, rsa_keypair: tuple[str, str]) -> None:
-        private_pem, public_pem = rsa_keypair
-        user_id = uuid.uuid4()
-        jti = str(uuid.uuid4())
-        claims = _make_valid_authcore_claims(user_id)
-        claims["jti"] = jti
-        token = _sign_rs256(claims, private_pem)
-
-        mock_redis = MagicMock()
-        mock_redis.exists.return_value = 0  # not in blacklist
-
-        provider = AuthCoreJWTProvider(public_key_pem=public_pem, redis_client=mock_redis)
-        result = provider.validate_token(token)
-        assert result == user_id
-
-    def test_skips_jti_check_when_no_redis(self, rsa_keypair: tuple[str, str]) -> None:
+    def test_jti_present_but_not_blacklist_checked(self, rsa_keypair: tuple[str, str]) -> None:
+        """jti claim is required but Pilot Space does not check Redis blacklist (MVP trade-off)."""
         private_pem, public_pem = rsa_keypair
         user_id = uuid.uuid4()
         claims = _make_valid_authcore_claims(user_id)
         token = _sign_rs256(claims, private_pem)
 
-        provider = AuthCoreJWTProvider(public_key_pem=public_pem, redis_client=None)
-        result = provider.validate_token(token)
-        assert result == user_id
+        # No Redis, no blacklist — token validates successfully
+        provider = AuthCoreJWTProvider(public_key_pem=public_pem)
+        result = provider.verify_token(token)
+        assert result.user_id == user_id
 
 
 # ---------------------------------------------------------------------------
@@ -250,13 +221,11 @@ def _make_settings(
     auth_provider: str = "supabase",
     authcore_public_key: str | None = None,
     authcore_url: str | None = None,
-    redis_url: str = "redis://localhost:6379/0",
 ) -> MagicMock:
     settings = MagicMock()
     settings.auth_provider = auth_provider
     settings.authcore_public_key = authcore_public_key
     settings.authcore_url = authcore_url
-    settings.redis_url = redis_url
     return settings
 
 
@@ -281,14 +250,7 @@ class TestGetJwtProviderFactory:
     def test_returns_authcore_provider_when_configured(self, rsa_keypair: tuple[str, str]) -> None:
         _, public_pem = rsa_keypair
         settings = _make_settings(auth_provider="authcore", authcore_public_key=public_pem)
-
-        # RedisClient is imported lazily inside get_jwt_provider; patch the source module
-        with patch(
-            "pilot_space.infrastructure.cache.redis.RedisClient",
-            return_value=MagicMock(),
-        ):
-            provider = get_jwt_provider(settings)
-
+        provider = get_jwt_provider(settings)
         assert isinstance(provider, AuthCoreJWTProvider)
 
     def test_raises_value_error_when_authcore_missing_public_key(self) -> None:
@@ -306,16 +268,10 @@ class TestGetJwtProviderFactory:
         provider = get_jwt_provider(settings)
         assert isinstance(provider, SupabaseJWTProvider)
 
-    def test_authcore_provider_skips_redis_when_no_redis_url(
-        self, rsa_keypair: tuple[str, str]
-    ) -> None:
+    def test_authcore_provider_only_needs_public_key(self, rsa_keypair: tuple[str, str]) -> None:
+        """AuthCoreJWTProvider no longer takes a Redis client (JTI check is MVP trade-off)."""
         _, public_pem = rsa_keypair
-        settings = _make_settings(
-            auth_provider="authcore",
-            authcore_public_key=public_pem,
-            redis_url="",
-        )
-        settings.redis_url = ""
+        settings = _make_settings(auth_provider="authcore", authcore_public_key=public_pem)
         provider = get_jwt_provider(settings)
         assert isinstance(provider, AuthCoreJWTProvider)
 
@@ -333,12 +289,15 @@ class TestBackwardCompatibility:
         assert isinstance(provider, SupabaseJWTProvider)
 
     def test_supabase_provider_validates_full_round_trip(self) -> None:
-        """SupabaseJWTProvider returns UUID matching the sub claim."""
+        """SupabaseJWTProvider returns TokenPayload with correct user_id."""
+        from pilot_space.infrastructure.auth.supabase_auth import TokenPayload
+
         user_id = uuid.uuid4()
-        mock_payload = MagicMock()
+        mock_payload = MagicMock(spec=TokenPayload)
         mock_payload.user_id = user_id
         mock_auth = MagicMock()
         mock_auth.validate_token.return_value = mock_payload
 
         provider = SupabaseJWTProvider(auth=mock_auth)
-        assert provider.validate_token("any.token") == user_id
+        result = provider.verify_token("any.token")
+        assert result.user_id == user_id

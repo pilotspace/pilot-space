@@ -1,6 +1,7 @@
 """Authentication middleware for JWT validation.
 
-Validates Supabase JWT tokens on protected routes.
+Validates JWT tokens on protected routes. Provider is determined by
+AUTH_PROVIDER env var — defaults to Supabase, supports AuthCore.
 """
 
 from __future__ import annotations
@@ -10,12 +11,12 @@ from typing import TYPE_CHECKING, Any
 from fastapi import HTTPException, Request, status
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 
-from pilot_space.infrastructure.auth import (
-    SupabaseAuth,
-    SupabaseAuthError,
-    TokenExpiredError,
-    TokenPayload,
+from pilot_space.dependencies.jwt_providers import (
+    JWTExpiredError,
+    JWTValidationError,
+    get_jwt_provider,
 )
+from pilot_space.infrastructure.auth import TokenPayload
 
 if TYPE_CHECKING:
     from starlette.responses import Response
@@ -31,6 +32,7 @@ PUBLIC_ROUTES: set[str] = {
     "/api/v1/auth/login",
     "/api/v1/auth/callback",
     "/api/v1/auth/refresh",
+    "/api/v1/auth/config",
 }
 
 
@@ -50,22 +52,20 @@ class AuthMiddleware(BaseHTTPMiddleware):
     """Middleware for JWT authentication.
 
     Validates Bearer tokens on non-public routes and attaches
-    user context to request state.
+    user context to request state. Provider is determined by
+    AUTH_PROVIDER env var (default: supabase).
     """
 
-    def __init__(
-        self,
-        app: Any,
-        auth: SupabaseAuth | None = None,
-    ) -> None:
+    def __init__(self, app: Any) -> None:
         """Initialize auth middleware.
 
         Args:
             app: FastAPI application.
-            auth: Optional SupabaseAuth instance.
         """
         super().__init__(app)
-        self._auth = auth or SupabaseAuth()
+        from pilot_space.config import get_settings
+
+        self._provider = get_jwt_provider(get_settings())
 
     async def dispatch(
         self,
@@ -112,20 +112,18 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
         token = parts[1]
 
-        # Validate token
         try:
-            payload = self._auth.validate_token(token)
-            # Store user context in request state
+            payload = self._provider.verify_token(token)
             request.state.user = payload
             request.state.user_id = payload.user_id
             request.state.token = token
-        except TokenExpiredError as e:
+        except JWTExpiredError as e:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Token has expired",
                 headers={"WWW-Authenticate": "Bearer"},
             ) from e
-        except SupabaseAuthError as e:
+        except JWTValidationError as e:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=str(e),

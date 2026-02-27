@@ -170,4 +170,25 @@ async def logout(
     return {"message": "Logged out successfully"}
 
 
+@router.get("/config", tags=["auth"])
+async def get_auth_config() -> dict[str, str | None]:
+    """Return the active JWT provider configuration.
+
+    Used by the frontend to route token refresh calls to the correct
+    auth service (Supabase GoTrue vs AuthCore).
+
+    Returns:
+        provider: "supabase" or "authcore"
+        authcore_url: AuthCore base URL when provider is "authcore", else null
+    """
+    from pilot_space.config import get_settings
+
+    settings = get_settings()
+    provider = (settings.auth_provider or "supabase").lower().strip()
+    authcore_url: str | None = None
+    if provider == "authcore":
+        authcore_url = getattr(settings, "authcore_url", None)
+    return {"provider": provider, "authcore_url": authcore_url}
+
+
 __all__ = ["router"]

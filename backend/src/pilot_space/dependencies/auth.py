@@ -23,8 +23,6 @@ from pilot_space.dependencies.jwt_providers import (
 )
 from pilot_space.infrastructure.auth import (
     SupabaseAuth,
-    SupabaseAuthError,
-    TokenExpiredError,
     TokenPayload,
 )
 from pilot_space.infrastructure.database.engine import get_db_session
@@ -146,17 +144,15 @@ def get_token_from_header(request: Request) -> str:
 
 def get_current_user(
     request: Request,
-    auth: Annotated[SupabaseAuth, Depends(get_auth)],
 ) -> TokenPayload:
     """Get current authenticated user from request.
 
-    First checks request.state (set by middleware), then validates token.
-    Uses the configured JWT provider (Supabase default, or AuthCore when
-    AUTH_PROVIDER=authcore) for token validation.
+    First checks request.state (set by middleware), then validates token
+    via the configured JWT provider (Supabase default, or AuthCore when
+    AUTH_PROVIDER=authcore).
 
     Args:
         request: The current request.
-        auth: Supabase Auth instance (used only when provider is "supabase").
 
     Returns:
         Validated token payload with user info.
@@ -169,33 +165,10 @@ def get_current_user(
     if user is not None:
         return user  # type: ignore[no-any-return]
 
-    # Validate token manually (for routes without middleware)
     token = get_token_from_header(request)
-
-    settings = get_settings()
-    provider_name = (settings.auth_provider or "supabase").lower().strip()
-
-    if provider_name == "supabase":
-        # Keep the original Supabase path — returns full TokenPayload
-        try:
-            return auth.validate_token(token)
-        except TokenExpiredError as e:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Token has expired",
-                headers={"WWW-Authenticate": "Bearer"},
-            ) from e
-        except SupabaseAuthError as e:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=str(e),
-                headers={"WWW-Authenticate": "Bearer"},
-            ) from e
-
-    # AuthCore path — validate via provider and synthesise a minimal TokenPayload
     provider = _get_jwt_provider()
     try:
-        user_id = provider.validate_token(token)
+        return provider.verify_token(token)
     except JWTExpiredError as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -208,20 +181,6 @@ def get_current_user(
             detail=str(e),
             headers={"WWW-Authenticate": "Bearer"},
         ) from e
-
-    # Synthesise a TokenPayload so downstream code continues to work unchanged
-    import time
-
-    return TokenPayload(
-        sub=str(user_id),
-        email=None,
-        role="authenticated",
-        aud="authenticated",
-        exp=int(time.time()) + 3600,
-        iat=int(time.time()),
-        app_metadata={},
-        user_metadata={},
-    )
 
 
 def get_current_user_id(
