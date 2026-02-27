@@ -43,7 +43,7 @@ export const UserMessage = memo<UserMessageProps>(({ message, userName = 'You', 
       {(message.metadata?.attachments ?? []).length > 0 && (
         <div className="flex flex-wrap gap-1.5 mt-2" data-testid="attachment-chips">
           {(message.metadata?.attachments ?? []).map((att) => (
-            <AttachmentChip key={att.attachment_id} attachment={att} />
+            <AttachmentChip key={att.attachmentId} attachment={att} />
           ))}
         </div>
       )}

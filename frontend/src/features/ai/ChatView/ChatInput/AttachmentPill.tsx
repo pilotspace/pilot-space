@@ -60,14 +60,14 @@ interface AttachmentPillProps {
 }
 
 export const AttachmentPill = memo<AttachmentPillProps>(({ attachment, onRemove }) => {
-  const { filename, mime_type, status, error } = attachment;
+  const { filename, mimeType, status, error } = attachment;
 
   return (
     <Badge variant="secondary" className="gap-1.5 max-w-[200px]" data-testid="attachment-pill">
       {status === 'uploading' ? (
         <Loader2 className="h-3 w-3 animate-spin" role="status" aria-label="Uploading" />
       ) : (
-        getFileIcon(mime_type)
+        getFileIcon(mimeType)
       )}
 
       <span className="truncate text-xs">{truncateFilename(filename)}</span>

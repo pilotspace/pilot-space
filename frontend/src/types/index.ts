@@ -84,6 +84,8 @@ export type {
   TaskCreate,
   TaskUpdate,
   TaskListResponse,
+  SubtaskSchema,
+  DecomposeResponse,
   ContextExportResponse,
   GhostTextSuggestion,
 } from './ai';

@@ -37,40 +37,40 @@ import { attachmentsApi } from '@/services/api/attachments';
 const mockFolder: DriveFileItem = {
   id: 'folder-1',
   name: 'My Folder',
-  mime_type: 'application/vnd.google-apps.folder',
-  size_bytes: null,
-  modified_at: '2026-01-01T00:00:00Z',
-  is_folder: true,
-  icon_url: null,
+  mimeType: 'application/vnd.google-apps.folder',
+  sizeBytes: null,
+  modifiedAt: '2026-01-01T00:00:00Z',
+  isFolder: true,
+  iconUrl: null,
 };
 
 const mockFile1: DriveFileItem = {
   id: 'file-1',
   name: 'Report.pdf',
-  mime_type: 'application/pdf',
-  size_bytes: 102400,
-  modified_at: '2026-01-10T00:00:00Z',
-  is_folder: false,
-  icon_url: null,
+  mimeType: 'application/pdf',
+  sizeBytes: 102400,
+  modifiedAt: '2026-01-10T00:00:00Z',
+  isFolder: false,
+  iconUrl: null,
 };
 
 const mockFile2: DriveFileItem = {
   id: 'file-2',
   name: 'Notes.txt',
-  mime_type: 'text/plain',
-  size_bytes: 2048,
-  modified_at: '2026-01-12T00:00:00Z',
-  is_folder: false,
-  icon_url: null,
+  mimeType: 'text/plain',
+  sizeBytes: 2048,
+  modifiedAt: '2026-01-12T00:00:00Z',
+  isFolder: false,
+  iconUrl: null,
 };
 
 const mockImportResponse: AttachmentUploadResponse = {
-  attachment_id: 'att-drive-1',
+  attachmentId: 'att-drive-1',
   filename: 'Report.pdf',
-  mime_type: 'application/pdf',
-  size_bytes: 102400,
+  mimeType: 'application/pdf',
+  sizeBytes: 102400,
   source: 'google_drive',
-  expires_at: '2026-02-01T00:00:00Z',
+  expiresAt: '2026-02-01T00:00:00Z',
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -121,7 +121,7 @@ describe('DriveFilePicker', () => {
   it('renders_file_list', async () => {
     vi.mocked(attachmentsApi.getDriveFiles).mockResolvedValue({
       files: [mockFolder, mockFile1, mockFile2],
-      next_page_token: null,
+      nextPageToken: null,
     });
 
     renderPicker();
@@ -135,8 +135,8 @@ describe('DriveFilePicker', () => {
 
   it('folder_click_navigates', async () => {
     vi.mocked(attachmentsApi.getDriveFiles)
-      .mockResolvedValueOnce({ files: [mockFolder], next_page_token: null })
-      .mockResolvedValue({ files: [mockFile1], next_page_token: null });
+      .mockResolvedValueOnce({ files: [mockFolder], nextPageToken: null })
+      .mockResolvedValue({ files: [mockFile1], nextPageToken: null });
 
     renderPicker();
 
@@ -161,7 +161,7 @@ describe('DriveFilePicker', () => {
   it('renders_search_input', async () => {
     vi.mocked(attachmentsApi.getDriveFiles).mockResolvedValue({
       files: [],
-      next_page_token: null,
+      nextPageToken: null,
     });
 
     renderPicker();
@@ -173,7 +173,7 @@ describe('DriveFilePicker', () => {
   it('add_to_chat_disabled_without_selection', async () => {
     vi.mocked(attachmentsApi.getDriveFiles).mockResolvedValue({
       files: [mockFile1],
-      next_page_token: null,
+      nextPageToken: null,
     });
 
     renderPicker();
@@ -187,7 +187,7 @@ describe('DriveFilePicker', () => {
   it('file_click_enables_add_to_chat', async () => {
     vi.mocked(attachmentsApi.getDriveFiles).mockResolvedValue({
       files: [mockFile1],
-      next_page_token: null,
+      nextPageToken: null,
     });
 
     renderPicker();
@@ -203,7 +203,7 @@ describe('DriveFilePicker', () => {
   it('add_to_chat_calls_import_and_closes', async () => {
     vi.mocked(attachmentsApi.getDriveFiles).mockResolvedValue({
       files: [mockFile1],
-      next_page_token: null,
+      nextPageToken: null,
     });
     vi.mocked(attachmentsApi.importDriveFile).mockResolvedValue(mockImportResponse);
 

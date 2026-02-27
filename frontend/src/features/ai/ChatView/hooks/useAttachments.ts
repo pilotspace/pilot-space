@@ -94,9 +94,7 @@ export function useAttachments({
           if (generationRef.current !== capturedGeneration) return;
           setAttachmentsRef.current((prev) =>
             prev.map((a) =>
-              a.id === localId
-                ? { ...a, attachment_id: response.attachment_id, status: 'ready' }
-                : a
+              a.id === localId ? { ...a, attachmentId: response.attachmentId, status: 'ready' } : a
             )
           );
         })
@@ -142,8 +140,8 @@ export function useAttachments({
       const newAttachment: AttachmentContext = {
         id: localId,
         filename: file.name,
-        mime_type: file.type,
-        size_bytes: file.size,
+        mimeType: file.type,
+        sizeBytes: file.size,
         source: 'local',
         status: 'uploading',
         _file: file,
@@ -194,11 +192,11 @@ export function useAttachments({
     setAttachments((prev) => [
       ...prev,
       {
-        id: response.attachment_id,
-        attachment_id: response.attachment_id,
+        id: response.attachmentId,
+        attachmentId: response.attachmentId,
         filename: response.filename,
-        mime_type: response.mime_type,
-        size_bytes: response.size_bytes,
+        mimeType: response.mimeType,
+        sizeBytes: response.sizeBytes,
         source: 'google_drive' as const,
         status: 'ready' as const,
       },
@@ -212,8 +210,8 @@ export function useAttachments({
   }, []);
 
   const attachmentIds: string[] = attachments
-    .filter((a) => a.status === 'ready' && a.attachment_id !== undefined)
-    .map((a) => a.attachment_id!);
+    .filter((a) => a.status === 'ready' && a.attachmentId !== undefined)
+    .map((a) => a.attachmentId!);
 
   return { attachments, attachmentIds, addFile, addFromDrive, removeFile, retry, reset };
 }

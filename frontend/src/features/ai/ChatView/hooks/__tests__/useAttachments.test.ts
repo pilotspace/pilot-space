@@ -45,12 +45,12 @@ function makeFile(name: string, type: string, sizeBytes: number): File {
 
 function makeUploadResponse(filename: string): AttachmentUploadResponse {
   return {
-    attachment_id: `srv-${filename}`,
+    attachmentId: `srv-${filename}`,
     filename,
-    mime_type: 'application/pdf',
-    size_bytes: 1024,
+    mimeType: 'application/pdf',
+    sizeBytes: 1024,
     source: 'local' as const,
-    expires_at: new Date(Date.now() + 3600 * 1000).toISOString(),
+    expiresAt: new Date(Date.now() + 3600 * 1000).toISOString(),
   };
 }
 
@@ -206,12 +206,12 @@ describe('useAttachments', () => {
     });
 
     const response: AttachmentUploadResponse = {
-      attachment_id: 'drive-123',
+      attachmentId: 'drive-123',
       filename: 'doc.gdoc',
-      mime_type: 'application/vnd.google-apps.document',
-      size_bytes: 2048,
+      mimeType: 'application/vnd.google-apps.document',
+      sizeBytes: 2048,
       source: 'google_drive' as const,
-      expires_at: new Date(Date.now() + 3600 * 1000).toISOString(),
+      expiresAt: new Date(Date.now() + 3600 * 1000).toISOString(),
     };
 
     act(() => {
@@ -220,7 +220,7 @@ describe('useAttachments', () => {
 
     expect(result.current.attachments).toHaveLength(1);
     expect(result.current.attachments[0]!.status).toBe('ready');
-    expect(result.current.attachments[0]!.attachment_id).toBe('drive-123');
+    expect(result.current.attachments[0]!.attachmentId).toBe('drive-123');
     expect(result.current.attachmentIds).toContain('drive-123');
   });
 
@@ -239,12 +239,12 @@ describe('useAttachments', () => {
     });
 
     const response: AttachmentUploadResponse = {
-      attachment_id: 'drive-999',
+      attachmentId: 'drive-999',
       filename: 'extra.gdoc',
-      mime_type: 'application/vnd.google-apps.document',
-      size_bytes: 512,
+      mimeType: 'application/vnd.google-apps.document',
+      sizeBytes: 512,
       source: 'google_drive' as const,
-      expires_at: new Date(Date.now() + 3600 * 1000).toISOString(),
+      expiresAt: new Date(Date.now() + 3600 * 1000).toISOString(),
     };
 
     act(() => {
@@ -305,7 +305,7 @@ describe('useAttachments', () => {
       expect(result.current.attachments[0]!.status).toBe('ready');
     });
 
-    expect(result.current.attachments[0]!.attachment_id).toBe('srv-retry.pdf');
+    expect(result.current.attachments[0]!.attachmentId).toBe('srv-retry.pdf');
     expect(attachmentsApi.upload).toHaveBeenCalledTimes(2);
   });
 
@@ -316,12 +316,12 @@ describe('useAttachments', () => {
 
     // Add a Drive attachment directly — it has no _file
     const driveResponse: AttachmentUploadResponse = {
-      attachment_id: 'drive-no-file',
+      attachmentId: 'drive-no-file',
       filename: 'sheet.gdoc',
-      mime_type: 'application/vnd.google-apps.document',
-      size_bytes: 512,
+      mimeType: 'application/vnd.google-apps.document',
+      sizeBytes: 512,
       source: 'google_drive' as const,
-      expires_at: new Date(Date.now() + 3600 * 1000).toISOString(),
+      expiresAt: new Date(Date.now() + 3600 * 1000).toISOString(),
     };
 
     act(() => {

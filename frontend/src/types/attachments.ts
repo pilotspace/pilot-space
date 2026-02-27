@@ -10,14 +10,14 @@ export type AttachmentSource = 'local' | 'google_drive';
 
 /**
  * Persisted attachment metadata stored in message history.
- * Mirrors the backend AttachmentMetadataSchema.
+ * Mirrors the backend AttachmentMetadataSchema (BaseSchema → camelCase).
  */
 export interface AttachmentMetadata {
-  attachment_id: string;
+  attachmentId: string;
   filename: string;
-  mime_type: string;
+  mimeType: string;
   source: AttachmentSource;
-  size_bytes: number;
+  sizeBytes: number;
 }
 
 /**
@@ -28,10 +28,10 @@ export interface AttachmentContext {
   /** Local temp ID before upload completes */
   id: string;
   /** Server-assigned ID after upload */
-  attachment_id?: string;
+  attachmentId?: string;
   filename: string;
-  mime_type: string;
-  size_bytes: number;
+  mimeType: string;
+  sizeBytes: number;
   source: AttachmentSource;
   status: AttachmentStatus;
   error?: string;
@@ -41,15 +41,15 @@ export interface AttachmentContext {
 
 /**
  * Upload response from the backend attachment endpoint.
- * Mirrors the backend AttachmentUploadResponseSchema.
+ * Mirrors the backend AttachmentUploadResponseSchema (BaseSchema → camelCase).
  */
 export interface AttachmentUploadResponse {
-  attachment_id: string;
+  attachmentId: string;
   filename: string;
-  mime_type: string;
-  size_bytes: number;
+  mimeType: string;
+  sizeBytes: number;
   source: AttachmentSource;
-  expires_at: string;
+  expiresAt: string;
 }
 
 /**
@@ -95,26 +95,26 @@ export const FILE_SIZE_LIMITS: Record<string, number> = {
   default: 5 * 1024 * 1024, // 5MB default for code/text
 };
 
-/** Backend response from GET /ai/drive/status */
+/** Backend response from GET /ai/drive/status (BaseSchema → camelCase). */
 export interface DriveStatusResponse {
   connected: boolean;
-  google_email: string | null;
-  connected_at: string | null;
+  googleEmail: string | null;
+  connectedAt: string | null;
 }
 
-/** A single file or folder from Google Drive */
+/** A single file or folder from Google Drive (BaseSchema → camelCase). */
 export interface DriveFileItem {
   id: string;
   name: string;
-  mime_type: string;
-  size_bytes: number | null;
-  modified_at: string | null;
-  is_folder: boolean;
-  icon_url: string | null;
+  mimeType: string;
+  sizeBytes: number | null;
+  modifiedAt: string | null;
+  isFolder: boolean;
+  iconUrl: string | null;
 }
 
-/** Paginated response from GET /ai/drive/files */
+/** Paginated response from GET /ai/drive/files (BaseSchema → camelCase). */
 export interface DriveFileListResponse {
   files: DriveFileItem[];
-  next_page_token: string | null;
+  nextPageToken: string | null;
 }

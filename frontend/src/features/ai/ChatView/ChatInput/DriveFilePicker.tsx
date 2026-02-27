@@ -69,7 +69,7 @@ export function DriveFilePicker({
   }, []);
 
   const handleFileClick = useCallback((file: DriveFileItem) => {
-    if (file.is_folder) return;
+    if (file.isFolder) return;
     setSelectedFile((prev) => (prev?.id === file.id ? null : file));
   }, []);
 
@@ -82,7 +82,7 @@ export function DriveFilePicker({
         workspace_id: workspaceId,
         file_id: selectedFile.id,
         filename: selectedFile.name,
-        mime_type: selectedFile.mime_type,
+        mime_type: selectedFile.mimeType,
         session_id: sessionId,
       });
       onImported(response);
@@ -201,7 +201,7 @@ export function DriveFilePicker({
                       key={item.id}
                       type="button"
                       onClick={() => {
-                        if (item.is_folder) {
+                        if (item.isFolder) {
                           handleFolderClick(item);
                         } else {
                           handleFileClick(item);
@@ -210,17 +210,17 @@ export function DriveFilePicker({
                       className={cn(
                         'w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md text-sm',
                         'text-left transition-colors hover:bg-accent',
-                        !item.is_folder && selectedFile?.id === item.id && 'bg-accent'
+                        !item.isFolder && selectedFile?.id === item.id && 'bg-accent'
                       )}
-                      data-selected={!item.is_folder && selectedFile?.id === item.id}
+                      data-selected={!item.isFolder && selectedFile?.id === item.id}
                     >
-                      {item.is_folder ? (
+                      {item.isFolder ? (
                         <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
                       ) : (
                         <File className="h-4 w-4 shrink-0 text-muted-foreground" />
                       )}
                       <span className="truncate flex-1">{item.name}</span>
-                      {item.is_folder && (
+                      {item.isFolder && (
                         <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                       )}
                     </button>

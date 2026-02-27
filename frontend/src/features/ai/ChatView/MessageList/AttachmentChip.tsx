@@ -57,8 +57,8 @@ interface AttachmentChipProps {
 }
 
 export const AttachmentChip = memo<AttachmentChipProps>(({ attachment }) => {
-  const { filename, mime_type } = attachment;
-  const fileType = getFileType(mime_type);
+  const { filename, mimeType } = attachment;
+  const fileType = getFileType(mimeType);
 
   const iconMap: Record<FileType, React.ReactNode> = {
     image: <ImageIcon className="h-3 w-3" aria-hidden="true" />,

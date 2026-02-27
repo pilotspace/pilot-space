@@ -16,11 +16,11 @@ import { AttachmentChip } from '../AttachmentChip';
 
 function makeMetadata(overrides: Partial<AttachmentMetadata> = {}): AttachmentMetadata {
   return {
-    attachment_id: 'srv-abc-123',
+    attachmentId: 'srv-abc-123',
     filename: 'design-spec.pdf',
-    mime_type: 'application/pdf',
+    mimeType: 'application/pdf',
     source: 'local' as const,
-    size_bytes: 4096,
+    sizeBytes: 4096,
     ...overrides,
   };
 }
@@ -52,7 +52,7 @@ describe('AttachmentChip', () => {
   it('shows_document_icon_for_pdf', () => {
     render(
       <AttachmentChip
-        attachment={makeMetadata({ mime_type: 'application/pdf', filename: 'report.pdf' })}
+        attachment={makeMetadata({ mimeType: 'application/pdf', filename: 'report.pdf' })}
       />
     );
 
@@ -68,7 +68,7 @@ describe('AttachmentChip', () => {
   it('shows_image_icon_for_png', () => {
     render(
       <AttachmentChip
-        attachment={makeMetadata({ mime_type: 'image/png', filename: 'screenshot.png' })}
+        attachment={makeMetadata({ mimeType: 'image/png', filename: 'screenshot.png' })}
       />
     );
 

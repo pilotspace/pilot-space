@@ -61,8 +61,8 @@ describe('useDriveStatus', () => {
   it('returns_connected_false_initially', async () => {
     const mockResponse: DriveStatusResponse = {
       connected: false,
-      google_email: null,
-      connected_at: null,
+      googleEmail: null,
+      connectedAt: null,
     };
     vi.mocked(attachmentsApi.getDriveStatus).mockResolvedValue(mockResponse);
 
@@ -75,16 +75,16 @@ describe('useDriveStatus', () => {
     expect(attachmentsApi.getDriveStatus).toHaveBeenCalledWith('ws-1');
     expect(result.current.data).toEqual({
       connected: false,
-      google_email: null,
-      connected_at: null,
+      googleEmail: null,
+      connectedAt: null,
     });
   });
 
   it('returns_connected_true_with_email', async () => {
     const mockResponse: DriveStatusResponse = {
       connected: true,
-      google_email: 'alice@example.com',
-      connected_at: '2026-01-01T00:00:00Z',
+      googleEmail: 'alice@example.com',
+      connectedAt: '2026-01-01T00:00:00Z',
     };
     vi.mocked(attachmentsApi.getDriveStatus).mockResolvedValue(mockResponse);
 
@@ -97,8 +97,8 @@ describe('useDriveStatus', () => {
     expect(attachmentsApi.getDriveStatus).toHaveBeenCalledWith('ws-2');
     expect(result.current.data).toEqual({
       connected: true,
-      google_email: 'alice@example.com',
-      connected_at: '2026-01-01T00:00:00Z',
+      googleEmail: 'alice@example.com',
+      connectedAt: '2026-01-01T00:00:00Z',
     });
   });
 });

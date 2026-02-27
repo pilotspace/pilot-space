@@ -19,8 +19,8 @@ function makeAttachment(overrides: Partial<AttachmentContext> = {}): AttachmentC
   return {
     id: 'local-1',
     filename: 'architecture.pdf',
-    mime_type: 'application/pdf',
-    size_bytes: 2048,
+    mimeType: 'application/pdf',
+    sizeBytes: 2048,
     source: 'local' as const,
     status: 'ready' as const,
     ...overrides,
