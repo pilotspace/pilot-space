@@ -163,55 +163,73 @@ class TestIssueExtractionEndpoint:
             assert "extracting" in statuses
 
 
-class TestApprovalEndpoint:
-    """Test suite for approval endpoint."""
+class TestCreateExtractedIssuesEndpoint:
+    """Test suite for create-extracted-issues endpoint (auto-approve)."""
 
     @pytest.mark.asyncio
-    async def test_approval_endpoint_exists(self, client, auth_headers, test_note):
-        """Verify approval endpoint is accessible."""
+    async def test_endpoint_returns_empty_for_no_project(self, client, auth_headers, test_note):
+        """Verify endpoint returns empty result when no project_id provided."""
         note_id = str(test_note.id)
-        approval_id = str(uuid4())
 
         response = await client.post(
             f"/ai/notes/{note_id}/extract-issues/approve",
             headers=auth_headers,
             json={
-                "approval_id": approval_id,
-                "selected_issues": [0, 1],
+                "issues": [{"title": "Fix login bug", "priority": 1}],
+                "project_id": None,
             },
         )
 
-        # Currently returns placeholder response
         assert response.status_code == 200
         data = response.json()
         assert "created_issues" in data
+        assert data["created_count"] == 0
 
     @pytest.mark.asyncio
-    async def test_approval_validates_request(self, client, auth_headers, test_note):
-        """Verify approval request validation."""
+    async def test_endpoint_returns_empty_for_no_issues(self, client, auth_headers, test_note):
+        """Verify endpoint returns empty result when issues list is empty."""
         note_id = str(test_note.id)
 
-        # Missing approval_id
         response = await client.post(
             f"/ai/notes/{note_id}/extract-issues/approve",
             headers=auth_headers,
             json={
-                "selected_issues": [0],
+                "issues": [],
+                "project_id": str(uuid4()),
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["created_count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_endpoint_validates_request_schema(self, client, auth_headers, test_note):
+        """Verify request schema validation rejects invalid issue priority."""
+        note_id = str(test_note.id)
+
+        # priority must be 0-4
+        response = await client.post(
+            f"/ai/notes/{note_id}/extract-issues/approve",
+            headers=auth_headers,
+            json={
+                "issues": [{"title": "Test", "priority": 99}],
+                "project_id": str(uuid4()),
             },
         )
 
         assert response.status_code == 422  # Validation error
 
     @pytest.mark.asyncio
-    async def test_approval_requires_workspace_header(self, client, test_note):
-        """Verify workspace ID header is required for approval."""
+    async def test_endpoint_requires_workspace_header(self, client, test_note):
+        """Verify workspace ID header is required."""
         note_id = str(test_note.id)
 
         response = await client.post(
             f"/ai/notes/{note_id}/extract-issues/approve",
             json={
-                "approval_id": str(uuid4()),
-                "selected_issues": [0],
+                "issues": [{"title": "Test"}],
+                "project_id": str(uuid4()),
             },
         )
 

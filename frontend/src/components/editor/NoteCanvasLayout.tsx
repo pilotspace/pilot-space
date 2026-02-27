@@ -117,9 +117,10 @@ export function NoteCanvasLayout(props: NoteCanvasProps) {
       extractionActions.startExtraction({
         ...params,
         workspaceId,
+        projectId: projectId ?? null,
       });
     },
-    [workspaceId, extractionActions]
+    [workspaceId, projectId, extractionActions]
   );
 
   const {

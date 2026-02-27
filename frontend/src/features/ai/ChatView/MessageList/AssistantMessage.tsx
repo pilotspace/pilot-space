@@ -92,14 +92,20 @@ export const AssistantMessage = memo<AssistantMessageProps>(({ message, classNam
 
       setIsCreatingIssues(true);
       try {
+        const PRIORITY_INT: Record<string, number> = {
+          urgent: 0,
+          high: 1,
+          medium: 2,
+          low: 3,
+          none: 4,
+        };
         const result = await aiApi.createExtractedIssues(
           workspaceId,
           noteId,
           selected.map((issue) => ({
             title: issue.title,
-            description: issue.description || undefined,
-            priority: issue.priority,
-            type: issue.issue_type,
+            description: issue.description || null,
+            priority: PRIORITY_INT[issue.priority.toLowerCase()] ?? 4,
             source_block_id: issue.source_block_id,
           }))
         );

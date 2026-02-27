@@ -298,11 +298,11 @@ export const aiApi = {
     }>('/skills'),
 
   /**
-   * Create issues from AI extraction results.
-   * User explicitly selected which issues to create — no approval needed.
-   * @param workspaceId - Workspace UUID
+   * Create issues from AI extraction results (auto-approve, DD-003 non-destructive).
+   * @param workspaceId - Workspace UUID (unused, kept for interface compatibility)
    * @param noteId - Note UUID the issues were extracted from
-   * @param issues - Selected extracted issues to create
+   * @param issues - Issues to create with priority as int (0=urgent…4=none)
+   * @param projectId - Project to assign the issues to
    * @returns Created issue IDs
    */
   createExtractedIssues: (
@@ -310,15 +310,23 @@ export const aiApi = {
     noteId: string,
     issues: Array<{
       title: string;
-      description?: string;
-      priority?: string;
-      type?: string;
+      description?: string | null;
+      priority?: number;
       source_block_id?: string | null;
-    }>
+    }>,
+    projectId?: string | null
   ) =>
     apiClient.post<{ created_issues: string[]; created_count: number }>(
       `/notes/${noteId}/extract-issues/approve`,
-      { approval_id: '', selected_issues: issues.map((_, i) => i) }
+      {
+        issues: issues.map((i) => ({
+          title: i.title,
+          description: i.description ?? null,
+          priority: i.priority ?? 4,
+          source_block_id: i.source_block_id ?? null,
+        })),
+        project_id: projectId ?? null,
+      }
     ),
 
   // ============================================================

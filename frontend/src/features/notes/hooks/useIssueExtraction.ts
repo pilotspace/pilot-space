@@ -2,13 +2,15 @@
  * useIssueExtraction - Hook for managing the issue extraction SSE stream.
  *
  * Connects to the extraction SSE endpoint, collects extracted issues,
- * and manages loading/error state for the ExtractionPreviewModal.
+ * and auto-creates them on completion (auto-approve, DD-003 non-destructive).
  *
  * Feature 009: Intent-to-Issues extraction pipeline.
  */
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { toast } from 'sonner';
 import { SSEClient } from '@/lib/sse-client';
 import type { SSEEvent } from '@/lib/sse-client';
+import { aiApi } from '@/services/api/ai';
 import type { ExtractedIssue } from '../components/ExtractionPreviewModal';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? '/api/v1';
@@ -20,7 +22,7 @@ interface ExtractionState {
   isExtracting: boolean;
   /** Error message if extraction failed */
   error: string | null;
-  /** Whether the preview modal is open */
+  /** Whether the preview modal is open (always false — auto-approve mode) */
   isModalOpen: boolean;
 }
 
@@ -41,23 +43,27 @@ interface StartExtractionParams {
   selectedText?: string;
   availableLabels?: string[];
   maxIssues?: number;
+  /** Project to assign auto-created issues to */
+  projectId?: string | null;
+  /** Called after auto-creation with created issue IDs */
+  onCreated?: (createdIds: string[]) => void;
 }
 
 /**
  * Hook for managing issue extraction from note content via SSE streaming.
  *
- * Returns state and actions for the extraction flow:
- * 1. startExtraction() -> opens modal, starts SSE stream
- * 2. Issues arrive via SSE -> added to issues array
- * 3. User selects issues in ExtractionPreviewModal
- * 4. closeModal() or abort() to cancel
+ * Auto-approve flow (DD-003 non-destructive):
+ * 1. startExtraction() → starts SSE stream
+ * 2. Issues arrive via SSE → added to issues array
+ * 3. complete event → auto-create all issues, show toast
  */
 export function useIssueExtraction(): [ExtractionState, ExtractionActions] {
   const [issues, setIssues] = useState<ExtractedIssue[]>([]);
   const [isExtracting, setIsExtracting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const clientRef = useRef<SSEClient | null>(null);
+  // Ref to collect issues during streaming (avoids stale closure in SSE callback)
+  const collectedIssuesRef = useRef<ExtractedIssue[]>([]);
 
   // Cleanup on unmount: abort any in-progress SSE connection
   useEffect(() => {
@@ -74,7 +80,6 @@ export function useIssueExtraction(): [ExtractionState, ExtractionActions] {
 
   const closeModal = useCallback(() => {
     abort();
-    setIsModalOpen(false);
     setIssues([]);
     setError(null);
   }, [abort]);
@@ -84,11 +89,11 @@ export function useIssueExtraction(): [ExtractionState, ExtractionActions] {
       // Abort any existing extraction
       abort();
 
-      // Reset state and open modal
+      // Reset state
       setIssues([]);
       setError(null);
       setIsExtracting(true);
-      setIsModalOpen(true);
+      collectedIssuesRef.current = [];
 
       const url = `${API_BASE}/notes/${params.noteId}/extract-issues`;
 
@@ -109,11 +114,53 @@ export function useIssueExtraction(): [ExtractionState, ExtractionActions] {
           switch (event.type) {
             case 'issue': {
               const data = event.data as ExtractedIssue;
+              collectedIssuesRef.current.push(data);
               setIssues((prev) => [...prev, data]);
               break;
             }
             case 'complete': {
               setIsExtracting(false);
+
+              const collected = collectedIssuesRef.current;
+              if (collected.length === 0) {
+                toast.info('No actionable issues found in this note.');
+                return;
+              }
+
+              if (!params.projectId) {
+                toast.warning(
+                  `${collected.length} issue${collected.length !== 1 ? 's' : ''} found`,
+                  { description: 'Open a project note to auto-create issues.' }
+                );
+                return;
+              }
+
+              // Auto-create all extracted issues (DD-003 non-destructive)
+              const issuesToCreate = collected.map((i) => ({
+                title: i.title,
+                description: i.description || null,
+                priority: i.priority,
+                source_block_id: i.sourceBlockIds[0] ?? null,
+              }));
+
+              aiApi
+                .createExtractedIssues(
+                  params.workspaceId,
+                  params.noteId,
+                  issuesToCreate,
+                  params.projectId
+                )
+                .then((result) => {
+                  const count = result.created_issues.length;
+                  params.onCreated?.(result.created_issues);
+                  toast.success(`${count} issue${count !== 1 ? 's' : ''} created`, {
+                    description: 'View them in the Issues board.',
+                  });
+                })
+                .catch((err: Error) => {
+                  toast.error('Failed to create issues', { description: err.message });
+                });
+
               break;
             }
             case 'error': {
@@ -145,7 +192,7 @@ export function useIssueExtraction(): [ExtractionState, ExtractionActions] {
   );
 
   return [
-    { issues, isExtracting, error, isModalOpen },
+    { issues, isExtracting, error, isModalOpen: false },
     { startExtraction, closeModal, abort },
   ];
 }

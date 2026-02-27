@@ -149,8 +149,7 @@ export function ExtractionPreviewModal({
         .map((i) => ({
           title: i.title,
           description: i.description,
-          priority: PRIORITY_LABELS[i.priority]?.label.toLowerCase() ?? 'medium',
-          type: 'task' as const,
+          priority: i.priority, // already a number (0-4)
           source_block_id: i.sourceBlockIds[0] ?? null,
         }));
 
