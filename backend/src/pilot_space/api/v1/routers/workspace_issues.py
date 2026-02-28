@@ -260,15 +260,15 @@ async def list_issue_relations(
     issue_id: IssueIdPath,
     current_user_id: SyncedUserId,
     workspace_repo: WorkspaceRepositoryDep,
+    issue_repo: IssueRepositoryDep,
     link_repo: IssueLinkRepositoryDep,
 ) -> list[IssueLinkSchema]:
     """List all issue-to-issue relations (blocks, blocked_by, duplicates, related)."""
     workspace = await _resolve_workspace(workspace_id, workspace_repo)
     await set_rls_context(session, current_user_id, workspace.id)
 
-    row = await session.execute(select(Issue.workspace_id).where(Issue.id == issue_id))
-    issue_workspace_id = row.scalar_one_or_none()
-    if issue_workspace_id is None or issue_workspace_id != workspace.id:
+    issue = await issue_repo.get_by_id_with_relations(issue_id)
+    if issue is None or issue.workspace_id != workspace.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
 
     links = await link_repo.find_all_for_issue(issue_id, workspace.id)

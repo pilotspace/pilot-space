@@ -4,16 +4,14 @@
  * Covers:
  * - Project section renders pill linking to project page
  * - Notes section renders note links grouped by linkType
- * - Relations section renders IssueReferenceCards from hook data
+ * - Relations section renders IssueReferenceCards from props
  * - Empty state per section when no items
  * - Show more/less toggle when > 3 items
  * - Loading state for relations
  */
 
-import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { Issue, IssueRelation } from '@/types';
 
 const mockPush = vi.fn();
@@ -26,13 +24,6 @@ vi.mock('@/lib/utils', () => ({
   cn: (...classes: (string | undefined | false)[]) => classes.filter(Boolean).join(' '),
 }));
 
-vi.mock('@/services/api', () => ({
-  issuesApi: {
-    getRelations: vi.fn(),
-  },
-}));
-
-import { issuesApi } from '@/services/api';
 import { IssueGraph } from '../issue-graph';
 
 const BASE_ISSUE: Issue = {
@@ -68,30 +59,24 @@ const MOCK_RELATION: IssueRelation = {
   },
 };
 
-function createWrapper() {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
-  return function Wrapper({ children }: { children: React.ReactNode }) {
-    return React.createElement(QueryClientProvider, { client: queryClient }, children);
-  };
-}
+const renderGraph = (
+  issueOverrides: Partial<Issue> = {},
+  graphProps: { relations?: IssueRelation[]; relationsLoading?: boolean } = {}
+) =>
+  render(
+    <IssueGraph
+      issue={{ ...BASE_ISSUE, ...issueOverrides }}
+      workspaceId="ws-1"
+      workspaceSlug="my-ws"
+      relations={graphProps.relations ?? []}
+      relationsLoading={graphProps.relationsLoading ?? false}
+    />
+  );
 
 describe('IssueGraph', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(issuesApi.getRelations).mockResolvedValue([]);
   });
-
-  const renderGraph = (overrides: Partial<Issue> = {}) =>
-    render(
-      <IssueGraph
-        issue={{ ...BASE_ISSUE, ...overrides }}
-        workspaceId="ws-1"
-        workspaceSlug="my-ws"
-      />,
-      { wrapper: createWrapper() }
-    );
 
   // ── Project section ─────────────────────────────────────────────────────
 
@@ -183,27 +168,29 @@ describe('IssueGraph', () => {
 
   // ── Relations section ────────────────────────────────────────────────────
 
-  it('shows "No related issues" when relations list is empty', async () => {
+  it('shows "No related issues" when relations list is empty', () => {
     renderGraph();
-    expect(await screen.findByText('No related issues')).toBeInTheDocument();
+    expect(screen.getByText('No related issues')).toBeInTheDocument();
   });
 
-  it('renders IssueReferenceCard for each relation', async () => {
-    vi.mocked(issuesApi.getRelations).mockResolvedValue([MOCK_RELATION]);
-    renderGraph();
-    expect(await screen.findByText('PS-2')).toBeInTheDocument();
-    expect(await screen.findByText('Blocked Issue')).toBeInTheDocument();
+  it('shows "Loading…" while relationsLoading is true', () => {
+    renderGraph({}, { relations: [], relationsLoading: true });
+    expect(screen.getByText('Loading…')).toBeInTheDocument();
   });
 
-  it('navigates to related issue on card click', async () => {
-    vi.mocked(issuesApi.getRelations).mockResolvedValue([MOCK_RELATION]);
-    renderGraph();
-    const card = await screen.findByRole('button');
-    fireEvent.click(card);
+  it('renders IssueReferenceCard for each relation', () => {
+    renderGraph({}, { relations: [MOCK_RELATION] });
+    expect(screen.getByText('PS-2')).toBeInTheDocument();
+    expect(screen.getByText('Blocked Issue')).toBeInTheDocument();
+  });
+
+  it('navigates to related issue on card click', () => {
+    renderGraph({}, { relations: [MOCK_RELATION] });
+    fireEvent.click(screen.getByRole('button', { name: /Blocked Issue/i }));
     expect(mockPush).toHaveBeenCalledWith('/my-ws/issues/issue-2');
   });
 
-  it('shows "Show N more" when relations exceed 3', async () => {
+  it('shows "Show N more" when relations exceed 3', () => {
     const manyRelations: IssueRelation[] = Array.from({ length: 5 }, (_, i) => ({
       id: `link-${i}`,
       linkType: 'related' as const,
@@ -216,8 +203,7 @@ describe('IssueGraph', () => {
         state: { id: 'state-x', name: 'Todo', color: '#60a5fa', group: 'unstarted' as const },
       },
     }));
-    vi.mocked(issuesApi.getRelations).mockResolvedValue(manyRelations);
-    renderGraph();
-    expect(await screen.findByText('Show 2 more')).toBeInTheDocument();
+    renderGraph({}, { relations: manyRelations });
+    expect(screen.getByText('Show 2 more')).toBeInTheDocument();
   });
 });

@@ -31,7 +31,7 @@ import {
 } from '@/features/issues/components';
 import { IssueDescriptionEmptyState } from './issue-description-empty-state';
 import { GitHubSection } from './github-section';
-import { useIssueLinks } from '@/features/issues/hooks';
+import { useIssueLinks, useIssueRelations } from '@/features/issues/hooks';
 import { createIssueNoteExtensions } from '@/features/issues/editor/create-issue-note-extensions';
 import type { Issue, UpdateIssueData } from '@/types';
 
@@ -71,6 +71,12 @@ export function IssueEditorContent({
 
   // -- GitHub integration links --
   const { pullRequests, commits, isLoading: linksLoading } = useIssueLinks(workspaceId, issueId);
+
+  // -- Issue-to-issue relations (hoisted for accurate CollapsibleSection count) --
+  const { data: relations = [], isLoading: relationsLoading } = useIssueRelations(
+    workspaceId,
+    issue.id
+  );
 
   // -- TipTap Editor --
   const extensions = useMemo(
@@ -231,9 +237,15 @@ export function IssueEditorContent({
             <CollapsibleSection
               title="Relationships"
               icon={<Link2 className="size-3.5" />}
-              count={(issue.noteLinks?.length ?? 0) + (issue.project ? 1 : 0)}
+              count={(issue.noteLinks?.length ?? 0) + (issue.project ? 1 : 0) + relations.length}
             >
-              <IssueGraph issue={issue} workspaceId={workspaceId} workspaceSlug={workspaceSlug} />
+              <IssueGraph
+                issue={issue}
+                workspaceId={workspaceId}
+                workspaceSlug={workspaceSlug}
+                relations={relations}
+                relationsLoading={relationsLoading}
+              />
             </CollapsibleSection>
 
             <CollapsibleSection title="Activity" icon={<MessageSquare className="size-3.5" />}>

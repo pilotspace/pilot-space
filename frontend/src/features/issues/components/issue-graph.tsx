@@ -8,14 +8,15 @@
  *   Notes       — noteLinks grouped by CREATED / EXTRACTED / REFERENCED
  *   Relations   — issue-to-issue links (blocks / blocked_by / duplicates / related)
  *
- * NOT observer-wrapped: server state only via TanStack Query, no MobX reads.
+ * Presentational component: receives `relations` and `relationsLoading` as props
+ * from the parent (IssueEditorContent) so the parent can include the relation
+ * count in its CollapsibleSection header badge.
  */
 
 import { useState } from 'react';
 import Link from 'next/link';
 import { ChevronDown, ChevronUp, Folder } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useIssueRelations } from '@/features/issues/hooks/use-issue-relations';
 import { IssueReferenceCard } from './issue-reference-card';
 import type { Issue, IssueRelation, NoteIssueLink } from '@/types';
 
@@ -33,9 +34,10 @@ const NOTE_LINK_TYPE_LABEL: Record<NoteIssueLink['linkType'], string> = {
 // Map IssueRelation.linkType → IssueReferenceCard relationType
 function toCardRelationType(
   linkType: IssueRelation['linkType']
-): 'blocks' | 'blocked_by' | 'relates' {
+): 'blocks' | 'blocked_by' | 'duplicates' | 'relates' {
   if (linkType === 'blocks') return 'blocks';
   if (linkType === 'blocked_by') return 'blocked_by';
+  if (linkType === 'duplicates') return 'duplicates';
   return 'relates';
 }
 
@@ -90,17 +92,16 @@ export interface IssueGraphProps {
   issue: Issue;
   workspaceId: string;
   workspaceSlug: string;
+  /** Relations fetched by the parent via useIssueRelations. */
+  relations: IssueRelation[];
+  /** True while the parent's useIssueRelations query is loading. */
+  relationsLoading: boolean;
 }
 
 // ---------------------------------------------------------------------------
-// IssueGraph (non-observer)
+// IssueGraph (non-observer, presentational)
 // ---------------------------------------------------------------------------
-export function IssueGraph({ issue, workspaceId, workspaceSlug }: IssueGraphProps) {
-  const { data: relations = [], isLoading: relationsLoading } = useIssueRelations(
-    workspaceId,
-    issue.id
-  );
-
+export function IssueGraph({ issue, workspaceSlug, relations, relationsLoading }: IssueGraphProps) {
   const [notesExpanded, setNotesExpanded] = useState(false);
   const [relationsExpanded, setRelationsExpanded] = useState(false);
 
@@ -191,7 +192,7 @@ export function IssueGraph({ issue, workspaceId, workspaceSlug }: IssueGraphProp
                     issueId={relation.relatedIssue.id}
                     identifier={relation.relatedIssue.identifier}
                     title={relation.relatedIssue.name}
-                    stateGroup={relation.relatedIssue.state?.group ?? 'unstarted'}
+                    stateGroup={relation.relatedIssue.state.group}
                     relationType={toCardRelationType(relation.linkType)}
                     workspaceSlug={workspaceSlug}
                   />

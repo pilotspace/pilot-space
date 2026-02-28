@@ -8,7 +8,7 @@ interface IssueReferenceCardProps {
   identifier: string;
   title: string;
   stateGroup: string; // 'unstarted' | 'started' | 'completed' | 'cancelled'
-  relationType: 'blocks' | 'blocked_by' | 'relates';
+  relationType: 'blocks' | 'blocked_by' | 'duplicates' | 'relates';
   workspaceSlug: string;
 }
 
@@ -22,12 +22,14 @@ const STATE_GROUP_DOT: Record<string, string> = {
 const RELATION_TYPE_CHIP: Record<IssueReferenceCardProps['relationType'], string> = {
   blocks: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
   blocked_by: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
+  duplicates: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
   relates: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
 };
 
 const RELATION_TYPE_LABEL: Record<IssueReferenceCardProps['relationType'], string> = {
   blocks: 'blocks',
   blocked_by: 'blocked by',
+  duplicates: 'duplicates',
   relates: 'relates',
 };
 

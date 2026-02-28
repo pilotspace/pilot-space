@@ -11,7 +11,7 @@ import type { IssueRelation } from '@/types';
 
 export const issueRelationsKeys = {
   detail: (workspaceId: string, issueId: string) =>
-    ['issues', issueId, 'relations', workspaceId] as const,
+    ['issues', workspaceId, issueId, 'relations'] as const,
 };
 
 export function useIssueRelations(workspaceId: string, issueId: string) {

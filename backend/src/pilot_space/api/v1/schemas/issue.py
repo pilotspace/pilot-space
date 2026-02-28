@@ -6,7 +6,7 @@ T140: Create Issue Pydantic schemas for API layer.
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import Field, field_validator
@@ -396,8 +396,8 @@ class IssueLinkSchema(BaseSchema):
     """Issue-to-issue relation for the GET /relations endpoint."""
 
     id: UUID
-    link_type: str
-    direction: str
+    link_type: Literal["blocks", "blocked_by", "duplicates", "related"]
+    direction: Literal["outbound", "inbound"]
     related_issue: IssueBriefResponse
 
 

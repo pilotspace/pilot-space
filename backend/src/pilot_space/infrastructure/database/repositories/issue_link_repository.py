@@ -10,6 +10,7 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import and_, or_, select
+from sqlalchemy.orm import selectinload
 
 from pilot_space.infrastructure.database.models.issue_link import (
     IssueLink,
@@ -110,14 +111,21 @@ class IssueLinkRepository(BaseRepository[IssueLink]):
         Returns:
             List of IssueLink records (both directions).
         """
-        query = select(IssueLink).where(
-            and_(
-                IssueLink.workspace_id == workspace_id,
-                IssueLink.is_deleted == False,  # noqa: E712
-                or_(
-                    IssueLink.source_issue_id == issue_id,
-                    IssueLink.target_issue_id == issue_id,
-                ),
+        query = (
+            select(IssueLink)
+            .where(
+                and_(
+                    IssueLink.workspace_id == workspace_id,
+                    IssueLink.is_deleted == False,  # noqa: E712
+                    or_(
+                        IssueLink.source_issue_id == issue_id,
+                        IssueLink.target_issue_id == issue_id,
+                    ),
+                )
+            )
+            .options(
+                selectinload(IssueLink.source_issue),
+                selectinload(IssueLink.target_issue),
             )
         )
         result = await self.session.execute(query)
@@ -192,13 +200,13 @@ class IssueLinkRepository(BaseRepository[IssueLink]):
         # Build bidirectional adjacency map in-memory
         adjacency: dict[UUID, list[tuple[UUID, str, str]]] = {}
         for link in all_links:
-            # source → target (outgoing)
+            # source → target (outbound)
             adjacency.setdefault(link.source_issue_id, []).append(
-                (link.target_issue_id, link.link_type.value, "outgoing")
+                (link.target_issue_id, link.link_type.value, "outbound")
             )
-            # target → source (incoming)
+            # target → source (inbound)
             adjacency.setdefault(link.target_issue_id, []).append(
-                (link.source_issue_id, link.link_type.value, "incoming")
+                (link.source_issue_id, link.link_type.value, "inbound")
             )
 
         # BFS traversal using in-memory adjacency map

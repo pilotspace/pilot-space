@@ -116,9 +116,9 @@ describe('useIssueRelations', () => {
   it('uses correct query key', () => {
     expect(issueRelationsKeys.detail('ws-1', 'issue-1')).toEqual([
       'issues',
+      'ws-1',
       'issue-1',
       'relations',
-      'ws-1',
     ]);
   });
 });
