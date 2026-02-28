@@ -117,6 +117,7 @@ class NoteIssueLinkBriefSchema(BaseSchema):
 
     id: UUID
     note_id: UUID
+    issue_id: UUID
     link_type: str
     note_title: str
 
@@ -198,6 +199,7 @@ class IssueResponse(BaseSchema):
                 NoteIssueLinkBriefSchema(
                     id=link.id,
                     note_id=link.note_id,
+                    issue_id=link.issue_id,
                     link_type=link.link_type.value.upper(),
                     note_title=link.note.title if link.note else "",
                 )
@@ -372,6 +374,8 @@ class WorkspaceIssueUpdateRequest(BaseSchema):
     state_id: UUID | None = None
     assignee_id: UUID | None = None
     cycle_id: UUID | None = None
+    module_id: UUID | None = None
+    parent_id: UUID | None = None
     estimate_points: int | None = None
     estimate_hours: float | None = None
     start_date: str | None = None
@@ -382,6 +386,8 @@ class WorkspaceIssueUpdateRequest(BaseSchema):
     # Clear flags
     clear_assignee: bool = False
     clear_cycle: bool = False
+    clear_module: bool = False
+    clear_parent: bool = False
     clear_estimate: bool = False
     clear_start_date: bool = False
     clear_target_date: bool = False

@@ -7,7 +7,12 @@ export function formatActionType(actionType: string): string {
   return actionType.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-/** Destructive actions that require modal overlay approval per DD-003. */
+/**
+ * Destructive actions that require modal overlay approval per DD-003.
+ * SYNC: Must be kept in sync with the backend ApprovalService's destructive action
+ * classification. Add new destructive action_type values here when adding them to
+ * the backend executor.
+ */
 export const DESTRUCTIVE_ACTIONS = new Set([
   'delete_issue',
   'merge_pr',

@@ -26,6 +26,7 @@ from pilot_space.dependencies import (
     CurrentUserId,
     DbSession,
 )
+from pilot_space.infrastructure.database.rls import set_rls_context
 from pilot_space.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
@@ -76,6 +77,9 @@ async def verify_workspace_admin(
         "00000000-0000-0000-0000-000000000001"
     ):
         return
+
+    # Set RLS context so workspace_members policy can evaluate current_user_id
+    await set_rls_context(session, current_user_id, workspace_id)
 
     from sqlalchemy import select
 
@@ -197,6 +201,9 @@ async def get_approval(
     Raises:
         HTTPException: If request not found or unauthorized.
     """
+
+    # Verify user is workspace admin
+    await verify_workspace_admin(current_user_id, workspace_id, session)
 
     from pilot_space.ai.infrastructure.approval import ApprovalService
 

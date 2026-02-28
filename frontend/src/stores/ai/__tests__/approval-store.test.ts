@@ -6,7 +6,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ApprovalStore } from '../ApprovalStore';
-import { aiApi, type ApprovalRequest } from '@/services/api/ai';
+import { aiApi, type ApprovalRequest, type ApprovalResolutionResponse } from '@/services/api/ai';
 import type { AIStore } from '../AIStore';
 
 // Mock the API
@@ -56,6 +56,7 @@ describe('ApprovalStore', () => {
     it('should load pending approvals successfully', async () => {
       const mockResponse = {
         requests: mockApprovalRequests,
+        total: 2,
         pending_count: 2,
       };
 
@@ -89,6 +90,7 @@ describe('ApprovalStore', () => {
     it('should load all approvals without filter', async () => {
       const mockResponse = {
         requests: mockApprovalRequests,
+        total: 2,
         pending_count: 2,
       };
 
@@ -104,6 +106,7 @@ describe('ApprovalStore', () => {
       const firstRequest = mockApprovalRequests[0]!;
       const mockResponse = {
         requests: [firstRequest],
+        total: 1,
         pending_count: 1,
       };
 
@@ -120,21 +123,17 @@ describe('ApprovalStore', () => {
     it('should approve request successfully', async () => {
       const mockResponse = {
         requests: [],
+        total: 0,
         pending_count: 0,
       };
 
-      const mockApprovedRequest: ApprovalRequest = {
-        id: '1',
-        agent_name: 'issue_extractor',
-        action_type: 'extract_issues',
-        status: 'approved',
-        created_at: '2026-01-26T10:00:00Z',
-        expires_at: '2026-01-27T10:00:00Z',
-        requested_by: 'John Doe',
-        context_preview: '3 issues to create',
+      const mockResolution: ApprovalResolutionResponse = {
+        approved: true,
+        action_result: null,
+        action_error: null,
       };
 
-      vi.mocked(aiApi.resolveApproval).mockResolvedValue(mockApprovedRequest);
+      vi.mocked(aiApi.resolveApproval).mockResolvedValue(mockResolution);
       vi.mocked(aiApi.listApprovals).mockResolvedValue(mockResponse);
 
       await store.approve('1', 'Looks good');
@@ -150,21 +149,17 @@ describe('ApprovalStore', () => {
     it('should approve with selected issues', async () => {
       const mockResponse = {
         requests: [],
+        total: 0,
         pending_count: 0,
       };
 
-      const mockApprovedRequest: ApprovalRequest = {
-        id: '1',
-        agent_name: 'issue_extractor',
-        action_type: 'extract_issues',
-        status: 'approved',
-        created_at: '2026-01-26T10:00:00Z',
-        expires_at: '2026-01-27T10:00:00Z',
-        requested_by: 'John Doe',
-        context_preview: '3 issues to create',
+      const mockResolution: ApprovalResolutionResponse = {
+        approved: true,
+        action_result: null,
+        action_error: null,
       };
 
-      vi.mocked(aiApi.resolveApproval).mockResolvedValue(mockApprovedRequest);
+      vi.mocked(aiApi.resolveApproval).mockResolvedValue(mockResolution);
       vi.mocked(aiApi.listApprovals).mockResolvedValue(mockResponse);
 
       await store.approve('1', undefined, [0, 2]);
@@ -189,21 +184,17 @@ describe('ApprovalStore', () => {
     it('should reject request successfully', async () => {
       const mockResponse = {
         requests: [],
+        total: 0,
         pending_count: 0,
       };
 
-      const mockRejectedRequest: ApprovalRequest = {
-        id: '1',
-        agent_name: 'issue_extractor',
-        action_type: 'extract_issues',
-        status: 'rejected',
-        created_at: '2026-01-26T10:00:00Z',
-        expires_at: '2026-01-27T10:00:00Z',
-        requested_by: 'John Doe',
-        context_preview: '3 issues to create',
+      const mockResolution: ApprovalResolutionResponse = {
+        approved: false,
+        action_result: null,
+        action_error: null,
       };
 
-      vi.mocked(aiApi.resolveApproval).mockResolvedValue(mockRejectedRequest);
+      vi.mocked(aiApi.resolveApproval).mockResolvedValue(mockResolution);
       vi.mocked(aiApi.listApprovals).mockResolvedValue(mockResponse);
 
       await store.reject('1', 'Not needed');
@@ -249,6 +240,7 @@ describe('ApprovalStore', () => {
     it('should group requests by agent name', async () => {
       const mockResponse = {
         requests: mockApprovalRequests,
+        total: 2,
         pending_count: 2,
       };
 
@@ -323,6 +315,7 @@ describe('ApprovalStore', () => {
 
       vi.mocked(aiApi.listApprovals).mockResolvedValue({
         requests: mixedRequests,
+        total: 3,
         pending_count: 1,
       });
       await store.loadPending();
@@ -336,6 +329,7 @@ describe('ApprovalStore', () => {
       const request = mockApprovalRequests[0]!;
       vi.mocked(aiApi.listApprovals).mockResolvedValue({
         requests: [request],
+        total: 1,
         pending_count: 1,
       });
       await store.loadPending();
@@ -354,6 +348,7 @@ describe('ApprovalStore', () => {
       const request = mockApprovalRequests[0]!;
       vi.mocked(aiApi.listApprovals).mockResolvedValue({
         requests: [request],
+        total: 1,
         pending_count: 1,
       });
       await store.loadPending();
@@ -371,6 +366,7 @@ describe('ApprovalStore', () => {
       // Set up some state
       const mockResponse = {
         requests: mockApprovalRequests,
+        total: 2,
         pending_count: 2,
       };
       vi.mocked(aiApi.listApprovals).mockResolvedValue(mockResponse);

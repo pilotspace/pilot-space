@@ -124,6 +124,10 @@ class ApprovalResolution(BaseModel):
         max_length=1000,
         description="Optional note explaining the decision",
     )
+    selected_issues: list[int] | None = Field(
+        default=None,
+        description="Indices of issues selected for partial approval (issue extraction flow)",
+    )
 
     model_config = {
         "json_schema_extra": {

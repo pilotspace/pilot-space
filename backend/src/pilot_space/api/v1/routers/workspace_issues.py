@@ -241,6 +241,7 @@ async def list_issue_note_links(
         NoteIssueLinkBriefSchema(
             id=link.id,
             note_id=link.note_id,
+            issue_id=link.issue_id,
             link_type=link.link_type.value.upper(),
             note_title=link.note.title if link.note else "",
         )
@@ -260,35 +261,45 @@ async def list_issue_relations(
     issue_id: IssueIdPath,
     current_user_id: SyncedUserId,
     workspace_repo: WorkspaceRepositoryDep,
-    issue_repo: IssueRepositoryDep,
     link_repo: IssueLinkRepositoryDep,
 ) -> list[IssueLinkSchema]:
     """List all issue-to-issue relations (blocks, blocked_by, duplicates, related)."""
     workspace = await _resolve_workspace(workspace_id, workspace_repo)
     await set_rls_context(session, current_user_id, workspace.id)
 
-    issue = await issue_repo.get_by_id_with_relations(issue_id)
-    if issue is None or issue.workspace_id != workspace.id:
+    # Scalar ownership check: avoid loading full issue relations just to verify workspace membership
+    issue_ws_row = await session.execute(
+        select(Issue.workspace_id).where(
+            Issue.id == issue_id,
+            Issue.is_deleted == False,  # noqa: E712
+        )
+    )
+    issue_workspace_id = issue_ws_row.scalar_one_or_none()
+    if issue_workspace_id is None or issue_workspace_id != workspace.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
 
     links = await link_repo.find_all_for_issue(issue_id, workspace.id)
-    return [
-        IssueLinkSchema(
-            id=link.id,
-            link_type=link.link_type.value,
-            direction="outbound" if link.source_issue_id == issue_id else "inbound",
-            related_issue=IssueBriefResponse(
-                id=rel.id,
-                identifier=rel.identifier,
-                name=rel.name,
-                priority=rel.priority,
-                state=StateBriefSchema.model_validate(rel.state),
-                assignee=UserBriefSchema.model_validate(rel.assignee) if rel.assignee else None,
-            ),
+    result: list[IssueLinkSchema] = []
+    for link in links:
+        rel = link.target_issue if link.source_issue_id == issue_id else link.source_issue
+        if rel is None:  # pyright: ignore[reportUnnecessaryComparison]
+            continue
+        result.append(
+            IssueLinkSchema(
+                id=link.id,
+                link_type=link.link_type.value,
+                direction="outbound" if link.source_issue_id == issue_id else "inbound",
+                related_issue=IssueBriefResponse(
+                    id=rel.id,
+                    identifier=rel.identifier,
+                    name=rel.name,
+                    priority=rel.priority,
+                    state=StateBriefSchema.model_validate(rel.state),
+                    assignee=UserBriefSchema.model_validate(rel.assignee) if rel.assignee else None,
+                ),
+            )
         )
-        for link in links
-        for rel in [link.target_issue if link.source_issue_id == issue_id else link.source_issue]
-    ]
+    return result
 
 
 @router.post(
@@ -452,8 +463,12 @@ async def update_workspace_issue(
         cycle_id=None
         if issue_data.clear_cycle
         else (issue_data.cycle_id if issue_data.cycle_id is not None else UNCHANGED),
-        module_id=UNCHANGED,
-        parent_id=UNCHANGED,
+        module_id=None
+        if issue_data.clear_module
+        else (issue_data.module_id if issue_data.module_id is not None else UNCHANGED),
+        parent_id=None
+        if issue_data.clear_parent
+        else (issue_data.parent_id if issue_data.parent_id is not None else UNCHANGED),
         estimate_points=None
         if issue_data.clear_estimate
         else (issue_data.estimate_points if issue_data.estimate_points is not None else UNCHANGED),

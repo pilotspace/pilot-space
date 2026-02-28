@@ -14,11 +14,13 @@ export const issueRelationsKeys = {
     ['issues', workspaceId, issueId, 'relations'] as const,
 };
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export function useIssueRelations(workspaceId: string, issueId: string) {
   return useQuery<IssueRelation[]>({
     queryKey: issueRelationsKeys.detail(workspaceId, issueId),
     queryFn: () => issuesApi.getRelations(workspaceId, issueId),
-    enabled: !!workspaceId && !!issueId,
+    enabled: UUID_RE.test(workspaceId) && UUID_RE.test(issueId),
     staleTime: 30_000,
   });
 }

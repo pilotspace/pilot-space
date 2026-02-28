@@ -78,6 +78,7 @@ export interface CostSummary {
 
 export interface ApprovalListResponse {
   requests: ApprovalRequest[];
+  total: number;
   pending_count: number;
 }
 
@@ -91,6 +92,22 @@ export interface ApprovalRequest {
   requested_by: string;
   context_preview: string;
   payload?: Record<string, unknown>;
+}
+
+/** Full approval detail — returned by GET /ai/approvals/{id}. */
+export interface ApprovalDetailResponse extends ApprovalRequest {
+  payload: Record<string, unknown>;
+  context: Record<string, unknown> | null;
+  resolved_at: string | null;
+  resolved_by: string | null;
+  resolution_note: string | null;
+}
+
+/** Response shape for POST /ai/approvals/{id}/resolve. */
+export interface ApprovalResolutionResponse {
+  approved: boolean;
+  action_result: Record<string, unknown> | null;
+  action_error: string | null;
 }
 
 export interface ConversationSession {
@@ -205,16 +222,16 @@ export const aiApi = {
    * @returns Approval request details
    */
   getApproval: (approvalId: string) =>
-    apiClient.get<ApprovalRequest>(`/ai/approvals/${approvalId}`),
+    apiClient.get<ApprovalDetailResponse>(`/ai/approvals/${approvalId}`),
 
   /**
    * Resolve approval request (approve/reject).
    * @param approvalId - Approval request UUID
    * @param resolution - Approval resolution with optional note and selected issues
-   * @returns Updated approval request
+   * @returns Resolution outcome (approved flag + optional action result/error)
    */
   resolveApproval: (approvalId: string, resolution: ApprovalResolutionRequest) =>
-    apiClient.post<ApprovalRequest>(`/ai/approvals/${approvalId}/resolve`, resolution),
+    apiClient.post<ApprovalResolutionResponse>(`/ai/approvals/${approvalId}/resolve`, resolution),
 
   /**
    * Cost tracking endpoints.

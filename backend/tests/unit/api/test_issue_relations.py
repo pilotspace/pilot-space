@@ -62,6 +62,15 @@ def _make_link(
     return link
 
 
+def _make_session_for_issue(workspace_id: UUID | None) -> AsyncMock:
+    """Create a mock session whose execute() returns the given workspace_id scalar."""
+    mock_session = AsyncMock()
+    mock_execute_result = MagicMock()
+    mock_execute_result.scalar_one_or_none.return_value = workspace_id
+    mock_session.execute.return_value = mock_execute_result
+    return mock_session
+
+
 async def _call_endpoint(
     *,
     workspace_id: str = "test-workspace",
@@ -71,26 +80,18 @@ async def _call_endpoint(
     issue_exists: bool = True,
     issue_workspace_id: UUID | None = None,
 ) -> list[IssueLinkSchema]:
-    """Call list_issue_relations with mocked infrastructure."""
+    """Call list_issue_relations with mocked infrastructure (success path only)."""
     if issue_id is None:
         issue_id = uuid4()
     if workspace is None:
         workspace = _make_workspace()
 
-    mock_session = AsyncMock()
+    effective_ws_id = issue_workspace_id if issue_workspace_id is not None else workspace.id
+    mock_session = _make_session_for_issue(effective_ws_id if issue_exists else None)
     mock_link_repo = AsyncMock()
     mock_workspace_repo = AsyncMock()
-    mock_issue_repo = AsyncMock()
 
     mock_link_repo.find_all_for_issue.return_value = links
-
-    if issue_exists:
-        ws_id = issue_workspace_id if issue_workspace_id is not None else workspace.id
-        mock_issue = _make_issue(ws_id)
-        mock_issue.id = issue_id
-        mock_issue_repo.get_by_id_with_relations.return_value = mock_issue
-    else:
-        mock_issue_repo.get_by_id_with_relations.return_value = None
 
     with (
         patch(_RESOLVE_WORKSPACE, return_value=workspace) as mock_resolve,
@@ -102,7 +103,6 @@ async def _call_endpoint(
             issue_id=issue_id,
             current_user_id=TEST_USER_ID,
             workspace_repo=mock_workspace_repo,
-            issue_repo=mock_issue_repo,
             link_repo=mock_link_repo,
         )
 
@@ -156,9 +156,32 @@ async def test_direction_is_outbound_when_issue_is_source() -> None:
 
 @pytest.mark.asyncio
 async def test_raises_404_when_issue_not_found() -> None:
-    """Should return 404 when issue_repo returns None (not found or soft-deleted)."""
-    with pytest.raises(HTTPException) as exc_info:
-        await _call_endpoint(links=[], issue_exists=False)
+    """Should return 404 when issue not found (deleted or nonexistent).
+
+    Verifies that set_rls_context IS called before the 404 is raised —
+    the RLS context must be established before any DB access.
+    """
+    workspace = _make_workspace()
+    issue_id = uuid4()
+    mock_session = _make_session_for_issue(None)  # scalar_one_or_none returns None
+    mock_link_repo = AsyncMock()
+    mock_workspace_repo = AsyncMock()
+
+    with (
+        patch(_RESOLVE_WORKSPACE, return_value=workspace),
+        patch(_SET_RLS_CONTEXT, new_callable=AsyncMock) as mock_rls,
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            await list_issue_relations(
+                session=mock_session,
+                workspace_id="test-workspace",
+                issue_id=issue_id,
+                current_user_id=TEST_USER_ID,
+                workspace_repo=mock_workspace_repo,
+                link_repo=mock_link_repo,
+            )
+        # RLS context must be set before the 404 check
+        mock_rls.assert_awaited_once_with(mock_session, TEST_USER_ID, workspace.id)
 
     assert exc_info.value.status_code == 404
     assert "not found" in exc_info.value.detail.lower()
@@ -166,16 +189,31 @@ async def test_raises_404_when_issue_not_found() -> None:
 
 @pytest.mark.asyncio
 async def test_raises_404_when_issue_belongs_to_different_workspace() -> None:
-    """Should return 404 when the issue exists but belongs to a different workspace."""
+    """Should return 404 when the issue exists but belongs to a different workspace.
+
+    Verifies that set_rls_context IS called before the cross-workspace check.
+    """
     workspace = _make_workspace()
     other_workspace_id = uuid4()  # different from workspace.id
+    issue_id = uuid4()
+    mock_session = _make_session_for_issue(other_workspace_id)
+    mock_link_repo = AsyncMock()
+    mock_workspace_repo = AsyncMock()
 
-    with pytest.raises(HTTPException) as exc_info:
-        await _call_endpoint(
-            links=[],
-            workspace=workspace,
-            issue_exists=True,
-            issue_workspace_id=other_workspace_id,
-        )
+    with (
+        patch(_RESOLVE_WORKSPACE, return_value=workspace),
+        patch(_SET_RLS_CONTEXT, new_callable=AsyncMock) as mock_rls,
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            await list_issue_relations(
+                session=mock_session,
+                workspace_id="test-workspace",
+                issue_id=issue_id,
+                current_user_id=TEST_USER_ID,
+                workspace_repo=mock_workspace_repo,
+                link_repo=mock_link_repo,
+            )
+        # RLS context must be set before the cross-workspace check
+        mock_rls.assert_awaited_once_with(mock_session, TEST_USER_ID, workspace.id)
 
     assert exc_info.value.status_code == 404

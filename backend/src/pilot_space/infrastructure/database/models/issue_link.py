@@ -76,16 +76,18 @@ class IssueLink(WorkspaceScopedModel):
         nullable=False,
     )
 
-    # Relationships
+    # Relationships — noload by default; use explicit selectinload() in queries that need them.
+    # find_all_for_issue adds selectinload(source_issue) + selectinload(target_issue) explicitly.
+    # find_dependency_chain only needs UUIDs (scalars), so noload avoids 2xN phantom queries.
     source_issue: Mapped[Issue] = relationship(
         "Issue",
         foreign_keys=[source_issue_id],
-        lazy="selectin",
+        lazy="noload",
     )
     target_issue: Mapped[Issue] = relationship(
         "Issue",
         foreign_keys=[target_issue_id],
-        lazy="selectin",
+        lazy="noload",
     )
 
     __table_args__ = (

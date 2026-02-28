@@ -44,7 +44,7 @@ export interface ApprovalRequest {
   id: string;
   agentName: string;
   actionType: string;
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'pending' | 'approved' | 'rejected' | 'expired';
   contextPreview: string;
   payload?: Record<string, unknown>;
   createdAt: Date;

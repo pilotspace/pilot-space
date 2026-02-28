@@ -24,9 +24,7 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     """Replace issue_links RLS policy with cross-workspace validation."""
     # Drop the existing permissive policy
-    op.execute(
-        'DROP POLICY IF EXISTS "issue_links_workspace_member" ON issue_links'
-    )
+    op.execute('DROP POLICY IF EXISTS "issue_links_workspace_member" ON issue_links')
 
     # Recreate with separate SELECT (USING) and INSERT/UPDATE (WITH CHECK) clauses.
     # SELECT: user must be member of the link's workspace.
@@ -38,7 +36,7 @@ def upgrade() -> None:
         USING (
             workspace_id IN (
                 SELECT wm.workspace_id FROM workspace_members wm
-                WHERE wm.user_id = auth.uid()
+                WHERE wm.user_id = current_setting('app.current_user_id', true)::uuid
             )
         );
     """)
@@ -50,13 +48,13 @@ def upgrade() -> None:
         USING (
             workspace_id IN (
                 SELECT wm.workspace_id FROM workspace_members wm
-                WHERE wm.user_id = auth.uid()
+                WHERE wm.user_id = current_setting('app.current_user_id', true)::uuid
             )
         )
         WITH CHECK (
             workspace_id IN (
                 SELECT wm.workspace_id FROM workspace_members wm
-                WHERE wm.user_id = auth.uid()
+                WHERE wm.user_id = current_setting('app.current_user_id', true)::uuid
             )
             AND EXISTS (
                 SELECT 1 FROM issues
@@ -74,12 +72,8 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Revert to the original simpler RLS policy."""
-    op.execute(
-        'DROP POLICY IF EXISTS "issue_links_workspace_member_select" ON issue_links'
-    )
-    op.execute(
-        'DROP POLICY IF EXISTS "issue_links_workspace_member_mutate" ON issue_links'
-    )
+    op.execute('DROP POLICY IF EXISTS "issue_links_workspace_member_select" ON issue_links')
+    op.execute('DROP POLICY IF EXISTS "issue_links_workspace_member_mutate" ON issue_links')
 
     op.execute("""
         CREATE POLICY "issue_links_workspace_member"
@@ -88,7 +82,7 @@ def downgrade() -> None:
         USING (
             workspace_id IN (
                 SELECT wm.workspace_id FROM workspace_members wm
-                WHERE wm.user_id = auth.uid()
+                WHERE wm.user_id = current_setting('app.current_user_id', true)::uuid
             )
         );
     """)
