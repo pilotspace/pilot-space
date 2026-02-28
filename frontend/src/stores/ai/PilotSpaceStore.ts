@@ -360,6 +360,10 @@ export class PilotSpaceStore {
     return this.actions.rejectAction(id, reason);
   }
 
+  removePendingApproval(requestId: string): void {
+    this.pendingApprovals = this.pendingApprovals.filter((r) => r.requestId !== requestId);
+  }
+
   clearConversation(): void {
     this.clear();
   }

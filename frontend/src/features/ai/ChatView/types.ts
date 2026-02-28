@@ -146,6 +146,7 @@ export interface IPilotSpaceStore {
   addMentionedAgent(agent: string): void;
   approveAction(id: string, modifications?: Record<string, unknown>): Promise<void>;
   rejectAction(id: string, reason: string): Promise<void>;
+  removePendingApproval(requestId: string): void;
   abort(): void;
   clearConversation(): void;
 }

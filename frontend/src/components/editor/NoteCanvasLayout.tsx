@@ -285,6 +285,7 @@ export function NoteCanvasLayout(props: NoteCanvasProps) {
     >
       <ChatView
         store={aiStore.pilotSpace}
+        approvalStore={aiStore.approval}
         autoFocus
         onClose={() => setIsChatViewOpen(false)}
         suggestedPrompts={

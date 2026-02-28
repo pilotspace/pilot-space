@@ -282,6 +282,90 @@ describe('ApprovalStore', () => {
     });
   });
 
+  describe('pendingRequests', () => {
+    it('returns empty array when no requests', () => {
+      expect(store.pendingRequests).toEqual([]);
+    });
+
+    it('filters out non-pending statuses', async () => {
+      const mixedRequests: ApprovalRequest[] = [
+        {
+          id: '1',
+          agent_name: 'agent',
+          action_type: 'do_thing',
+          status: 'pending',
+          created_at: '2026-01-26T10:00:00Z',
+          expires_at: '2026-01-27T10:00:00Z',
+          requested_by: 'user',
+          context_preview: 'pending item',
+        },
+        {
+          id: '2',
+          agent_name: 'agent',
+          action_type: 'done_thing',
+          status: 'approved',
+          created_at: '2026-01-26T09:00:00Z',
+          expires_at: '2026-01-27T09:00:00Z',
+          requested_by: 'user',
+          context_preview: 'approved item',
+        },
+        {
+          id: '3',
+          agent_name: 'agent',
+          action_type: 'nope_thing',
+          status: 'rejected',
+          created_at: '2026-01-26T08:00:00Z',
+          expires_at: '2026-01-27T08:00:00Z',
+          requested_by: 'user',
+          context_preview: 'rejected item',
+        },
+      ];
+
+      vi.mocked(aiApi.listApprovals).mockResolvedValue({
+        requests: mixedRequests,
+        pending_count: 1,
+      });
+      await store.loadPending();
+
+      const pending = store.pendingRequests;
+      expect(pending).toHaveLength(1);
+      expect(pending[0]?.id).toBe('1');
+    });
+
+    it('maps snake_case API fields to camelCase ChatView shape', async () => {
+      const request = mockApprovalRequests[0]!;
+      vi.mocked(aiApi.listApprovals).mockResolvedValue({
+        requests: [request],
+        pending_count: 1,
+      });
+      await store.loadPending();
+
+      const [mapped] = store.pendingRequests;
+      expect(mapped).toBeDefined();
+      expect(mapped!.id).toBe(request.id);
+      expect(mapped!.agentName).toBe(request.agent_name);
+      expect(mapped!.actionType).toBe(request.action_type);
+      expect(mapped!.status).toBe('pending');
+      expect(mapped!.contextPreview).toBe(request.context_preview);
+      expect(mapped!.payload).toEqual(request.payload);
+    });
+
+    it('converts created_at/expires_at strings to Date objects', async () => {
+      const request = mockApprovalRequests[0]!;
+      vi.mocked(aiApi.listApprovals).mockResolvedValue({
+        requests: [request],
+        pending_count: 1,
+      });
+      await store.loadPending();
+
+      const [mapped] = store.pendingRequests;
+      expect(mapped!.createdAt).toBeInstanceOf(Date);
+      expect(mapped!.expiresAt).toBeInstanceOf(Date);
+      expect(mapped!.createdAt.toISOString()).toBe(new Date(request.created_at).toISOString());
+      expect(mapped!.expiresAt.toISOString()).toBe(new Date(request.expires_at).toISOString());
+    });
+  });
+
   describe('reset', () => {
     it('should reset store to initial state', async () => {
       // Set up some state

@@ -16,7 +16,6 @@ import type React from 'react';
 import { observer } from 'mobx-react-lite';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,9 +29,11 @@ import {
 import { Square, AlertCircle, X } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import type { PilotSpaceStore } from '@/stores/ai/PilotSpaceStore';
+import type { ApprovalStore } from '@/stores/ai/ApprovalStore';
 import { SessionListStore } from '@/stores/ai/SessionListStore';
 import type { AgentTask } from './types';
 import { ChatHeader } from './ChatHeader';
+import { ConversationLoadingSkeleton } from './MessageList/ConversationLoadingSkeleton';
 import { MessageList } from './MessageList/MessageList';
 import { TaskPanel } from './TaskPanel/TaskPanel';
 import { DestructiveApprovalModal } from './ApprovalOverlay/DestructiveApprovalModal';
@@ -64,110 +65,10 @@ export function isDestructiveAction(actionType: string): boolean {
   return DESTRUCTIVE_ACTIONS.has(actionType);
 }
 
-/**
- * Loading skeleton for conversation resume with staggered animation
- */
-function ConversationLoadingSkeleton() {
-  const messageSkeletons = [
-    // User message
-    {
-      align: 'end',
-      items: [
-        { h: 4, w: 48 },
-        { h: 12, w: 64 },
-      ],
-    },
-    // Assistant message
-    {
-      align: 'start',
-      items: [
-        { h: 4, w: 32 },
-        { h: 20, w: 80 },
-        { h: 16, w: 72 },
-      ],
-    },
-    // User message
-    {
-      align: 'end',
-      items: [
-        { h: 4, w: 40 },
-        { h: 10, w: 56 },
-      ],
-    },
-    // Assistant message
-    {
-      align: 'start',
-      items: [
-        { h: 4, w: 36 },
-        { h: 24, w: 96 },
-      ],
-    },
-  ];
-
-  return (
-    <motion.div
-      role="status"
-      aria-label="Loading conversation"
-      className="flex-1 overflow-y-auto px-4 py-6 space-y-4"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.2 }}
-    >
-      {messageSkeletons.map((msg, idx) => (
-        <motion.div
-          key={idx}
-          className={cn('flex', msg.align === 'end' ? 'justify-end' : 'justify-start')}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: idx * 0.1, duration: 0.3 }}
-        >
-          <div className="max-w-[80%] space-y-2">
-            {msg.items.map((item, itemIdx) => (
-              <Skeleton
-                key={itemIdx}
-                className={cn(
-                  `h-${item.h} w-${item.w} rounded-xl`,
-                  msg.align === 'end' && itemIdx === 0 && 'ml-auto'
-                )}
-                style={{ height: item.h * 4, width: item.w * 4 }}
-              />
-            ))}
-          </div>
-        </motion.div>
-      ))}
-
-      {/* Loading indicator at bottom */}
-      <motion.div
-        className="flex justify-center pt-2"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.4 }}
-      >
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <motion.div
-            className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50"
-            animate={{ scale: [1, 1.2, 1] }}
-            transition={{ duration: 0.8, repeat: Infinity, repeatDelay: 0.2 }}
-          />
-          <motion.div
-            className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50"
-            animate={{ scale: [1, 1.2, 1] }}
-            transition={{ duration: 0.8, repeat: Infinity, repeatDelay: 0.2, delay: 0.2 }}
-          />
-          <motion.div
-            className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50"
-            animate={{ scale: [1, 1.2, 1] }}
-            transition={{ duration: 0.8, repeat: Infinity, repeatDelay: 0.2, delay: 0.4 }}
-          />
-          <span className="ml-1">Loading conversation</span>
-        </div>
-      </motion.div>
-    </motion.div>
-  );
-}
-
 interface ChatViewProps {
   store: PilotSpaceStore;
+  /** Backend-polled approval store — loads all pending approvals across sessions */
+  approvalStore?: ApprovalStore;
   userName?: string;
   userAvatar?: string;
   /** Auto-focus the chat input when the view becomes visible */
@@ -186,6 +87,7 @@ interface ChatViewProps {
 const ChatViewInternal = observer<ChatViewProps>(
   ({
     store,
+    approvalStore,
     userName,
     userAvatar,
     autoFocus,
@@ -237,6 +139,15 @@ const ChatViewInternal = observer<ChatViewProps>(
     useEffect(() => {
       sessionListStore.fetchSessions();
     }, [sessionListStore]);
+
+    // Load all backend-pending approvals on mount, then poll every 30s.
+    // De-duplicated with SSE arrivals in chatViewApprovals derivation below.
+    useEffect(() => {
+      if (!approvalStore) return;
+      void approvalStore.loadPending();
+      const interval = setInterval(() => void approvalStore.loadPending(), 30_000);
+      return () => clearInterval(interval);
+    }, [approvalStore]);
 
     // Auto-resume most recent session for context on mount/context change.
     // Falls back to fresh conversation if no matching session exists.
@@ -318,11 +229,11 @@ const ChatViewInternal = observer<ChatViewProps>(
 
     const completedAgentTasks = agentTasks.filter((t) => t.status === 'completed');
 
-    // Convert ApprovalRequest to ChatView ApprovalRequest.
+    // SSE-triggered approvals (current session, in-memory).
     // Computed inline (no useMemo) because store.pendingApprovals is a MobX ObservableArray
     // whose reference never changes on push — useMemo([store.pendingApprovals]) would
     // cache stale empty array even after approvals arrive (observer re-renders correctly).
-    const chatViewApprovals = store.pendingApprovals.map((req) => ({
+    const sseApprovals = store.pendingApprovals.map((req) => ({
       id: req.requestId,
       agentName: 'PilotSpace Agent',
       actionType: req.actionType,
@@ -333,6 +244,13 @@ const ChatViewInternal = observer<ChatViewProps>(
       expiresAt: req.expiresAt,
       reasoning: req.consequences,
     }));
+
+    // Backend-polled approvals (all sessions); de-dup against SSE list by id.
+    const polledApprovals = (approvalStore?.pendingRequests ?? []).filter(
+      (r) => !sseApprovals.some((s) => s.id === r.id)
+    );
+
+    const chatViewApprovals = [...sseApprovals, ...polledApprovals];
 
     // Split approvals: non-destructive inline cards vs destructive modal overlay
     const inlineApprovals: typeof chatViewApprovals = [];
@@ -399,16 +317,26 @@ const ChatViewInternal = observer<ChatViewProps>(
 
     const handleApproveAction = useCallback(
       async (id: string, modifications?: Record<string, unknown>) => {
-        await store.approveAction(id, modifications);
+        if (approvalStore) {
+          await approvalStore.approve(id);
+          store.removePendingApproval(id);
+        } else {
+          await store.approveAction(id, modifications);
+        }
       },
-      [store]
+      [store, approvalStore]
     );
 
     const handleRejectAction = useCallback(
       async (id: string, reason: string) => {
-        await store.rejectAction(id, reason);
+        if (approvalStore) {
+          await approvalStore.reject(id, reason);
+          store.removePendingApproval(id);
+        } else {
+          await store.rejectAction(id, reason);
+        }
       },
-      [store]
+      [store, approvalStore]
     );
 
     const handleSuggestedPrompt = useCallback((prompt: string) => {

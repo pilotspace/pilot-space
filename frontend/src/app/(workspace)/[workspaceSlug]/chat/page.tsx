@@ -68,7 +68,7 @@ export default observer(function ChatPage() {
 
   return (
     <div className="h-full">
-      <ChatView store={store} userName="User" className="h-full" />
+      <ChatView store={store} approvalStore={aiStore.approval} userName="User" className="h-full" />
     </div>
   );
 });

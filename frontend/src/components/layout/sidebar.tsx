@@ -11,7 +11,6 @@ import {
   LayoutGrid,
   FolderKanban,
   MessageSquare,
-  CheckSquare,
   DollarSign,
   Settings,
   ChevronLeft,
@@ -60,7 +59,6 @@ const navigationItems = [
   { name: 'Issues', path: 'issues', icon: LayoutGrid, testId: 'nav-issues' },
   { name: 'Projects', path: 'projects', icon: FolderKanban, testId: 'nav-projects' },
   { name: 'AI Chat', path: 'chat', icon: MessageSquare, testId: 'nav-chat' },
-  { name: 'Approvals', path: 'approvals', icon: CheckSquare, testId: 'nav-approvals' },
   { name: 'Costs', path: 'costs', icon: DollarSign, testId: 'nav-costs' },
 ];
 

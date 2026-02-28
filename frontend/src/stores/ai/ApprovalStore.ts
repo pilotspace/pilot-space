@@ -14,6 +14,7 @@
 
 import { makeAutoObservable, runInAction } from 'mobx';
 import { aiApi, type ApprovalRequest } from '@/services/api/ai';
+import type { ApprovalRequest as ChatViewApprovalRequest } from '@/features/ai/ChatView/types';
 import type { AIStore } from './AIStore';
 
 export class ApprovalStore {
@@ -26,6 +27,24 @@ export class ApprovalStore {
 
   constructor(_rootStore: AIStore) {
     makeAutoObservable(this);
+  }
+
+  /**
+   * Get pending requests mapped to ChatView ApprovalRequest shape for inline rendering.
+   */
+  get pendingRequests(): ChatViewApprovalRequest[] {
+    return this.requests
+      .filter((r) => r.status === 'pending')
+      .map((r) => ({
+        id: r.id,
+        agentName: r.agent_name,
+        actionType: r.action_type,
+        status: 'pending' as const,
+        contextPreview: r.context_preview,
+        payload: r.payload,
+        createdAt: new Date(r.created_at),
+        expiresAt: new Date(r.expires_at),
+      }));
   }
 
   /**
