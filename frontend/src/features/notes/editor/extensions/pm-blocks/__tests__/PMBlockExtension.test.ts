@@ -1,13 +1,13 @@
 /**
- * TDD red-phase tests for PMBlockExtension (T024).
+ * Tests for PMBlockExtension (T024).
  *
  * PMBlockExtension is a generic TipTap node that serves as the container for
- * all PM block types: decision, form, raci, risk, timeline, dashboard.
+ * all SDLC PM block types. Block types are defined by the backend
+ * note_server.py:_VALID_PM_BLOCK_TYPES (C-3).
  *
  * Attrs: blockType (string), data (JSON string), version (number).
  *
- * Spec refs: FR-020 (decision), FR-027 (form), FR-030 (RACI),
- * FR-032 (risk), FR-039 (timeline), FR-041 (dashboard)
+ * Spec refs: FR-020 (decision), FR-030 (RACI), FR-032 (risk)
  *
  * @module pm-blocks/__tests__/PMBlockExtension.test
  */
@@ -59,18 +59,18 @@ describe('PMBlockExtension basics', () => {
 
 // ── Block type constants ────────────────────────────────────────────────
 describe('PM_BLOCK_TYPES', () => {
-  it('exports all 10 block types', () => {
+  it('exports all 10 SDLC block types', () => {
     expect(PM_BLOCK_TYPES).toEqual([
-      'capacity-plan',
-      'dashboard',
+      'acceptance_criteria',
+      'assumption',
       'decision',
-      'dependency-map',
-      'form',
+      'definition_of_done',
+      'dependency',
       'raci',
-      'release-notes',
+      'requirement',
       'risk',
-      'sprint-board',
-      'timeline',
+      'status_update',
+      'user_story',
     ]);
   });
 });

@@ -27,32 +27,33 @@ import { pmBlockStyles } from './pm-block-styles';
 import type { PMBlockType } from './PMBlockExtension';
 import { useBlockEditGuard } from './shared/useBlockEditGuard';
 
-/** Lazy-loaded renderer registry — one per block type. */
+/** Lazy-loaded renderer registry — one per SDLC block type. */
 const RENDERER_MAP: Record<PMBlockType, ComponentType<PMRendererProps>> = {
+  acceptance_criteria: lazy(() =>
+    import('./renderers/FormRenderer').then((m) => ({ default: m.FormRenderer }))
+  ),
+  assumption: lazy(() =>
+    import('./renderers/DecisionRenderer').then((m) => ({ default: m.DecisionRenderer }))
+  ),
   decision: lazy(() =>
     import('./renderers/DecisionRenderer').then((m) => ({ default: m.DecisionRenderer }))
   ),
-  form: lazy(() => import('./renderers/FormRenderer').then((m) => ({ default: m.FormRenderer }))),
-  raci: lazy(() => import('./renderers/RACIRenderer').then((m) => ({ default: m.RACIRenderer }))),
-  risk: lazy(() => import('./renderers/RiskRenderer').then((m) => ({ default: m.RiskRenderer }))),
-  timeline: lazy(() =>
-    import('./renderers/TimelineRenderer').then((m) => ({ default: m.TimelineRenderer }))
+  definition_of_done: lazy(() =>
+    import('./renderers/ReleaseNotesRenderer').then((m) => ({ default: m.ReleaseNotesRenderer }))
   ),
-  dashboard: lazy(() =>
-    import('./renderers/DashboardRenderer').then((m) => ({ default: m.DashboardRenderer }))
-  ),
-  // Feature 017 — PM Block Engine (T-228): renderers TBD
-  'sprint-board': lazy(() =>
-    import('./renderers/SprintBoardRenderer').then((m) => ({ default: m.SprintBoardRenderer }))
-  ),
-  'dependency-map': lazy(() =>
+  dependency: lazy(() =>
     import('./renderers/DependencyMapRenderer').then((m) => ({ default: m.DependencyMapRenderer }))
   ),
-  'capacity-plan': lazy(() =>
-    import('./renderers/CapacityPlanRenderer').then((m) => ({ default: m.CapacityPlanRenderer }))
+  raci: lazy(() => import('./renderers/RACIRenderer').then((m) => ({ default: m.RACIRenderer }))),
+  requirement: lazy(() =>
+    import('./renderers/FormRenderer').then((m) => ({ default: m.FormRenderer }))
   ),
-  'release-notes': lazy(() =>
-    import('./renderers/ReleaseNotesRenderer').then((m) => ({ default: m.ReleaseNotesRenderer }))
+  risk: lazy(() => import('./renderers/RiskRenderer').then((m) => ({ default: m.RiskRenderer }))),
+  status_update: lazy(() =>
+    import('./renderers/DashboardRenderer').then((m) => ({ default: m.DashboardRenderer }))
+  ),
+  user_story: lazy(() =>
+    import('./renderers/FormRenderer').then((m) => ({ default: m.FormRenderer }))
   ),
 };
 
@@ -72,17 +73,16 @@ export interface PMRendererProps {
 
 /** Block type display labels for the type badge. */
 const BLOCK_TYPE_LABELS: Record<PMBlockType, string> = {
+  acceptance_criteria: 'Acceptance Criteria',
+  assumption: 'Assumption',
   decision: 'Decision Record',
-  form: 'Form',
+  definition_of_done: 'Definition of Done',
+  dependency: 'Dependency',
   raci: 'RACI Matrix',
+  requirement: 'Requirement',
   risk: 'Risk Register',
-  timeline: 'Timeline',
-  dashboard: 'KPI Dashboard',
-  // Feature 017 — PM Block Engine (T-228)
-  'sprint-board': 'Sprint Board',
-  'dependency-map': 'Dependency Map',
-  'capacity-plan': 'Capacity Plan',
-  'release-notes': 'Release Notes',
+  status_update: 'Status Update',
+  user_story: 'User Story',
 };
 
 /** Loading skeleton shown while renderer chunk loads. */

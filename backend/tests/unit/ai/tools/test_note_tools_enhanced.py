@@ -124,23 +124,46 @@ def _drain_content_update(queue: asyncio.Queue[str]) -> dict:
 class TestSearchNotes:
     """Test suite for search_notes tool (NT-001).
 
-    Database-dependent search_notes functionality will be covered by integration tests.
-    These unit tests verify tool registration and basic structure.
+    search_notes is now in note_query_server (CQRS-lite split).
+    These unit tests verify tool registration in the new location.
     """
 
-    def test_search_notes_tool_registered(self) -> None:
-        """Verify search_notes tool is registered in note server."""
-        queue = asyncio.Queue()
-        tools = _capture_note_tools(queue)
-        assert "search_notes" in tools
+    def test_search_notes_tool_registered_in_query_server(self) -> None:
+        """Verify search_notes tool is registered in note_query_server."""
+        from unittest.mock import patch
+
+        import pilot_space.ai.mcp.note_query_server as nqs_module
+
+        captured: dict[str, object] = {}
+        original_create = nqs_module.create_sdk_mcp_server
+
+        def _intercept(*, name, version, tools):
+            captured["tools"] = {t.name: t for t in tools}
+            return original_create(name=name, version=version, tools=tools)
+
+        with patch.object(nqs_module, "create_sdk_mcp_server", side_effect=_intercept):
+            nqs_module.create_note_query_server(tool_context=None)
+
+        assert "search_notes" in captured["tools"]
 
     @pytest.mark.asyncio
     async def test_search_notes_without_context_returns_error(self) -> None:
         """Verify search_notes returns error when tool_context is missing."""
-        queue = asyncio.Queue()
-        tools = _capture_note_tools(queue, tool_context=None)
-        search_tool = tools["search_notes"]
+        from unittest.mock import patch
 
+        import pilot_space.ai.mcp.note_query_server as nqs_module
+
+        captured: dict[str, object] = {}
+        original_create = nqs_module.create_sdk_mcp_server
+
+        def _intercept(*, name, version, tools):
+            captured["tools"] = {t.name: t for t in tools}
+            return original_create(name=name, version=version, tools=tools)
+
+        with patch.object(nqs_module, "create_sdk_mcp_server", side_effect=_intercept):
+            nqs_module.create_note_query_server(tool_context=None)
+
+        search_tool = captured["tools"]["search_notes"]
         result = await search_tool.handler({"query": "test"})
 
         assert "content" in result
@@ -528,11 +551,11 @@ class TestToolNamesConstant:
         assert len(TOOL_NAMES) == 9
 
     def test_note_server_includes_new_tools(self) -> None:
-        """Verify note_server TOOL_NAMES includes 3 new CRUD tools."""
+        """Verify note_server TOOL_NAMES includes insert_pm_block and CRUD tools."""
         from pilot_space.ai.mcp.note_server import SERVER_NAME, TOOL_NAMES
 
         expected = [
-            f"mcp__{SERVER_NAME}__search_notes",
+            f"mcp__{SERVER_NAME}__insert_pm_block",
             f"mcp__{SERVER_NAME}__create_note",
             f"mcp__{SERVER_NAME}__update_note",
         ]

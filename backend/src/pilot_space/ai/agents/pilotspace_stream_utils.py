@@ -40,6 +40,10 @@ from pilot_space.ai.mcp.note_content_server import (
     SERVER_NAME as NOTE_CONTENT_SERVER_NAME,
     create_note_content_server,
 )
+from pilot_space.ai.mcp.note_query_server import (
+    SERVER_NAME as NOTE_QUERY_SERVER_NAME,
+    create_note_query_server,
+)
 from pilot_space.ai.mcp.note_server import (
     SERVER_NAME as NOTE_SERVER_NAME,
     create_note_tools_server,
@@ -85,7 +89,7 @@ def build_mcp_servers(
     """Build the MCP server dict and block-reference map for an SDK session.
 
     Constructs a ¶N block reference map from the note context (if present)
-    and instantiates all 7 MCP tool servers (6 domain + 1 interaction).
+    and instantiates all 8 MCP tool servers (7 domain + 1 interaction).
 
     Returns:
         Tuple of (mcp_servers dict keyed by server name, block_ref_map or None).
@@ -108,6 +112,9 @@ def build_mcp_servers(
             context_note_id=str(context_note_id) if context_note_id else None,
             tool_context=tool_context,
             block_ref_map=ref_map,
+        ),
+        NOTE_QUERY_SERVER_NAME: create_note_query_server(
+            tool_context=tool_context,
         ),
         NOTE_CONTENT_SERVER_NAME: create_note_content_server(
             publisher,

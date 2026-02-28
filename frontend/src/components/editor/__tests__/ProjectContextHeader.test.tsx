@@ -10,10 +10,15 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { useProject } from '@/features/projects/hooks';
+import { useActiveCycle } from '@/features/cycles/hooks/useCycle';
 import { ProjectContextHeader } from '../ProjectContextHeader';
 
 vi.mock('@/features/projects/hooks', () => ({
   useProject: vi.fn(),
+}));
+
+vi.mock('@/features/cycles/hooks/useCycle', () => ({
+  useActiveCycle: vi.fn().mockReturnValue({ data: undefined }),
 }));
 
 const mockProject = {
@@ -158,5 +163,48 @@ describe('ProjectContextHeader', () => {
     render(<ProjectContextHeader projectId="proj-1" workspaceSlug="acme" />);
     // Folder SVG rendered as fallback
     expect(document.querySelector('svg')).toBeInTheDocument();
+  });
+
+  it('test_cycle_burndown_renders_when_active_cycle_has_metrics', () => {
+    (useProject as Mock).mockReturnValue({ data: mockProject, isLoading: false });
+    (useActiveCycle as Mock).mockReturnValue({
+      data: {
+        id: 'cycle-1',
+        name: 'Sprint 5',
+        metrics: {
+          totalIssues: 10,
+          completedIssues: 6,
+          completionPercentage: 60,
+        },
+      },
+    });
+    render(
+      <ProjectContextHeader projectId="proj-1" workspaceSlug="acme" workspaceId="ws-uuid-1" />
+    );
+    expect(screen.getByText('Sprint 5')).toBeInTheDocument();
+    expect(screen.getByText('6/10')).toBeInTheDocument();
+    // Cycle progress bar renders
+    const cycleBars = screen.getAllByRole('progressbar');
+    expect(cycleBars.length).toBeGreaterThanOrEqual(2); // project + cycle
+  });
+
+  it('test_cycle_burndown_hidden_when_no_active_cycle', () => {
+    (useProject as Mock).mockReturnValue({ data: mockProject, isLoading: false });
+    (useActiveCycle as Mock).mockReturnValue({ data: undefined });
+    render(
+      <ProjectContextHeader projectId="proj-1" workspaceSlug="acme" workspaceId="ws-uuid-1" />
+    );
+    expect(screen.queryByText('Sprint 5')).not.toBeInTheDocument();
+  });
+
+  it('test_cycle_burndown_hidden_when_cycle_has_no_metrics', () => {
+    (useProject as Mock).mockReturnValue({ data: mockProject, isLoading: false });
+    (useActiveCycle as Mock).mockReturnValue({
+      data: { id: 'cycle-1', name: 'Sprint 5', metrics: undefined },
+    });
+    render(
+      <ProjectContextHeader projectId="proj-1" workspaceSlug="acme" workspaceId="ws-uuid-1" />
+    );
+    expect(screen.queryByText('Sprint 5')).not.toBeInTheDocument();
   });
 });

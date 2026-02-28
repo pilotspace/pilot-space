@@ -24,6 +24,8 @@ import { useSelectionContext } from '@/features/notes/editor/hooks/useSelectionC
 import { useContentUpdates } from '@/features/notes/editor/hooks/useContentUpdates';
 import { cn } from '@/lib/utils';
 import { createEditorExtensions } from '@/features/notes/editor/extensions';
+import { useEntityHighlightData } from '@/features/notes/editor/hooks/useEntityHighlightData';
+import type { EntityHighlightStorage } from '@/features/notes/editor/extensions/EntityHighlightExtension';
 import '@/features/notes/editor/extensions/note-link.css';
 import { notesApi } from '@/services/api/notes';
 import { useResponsive } from '@/hooks/useMediaQuery';
@@ -32,6 +34,18 @@ import { useAIAutoScroll } from '@/hooks/useAIAutoScroll';
 import { useNoteHealth } from '@/hooks/useNoteHealth';
 import type { NoteHealthData } from '@/hooks/useNoteHealth';
 import { useEditorSync } from './hooks/useEditorSync';
+
+// H-6: Helper to update EntityHighlightExtension entities without recreating extensions.
+// Follows the pattern used by updateAIBlockProcessingStorage (functional/immutable-data rule).
+function updateEntityHighlightStorage(
+  editor: Editor,
+  entities: Array<{ name: string; projectId: string }>
+): void {
+  const storage = (editor.storage as unknown as Record<string, unknown>)['entityHighlight'] as
+    | EntityHighlightStorage
+    | undefined;
+  if (storage) storage.entities = entities;
+}
 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -240,6 +254,9 @@ export function useNoteCanvasEditor(props: NoteCanvasProps): NoteCanvasEditorSta
 
   const { isSmallScreen } = useResponsive();
 
+  // Project entities for EntityHighlightExtension
+  const projectEntities = useEntityHighlightData(resolvedWorkspaceId);
+
   // Ghost text trigger
   const handleGhostTextTrigger = useCallback(
     (context: GhostTextContext) => {
@@ -336,6 +353,8 @@ export function useNoteCanvasEditor(props: NoteCanvasProps): NoteCanvasEditorSta
             if (workspaceSlug) router.push(`/${workspaceSlug}/notes/${targetNoteId}`);
           },
         },
+        // H-6: Register with empty entities; injected via extensionStorage useEffect below
+        entityHighlight: {},
         slashCommand: {
           onAICommand: async (command: string, cmdEditor: Editor) => {
             const selectedText = cmdEditor.state.selection.empty
@@ -454,6 +473,14 @@ export function useNoteCanvasEditor(props: NoteCanvasProps): NoteCanvasEditorSta
   // Sync ghost text + margin annotations from MobX stores
   useEditorSync(editorRef, isEditorReady, aiStore, noteId, workspaceSlug, editor);
 
+  // H-6: Update EntityHighlightExtension entities in-place via extensionStorage.
+  // projectEntities is NOT in the extensions useMemo deps — this avoids a full
+  // editor remount (losing cursor + undo history) on every entities reference change.
+  useEffect(() => {
+    if (!editor) return;
+    updateEntityHighlightStorage(editor, projectEntities);
+  }, [editor, projectEntities]);
+
   // Track selection context for ChatView
   useSelectionContext(editor, aiStore.pilotSpace, noteId, title);
 
@@ -462,7 +489,8 @@ export function useNoteCanvasEditor(props: NoteCanvasProps): NoteCanvasEditorSta
     editor,
     aiStore.pilotSpace,
     noteId,
-    resolvedWorkspaceId
+    resolvedWorkspaceId,
+    aiStore.approval
   );
 
   // Auto-scroll to AI-focused blocks

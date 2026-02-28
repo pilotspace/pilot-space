@@ -310,7 +310,15 @@ export interface ContentUpdateData {
     | 'remove_content'
     | 'replace_content'
     | 'insert_pm_block'
-    | 'update_pm_block';
+    | 'update_pm_block'
+    | 'create_issues'
+    | 'create_single_issue';
+  /**
+   * Operation status from backend approval gate (DD-003).
+   * 'pending_apply'    — auto-execute path; apply immediately.
+   * 'approval_required' — human-in-the-loop; must be routed to ApprovalStore.
+   */
+  status?: 'pending_apply' | 'approval_required';
   blockId: string | null;
   /** Markdown content from AI agent (preferred over JSONContent) */
   markdown: string | null;
@@ -338,6 +346,26 @@ export interface ContentUpdateData {
     /** JSON-encoded block data string */
     data: string;
     version?: number;
+  };
+  /**
+   * Bulk issues array — present when operation is 'create_issues'.
+   * Each entry matches the normalized_issues shape from extract_issues tool.
+   */
+  issues?: Array<{
+    title: string;
+    description: string;
+    priority: 'low' | 'medium' | 'high' | 'urgent';
+    type: 'bug' | 'task' | 'feature' | 'improvement';
+  }>;
+  /**
+   * Single issue data — present when operation is 'create_single_issue'.
+   * Matches the issue_data shape from create_issue_from_note tool.
+   */
+  issue?: {
+    title: string;
+    description: string;
+    priority: 'low' | 'medium' | 'high' | 'urgent';
+    type: 'bug' | 'task' | 'feature' | 'improvement';
   };
 }
 

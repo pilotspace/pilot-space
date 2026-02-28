@@ -19,6 +19,7 @@ import { reaction } from 'mobx';
 import { toast } from 'sonner';
 import type { Editor } from '@tiptap/core';
 import type { PilotSpaceStore } from '@/stores/ai/PilotSpaceStore';
+import type { ApprovalStore } from '@/stores/ai/ApprovalStore';
 import type { ContentUpdateData } from '@/stores/ai/types/events';
 import type { Issue } from '@/types';
 import {
@@ -32,6 +33,8 @@ import {
   handleInsertInlineIssue,
   handleInsertPMBlock,
   handleUpdatePMBlock,
+  handleCreateIssues,
+  handleCreateSingleIssue,
 } from './contentUpdateHandlers';
 
 // Re-export highlightBlock for consumers that import from this module
@@ -59,16 +62,24 @@ interface RetryQueueEntry {
  * - Automatically retries when user moves away from conflicting block
  * - Debounces issue creation to prevent duplicates when AI rapidly extracts issues
  *
+ * DD-003 Approval Gate:
+ * - Updates with status='approval_required' are NOT applied immediately.
+ * - The backend emits a companion approval_request SSE event that the ApprovalStore
+ *   handles via its existing API-based workflow.
+ * - approvalStore.loadPending() is triggered so the approval badge refreshes.
+ *
  * @param editor - TipTap editor instance
  * @param store - PilotSpaceStore instance
  * @param noteId - Current note ID
  * @param workspaceId - Current workspace ID (needed for issue creation)
+ * @param approvalStore - ApprovalStore for DD-003 approval gate (optional)
  */
 export function useContentUpdates(
   editor: Editor | null,
   store: PilotSpaceStore,
   noteId: string,
-  workspaceId?: string
+  workspaceId?: string,
+  approvalStore?: ApprovalStore
 ): { processingBlockIds: string[]; userEditingBlockId: string | null } {
   // Track in-flight issue creation requests to prevent duplicates (per-instance)
   const inFlightIssuesRef = useRef(new Map<string, Promise<Issue>>());
@@ -119,6 +130,15 @@ export function useContentUpdates(
       isRetry = false
     ): Promise<boolean> => {
       if (!editor) return false;
+
+      // DD-003 Approval Gate: do not apply updates requiring human confirmation.
+      if (update.status === 'approval_required') {
+        console.info('[AI] content_update deferred: approval_required', update.operation);
+        approvalStore?.loadPending().catch((err: unknown) => {
+          console.warn('[AI] Failed to refresh approval store:', err);
+        });
+        return true; // Not a conflict, just deferred
+      }
 
       // Conflict detection: skip if user is editing the target block
       // Exception: insert_inline_issue is non-destructive (adds inline badge, doesn't replace content)
@@ -176,6 +196,24 @@ export function useContentUpdates(
           case 'replace_content':
             handleReplaceContent(editor, update);
             break;
+          case 'create_issues':
+            await handleCreateIssues(
+              editor,
+              update,
+              workspaceId,
+              noteId,
+              inFlightIssuesRef.current
+            );
+            break;
+          case 'create_single_issue':
+            await handleCreateSingleIssue(
+              editor,
+              update,
+              workspaceId,
+              noteId,
+              inFlightIssuesRef.current
+            );
+            break;
           default:
             console.warn('[AI] Unknown content update operation:', update);
             return false;
@@ -186,7 +224,7 @@ export function useContentUpdates(
         return false;
       }
     },
-    [editor, workspaceId, noteId]
+    [editor, workspaceId, noteId, approvalStore]
   );
 
   // Add failed update to retry queue with exponential backoff

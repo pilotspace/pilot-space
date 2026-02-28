@@ -50,7 +50,7 @@ const defaultProps = {
   data: { workspaceId: WORKSPACE_ID, cycleId: CYCLE_ID } as Record<string, unknown>,
   readOnly: false,
   onDataChange: vi.fn(),
-  blockType: 'dependency-map' as const,
+  blockType: 'dependency' as const,
 };
 
 function makeMapData(overrides: Partial<DependencyMapData> = {}): DependencyMapData {

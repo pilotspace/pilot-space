@@ -51,7 +51,7 @@ const defaultProps = {
   data: { workspaceId: WORKSPACE_ID, cycleId: CYCLE_ID } as Record<string, unknown>,
   readOnly: false,
   onDataChange: vi.fn(),
-  blockType: 'release-notes' as const,
+  blockType: 'definition_of_done' as const,
 };
 
 function makeNotesData(overrides: Partial<ReleaseNotesData> = {}): ReleaseNotesData {

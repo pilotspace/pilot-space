@@ -6,8 +6,9 @@
  *
  * @module components/editor/__tests__/InlineNoteHeader.test
  */
-import { describe, it, expect } from 'vitest';
-import { getTagColor } from '../InlineNoteHeader';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { getTagColor, InlineNoteHeader } from '../InlineNoteHeader';
 
 describe('getTagColor', () => {
   it('test_known_primary_tag — "AI Features" returns primary colors', () => {
@@ -73,5 +74,65 @@ describe('getTagColor', () => {
       bg: 'bg-foreground',
       text: 'text-background',
     });
+  });
+});
+
+// Mock next/link to render a plain anchor
+vi.mock('next/link', () => ({
+  default: ({ children, href, ...props }: { children: React.ReactNode; href: string }) => (
+    <a href={href} {...props}>
+      {children}
+    </a>
+  ),
+}));
+
+const baseProps = {
+  title: 'Test Note',
+  createdAt: '2025-01-01T00:00:00Z',
+  wordCount: 500,
+  workspaceSlug: 'acme',
+};
+
+describe('InlineNoteHeader — "Last Edited" indicator', () => {
+  it('test_shows_edited_ago_when_updatedAt_differs_from_createdAt', () => {
+    render(
+      <InlineNoteHeader
+        {...baseProps}
+        updatedAt="2025-01-15T12:00:00Z"
+        onVersionHistory={() => {}}
+      />
+    );
+    const editedBtn = screen.getByText(/^Edited/);
+    expect(editedBtn).toBeInTheDocument();
+    expect(editedBtn.tagName).toBe('BUTTON');
+  });
+
+  it('test_hides_edited_ago_when_updatedAt_equals_createdAt', () => {
+    render(
+      <InlineNoteHeader
+        {...baseProps}
+        updatedAt="2025-01-01T00:00:00Z"
+        onVersionHistory={() => {}}
+      />
+    );
+    expect(screen.queryByText(/^Edited/)).not.toBeInTheDocument();
+  });
+
+  it('test_hides_edited_ago_when_updatedAt_undefined', () => {
+    render(<InlineNoteHeader {...baseProps} onVersionHistory={() => {}} />);
+    expect(screen.queryByText(/^Edited/)).not.toBeInTheDocument();
+  });
+
+  it('test_clicking_edited_ago_calls_onVersionHistory', () => {
+    const onVersionHistory = vi.fn();
+    render(
+      <InlineNoteHeader
+        {...baseProps}
+        updatedAt="2025-01-15T12:00:00Z"
+        onVersionHistory={onVersionHistory}
+      />
+    );
+    fireEvent.click(screen.getByText(/^Edited/));
+    expect(onVersionHistory).toHaveBeenCalledOnce();
   });
 });

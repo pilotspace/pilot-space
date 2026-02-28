@@ -50,7 +50,7 @@ const defaultProps = {
   data: { workspaceId: WORKSPACE_ID, cycleId: CYCLE_ID } as Record<string, unknown>,
   readOnly: false,
   onDataChange: vi.fn(),
-  blockType: 'capacity-plan' as const,
+  blockType: 'status_update' as const,
 };
 
 function makePlanData(overrides: Partial<CapacityPlanData> = {}): CapacityPlanData {

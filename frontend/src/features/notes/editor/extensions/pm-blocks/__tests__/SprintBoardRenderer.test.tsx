@@ -49,7 +49,7 @@ const defaultProps = {
   data: { workspaceId: WORKSPACE_ID, cycleId: CYCLE_ID } as Record<string, unknown>,
   readOnly: false,
   onDataChange: vi.fn(),
-  blockType: 'sprint-board' as const,
+  blockType: 'status_update' as const,
 };
 
 function makeBoardData(overrides: Partial<SprintBoardData> = {}): SprintBoardData {

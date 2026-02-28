@@ -555,3 +555,67 @@ export function handleUpdatePMBlock(
     });
   }
 }
+
+/**
+ * Handle create_issues operation.
+ * Processes a bulk issue extraction result from the extract_issues MCP tool.
+ * Each issue in the array is inserted as an inline issue node in the editor.
+ */
+export async function handleCreateIssues(
+  editor: Editor,
+  update: ContentUpdateData,
+  workspaceId?: string,
+  noteId?: string,
+  inFlightIssues?: Map<string, Promise<Issue>>
+): Promise<void> {
+  const issues = update.issues;
+  if (!issues || issues.length === 0) {
+    console.warn('[AI] create_issues operation missing issues array or empty');
+    return;
+  }
+
+  for (const issueItem of issues) {
+    const syntheticUpdate: ContentUpdateData = {
+      ...update,
+      operation: 'insert_inline_issue',
+      issueData: {
+        title: issueItem.title,
+        description: issueItem.description,
+        priority: issueItem.priority,
+        type: issueItem.type,
+      },
+    };
+    await handleInsertInlineIssue(editor, syntheticUpdate, workspaceId, noteId, inFlightIssues);
+  }
+}
+
+/**
+ * Handle create_single_issue operation.
+ * Processes a single issue creation result from the create_issue_from_note MCP tool.
+ */
+export async function handleCreateSingleIssue(
+  editor: Editor,
+  update: ContentUpdateData,
+  workspaceId?: string,
+  noteId?: string,
+  inFlightIssues?: Map<string, Promise<Issue>>
+): Promise<void> {
+  const issueItem = update.issue;
+  if (!issueItem) {
+    console.warn('[AI] create_single_issue operation missing issue data');
+    return;
+  }
+
+  const syntheticUpdate: ContentUpdateData = {
+    ...update,
+    operation: 'insert_inline_issue',
+    issueData: {
+      title: issueItem.title,
+      description: issueItem.description,
+      priority: issueItem.priority,
+      type: issueItem.type,
+      sourceBlockId: update.blockId ?? undefined,
+    },
+  };
+  await handleInsertInlineIssue(editor, syntheticUpdate, workspaceId, noteId, inFlightIssues);
+}

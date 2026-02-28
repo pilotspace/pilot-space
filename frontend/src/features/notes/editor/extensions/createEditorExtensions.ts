@@ -81,6 +81,11 @@ import {
   type MarginAnnotationContext,
 } from './MarginAnnotationAutoTriggerExtension';
 import { IssueLinkExtension, type IssueLinkOptions, type IssuePreview } from './IssueLinkExtension';
+import {
+  EntityHighlightExtension,
+  type EntityHighlightOptions,
+  type EntityMatch,
+} from './EntityHighlightExtension';
 import { CodeBlockExtension, type CodeBlockOptions } from './CodeBlockExtension';
 import { MentionExtension, type MentionOptions, type MentionUser } from './MentionExtension';
 import {
@@ -178,6 +183,15 @@ export interface EditorExtensionsOptions {
   };
   /** Density extension configuration (M8 — Feature 016 Sprint 3) */
   density?: Partial<DensityOptions>;
+  /**
+   * Entity highlight configuration (project name detection).
+   * H-6: Do NOT pass projectEntities here — inject via extensionStorage useEffect
+   * in NoteCanvasEditor to avoid triggering a full editor remount.
+   */
+  entityHighlight?: Omit<Partial<EntityHighlightOptions>, 'projectEntities'> & {
+    onEntityHover?: (entity: EntityMatch) => void;
+    onEntityClick?: (entity: EntityMatch) => void;
+  };
 }
 
 /**
@@ -245,6 +259,7 @@ export function createEditorExtensions(options: EditorExtensionsOptions = {}): A
     noteLink,
     ownership,
     density,
+    entityHighlight,
   } = options;
 
   const extensions: AnyExtension[] = [];
@@ -419,6 +434,15 @@ export function createEditorExtensions(options: EditorExtensionsOptions = {}): A
   extensions.push(
     IssueLinkExtension.configure({
       ...issueLink,
+    })
+  );
+
+  // Entity highlight (project name detection) — after IssueLinkExtension (lower priority).
+  // H-6: Always register with empty initial entities; actual list is injected via
+  // editor.extensionStorage['entityHighlight'].entities in NoteCanvasEditor useEffect.
+  extensions.push(
+    EntityHighlightExtension.configure({
+      ...entityHighlight,
     })
   );
 

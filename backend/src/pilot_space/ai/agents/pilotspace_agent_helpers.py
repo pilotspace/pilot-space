@@ -1,7 +1,4 @@
-"""Helper functions for PilotSpace Agent.
-
-SSE event emission, message transformation, and subagent definitions.
-"""
+"""Helper functions for PilotSpace Agent: SSE events, message transforms, subagent defs."""
 
 from __future__ import annotations
 
@@ -31,6 +28,7 @@ from pilot_space.ai.mcp.interaction_server import TOOL_NAMES as INTERACTION_TOOL
 from pilot_space.ai.mcp.issue_relation_server import TOOL_NAMES as ISSUE_REL_TOOL_NAMES
 from pilot_space.ai.mcp.issue_server import TOOL_NAMES as ISSUE_TOOL_NAMES
 from pilot_space.ai.mcp.note_content_server import TOOL_NAMES as NOTE_CONTENT_TOOL_NAMES
+from pilot_space.ai.mcp.note_query_server import TOOL_NAMES as NOTE_QUERY_TOOL_NAMES
 from pilot_space.ai.mcp.note_server import TOOL_NAMES as NOTE_TOOL_NAMES
 from pilot_space.ai.mcp.project_server import TOOL_NAMES as PROJECT_TOOL_NAMES
 from pilot_space.infrastructure.logging import get_logger
@@ -43,9 +41,10 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-# Aggregated tool names across all MCP servers (33 tools total: 27 spec + 6 retained)
+# Aggregated tool names across all MCP servers (34 tools total: 27 spec + 6 retained + 1 query)
 ALL_TOOL_NAMES: list[str] = [
     *NOTE_TOOL_NAMES,
+    *NOTE_QUERY_TOOL_NAMES,
     *NOTE_CONTENT_TOOL_NAMES,
     *ISSUE_TOOL_NAMES,
     *ISSUE_REL_TOOL_NAMES,

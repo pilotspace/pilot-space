@@ -121,6 +121,7 @@ TOOL_APPROVAL_MAP: dict[str, ToolApprovalLevel] = {
     "create_issue_from_note": ToolApprovalLevel.REQUIRE_APPROVAL,
     "link_existing_issues": ToolApprovalLevel.REQUIRE_APPROVAL,
     "write_to_note": ToolApprovalLevel.REQUIRE_APPROVAL,
+    "insert_pm_block": ToolApprovalLevel.REQUIRE_APPROVAL,
     # Comment tools - reads are AUTO_EXECUTE, creation auto (CM-001: non-destructive)
     "create_comment": ToolApprovalLevel.AUTO_EXECUTE,
     "search_comments": ToolApprovalLevel.AUTO_EXECUTE,

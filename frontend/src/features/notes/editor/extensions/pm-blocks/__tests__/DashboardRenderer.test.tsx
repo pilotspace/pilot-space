@@ -7,7 +7,7 @@ const defaultProps = {
   data: {} as Record<string, unknown>,
   readOnly: false,
   onDataChange: vi.fn(),
-  blockType: 'dashboard' as const,
+  blockType: 'status_update' as const,
 };
 
 describe('DashboardRenderer', () => {

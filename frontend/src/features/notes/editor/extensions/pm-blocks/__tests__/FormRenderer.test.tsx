@@ -24,7 +24,7 @@ const defaultProps: PMRendererProps = {
   data: {} as Record<string, unknown>,
   readOnly: false,
   onDataChange: vi.fn(),
-  blockType: 'form' as const,
+  blockType: 'requirement' as const,
 };
 
 // ── Basic rendering ─────────────────────────────────────────────────────

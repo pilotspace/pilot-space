@@ -7,7 +7,7 @@ const defaultProps = {
   data: {} as Record<string, unknown>,
   readOnly: false,
   onDataChange: vi.fn(),
-  blockType: 'timeline' as const,
+  blockType: 'status_update' as const,
 };
 
 describe('TimelineRenderer', () => {

@@ -8,8 +8,8 @@
  *
  * @see DD-013 Note-First Collaborative Workspace
  */
-import { useCallback, useState } from 'react';
-import { format } from 'date-fns';
+import { useCallback, useMemo, useState } from 'react';
+import { format, formatDistanceToNow } from 'date-fns';
 import {
   ChevronRight,
   FileText,
@@ -46,7 +46,6 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import type { User } from '@/types';
 
 /**
  * Deterministic color mapping for topic tags.
@@ -95,8 +94,6 @@ export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 export interface InlineNoteHeaderProps {
   /** Note title (for breadcrumb display) */
   title: string;
-  /** Note author */
-  author?: User;
   /** Created timestamp */
   createdAt: string;
   /** Updated timestamp */
@@ -187,9 +184,8 @@ function SaveStatusIcon({ status }: { status: SaveStatus }) {
  */
 export function InlineNoteHeader({
   title,
-  author: _author,
   createdAt,
-  updatedAt: _updatedAt,
+  updatedAt,
   wordCount,
   isPinned = false,
   isAIAssisted = false,
@@ -206,7 +202,7 @@ export function InlineNoteHeader({
 }: InlineNoteHeaderProps) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
-  const createdAtDate = new Date(createdAt);
+  const createdAtDate = useMemo(() => new Date(createdAt), [createdAt]);
 
   const handleCopyLink = useCallback(() => {
     navigator.clipboard.writeText(window.location.href);
@@ -262,6 +258,25 @@ export function InlineNoteHeader({
             </TooltipTrigger>
             <TooltipContent>Created: {format(createdAtDate, 'PPp')}</TooltipContent>
           </Tooltip>
+
+          {/* Last edited - visible on md+, only when modified after creation */}
+          {updatedAt && new Date(updatedAt).getTime() !== createdAtDate.getTime() && (
+            <>
+              <span className="hidden md:inline text-border/60">·</span>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => onVersionHistory?.()}
+                    className="hidden md:inline text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer whitespace-nowrap"
+                  >
+                    Edited {formatDistanceToNow(new Date(updatedAt), { addSuffix: true })}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>Updated: {format(new Date(updatedAt), 'PPp')}</TooltipContent>
+              </Tooltip>
+            </>
+          )}
 
           {/* Word count - visible on lg+ */}
           <span className="hidden lg:inline text-border/60">·</span>

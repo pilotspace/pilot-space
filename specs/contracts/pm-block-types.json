@@ -1,26 +1,36 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "PM Block Types Contract",
-  "description": "Canonical set of PM block types shared between backend and frontend. Both sides MUST match exactly. Enforced by contract tests (FR-043, FR-044).",
-  "version": "2.0.0",
+  "description": "Canonical set of PM block types shared between backend and frontend. Both sides MUST match exactly. Enforced by contract tests (FR-043, FR-044). Backend note_server.py is the authoritative source.",
+  "version": "3.0.0",
   "block_types": [
+    "acceptance_criteria",
+    "assumption",
     "decision",
-    "form",
+    "definition_of_done",
+    "dependency",
     "raci",
+    "requirement",
     "risk",
-    "timeline",
-    "dashboard",
-    "sprint-board",
-    "dependency-map",
-    "capacity-plan",
-    "release-notes"
+    "status_update",
+    "user_story"
   ],
   "sources": {
-    "backend": "backend/src/pilot_space/ai/mcp/note_content_server.py:_VALID_PM_BLOCK_TYPES",
+    "backend": "backend/src/pilot_space/ai/mcp/note_server.py:_VALID_PM_BLOCK_TYPES",
     "frontend": "frontend/src/features/notes/editor/extensions/pm-blocks/PMBlockExtension.ts:PM_BLOCK_TYPES"
   },
   "coverage": {
-    "original_6": ["decision", "form", "raci", "risk", "timeline", "dashboard"],
-    "new_4_from_017": ["sprint-board", "dependency-map", "capacity-plan", "release-notes"]
+    "sdlc_types": [
+      "acceptance_criteria",
+      "assumption",
+      "decision",
+      "definition_of_done",
+      "dependency",
+      "raci",
+      "requirement",
+      "risk",
+      "status_update",
+      "user_story"
+    ]
   }
 }

@@ -13,12 +13,15 @@ import { Folder } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { useProject } from '@/features/projects/hooks';
+import { useActiveCycle } from '@/features/cycles/hooks/useCycle';
 
 export interface ProjectContextHeaderProps {
   /** Project ID — drives internal data fetch. Renders null if empty. */
   projectId: string;
   /** Workspace slug for building tab hrefs. */
   workspaceSlug: string;
+  /** Workspace ID for fetching active cycle. */
+  workspaceId?: string;
   /** Highlights the matching tab with a primary underline. */
   activeTab?: 'overview' | 'issues' | 'cycles';
 }
@@ -32,9 +35,15 @@ const TABS = [
 export function ProjectContextHeader({
   projectId,
   workspaceSlug,
+  workspaceId,
   activeTab,
 }: ProjectContextHeaderProps) {
   const { data: project, isLoading } = useProject({ projectId });
+  const { data: activeCycle } = useActiveCycle({
+    workspaceId: workspaceId ?? '',
+    projectId,
+    enabled: !!workspaceId && !!projectId,
+  });
 
   if (!projectId) return null;
 
@@ -93,6 +102,32 @@ export function ProjectContextHeader({
           </div>
           <span className="text-[10px] text-muted-foreground/70 tabular-nums">
             {completedCount}/{project.issueCount}
+          </span>
+        </div>
+      )}
+
+      {/* Active cycle burn-down — shown when a cycle has metrics */}
+      {activeCycle?.metrics && (
+        <div className="ml-2 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <span className="text-border/60">·</span>
+          <span className="truncate max-w-[80px]">{activeCycle.name}</span>
+          <div
+            className="h-1 w-16 rounded-full bg-muted overflow-hidden"
+            role="progressbar"
+            aria-valuenow={activeCycle.metrics.completedIssues}
+            aria-valuemin={0}
+            aria-valuemax={activeCycle.metrics.totalIssues}
+            aria-label={`Cycle: ${activeCycle.metrics.completedIssues} of ${activeCycle.metrics.totalIssues} completed`}
+          >
+            <div
+              className="h-full bg-emerald-500/70 rounded-full"
+              style={{
+                width: `${activeCycle.metrics.totalIssues > 0 ? (activeCycle.metrics.completedIssues / activeCycle.metrics.totalIssues) * 100 : 0}%`,
+              }}
+            />
+          </div>
+          <span className="tabular-nums">
+            {activeCycle.metrics.completedIssues}/{activeCycle.metrics.totalIssues}
           </span>
         </div>
       )}

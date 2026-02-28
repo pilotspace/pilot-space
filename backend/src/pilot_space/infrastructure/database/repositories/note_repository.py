@@ -306,6 +306,27 @@ class NoteRepository(BaseRepository[Note]):
         result = await self.session.execute(query)
         return result.scalars().all()
 
+    async def exists_in_workspace(self, note_id: UUID, workspace_id: UUID) -> bool:
+        """Check if a note exists in the given workspace without fetching content.
+
+        Selects only the id column to avoid loading the full JSONB content column.
+
+        Args:
+            note_id: The note UUID.
+            workspace_id: The workspace UUID.
+
+        Returns:
+            True if the note exists and is not deleted, False otherwise.
+        """
+        result = await self.session.execute(
+            select(Note.id).where(
+                Note.id == note_id,
+                Note.workspace_id == workspace_id,
+                Note.is_deleted.is_(False),
+            )
+        )
+        return result.scalar() is not None
+
     async def search_full_text(
         self,
         workspace_id: UUID,

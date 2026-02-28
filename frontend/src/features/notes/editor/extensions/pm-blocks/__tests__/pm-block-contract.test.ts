@@ -1,5 +1,5 @@
 /**
- * Contract test: PM Block Type Parity (T-228, 017-M6d)
+ * Contract test: PM Block Type Parity (T-228, C-3)
  *
  * Validates that the frontend's PM_BLOCK_TYPES matches the canonical set
  * defined in specs/contracts/pm-block-types.json.
@@ -7,9 +7,9 @@
  * Both backend and frontend must agree on the complete set; divergence breaks
  * the AI tool/editor contract (FR-043, FR-044).
  *
- * Current expected set:
- *   Original 6: decision, form, raci, risk, timeline, dashboard
- *   New 4 (017): sprint-board, dependency-map, capacity-plan, release-notes
+ * Current expected set (10 SDLC types, authoritative source: note_server.py):
+ *   acceptance_criteria, assumption, decision, definition_of_done,
+ *   dependency, raci, requirement, risk, status_update, user_story
  *
  * @module pm-blocks/__tests__/pm-block-contract.test
  */
@@ -31,8 +31,7 @@ const CONTRACT_PATH = resolve(
 interface PMBlockContract {
   block_types: string[];
   coverage: {
-    original_6: string[];
-    new_4_from_017: string[];
+    sdlc_types: string[];
   };
 }
 
@@ -62,21 +61,12 @@ describe('PM Block Type Contract (T-228, FR-043, FR-044)', () => {
     expect(extraInFrontend).toEqual([]);
   });
 
-  it('original 6 PM block types are always present', () => {
+  it('all 10 SDLC PM block types are present in frontend', () => {
     const contract = loadContract();
     const frontendSet = new Set<string>(PM_BLOCK_TYPES);
 
-    for (const bt of contract.coverage.original_6) {
+    for (const bt of contract.coverage.sdlc_types) {
       expect(frontendSet.has(bt)).toBe(true);
-    }
-  });
-
-  it('4 new PM block types from Feature 017 are in the contract', () => {
-    const contract = loadContract();
-    const contractSet = new Set(contract.block_types);
-
-    for (const bt of contract.coverage.new_4_from_017) {
-      expect(contractSet.has(bt)).toBe(true);
     }
   });
 

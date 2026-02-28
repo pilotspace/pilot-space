@@ -64,9 +64,9 @@ class TestToolResult:
 class TestToolApprovalMap:
     """Tests for TOOL_APPROVAL_MAP completeness and correctness."""
 
-    def test_map_has_33_entries(self) -> None:
-        """27 spec tools + 6 retained tools = 33 total."""
-        assert len(TOOL_APPROVAL_MAP) == 33
+    def test_map_has_34_entries(self) -> None:
+        """27 spec tools + 6 retained tools + 1 new (insert_pm_block) = 34 total."""
+        assert len(TOOL_APPROVAL_MAP) == 34
 
     def test_auto_execute_tools(self) -> None:
         auto_tools = [
@@ -126,14 +126,14 @@ class TestToolApprovalMap:
             )
 
     def test_approval_counts(self) -> None:
-        """33 tools: 10 auto + 21 require + 2 always."""
+        """34 tools: 10 auto + 22 require + 2 always."""
         auto = sum(1 for v in TOOL_APPROVAL_MAP.values() if v == ToolApprovalLevel.AUTO_EXECUTE)
         require = sum(
             1 for v in TOOL_APPROVAL_MAP.values() if v == ToolApprovalLevel.REQUIRE_APPROVAL
         )
         always = sum(1 for v in TOOL_APPROVAL_MAP.values() if v == ToolApprovalLevel.ALWAYS_REQUIRE)
         assert auto == 10
-        assert require == 21
+        assert require == 22
         assert always == 2
 
 

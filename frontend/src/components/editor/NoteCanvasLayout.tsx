@@ -88,7 +88,6 @@ export function NoteCanvasLayout(props: NoteCanvasProps) {
     error = null,
     workspaceId,
     title = 'Untitled',
-    author,
     createdAt,
     updatedAt,
     wordCount = 0,
@@ -182,13 +181,18 @@ export function NoteCanvasLayout(props: NoteCanvasProps) {
   const editorContent = (
     <div className="flex flex-col min-w-0 overflow-hidden h-full">
       {/* Project context header — shown only when note belongs to a project */}
-      {projectId && <ProjectContextHeader projectId={projectId} workspaceSlug={workspaceSlug} />}
+      {projectId && (
+        <ProjectContextHeader
+          projectId={projectId}
+          workspaceSlug={workspaceSlug}
+          workspaceId={workspaceId}
+        />
+      )}
 
       {/* Inline Note Header - Fixed at top, outside scrollable area */}
       {(title || createdAt) && (
         <InlineNoteHeader
           title={title}
-          author={author}
           createdAt={createdAt ?? new Date().toISOString()}
           updatedAt={updatedAt}
           wordCount={wordCount}

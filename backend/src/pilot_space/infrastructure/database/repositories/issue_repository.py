@@ -433,11 +433,12 @@ class IssueRepository(BaseRepository[Issue]):
             Matching issues.
         """
         # Use PostgreSQL full-text search
+        # selectinload avoids cartesian product joins when multiple collections are loaded
         query = (
             select(Issue)
             .options(
-                joinedload(Issue.project),
-                joinedload(Issue.state),
+                selectinload(Issue.project),
+                selectinload(Issue.state),
             )
             .where(
                 and_(

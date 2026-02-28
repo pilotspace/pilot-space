@@ -1,9 +1,11 @@
 /**
  * PMBlockExtension — Generic TipTap node for PM block types.
  *
- * Serves as the single container node for: decision, form, raci,
- * risk, timeline, dashboard. Rendering is delegated to type-specific
- * renderers via PMBlockNodeView.
+ * Serves as the single container node for SDLC document types:
+ * raci, risk, decision, dependency, assumption, requirement,
+ * acceptance_criteria, user_story, definition_of_done, status_update.
+ * Rendering is delegated to type-specific renderers via PMBlockNodeView.
+ * Unrecognised block types fall back to a generic JSON preview renderer.
  *
  * Attrs:
  * - blockType: one of PM_BLOCK_TYPES
@@ -13,6 +15,8 @@
  * Content transport: JSON via TipTap insertContentAt() (RD-008).
  * NOT markdown — complex PM structures have no markdown representation.
  *
+ * Source of truth: backend/src/pilot_space/ai/mcp/note_server.py:_VALID_PM_BLOCK_TYPES
+ *
  * @module pm-blocks/PMBlockExtension
  */
 import { Node, mergeAttributes } from '@tiptap/core';
@@ -21,20 +25,22 @@ import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { ReactNodeViewRenderer } from '@tiptap/react';
 import { PMBlockNodeView } from './PMBlockNodeView';
 
-/** All supported PM block types. */
+/**
+ * All supported PM block types.
+ * Canonical set defined by backend note_server.py:_VALID_PM_BLOCK_TYPES.
+ * Do NOT add types here without also updating the backend set.
+ */
 export const PM_BLOCK_TYPES = [
-  // Original 6
+  'acceptance_criteria',
+  'assumption',
   'decision',
-  'form',
+  'definition_of_done',
+  'dependency',
   'raci',
+  'requirement',
   'risk',
-  'timeline',
-  'dashboard',
-  // Feature 017 — PM Block Engine (T-228)
-  'sprint-board',
-  'dependency-map',
-  'capacity-plan',
-  'release-notes',
+  'status_update',
+  'user_story',
 ] as const;
 
 export type PMBlockType = (typeof PM_BLOCK_TYPES)[number];

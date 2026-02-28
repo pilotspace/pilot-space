@@ -4,6 +4,8 @@ Mutation tools emit SSE events directly via EventPublisher and return
 short text confirmations to avoid echoing content back as LLM input tokens.
 Note IDs are overridden from agent context (not model args) to prevent
 LLM UUID corruption.
+
+Read-only search tools (search_notes) live in note_query_server.py (CQRS-lite split).
 """
 
 from __future__ import annotations
@@ -33,7 +35,7 @@ TOOL_NAMES = [
     f"mcp__{SERVER_NAME}__create_issue_from_note",
     f"mcp__{SERVER_NAME}__link_existing_issues",
     f"mcp__{SERVER_NAME}__write_to_note",
-    f"mcp__{SERVER_NAME}__search_notes",
+    f"mcp__{SERVER_NAME}__insert_pm_block",
     f"mcp__{SERVER_NAME}__create_note",
     f"mcp__{SERVER_NAME}__update_note",
 ]
@@ -68,7 +70,7 @@ def create_note_tools_server(
     async def _verify_note_workspace(note_id: str) -> str | None:
         """Verify note belongs to current workspace. Returns error message or None."""
         if not tool_context:
-            return None  # No context available; skip verification (test/dev mode)
+            return "Error: authentication context required for this operation"
         if not note_id:
             return "note_id is required"
         from uuid import UUID
@@ -79,10 +81,10 @@ def create_note_tools_server(
 
         try:
             repo = NoteRepository(tool_context.db_session)
-            note = await repo.get_by_id(UUID(note_id))
+            exists = await repo.exists_in_workspace(UUID(note_id), UUID(tool_context.workspace_id))
         except (ValueError, TypeError):
             return f"Invalid note_id: {note_id}"
-        if not note or str(note.workspace_id) != tool_context.workspace_id:
+        if not exists:
             return f"Note {note_id} not found in workspace"
         return None
 
@@ -440,89 +442,136 @@ def create_note_tools_server(
             logger.exception("mcp_tool_error", tool="link_existing_issues")
             return _text_result(f"Error searching issues: {e!s}")
 
+    _VALID_PM_BLOCK_TYPES = frozenset(
+        {
+            "raci",
+            "risk",
+            "decision",
+            "dependency",
+            "assumption",
+            "requirement",
+            "acceptance_criteria",
+            "user_story",
+            "definition_of_done",
+            "status_update",
+        }
+    )
+
+    _PM_BLOCK_SCHEMAS: dict[str, set[str]] = {
+        "raci": {"roles", "responsibilities"},
+        "risk": {"description", "likelihood", "impact", "mitigation"},
+        "decision": {"summary", "rationale", "alternatives"},
+        "dependency": {"dependsOn", "blockedBy", "type"},
+        "assumption": {"statement", "owner", "validationDate"},
+        "requirement": {"title", "description", "priority", "acceptanceCriteria"},
+        "acceptance_criteria": {"criteria"},
+        "user_story": {"asA", "iWant", "soThat", "acceptanceCriteria"},
+        "definition_of_done": {"items"},
+        "status_update": {"status", "summary", "nextSteps"},
+    }
+
     @tool(
-        "search_notes",
-        "Search for notes by title in the workspace. Returns matching notes with metadata.",
+        "insert_pm_block",
+        "Insert a PM block (decision, risk, raci, etc.) into a note. "
+        "block_type must be one of: raci, risk, decision, dependency, assumption, "
+        "requirement, acceptance_criteria, user_story, definition_of_done, status_update. "
+        "data must be a valid JSON string with block-type-specific fields. "
+        "after_block_id is an optional ¶N reference or UUID to insert after.",
         {
             "type": "object",
             "properties": {
-                "query": {"type": "string", "description": "Search query for note title"},
-                "project_id": {
+                "note_id": {"type": "string", "description": "UUID of the note"},
+                "block_type": {
                     "type": "string",
-                    "description": "Optional project UUID to filter by",
+                    "enum": [
+                        "raci",
+                        "risk",
+                        "decision",
+                        "dependency",
+                        "assumption",
+                        "requirement",
+                        "acceptance_criteria",
+                        "user_story",
+                        "definition_of_done",
+                        "status_update",
+                    ],
+                    "description": "PM block type to insert",
                 },
-                "limit": {
-                    "type": "integer",
-                    "default": 20,
-                    "description": "Maximum number of results (max 100)",
+                "data": {
+                    "type": "string",
+                    "description": "JSON string with block-type-specific data fields",
                 },
-                "include_content": {
-                    "type": "boolean",
-                    "default": False,
-                    "description": "Include content preview in results",
+                "after_block_id": {
+                    "type": "string",
+                    "description": "Optional block reference (¶N) or UUID to insert after",
                 },
             },
-            "required": ["query"],
+            "required": ["note_id", "block_type", "data"],
         },
     )
-    async def search_notes(args: dict[str, Any]) -> dict[str, Any]:
-        if not tool_context:
-            return _text_result("Error: tool_context not available for search_notes")
+    async def insert_pm_block(args: dict[str, Any]) -> dict[str, Any]:
+        note_id = _resolve_note_id(args)
 
-        from uuid import UUID
+        ws_err = await _verify_note_workspace(note_id)
+        if ws_err:
+            return _text_result(f"Error: {ws_err}")
 
-        from pilot_space.infrastructure.database.repositories.note_repository import (
-            NoteRepository,
-        )
-
-        try:
-            workspace_id = UUID(tool_context.workspace_id)
-            query = args["query"]
-            project_id_str = args.get("project_id")
-            project_id = UUID(project_id_str) if project_id_str else None
-            limit = min(args.get("limit", 20), 100)
-            include_content = args.get("include_content", False)
-
-            repo = NoteRepository(tool_context.db_session)
-            notes = await repo.search_by_title(
-                workspace_id=workspace_id,
-                search_term=query,
-                project_id=project_id,
-                limit=limit,
-            )
-
-            results = []
-            for note in notes:
-                result_item = {
-                    "id": str(note.id),
-                    "title": note.title,
-                    "project_id": str(note.project_id) if note.project_id else None,
-                    "created_at": note.created_at.isoformat(),
-                }
-                if include_content:
-                    content = note.content or {}
-                    blocks = content.get("content", [])
-                    preview_text = ""
-                    for block in blocks[:3]:
-                        if block.get("type") == "paragraph":
-                            for node in block.get("content", []):
-                                if node.get("type") == "text":
-                                    preview_text += node.get("text", "")
-                        if len(preview_text) > 200:
-                            break
-                    result_item["content_preview"] = preview_text[:200]
-                results.append(result_item)
-
-            logger.info(
-                "mcp_tool_invoked", tool="search_notes", query=query[:50], found=len(results)
-            )
+        block_type = args.get("block_type", "")
+        if block_type not in _VALID_PM_BLOCK_TYPES:
             return _text_result(
-                f"Found {len(results)} note(s) matching '{query}':\n"
-                + "\n".join(f"- {r['title']} ({r['id']})" for r in results)
+                f"Error: Invalid block_type '{block_type}'. "
+                f"Must be one of: {', '.join(sorted(_VALID_PM_BLOCK_TYPES))}"
             )
-        except Exception as e:
-            logger.exception("mcp_tool_error", tool="search_notes")
-            return _text_result(f"Error searching notes: {e!s}")
+
+        data_str = args.get("data", "")
+        try:
+            parsed_data = json.loads(data_str)
+        except (json.JSONDecodeError, TypeError):
+            return _text_result("Error: data must be a valid JSON string")
+
+        if isinstance(parsed_data, dict):
+            expected_keys = _PM_BLOCK_SCHEMAS.get(block_type, set())
+            supplied_keys = set(parsed_data.keys())
+            unknown_keys = supplied_keys - expected_keys
+            if unknown_keys:
+                logger.warning(
+                    "mcp_tool_warn",
+                    tool="insert_pm_block",
+                    block_type=block_type,
+                    unknown_keys=sorted(unknown_keys),
+                )
+            missing_keys = expected_keys - supplied_keys
+            if missing_keys:
+                logger.warning(
+                    "mcp_tool_warn",
+                    tool="insert_pm_block",
+                    block_type=block_type,
+                    missing_keys=sorted(missing_keys),
+                )
+
+        after_block_id_raw = args.get("after_block_id")
+        after_block_id = _resolve_block_ref(after_block_id_raw) if after_block_id_raw else None
+
+        logger.info(
+            "mcp_tool_invoked",
+            tool="insert_pm_block",
+            block_type=block_type,
+            note_id=note_id,
+        )
+        approval_level = get_tool_approval_level("insert_pm_block")
+        status = "approval_required" if approval_level.value != "auto_execute" else "pending_apply"
+        await publisher.publish_focus_and_content(
+            note_id,
+            after_block_id,
+            {
+                "status": status,
+                "operation": "insert_pm_block",
+                "noteId": note_id,
+                "afterBlockId": after_block_id,
+                "pmBlockData": {"blockType": block_type, "data": data_str, "version": 1},
+            },
+        )
+        return _text_result(f"PM block '{block_type}' inserted into note.")
 
     @tool(
         "create_note",
@@ -598,21 +647,8 @@ def create_note_tools_server(
         if not note_id:
             return _text_result("Error: note_id is required")
 
-        # Verify note belongs to workspace
-        if tool_context:
-            from uuid import UUID
-
-            from pilot_space.infrastructure.database.repositories.note_repository import (
-                NoteRepository,
-            )
-
-            try:
-                repo = NoteRepository(tool_context.db_session)
-                note = await repo.get_by_id(UUID(note_id))
-            except (ValueError, TypeError):
-                return _text_result(f"Error: Invalid note_id: {note_id}")
-            if not note or str(note.workspace_id) != tool_context.workspace_id:
-                return _text_result(f"Error: Note {note_id} not found in workspace")
+        if error := await _verify_note_workspace(note_id):
+            return _text_result(f"Error: {error}")
 
         changes: dict[str, Any] = {}
         if "title" in args:
@@ -651,7 +687,7 @@ def create_note_tools_server(
             extract_issues,
             create_issue_from_note,
             link_existing_issues,
-            search_notes,
+            insert_pm_block,
             create_note,
             update_note,
         ],
