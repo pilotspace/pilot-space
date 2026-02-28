@@ -7,18 +7,27 @@
 
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
 import { observer } from 'mobx-react-lite';
 import { motion } from 'motion/react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ArrowLeft, Compass, Loader2, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { authStore } from '@/stores/AuthStore';
+import { authStore, isAuthCoreMode } from '@/stores/AuthStore';
 
 const ForgotPasswordPage = observer(function ForgotPasswordPage() {
+  const router = useRouter();
+
+  // AuthCore handles password reset via its own flow — redirect to login
+  useEffect(() => {
+    if (isAuthCoreMode) {
+      router.replace('/login');
+    }
+  }, [router]);
   const [email, setEmail] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);

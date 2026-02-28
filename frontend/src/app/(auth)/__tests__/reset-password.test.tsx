@@ -25,6 +25,10 @@ vi.mock('next/navigation', () => ({
 const mockSubscription = { unsubscribe: vi.fn() };
 let authChangeCallback: ((event: string) => void) | null = null;
 
+vi.mock('@/stores/AuthStore', () => ({
+  isAuthCoreMode: false,
+}));
+
 vi.mock('@/lib/supabase', () => ({
   supabase: {
     auth: {

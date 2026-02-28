@@ -60,15 +60,29 @@ export async function getAuthProvider(): Promise<AuthProvider> {
 
 /**
  * Synchronous access to the already-initialised provider.
- * Throws if called before getAuthProvider() has resolved.
+ *
+ * If the async `getAuthProvider()` has already resolved, returns the cached
+ * instance.  Otherwise creates a temporary fallback:
+ * - Supabase mode: caches a SupabaseAuthProvider (safe — no async init needed).
+ * - AuthCore mode: returns a *temporary* SupabaseAuthProvider but does NOT
+ *   cache it, so the next call to `getAuthProvider()` can still create the
+ *   correct AuthCoreAuthProvider once the base URL is fetched.
+ *
  * Use in request interceptors where async init was done at app startup.
  */
 export function getAuthProviderSync(): AuthProvider {
-  if (!_providerInstance) {
-    // Fallback to Supabase for SSR / before init completes
+  if (_providerInstance) return _providerInstance;
+
+  if (AUTH_PROVIDER_ENV !== 'authcore') {
+    // Supabase mode — safe to cache immediately
     _providerInstance = new SupabaseAuthProvider();
+    return _providerInstance;
   }
-  return _providerInstance;
+
+  // AuthCore mode but async init hasn't completed yet.
+  // Return a temporary Supabase provider WITHOUT caching it so that
+  // getAuthProvider() can still create the real AuthCoreAuthProvider.
+  return new SupabaseAuthProvider();
 }
 
 /** Reset for testing purposes only. */
@@ -78,4 +92,4 @@ export function _resetAuthProvider(): void {
 
 export type { AuthProvider };
 export { SupabaseAuthProvider, AuthCoreAuthProvider };
-export type { AuthTokens, AuthProviderUser, LoginResult } from './AuthProvider';
+export type { AuthTokens, AuthProviderUser, LoginResult, SignupResult } from './AuthProvider';

@@ -3,7 +3,7 @@
 import { useState, useEffect, type FormEvent } from 'react';
 import { observer } from 'mobx-react-lite';
 import { motion } from 'motion/react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Compass, Github, Mail, Loader2, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -11,12 +11,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { authStore } from '@/stores/AuthStore';
+import { authStore, isAuthCoreMode } from '@/stores/AuthStore';
 
 type AuthMode = 'login' | 'signup';
 
 const LoginPage = observer(function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [mode, setMode] = useState<AuthMode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -25,13 +26,33 @@ const LoginPage = observer(function LoginPage() {
   const [localError, setLocalError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
 
+  // Allowlist of known session error codes — prevents phishing via arbitrary query params
+  const KNOWN_SESSION_ERRORS: Record<string, string> = {
+    'Session expired. Please sign in again.': 'Session expired. Please sign in again.',
+    session_expired: 'Session expired. Please sign in again.',
+    unauthorized: 'You must sign in to access this page.',
+  };
+  const rawSessionError = searchParams.get('error');
+  const sessionError = rawSessionError ? (KNOWN_SESSION_ERRORS[rawSessionError] ?? null) : null;
+
   useEffect(() => {
     setMounted(true);
   }, []);
 
+  // Redirect authenticated users away from login page.
+  // MobX observer() tracks authStore.isLoading/isAuthenticated reactively.
+  useEffect(() => {
+    if (!authStore.isLoading && authStore.isAuthenticated) {
+      router.replace('/');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authStore.isLoading, authStore.isAuthenticated, router]);
+
   // Defer authStore.isLoading to post-mount to avoid hydration mismatch:
   // server singleton may have isLoading=false while client starts with isLoading=true
   const isAuthLoading = mounted && authStore.isLoading;
+
+  const showNameField = mode === 'signup' && !isAuthCoreMode;
 
   const handleEmailAuth = async (e: FormEvent) => {
     e.preventDefault();
@@ -42,14 +63,14 @@ const LoginPage = observer(function LoginPage() {
       return;
     }
 
-    if (mode === 'signup' && !name) {
+    if (showNameField && !name) {
       setLocalError('Please enter your name');
       return;
     }
 
     let success: boolean;
     if (mode === 'signup') {
-      success = await authStore.signup(email, password, name);
+      success = await authStore.signup(email, password, isAuthCoreMode ? undefined : name);
     } else {
       success = await authStore.login(email, password);
     }
@@ -69,7 +90,7 @@ const LoginPage = observer(function LoginPage() {
     authStore.clearError();
   };
 
-  const error = localError || authStore.error;
+  const error = sessionError || localError || authStore.error;
 
   return (
     <motion.div
@@ -97,7 +118,7 @@ const LoginPage = observer(function LoginPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <form onSubmit={handleEmailAuth} className="space-y-4">
-            {mode === 'signup' && (
+            {showNameField && (
               <div className="space-y-2">
                 <Label htmlFor="name">Full Name</Label>
                 <Input
@@ -121,6 +142,7 @@ const LoginPage = observer(function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 disabled={isAuthLoading}
+                aria-describedby={error ? 'auth-error' : undefined}
               />
             </div>
             <div className="space-y-2">
@@ -140,11 +162,12 @@ const LoginPage = observer(function LoginPage() {
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   tabIndex={-1}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
-              {mode === 'login' && (
+              {mode === 'login' && !isAuthCoreMode && (
                 <div className="flex justify-end">
                   <Link
                     href="/forgot-password"
@@ -158,6 +181,7 @@ const LoginPage = observer(function LoginPage() {
 
             {error && (
               <div
+                id="auth-error"
                 className="rounded-md bg-destructive/10 p-3 text-sm text-destructive"
                 role="alert"
               >
@@ -165,7 +189,12 @@ const LoginPage = observer(function LoginPage() {
               </div>
             )}
 
-            <Button type="submit" className="w-full h-11 shadow-warm-sm" disabled={isAuthLoading}>
+            <Button
+              type="submit"
+              className="w-full h-11 shadow-warm-sm"
+              disabled={isAuthLoading}
+              aria-busy={isAuthLoading}
+            >
               {isAuthLoading ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
@@ -175,26 +204,30 @@ const LoginPage = observer(function LoginPage() {
             </Button>
           </form>
 
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <Separator className="w-full" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-card px-2 text-muted-foreground">Or continue with</span>
-            </div>
-          </div>
+          {!isAuthCoreMode && (
+            <>
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <Separator className="w-full" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-card px-2 text-muted-foreground">Or continue with</span>
+                </div>
+              </div>
 
-          <div className="grid grid-cols-1 gap-2">
-            <Button
-              variant="outline"
-              className="h-11"
-              onClick={handleGitHubAuth}
-              disabled={isAuthLoading}
-            >
-              <Github className="mr-2 h-4 w-4" />
-              GitHub
-            </Button>
-          </div>
+              <div className="grid grid-cols-1 gap-2">
+                <Button
+                  variant="outline"
+                  className="h-11"
+                  onClick={handleGitHubAuth}
+                  disabled={isAuthLoading}
+                >
+                  <Github className="mr-2 h-4 w-4" />
+                  GitHub
+                </Button>
+              </div>
+            </>
+          )}
 
           <div className="text-center text-sm">
             {mode === 'login' ? (

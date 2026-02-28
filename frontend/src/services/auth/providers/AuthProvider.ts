@@ -24,12 +24,24 @@ export interface LoginResult {
   user: AuthProviderUser;
 }
 
+export interface SignupResult {
+  user: AuthProviderUser | null;
+  tokens: AuthTokens | null;
+  verificationRequired: boolean;
+}
+
 export interface AuthProvider {
   /**
    * Sign in with email + password. Returns tokens and user on success.
    * Throws on failure.
    */
   login(email: string, password: string): Promise<LoginResult>;
+
+  /**
+   * Register a new account. Returns user and tokens if auto-verified,
+   * or verificationRequired=true if email confirmation is needed.
+   */
+  signup(email: string, password: string, name?: string): Promise<SignupResult>;
 
   /**
    * Sign out the current user and clear all local session state.
@@ -46,4 +58,10 @@ export interface AuthProvider {
    * Return the current access token, or null if not authenticated.
    */
   getToken(): Promise<string | null>;
+
+  /**
+   * Restore session from persisted state (localStorage / Supabase SDK).
+   * Returns null if no stored session exists or it's expired/invalid.
+   */
+  restoreSession(): Promise<LoginResult | null>;
 }

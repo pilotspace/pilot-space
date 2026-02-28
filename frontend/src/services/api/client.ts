@@ -137,24 +137,34 @@ function createApiClient(): AxiosInstance {
     (response: AxiosResponse) => response,
     async (error: AxiosError<ApiProblemDetails | { detail?: string }>) => {
       const status = error.response?.status;
+      const originalRequest = error.config as InternalAxiosRequestConfig & { _retried?: boolean };
 
-      // Handle 401 Unauthorized - redirect to login
-      if (status === 401) {
-        // Sign out via provider to clear session (works for both Supabase and AuthCore)
+      // Handle 401 Unauthorized — attempt token refresh before logout
+      if (status === 401 && originalRequest && !originalRequest._retried) {
+        originalRequest._retried = true;
+
+        try {
+          // getToken() handles silent refresh internally
+          const freshToken = await getAuthProviderSync().getToken();
+          if (freshToken) {
+            originalRequest.headers.Authorization = `Bearer ${freshToken}`;
+            return instance(originalRequest);
+          }
+        } catch {
+          // Refresh failed — fall through to logout
+        }
+
+        // Token refresh failed or returned null — session is dead
         await getAuthProviderSync()
           .logout()
           .catch(() => undefined);
 
-        // Only redirect on client-side
         if (typeof window !== 'undefined') {
-          // Store the current path for redirect after login
           const currentPath = window.location.pathname + window.location.search;
           if (currentPath !== '/login') {
             sessionStorage.setItem('redirectAfterLogin', currentPath);
           }
-
-          // Redirect to login page
-          window.location.href = '/login';
+          window.location.href = '/login?error=session_expired';
         }
 
         return Promise.reject(

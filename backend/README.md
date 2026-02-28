@@ -174,6 +174,53 @@ See [infrastructure/README.md](src/pilot_space/infrastructure/README.md) for ful
 
 ---
 
+## Authentication Providers
+
+Pilot Space supports two JWT authorities, controlled by the `AUTH_PROVIDER` env var.
+
+| Provider | `AUTH_PROVIDER` | JWT Algorithm | Use Case |
+|----------|----------------|---------------|----------|
+| Supabase (default) | `supabase` | HS256 (HMAC) | Production — managed auth via Supabase GoTrue |
+| AuthCore | `authcore` | RS256 (RSA) | Self-hosted — standalone JWT microservice |
+
+### Switching to AuthCore
+
+```bash
+# backend/.env
+AUTH_PROVIDER=authcore
+AUTHCORE_URL=http://localhost:8001
+AUTHCORE_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----\nMIIB...\n-----END PUBLIC KEY-----"
+```
+
+Generate an RSA key pair for AuthCore:
+
+```bash
+openssl genrsa -out private.pem 2048
+openssl rsa -in private.pem -pubout -out public.pem
+```
+
+The `AUTHCORE_PUBLIC_KEY` must match the key pair used by the AuthCore service. See [`authcore/README.md`](../authcore/README.md) for full AuthCore setup.
+
+### Running AuthCore locally
+
+```bash
+# Start AuthCore + its Postgres (uses Docker Compose profile)
+docker compose --profile authcore up -d
+
+# Verify
+curl http://localhost:8001/health
+```
+
+### Configuration reference
+
+| Variable | Default | Required When |
+|----------|---------|---------------|
+| `AUTH_PROVIDER` | `supabase` | Always (determines JWT verification strategy) |
+| `AUTHCORE_PUBLIC_KEY` | — | `AUTH_PROVIDER=authcore` |
+| `AUTHCORE_URL` | — | `AUTH_PROVIDER=authcore` |
+
+---
+
 ## API Layer: 20 FastAPI Routers
 
 **Core Resources** (7 routers, 35+ endpoints): workspaces, workspace_members, workspace_invitations, projects, issues, workspace_notes, workspace_cycles

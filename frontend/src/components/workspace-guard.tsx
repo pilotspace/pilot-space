@@ -4,7 +4,7 @@ import * as React from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { observer } from 'mobx-react-lite';
 import { motion } from 'motion/react';
-import { Loader2, AlertCircle, LogIn, Building2 } from 'lucide-react';
+import { Loader2, AlertCircle, LogIn, Building2, ShieldX } from 'lucide-react';
 import { useAuthStore, useWorkspaceStore } from '@/stores';
 import { workspacesApi } from '@/services/api';
 import { Button } from '@/components/ui/button';
@@ -37,6 +37,7 @@ interface WorkspaceGuardProps {
 type GuardState =
   | { status: 'loading' }
   | { status: 'unauthenticated' }
+  | { status: 'no-access'; slug: string }
   | { status: 'not-found'; slug: string }
   | { status: 'error'; message: string }
   | { status: 'ready'; workspace: Workspace };
@@ -94,7 +95,12 @@ export const WorkspaceGuard = observer(function WorkspaceGuard({ children }: Wor
 
         // Check for specific error types
         if (error instanceof Error) {
-          if (error.message.includes('401') || error.message.includes('Unauthorized')) {
+          const is401 = error.message.includes('401') || error.message.includes('Unauthorized');
+          const is403 = error.message.includes('403') || error.message.includes('Forbidden');
+          if ((is401 || is403) && authStore.isAuthenticated) {
+            // User is authenticated but has no access to this workspace
+            setState({ status: 'no-access', slug: workspaceSlug });
+          } else if (is401) {
             setState({ status: 'unauthenticated' });
           } else if (error.message.includes('404') || error.message.includes('not found')) {
             setState({ status: 'not-found', slug: workspaceSlug });
@@ -150,6 +156,41 @@ export const WorkspaceGuard = observer(function WorkspaceGuard({ children }: Wor
                 <LogIn className="h-4 w-4" />
                 Sign in
               </Button>
+            </CardContent>
+          </Card>
+        </motion.div>
+      </div>
+    );
+  }
+
+  // Authenticated but no workspace access
+  if (state.status === 'no-access') {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-background px-4">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="w-full max-w-md"
+        >
+          <Card className="border-border/50 shadow-warm">
+            <CardContent className="flex flex-col items-center p-8 text-center">
+              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-amber-100">
+                <ShieldX className="h-7 w-7 text-amber-600" />
+              </div>
+              <h2 className="mb-2 text-xl font-semibold text-foreground">No workspace access</h2>
+              <p className="mb-6 text-muted-foreground">
+                You don&apos;t have access to{' '}
+                <span className="font-medium">&ldquo;{state.slug}&rdquo;</span>. Request an
+                invitation from the workspace owner, or create your own workspace.
+              </p>
+              <div className="flex w-full flex-col gap-2">
+                <Button onClick={() => router.push('/')} className="w-full">
+                  Go to workspace selector
+                </Button>
+                <Button variant="outline" onClick={() => router.push('/login')} className="w-full">
+                  Switch account
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </motion.div>

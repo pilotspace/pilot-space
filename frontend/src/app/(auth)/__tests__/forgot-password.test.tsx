@@ -12,6 +12,10 @@ vi.mock('mobx-react-lite', () => ({
   observer: <T,>(component: T) => component,
 }));
 
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
+}));
+
 vi.mock('motion/react', () => ({
   motion: {
     div: ({ children, ...props }: Record<string, unknown>) => (
@@ -26,6 +30,7 @@ vi.mock('@/stores/AuthStore', () => ({
     error: null,
     isLoading: false,
   },
+  isAuthCoreMode: false,
 }));
 
 import ForgotPasswordPage from '../forgot-password/page';

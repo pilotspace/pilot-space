@@ -18,11 +18,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/lib/supabase';
+import { isAuthCoreMode } from '@/stores/AuthStore';
 
 type ResetState = 'loading' | 'form' | 'success' | 'expired';
 
 export default function ResetPasswordPage() {
   const router = useRouter();
+
+  // AuthCore handles password reset via its own flow — redirect to login
+  useEffect(() => {
+    if (isAuthCoreMode) {
+      router.replace('/login');
+    }
+  }, [router]);
 
   const [resetState, setResetState] = useState<ResetState>('loading');
   const [password, setPassword] = useState('');

@@ -21,6 +21,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 
 from pilot_space.dependencies.jwt_providers import (
     AuthCoreJWTProvider,
+    DualJWTProvider,
     JWTExpiredError,
     JWTProvider,
     JWTValidationError,
@@ -247,11 +248,13 @@ class TestGetJwtProviderFactory:
         provider = get_jwt_provider(settings)
         assert isinstance(provider, SupabaseJWTProvider)
 
-    def test_returns_authcore_provider_when_configured(self, rsa_keypair: tuple[str, str]) -> None:
+    def test_returns_dual_provider_when_authcore_configured(
+        self, rsa_keypair: tuple[str, str]
+    ) -> None:
         _, public_pem = rsa_keypair
         settings = _make_settings(auth_provider="authcore", authcore_public_key=public_pem)
         provider = get_jwt_provider(settings)
-        assert isinstance(provider, AuthCoreJWTProvider)
+        assert isinstance(provider, DualJWTProvider)
 
     def test_raises_value_error_when_authcore_missing_public_key(self) -> None:
         settings = _make_settings(auth_provider="authcore", authcore_public_key=None)
@@ -273,7 +276,7 @@ class TestGetJwtProviderFactory:
         _, public_pem = rsa_keypair
         settings = _make_settings(auth_provider="authcore", authcore_public_key=public_pem)
         provider = get_jwt_provider(settings)
-        assert isinstance(provider, AuthCoreJWTProvider)
+        assert isinstance(provider, DualJWTProvider)
 
 
 # ---------------------------------------------------------------------------
@@ -301,3 +304,87 @@ class TestBackwardCompatibility:
         provider = SupabaseJWTProvider(auth=mock_auth)
         result = provider.verify_token("any.token")
         assert result.user_id == user_id
+
+
+# ---------------------------------------------------------------------------
+# DualJWTProvider — routing logic
+# ---------------------------------------------------------------------------
+
+
+def _make_hs256_token(payload: dict[str, Any], secret: str = "test-secret") -> str:
+    return jwt.encode(payload, secret, algorithm="HS256")
+
+
+class TestDualJWTProviderRouting:
+    """Verify DualJWTProvider routes tokens to the correct sub-provider."""
+
+    def test_routes_hs256_to_supabase(self, rsa_keypair: tuple[str, str]) -> None:
+        _, public_pem = rsa_keypair
+        mock_authcore = MagicMock(spec=AuthCoreJWTProvider)
+        mock_supabase = MagicMock(spec=SupabaseJWTProvider)
+
+        dual = DualJWTProvider(authcore=mock_authcore, supabase=mock_supabase)
+        token = _make_hs256_token({"sub": str(uuid.uuid4()), "exp": int(time.time()) + 3600})
+        dual.verify_token(token)
+
+        mock_supabase.verify_token.assert_called_once_with(token)
+        mock_authcore.verify_token.assert_not_called()
+
+    def test_routes_rs256_to_authcore(self, rsa_keypair: tuple[str, str]) -> None:
+        private_pem, public_pem = rsa_keypair
+        mock_authcore = MagicMock(spec=AuthCoreJWTProvider)
+        mock_supabase = MagicMock(spec=SupabaseJWTProvider)
+
+        dual = DualJWTProvider(authcore=mock_authcore, supabase=mock_supabase)
+        token = _sign_rs256(_make_valid_authcore_claims(), private_pem)
+        dual.verify_token(token)
+
+        mock_authcore.verify_token.assert_called_once_with(token)
+        mock_supabase.verify_token.assert_not_called()
+
+    def test_rejects_alg_none(self) -> None:
+        """alg=none must be rejected, not routed to any provider."""
+        import base64 as b64
+        import json as j
+
+        header = b64.urlsafe_b64encode(j.dumps({"alg": "none", "typ": "JWT"}).encode()).rstrip(b"=")
+        payload = b64.urlsafe_b64encode(j.dumps({"sub": "x"}).encode()).rstrip(b"=")
+        token = f"{header.decode()}.{payload.decode()}."
+
+        mock_authcore = MagicMock(spec=AuthCoreJWTProvider)
+        mock_supabase = MagicMock(spec=SupabaseJWTProvider)
+        dual = DualJWTProvider(authcore=mock_authcore, supabase=mock_supabase)
+
+        with pytest.raises(JWTValidationError, match="Unsupported"):
+            dual.verify_token(token)
+        mock_authcore.verify_token.assert_not_called()
+        mock_supabase.verify_token.assert_not_called()
+
+    def test_rejects_empty_algorithm(self) -> None:
+        """Unparseable JWT header must be rejected."""
+        mock_authcore = MagicMock(spec=AuthCoreJWTProvider)
+        mock_supabase = MagicMock(spec=SupabaseJWTProvider)
+        dual = DualJWTProvider(authcore=mock_authcore, supabase=mock_supabase)
+
+        with pytest.raises(JWTValidationError, match="Unsupported"):
+            dual.verify_token("not-a-jwt")
+        mock_authcore.verify_token.assert_not_called()
+        mock_supabase.verify_token.assert_not_called()
+
+    def test_rejects_unknown_algorithm(self) -> None:
+        """Unknown alg like PS256 must be rejected."""
+        import base64 as b64
+        import json as j
+
+        header = b64.urlsafe_b64encode(j.dumps({"alg": "PS256", "typ": "JWT"}).encode()).rstrip(
+            b"="
+        )
+        payload = b64.urlsafe_b64encode(j.dumps({"sub": "x"}).encode()).rstrip(b"=")
+        token = f"{header.decode()}.{payload.decode()}.sig"
+
+        mock_authcore = MagicMock(spec=AuthCoreJWTProvider)
+        mock_supabase = MagicMock(spec=SupabaseJWTProvider)
+        dual = DualJWTProvider(authcore=mock_authcore, supabase=mock_supabase)
+
+        with pytest.raises(JWTValidationError, match="Unsupported"):
+            dual.verify_token(token)

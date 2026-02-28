@@ -3,7 +3,8 @@
 import { makeAutoObservable, runInAction, computed } from 'mobx';
 import { supabase, type User, type Session } from '@/lib/supabase';
 import type { AuthChangeEvent } from '@supabase/supabase-js';
-import { getAuthProviderSync } from '@/services/auth/providers';
+import { getAuthProvider, getAuthProviderSync } from '@/services/auth/providers';
+import type { AuthProvider as IAuthProvider } from '@/services/auth/providers';
 
 export interface AuthUser {
   id: string;
@@ -14,6 +15,9 @@ export interface AuthUser {
 
 const MAX_REFRESH_FAILURES = 3;
 const SUPABASE_STORAGE_KEY_PREFIX = 'sb-';
+
+export const isAuthCoreMode =
+  (process.env.NEXT_PUBLIC_AUTH_PROVIDER ?? 'supabase').toLowerCase().trim() === 'authcore';
 
 function clearSupabaseAuthKeys(): void {
   if (typeof window === 'undefined') return;
@@ -35,6 +39,7 @@ export class AuthStore {
 
   private authSubscription: { unsubscribe: () => void } | null = null;
   private refreshFailureCount = 0;
+  private provider: IAuthProvider | null = null;
 
   constructor() {
     makeAutoObservable(this, {
@@ -47,6 +52,7 @@ export class AuthStore {
   }
 
   get isAuthenticated(): boolean {
+    if (isAuthCoreMode) return this.user !== null;
     return this.user !== null && this.session !== null;
   }
 
@@ -75,12 +81,12 @@ export class AuthStore {
     this.refreshFailureCount++;
     if (this.refreshFailureCount >= MAX_REFRESH_FAILURES) {
       this.refreshFailureCount = 0;
-      clearSupabaseAuthKeys();
+      if (!isAuthCoreMode) clearSupabaseAuthKeys();
       this.user = null;
       this.session = null;
       this.error = null;
       if (typeof window !== 'undefined') {
-        window.location.href = '/login?error=Session+expired';
+        window.location.href = '/login?error=session_expired';
       }
     }
   }
@@ -91,45 +97,11 @@ export class AuthStore {
 
   private async initializeAuth(): Promise<void> {
     try {
-      const { data, error } = await supabase.auth.getSession();
-
-      if (error) {
-        // Supabase's _initialize already exhausts internal retries before surfacing this error.
-        // An invalid/missing refresh token is a definitive failure — redirect immediately.
-        const isDefinitiveTokenFailure =
-          error.message.toLowerCase().includes('refresh token not found') ||
-          error.message.toLowerCase().includes('invalid refresh token');
-
-        runInAction(() => {
-          if (isDefinitiveTokenFailure) {
-            clearSupabaseAuthKeys();
-            this.user = null;
-            this.session = null;
-          } else {
-            this.handleRefreshFailure();
-            this.error = error.message;
-          }
-          this.isLoading = false;
-        });
-
-        // Always subscribe so future auth events (e.g. SIGNED_OUT) are tracked.
-        this.subscribeToAuthChanges();
-
-        if (isDefinitiveTokenFailure && typeof window !== 'undefined') {
-          window.location.href = '/login?error=Session+expired';
-        }
-        return;
+      if (isAuthCoreMode) {
+        await this.initializeAuthCore();
+      } else {
+        await this.initializeSupabase();
       }
-
-      runInAction(() => {
-        if (data.session) {
-          this.session = data.session;
-          this.user = this.mapSupabaseUser(data.session.user);
-        }
-        this.isLoading = false;
-      });
-
-      this.subscribeToAuthChanges();
     } catch (err) {
       runInAction(() => {
         this.error = err instanceof Error ? err.message : 'Failed to initialize auth';
@@ -138,7 +110,62 @@ export class AuthStore {
     }
   }
 
+  private async initializeAuthCore(): Promise<void> {
+    const provider = await getAuthProvider();
+    this.provider = provider;
+
+    const restored = await provider.restoreSession();
+
+    runInAction(() => {
+      if (restored) {
+        this.user = restored.user;
+      }
+      this.isLoading = false;
+    });
+  }
+
+  private async initializeSupabase(): Promise<void> {
+    const { data, error } = await supabase.auth.getSession();
+
+    if (error) {
+      const isDefinitiveTokenFailure =
+        error.message.toLowerCase().includes('refresh token not found') ||
+        error.message.toLowerCase().includes('invalid refresh token');
+
+      runInAction(() => {
+        if (isDefinitiveTokenFailure) {
+          clearSupabaseAuthKeys();
+          this.user = null;
+          this.session = null;
+        } else {
+          this.handleRefreshFailure();
+          this.error = error.message;
+        }
+        this.isLoading = false;
+      });
+
+      this.subscribeToAuthChanges();
+
+      if (isDefinitiveTokenFailure && typeof window !== 'undefined') {
+        window.location.href = '/login?error=session_expired';
+      }
+      return;
+    }
+
+    runInAction(() => {
+      if (data.session) {
+        this.session = data.session;
+        this.user = this.mapSupabaseUser(data.session.user);
+      }
+      this.isLoading = false;
+    });
+
+    this.subscribeToAuthChanges();
+  }
+
   private subscribeToAuthChanges(): void {
+    if (isAuthCoreMode) return;
+
     const { data } = supabase.auth.onAuthStateChange(
       (event: AuthChangeEvent, session: Session | null) => {
         runInAction(() => {
@@ -152,13 +179,11 @@ export class AuthStore {
             }
           }
 
-          // Handle expired/invalid refresh token (FR-004)
           if (event === 'TOKEN_REFRESHED' && !session) {
             this.handleRefreshFailure();
             return;
           }
 
-          // Successful token refresh — reset failure counter
           if (event === 'TOKEN_REFRESHED' && session) {
             this.resetRefreshFailures();
           }
@@ -178,27 +203,28 @@ export class AuthStore {
     };
   }
 
+  private getProvider(): IAuthProvider {
+    return this.provider ?? getAuthProviderSync();
+  }
+
   async login(email: string, password: string): Promise<boolean> {
     this.isLoading = true;
     this.error = null;
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) {
-        runInAction(() => {
-          this.error = error.message;
-          this.isLoading = false;
-        });
-        return false;
-      }
+      const provider = this.getProvider();
+      const result = await provider.login(email, password);
 
       runInAction(() => {
-        this.session = data.session;
-        this.user = data.user ? this.mapSupabaseUser(data.user) : null;
+        this.user = result.user;
+        if (!isAuthCoreMode) {
+          // Supabase SDK sets session internally; sync it from getSession()
+          supabase.auth.getSession().then(({ data }) => {
+            runInAction(() => {
+              this.session = data.session;
+            });
+          });
+        }
         this.isLoading = false;
         this.resetRefreshFailures();
       });
@@ -214,6 +240,10 @@ export class AuthStore {
   }
 
   async loginWithOAuth(provider: 'github' | 'google'): Promise<void> {
+    if (isAuthCoreMode) {
+      throw new Error('OAuth login is not available with AuthCore');
+    }
+
     this.isLoading = true;
     this.error = null;
 
@@ -239,33 +269,31 @@ export class AuthStore {
     }
   }
 
-  async signup(email: string, password: string, name: string): Promise<boolean> {
+  async signup(email: string, password: string, name?: string): Promise<boolean> {
     this.isLoading = true;
     this.error = null;
 
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            name,
-            full_name: name,
-          },
-        },
-      });
+      const provider = this.getProvider();
+      const result = await provider.signup(email, password, name);
 
-      if (error) {
+      if (result.verificationRequired) {
         runInAction(() => {
-          this.error = error.message;
           this.isLoading = false;
         });
-        return false;
+        // Caller should show "check your email" message
+        return true;
       }
 
       runInAction(() => {
-        this.session = data.session;
-        this.user = data.user ? this.mapSupabaseUser(data.user) : null;
+        this.user = result.user;
+        if (!isAuthCoreMode && result.tokens) {
+          supabase.auth.getSession().then(({ data }) => {
+            runInAction(() => {
+              this.session = data.session;
+            });
+          });
+        }
         this.isLoading = false;
       });
 
@@ -284,13 +312,17 @@ export class AuthStore {
     this.error = null;
 
     try {
-      await getAuthProviderSync().logout();
+      await this.getProvider().logout();
 
       runInAction(() => {
         this.user = null;
         this.session = null;
         this.isLoading = false;
       });
+
+      if (isAuthCoreMode && typeof window !== 'undefined') {
+        window.location.href = '/login';
+      }
     } catch (err) {
       runInAction(() => {
         this.error = err instanceof Error ? err.message : 'Logout failed';
@@ -303,6 +335,20 @@ export class AuthStore {
     this.error = null;
 
     try {
+      if (isAuthCoreMode) {
+        const token = await this.getProvider().getToken();
+        if (!token) {
+          runInAction(() => {
+            this.handleRefreshFailure();
+          });
+          return false;
+        }
+        runInAction(() => {
+          this.resetRefreshFailures();
+        });
+        return true;
+      }
+
       const { data, error } = await supabase.auth.refreshSession();
 
       if (error) {
@@ -330,6 +376,11 @@ export class AuthStore {
   }
 
   async updateProfile(data: { name?: string; avatarUrl?: string }): Promise<boolean> {
+    if (isAuthCoreMode) {
+      // AuthCore profile updates handled via separate profile API
+      return false;
+    }
+
     this.isLoading = true;
     this.error = null;
 
@@ -368,6 +419,11 @@ export class AuthStore {
   }
 
   async resetPassword(email: string): Promise<boolean> {
+    if (isAuthCoreMode) {
+      // AuthCore password reset handled via separate flow
+      return false;
+    }
+
     this.isLoading = true;
     this.error = null;
 

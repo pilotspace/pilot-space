@@ -13,6 +13,7 @@ vi.mock('@/lib/supabase', () => ({
   supabase: {
     auth: {
       signInWithPassword: vi.fn(),
+      signUp: vi.fn(),
       signOut: vi.fn(),
       refreshSession: vi.fn(),
       getSession: vi.fn(),
@@ -23,6 +24,7 @@ vi.mock('@/lib/supabase', () => ({
 import { supabase } from '@/lib/supabase';
 
 const mockSignIn = vi.mocked(supabase.auth.signInWithPassword);
+const mockSignUp = vi.mocked(supabase.auth.signUp);
 const mockSignOut = vi.mocked(supabase.auth.signOut);
 const mockRefreshSession = vi.mocked(supabase.auth.refreshSession);
 const mockGetSession = vi.mocked(supabase.auth.getSession);
@@ -181,5 +183,106 @@ describe('SupabaseAuthProvider.getToken', () => {
     const token = await provider.getToken();
 
     expect(token).toBeNull();
+  });
+});
+
+describe('SupabaseAuthProvider.signup', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('returns SignupResult with user and tokens on auto-verify', async () => {
+    mockSignUp.mockResolvedValueOnce({
+      data: { session: MOCK_SESSION, user: MOCK_USER },
+      error: null,
+    } as never);
+
+    const provider = new SupabaseAuthProvider();
+    const result = await provider.signup('test@example.com', 'password', 'Test User');
+
+    expect(result.user?.id).toBe('user-id-123');
+    expect(result.tokens?.accessToken).toBe('access-token-abc');
+    expect(result.verificationRequired).toBe(false);
+  });
+
+  it('returns verificationRequired=true when session is null', async () => {
+    mockSignUp.mockResolvedValueOnce({
+      data: { session: null, user: MOCK_USER },
+      error: null,
+    } as never);
+
+    const provider = new SupabaseAuthProvider();
+    const result = await provider.signup('test@example.com', 'password');
+
+    expect(result.verificationRequired).toBe(true);
+    expect(result.tokens).toBeNull();
+  });
+
+  it('passes name in user metadata when provided', async () => {
+    mockSignUp.mockResolvedValueOnce({
+      data: { session: MOCK_SESSION, user: MOCK_USER },
+      error: null,
+    } as never);
+
+    const provider = new SupabaseAuthProvider();
+    await provider.signup('test@example.com', 'password', 'My Name');
+
+    expect(mockSignUp).toHaveBeenCalledWith({
+      email: 'test@example.com',
+      password: 'password',
+      options: { data: { name: 'My Name', full_name: 'My Name' } },
+    });
+  });
+
+  it('throws on Supabase error', async () => {
+    mockSignUp.mockResolvedValueOnce({
+      data: { session: null, user: null },
+      error: { message: 'User already registered' },
+    } as never);
+
+    const provider = new SupabaseAuthProvider();
+    await expect(provider.signup('dup@example.com', 'password')).rejects.toThrow(
+      'User already registered'
+    );
+  });
+});
+
+describe('SupabaseAuthProvider.restoreSession', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('returns LoginResult when session exists', async () => {
+    mockGetSession.mockResolvedValueOnce({
+      data: { session: MOCK_SESSION },
+      error: null,
+    } as never);
+
+    const provider = new SupabaseAuthProvider();
+    const result = await provider.restoreSession();
+
+    expect(result).not.toBeNull();
+    expect(result!.user.id).toBe('user-id-123');
+    expect(result!.tokens.accessToken).toBe('access-token-abc');
+  });
+
+  it('returns null when no session', async () => {
+    mockGetSession.mockResolvedValueOnce({
+      data: { session: null },
+      error: null,
+    } as never);
+
+    const provider = new SupabaseAuthProvider();
+    const result = await provider.restoreSession();
+
+    expect(result).toBeNull();
+  });
+
+  it('returns null on error', async () => {
+    mockGetSession.mockResolvedValueOnce({
+      data: { session: null },
+      error: { message: 'Failed' },
+    } as never);
+
+    const provider = new SupabaseAuthProvider();
+    const result = await provider.restoreSession();
+
+    expect(result).toBeNull();
   });
 });

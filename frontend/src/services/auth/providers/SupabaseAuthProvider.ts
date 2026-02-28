@@ -6,7 +6,7 @@
  */
 
 import { supabase } from '@/lib/supabase';
-import type { AuthProvider, AuthTokens, LoginResult } from './AuthProvider';
+import type { AuthProvider, AuthTokens, LoginResult, SignupResult } from './AuthProvider';
 
 export class SupabaseAuthProvider implements AuthProvider {
   async login(email: string, password: string): Promise<LoginResult> {
@@ -34,6 +34,63 @@ export class SupabaseAuthProvider implements AuthProvider {
           (data.user.user_metadata?.full_name as string | undefined) ||
           '',
         avatarUrl: (data.user.user_metadata?.avatar_url as string | undefined) ?? null,
+      },
+    };
+  }
+
+  async signup(email: string, password: string, name?: string): Promise<SignupResult> {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: name ? { data: { name, full_name: name } } : undefined,
+    });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    const user = data.user
+      ? {
+          id: data.user.id,
+          email: data.user.email ?? '',
+          name:
+            (data.user.user_metadata?.name as string | undefined) ||
+            (data.user.user_metadata?.full_name as string | undefined) ||
+            '',
+          avatarUrl: (data.user.user_metadata?.avatar_url as string | undefined) ?? null,
+        }
+      : null;
+
+    const tokens = data.session
+      ? {
+          accessToken: data.session.access_token,
+          refreshToken: data.session.refresh_token,
+          expiresAt: data.session.expires_at ?? 0,
+        }
+      : null;
+
+    // Supabase returns session=null when email confirmation is required
+    return { user, tokens, verificationRequired: !data.session };
+  }
+
+  async restoreSession(): Promise<LoginResult | null> {
+    const { data, error } = await supabase.auth.getSession();
+    if (error || !data.session) return null;
+
+    return {
+      tokens: {
+        accessToken: data.session.access_token,
+        refreshToken: data.session.refresh_token,
+        expiresAt: data.session.expires_at ?? 0,
+      },
+      user: {
+        id: data.session.user.id,
+        email: data.session.user.email ?? '',
+        name:
+          (data.session.user.user_metadata?.name as string | undefined) ||
+          (data.session.user.user_metadata?.full_name as string | undefined) ||
+          '',
+        avatarUrl: (data.session.user.user_metadata?.avatar_url as string | undefined) ?? null,
       },
     };
   }

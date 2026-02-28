@@ -3,9 +3,13 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'motion/react';
-import { Compass, Loader2 } from 'lucide-react';
+import { Compass, Loader2, Plus, Building2 } from 'lucide-react';
 import { WorkspaceSelector, addRecentWorkspace } from '@/components/workspace-selector';
-import { supabase } from '@/lib/supabase';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { getAuthProvider } from '@/services/auth/providers';
 import { workspacesApi } from '@/services/api/workspaces';
 
 const WORKSPACE_STORAGE_KEY = 'pilot-space:last-workspace';
@@ -23,52 +27,59 @@ const stagger = {
   },
 };
 
+function slugify(name: string): string {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
 export default function HomePage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = React.useState(true);
+  const [hasWorkspaces, setHasWorkspaces] = React.useState(true);
+  const [newWorkspaceName, setNewWorkspaceName] = React.useState('');
+  const [createError, setCreateError] = React.useState<string | null>(null);
+  const [isCreating, setIsCreating] = React.useState(false);
 
   React.useEffect(() => {
     let cancelled = false;
 
     async function resolveWorkspace() {
-      // 1. Check localStorage for a previously visited workspace
-      const storedWorkspace = localStorage.getItem(WORKSPACE_STORAGE_KEY);
-      if (storedWorkspace) {
-        router.replace(`/${storedWorkspace}`);
-        return;
-      }
-
-      // 2. Check if user is authenticated
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+      // 1. Check if user is authenticated (works for both Supabase and AuthCore)
+      const provider = await getAuthProvider();
+      const token = await provider.getToken();
 
       if (cancelled) return;
 
-      if (!session) {
-        // Not authenticated → redirect to landing page
+      if (!token) {
         router.replace('/welcome');
         return;
       }
 
-      // 3. Authenticated but no stored workspace → fetch from API
+      // 2. Fetch user's workspaces to validate access
       try {
         const { items } = await workspacesApi.list();
 
         if (cancelled) return;
 
         if (items.length > 0) {
-          const defaultWorkspace = items[0]!; // Safe: guard confirms items.length > 0
-          addRecentWorkspace(defaultWorkspace.slug);
-          router.replace(`/${defaultWorkspace.slug}`);
+          const storedSlug = localStorage.getItem(WORKSPACE_STORAGE_KEY);
+          // Use stored workspace if user still has access, otherwise use first
+          const target = (storedSlug && items.find((w) => w.slug === storedSlug)) || items[0]!;
+          addRecentWorkspace(target.slug);
+          router.replace(`/${target.slug}`);
           return;
         }
       } catch {
         // API error → fall through to workspace selector
       }
 
-      // 4. No workspaces found → show selector
+      // 3. No workspaces found → clear stale stored slug and show creation form
+      localStorage.removeItem(WORKSPACE_STORAGE_KEY);
       if (!cancelled) {
+        setHasWorkspaces(false);
         setIsLoading(false);
       }
     }
@@ -83,6 +94,24 @@ export default function HomePage() {
   const handleWorkspaceSelect = (slug: string) => {
     addRecentWorkspace(slug);
     router.push(`/${slug}`);
+  };
+
+  const handleCreateWorkspace = async () => {
+    const name = newWorkspaceName.trim();
+    if (!name) return;
+
+    setCreateError(null);
+    setIsCreating(true);
+
+    try {
+      const slug = slugify(name);
+      const workspace = await workspacesApi.create({ name, slug });
+      addRecentWorkspace(workspace.slug);
+      router.replace(`/${workspace.slug}`);
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : 'Failed to create workspace');
+      setIsCreating(false);
+    }
   };
 
   if (isLoading) {
@@ -133,12 +162,61 @@ export default function HomePage() {
         </motion.h1>
 
         <motion.p variants={fadeUp} className="mb-8 text-center text-muted-foreground">
-          Select a workspace to get started
+          {hasWorkspaces ? 'Select a workspace to get started' : 'Create your first workspace'}
         </motion.p>
 
-        {/* Workspace Selector */}
+        {/* Workspace Selector or Creation Form */}
         <motion.div variants={fadeUp} className="w-full">
-          <WorkspaceSelector onSelect={handleWorkspaceSelect} />
+          {hasWorkspaces ? (
+            <WorkspaceSelector onSelect={handleWorkspaceSelect} />
+          ) : (
+            <Card className="border-border/50 shadow-warm">
+              <CardContent className="p-6">
+                <div className="mb-4 flex items-center justify-center">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
+                    <Building2 className="h-6 w-6 text-primary" />
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="workspace-name">Workspace name</Label>
+                    <Input
+                      id="workspace-name"
+                      type="text"
+                      placeholder="My team workspace"
+                      value={newWorkspaceName}
+                      onChange={(e) => setNewWorkspaceName(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleCreateWorkspace()}
+                      disabled={isCreating}
+                      className="h-11"
+                    />
+                    {newWorkspaceName.trim() && (
+                      <p className="text-xs text-muted-foreground">
+                        Slug: {slugify(newWorkspaceName)}
+                      </p>
+                    )}
+                  </div>
+                  {createError && (
+                    <p className="text-sm text-destructive" role="alert">
+                      {createError}
+                    </p>
+                  )}
+                  <Button
+                    onClick={handleCreateWorkspace}
+                    disabled={!newWorkspaceName.trim() || isCreating}
+                    className="w-full gap-2"
+                  >
+                    {isCreating ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Plus className="h-4 w-4" />
+                    )}
+                    Create workspace
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </motion.div>
       </motion.div>
     </div>

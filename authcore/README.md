@@ -235,3 +235,51 @@ Access tokens are short-lived (15 min) and stateless by design, but logout must 
 ### CQRS-lite service design
 
 Each operation is a dedicated service class (`RegisterService`, `LoginService`, etc.) with a single `execute(Payload) → Result` method. This eliminates fat service objects, makes each operation independently testable, and keeps the router layer thin. Full CQRS with event sourcing was not adopted — the complexity is unwarranted for an auth service with well-defined, low-cardinality operations.
+
+---
+
+## Pilot Space Integration
+
+AuthCore can replace Supabase Auth as the JWT provider for the Pilot Space backend.
+
+### 1. Configure the backend
+
+Set three env vars in `backend/.env`:
+
+```bash
+AUTH_PROVIDER=authcore
+AUTHCORE_URL=http://localhost:8001
+AUTHCORE_PUBLIC_KEY="$(awk 'NF {sub(/\r/, ""); printf "%s\\n",$0;}' public.pem)"
+```
+
+`AUTHCORE_PUBLIC_KEY` must be the same RSA public key that AuthCore uses for signing. The backend uses it to verify incoming JWTs without contacting AuthCore at runtime.
+
+### 2. Start via Docker Compose (from project root)
+
+```bash
+docker compose --profile authcore up -d
+```
+
+This starts AuthCore on port 8001 with a dedicated Postgres instance and shared Redis.
+
+### 3. End-to-end example
+
+```bash
+# Register a user
+curl -s -X POST http://localhost:8001/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"dev@example.com","password":"Secure1!"}' | jq .
+
+# (Verify email via SMTP logs or test token)
+
+# Login — get access token
+ACCESS=$(curl -s -X POST http://localhost:8001/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"dev@example.com","password":"Secure1!"}' | jq -r .access_token)
+
+# Call Pilot Space API with the AuthCore-issued token
+curl -s http://localhost:8000/api/v1/workspaces \
+  -H "Authorization: Bearer $ACCESS" | jq .
+```
+
+The Pilot Space backend validates the JWT signature using the configured `AUTHCORE_PUBLIC_KEY`. No runtime calls to AuthCore are needed for token verification.

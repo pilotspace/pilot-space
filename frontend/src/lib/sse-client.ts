@@ -10,7 +10,7 @@
  * @see specs/004-mvp-agents-build/tasks/P16-T111-T120.md#T111
  */
 
-import { supabase } from '@/lib/supabase';
+import { getAuthProviderSync } from '@/services/auth/providers';
 
 export interface SSEClientOptions {
   /** SSE endpoint URL */
@@ -191,19 +191,17 @@ export class SSEClient {
   }
 
   /**
-   * Get Supabase auth headers for authenticated requests.
+   * Get auth headers for authenticated requests.
+   * Works for both Supabase and AuthCore providers.
    */
   private async getAuthHeaders(): Promise<Record<string, string>> {
     try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (session?.access_token) {
-        return { Authorization: `Bearer ${session.access_token}` };
+      const token = await getAuthProviderSync().getToken();
+      if (token) {
+        return { Authorization: `Bearer ${token}` };
       }
     } catch {
-      console.warn('Failed to get auth session for SSE request');
+      console.warn('Failed to get auth token for SSE request');
     }
     return {};
   }
