@@ -1,0 +1,317 @@
+"""pilot implement — full workflow: fetch → clone → branch → inject → claude → PR."""
+
+from __future__ import annotations
+
+import asyncio
+import os
+import subprocess
+from pathlib import Path
+from typing import Annotated, Any
+
+import git
+import typer
+from jinja2 import Environment, FileSystemLoader
+from rich.console import Console
+
+from pilot_cli.api_client import PilotAPIClient, PilotAPIError
+from pilot_cli.config import PilotConfig
+from pilot_cli.github_client import GitHubClient, GitHubClientError
+
+console = Console()
+
+# Path where repos are cloned: ~/.pilot/workspaces/<workspace-slug>/<issue-id>/
+WORKSPACES_DIR = Path.home() / ".pilot" / "workspaces"
+
+_BACKEND_GATE = "uv run pyright && uv run ruff check && uv run pytest --cov=."
+_FRONTEND_GATE = "pnpm lint && pnpm type-check && pnpm test"
+
+
+def implement_command(
+    issue_id: Annotated[str, typer.Argument(help="Issue ID, e.g. PS-42")],
+) -> None:
+    """Implement an issue with Claude Code — full automated workflow.
+
+    Steps:
+      1. Fetch issue context from Pilot Space API
+      2. Clone the project repository
+      3. Create a feature branch
+      4. Inject CLAUDE.md with issue context
+      5. Launch Claude Code interactively
+      6. Commit, push, create GitHub PR, update issue status
+    """
+    try:
+        config = PilotConfig.load()
+    except FileNotFoundError as e:
+        console.print("[red]Not logged in.[/red] Run [bold]pilot login[/bold] first.")
+        raise typer.Exit(1) from e
+
+    asyncio.run(_run_implement(issue_id, config))
+
+
+async def _run_implement(issue_id: str, config: PilotConfig) -> None:
+    client = PilotAPIClient.from_config(config)
+
+    # ── Step 1: Fetch context ────────────────────────────────────────────────
+    console.print(
+        f"\n[dim][[/dim]1/6[dim]][/dim] Fetching issue context for "
+        f"[bold]{issue_id}[/bold]...",
+        end=" ",
+    )
+    try:
+        ctx = await client.get_implement_context(issue_id)
+    except PilotAPIError as e:
+        console.print("[red]✗[/red]")
+        if e.status_code == 403:
+            console.print(
+                "[red]Error:[/red] You are not assigned to this issue "
+                "(or not an admin)."
+            )
+        elif e.status_code == 422:
+            console.print(
+                "[red]Error:[/red] No GitHub integration configured for this workspace."
+            )
+        else:
+            console.print(f"[red]Error {e.status_code}:[/red] {e.detail}")
+        raise typer.Exit(1) from e
+
+    issue_title: str = ctx["issue"]["title"]
+    suggested_branch: str = ctx["suggestedBranch"]
+    clone_url: str = ctx["repository"]["cloneUrl"]
+    default_branch: str = ctx["repository"]["defaultBranch"]
+    console.print(f"[green]✓[/green] [dim]{issue_title!r}[/dim]")
+
+    # ── Step 2: Clone repository ─────────────────────────────────────────────
+    target_path = WORKSPACES_DIR / config.workspace_slug / issue_id
+    console.print("[dim][[/dim]2/6[dim]][/dim] Cloning repository...", end=" ")
+
+    if target_path.exists():
+        console.print(
+            f"\n[yellow]Warning:[/yellow] {target_path} already exists. "
+            "Using existing clone."
+        )
+        repo = git.Repo(str(target_path))
+    else:
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+        try:
+            repo = git.Repo.clone_from(
+                clone_url,
+                str(target_path),
+                depth=1,
+                env=env,
+            )
+        except git.GitCommandError as e:
+            console.print("[red]✗[/red]")
+            console.print(
+                f"[red]Clone failed:[/red] {e}\n"
+                "[dim]Ensure you have SSH key configured or have run "
+                "[bold]gh auth login[/bold][/dim]"
+            )
+            raise typer.Exit(1) from e
+
+    console.print(f"[green]✓[/green] [dim]{target_path}[/dim]")
+
+    # ── Step 3: Create branch ────────────────────────────────────────────────
+    console.print(
+        f"[dim][[/dim]3/6[dim]][/dim] Creating branch "
+        f"[bold]{suggested_branch}[/bold]...",
+        end=" ",
+    )
+    try:
+        repo.git.checkout("-b", suggested_branch)
+    except git.GitCommandError:
+        # Branch already exists — check it out
+        repo.git.checkout(suggested_branch)
+    console.print("[green]✓[/green]")
+
+    # ── Step 4: Inject CLAUDE.md ─────────────────────────────────────────────
+    console.print(
+        "[dim][[/dim]4/6[dim]][/dim] Injecting CLAUDE.md with issue context...",
+        end=" ",
+    )
+    _inject_claude_md(target_path, ctx)
+    console.print("[green]✓[/green]")
+
+    # ── Step 5: Launch Claude Code ───────────────────────────────────────────
+    console.print("[dim][[/dim]5/6[dim]][/dim] Launching Claude Code...")
+    console.print("[dim]  (press Ctrl-C or type /exit to stop Claude Code)[/dim]\n")
+
+    try:
+        subprocess.run(["claude"], cwd=str(target_path))
+    except FileNotFoundError:
+        console.print("\n[red]Error:[/red] [bold]claude[/bold] command not found.")
+        console.print("[dim]Install Claude Code: https://docs.anthropic.com/claude-code[/dim]")
+        raise typer.Exit(1)
+    console.print()  # newline after claude exits
+
+    # ── Step 6: Commit, push, PR ─────────────────────────────────────────────
+    console.print("[dim][[/dim]6/6[dim]][/dim] Creating pull request...", end=" ")
+
+    repo.git.add("-A")
+    if not repo.is_dirty(untracked_files=True):
+        console.print()
+        console.print(
+            "[yellow]Warning:[/yellow] No changes after Claude Code "
+            "— skipping commit and PR."
+        )
+        return
+
+    commit_msg = (
+        f"feat({issue_id}): {issue_title}\n\n"
+        f"Implemented via `pilot implement {issue_id}`.\n\n"
+        f"Closes #{issue_id}"
+    )
+    repo.index.commit(commit_msg)
+    repo.git.push("origin", suggested_branch)
+
+    # Create GitHub PR
+    github_token = _get_github_token()
+    if github_token:
+        try:
+            gh = GitHubClient.from_clone_url(token=github_token, clone_url=clone_url)
+            pr_body = _build_pr_body(issue_id, issue_title, ctx)
+            pr = await gh.create_pull_request(
+                title=f"feat({issue_id}): {issue_title}",
+                body=pr_body,
+                head=suggested_branch,
+                base=default_branch,
+            )
+            console.print(f"[green]✓[/green] {pr.url}")
+        except GitHubClientError as e:
+            console.print(
+                f"[yellow]⚠[/yellow] PR creation failed ({e.status_code}): {e}"
+            )
+            console.print("[dim]Branch pushed. Create PR manually at GitHub.[/dim]")
+    else:
+        console.print(
+            "[yellow]⚠[/yellow] No GITHUB_TOKEN found "
+            "— branch pushed but no PR created."
+        )
+        console.print("[dim]Set GITHUB_TOKEN env var or run: gh auth login[/dim]")
+
+    # Update issue status → In Review
+    try:
+        await client.update_issue_status(issue_id, "in_review")
+        console.print(f"Issue [bold]{issue_id}[/bold] updated → [bold]In Review[/bold]")
+    except PilotAPIError as e:
+        console.print(f"[yellow]Warning:[/yellow] Could not update issue status: {e}")
+
+
+def _normalize_ctx(ctx: dict[str, Any]) -> dict[str, Any]:
+    """Normalize camelCase API response keys to snake_case for the Jinja2 template.
+
+    The API returns camelCase (e.g. ``acceptanceCriteria``, ``cloneUrl``) but
+    the CLAUDE_MD_TEMPLATE uses snake_case (e.g. ``acceptance_criteria``,
+    ``clone_url``).  Only the fields referenced in the template are mapped.
+    """
+    issue_raw: dict[str, Any] = ctx["issue"]
+    issue: dict[str, Any] = {
+        "id": issue_raw.get("id", ""),
+        "title": issue_raw.get("title", ""),
+        "status": issue_raw.get("status", ""),
+        "priority": issue_raw.get("priority", ""),
+        "labels": issue_raw.get("labels", []),
+        "description": issue_raw.get("description", ""),
+        "acceptance_criteria": issue_raw.get("acceptanceCriteria", []),
+    }
+
+    repo_raw: dict[str, Any] = ctx["repository"]
+    repository: dict[str, Any] = {
+        "clone_url": repo_raw.get("cloneUrl", ""),
+        "default_branch": repo_raw.get("defaultBranch", ""),
+        "provider": repo_raw.get("provider", ""),
+    }
+
+    project_raw: dict[str, Any] = ctx["project"]
+    project: dict[str, Any] = {
+        "name": project_raw.get("name", ""),
+        "tech_stack_summary": project_raw.get("techStackSummary", ""),
+    }
+
+    workspace_raw: dict[str, Any] = ctx["workspace"]
+    workspace: dict[str, Any] = {
+        "name": workspace_raw.get("name", ""),
+        "slug": workspace_raw.get("slug", ""),
+    }
+
+    notes_raw: list[dict[str, Any]] = ctx.get("linkedNotes", [])
+    linked_notes: list[dict[str, Any]] = [
+        {
+            "note_title": n.get("noteTitle", n.get("note_title", "")),
+            "relevant_blocks": n.get("relevantBlocks", n.get("relevant_blocks", [])),
+        }
+        for n in notes_raw
+    ]
+
+    return {
+        "issue": issue,
+        "repository": repository,
+        "project": project,
+        "workspace": workspace,
+        "linked_notes": linked_notes,
+        "suggested_branch": ctx.get("suggestedBranch", ""),
+    }
+
+
+def _inject_claude_md(target_path: Path, ctx: dict[str, Any]) -> None:
+    """Render CLAUDE.md from template; append to existing file if present."""
+    templates_dir = Path(__file__).parent.parent / "templates"
+    env = Environment(loader=FileSystemLoader(str(templates_dir)), autoescape=False)
+    template = env.get_template("CLAUDE_MD_TEMPLATE.md")
+
+    normalized = _normalize_ctx(ctx)
+
+    rendered = template.render(
+        issue=normalized["issue"],
+        linked_notes=normalized["linked_notes"],
+        workspace=normalized["workspace"],
+        project=normalized["project"],
+        repository=normalized["repository"],
+        suggested_branch=normalized["suggested_branch"],
+        backend_quality_gate=_BACKEND_GATE,
+        frontend_quality_gate=_FRONTEND_GATE,
+    )
+
+    claude_md = target_path / "CLAUDE.md"
+    if claude_md.exists():
+        # Append to existing CLAUDE.md — don't overwrite project conventions
+        existing = claude_md.read_text()
+        claude_md.write_text(existing + "\n\n---\n\n" + rendered)
+    else:
+        claude_md.write_text(rendered)
+
+
+def _get_github_token() -> str | None:
+    """Get GitHub token from GITHUB_TOKEN env var or gh CLI."""
+    token = os.environ.get("GITHUB_TOKEN")
+    if token:
+        return token
+    # Try gh CLI
+    result = subprocess.run(["gh", "auth", "token"], capture_output=True, text=True)
+    if result.returncode == 0:
+        return result.stdout.strip() or None
+    return None
+
+
+def _extract_issue_number(issue_id: str) -> str:
+    """Extract numeric part from issue ID like 'PS-42' → '42'."""
+    parts = issue_id.split("-")
+    return parts[-1] if len(parts) > 1 else issue_id
+
+
+def _build_pr_body(issue_id: str, title: str, ctx: dict[str, Any]) -> str:
+    """Build a GitHub PR body with issue reference."""
+    acceptance: list[str] = ctx["issue"].get("acceptanceCriteria", [])
+    ac_lines = (
+        "\n".join(f"- [ ] {c}" for c in acceptance)
+        if acceptance
+        else "_None specified._"
+    )
+    return (
+        f"## Summary\n\n"
+        f"Implements [{issue_id}] {title}\n\n"
+        f"## Acceptance Criteria\n\n{ac_lines}\n\n"
+        f"## Implementation\n\n"
+        f"Implemented via `pilot implement {issue_id}`.\n\n"
+        f"Closes #{issue_id}"
+    )

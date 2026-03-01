@@ -36,6 +36,7 @@ from pilot_space.api.v1.routers import (
     homepage_router,
     integrations_router,
     intents_router,
+    issue_implement_router,
     issues_ai_context_router,
     issues_ai_context_streaming_router,
     issues_ai_router,
@@ -232,6 +233,7 @@ app.include_router(auth_router, prefix=API_V1_PREFIX)
 app.include_router(workspaces_router, prefix=API_V1_PREFIX)
 app.include_router(projects_router, prefix=API_V1_PREFIX)
 app.include_router(issues_router, prefix=API_V1_PREFIX)
+app.include_router(issue_implement_router, prefix=API_V1_PREFIX)
 app.include_router(issues_ai_router, prefix=API_V1_PREFIX)
 app.include_router(issues_ai_context_router, prefix=API_V1_PREFIX)
 app.include_router(issues_ai_context_streaming_router, prefix=API_V1_PREFIX)

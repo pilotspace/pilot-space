@@ -1,0 +1,1 @@
+"""Pilot CLI test suite."""

@@ -105,6 +105,9 @@ from pilot_space.infrastructure.database.repositories.note_yjs_state_repository 
 from pilot_space.infrastructure.database.repositories.onboarding_repository import (
     OnboardingRepository,
 )
+from pilot_space.infrastructure.database.repositories.pilot_api_key_repository import (
+    PilotAPIKeyRepository,
+)
 from pilot_space.infrastructure.database.repositories.pm_block_insight_repository import (
     PMBlockInsightRepository,
 )
@@ -338,6 +341,11 @@ class InfraContainer(containers.DeclarativeContainer):
 
     constitution_rule_repository = providers.Factory(
         ConstitutionRuleRepository,
+        session=providers.Callable(get_current_session),
+    )
+
+    pilot_api_key_repository = providers.Factory(
+        PilotAPIKeyRepository,
         session=providers.Callable(get_current_session),
     )
 

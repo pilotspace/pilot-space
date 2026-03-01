@@ -262,6 +262,7 @@ def _get_delete_issue_service(
 
 DeleteIssueServiceDep = Annotated[DeleteIssueService, Depends(_get_delete_issue_service)]
 
+
 # ===== Cycle Service Dependencies =====
 
 
@@ -637,7 +638,6 @@ def _get_task_service(
 
 
 TaskServiceDep = Annotated[TaskService, Depends(_get_task_service)]
-
 
 __all__ = [  # noqa: RUF022
     "ActivityRepositoryDep",

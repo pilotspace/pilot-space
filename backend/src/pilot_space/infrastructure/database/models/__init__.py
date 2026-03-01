@@ -78,6 +78,7 @@ from pilot_space.infrastructure.database.models.note_note_link import (
 )
 from pilot_space.infrastructure.database.models.note_version import NoteVersion, VersionTrigger
 from pilot_space.infrastructure.database.models.onboarding import WorkspaceOnboarding
+from pilot_space.infrastructure.database.models.pilot_api_key import PilotAPIKey
 from pilot_space.infrastructure.database.models.pm_block_insight import PMBlockInsight
 from pilot_space.infrastructure.database.models.project import Project
 from pilot_space.infrastructure.database.models.skill_execution import (
@@ -170,6 +171,7 @@ __all__ = [
     "NoteNoteLinkType",
     "NoteVersion",
     "PMBlockInsight",
+    "PilotAPIKey",
     "Project",
     "RoleTemplate",
     "SkillApprovalRole",

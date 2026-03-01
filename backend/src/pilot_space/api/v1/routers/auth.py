@@ -11,9 +11,10 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from pilot_space.api.v1.dependencies import AuthServiceDep
+from pilot_space.api.v1.dependencies_pilot import ValidateAPIKeyServiceDep
 from pilot_space.api.v1.schemas.auth import (
     LoginRequest,
     UserProfileResponse,
@@ -24,6 +25,7 @@ from pilot_space.application.services.auth import (
     GetProfilePayload,
     LogoutPayload,
     UpdateProfilePayload,
+    ValidateAPIKeyPayload,
 )
 from pilot_space.dependencies import CurrentUser
 from pilot_space.dependencies.auth import SessionDep
@@ -192,6 +194,62 @@ async def get_auth_config() -> dict[str, str | None]:
     if provider == "authcore":
         authcore_url = getattr(settings, "authcore_url", None)
     return {"provider": provider, "authcore_url": authcore_url}
+
+
+@router.post(
+    "/validate-key",
+    summary="Validate a Pilot CLI API key",
+    description=(
+        "Used by the `pilot` CLI to verify the configured API key before use. "
+        "Reads `Authorization: Bearer <key>` from the request header. "
+        "Does NOT require Supabase JWT — the API key IS the authentication mechanism."
+    ),
+    status_code=status.HTTP_200_OK,
+)
+async def validate_api_key(
+    request: Request,
+    service: ValidateAPIKeyServiceDep,
+    _session: SessionDep,
+) -> dict[str, str]:
+    """POST /api/v1/auth/validate-key
+
+    Validates a CLI API key supplied via Bearer token header.
+    Returns workspace_slug on success; 401 on invalid or expired key.
+
+    The ``_session`` parameter sets the ContextVar consumed by
+    ``get_current_session()``, which repository Factory providers rely on.
+    No workspace context is set here — the RLS policy for key_hash lookup
+    permits cross-workspace SELECT on the ``pilot_api_keys`` table.
+
+    Args:
+        request: Incoming HTTP request (used to read Authorization header).
+        service: ValidateAPIKeyService (injected via DI container).
+        _session: Database session — establishes ContextVar for repositories.
+
+    Returns:
+        JSON body with ``workspace_slug`` on success.
+
+    Raises:
+        HTTPException 401: If the Authorization header is missing, malformed,
+            or contains an invalid/expired API key.
+    """
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing or malformed Authorization header. Expected: Bearer <api-key>",
+        )
+
+    raw_key = auth_header[len("Bearer ") :]
+    try:
+        result = await service.execute(ValidateAPIKeyPayload(raw_key=raw_key))
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired API key",
+        ) from exc
+
+    return {"workspace_slug": result.workspace_slug}
 
 
 __all__ = ["router"]

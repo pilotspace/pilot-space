@@ -74,6 +74,9 @@ from pilot_space.infrastructure.database.repositories.note_issue_link_repository
 from pilot_space.infrastructure.database.repositories.note_repository import (
     NoteRepository,
 )
+from pilot_space.infrastructure.database.repositories.pilot_api_key_repository import (
+    PilotAPIKeyRepository,
+)
 from pilot_space.infrastructure.database.repositories.project_repository import (
     ProjectRepository,
 )
@@ -126,6 +129,7 @@ __all__ = [
     "NoteAnnotationRepository",
     "NoteIssueLinkRepository",
     "NoteRepository",
+    "PilotAPIKeyRepository",
     "ProjectRepository",
     "RoleSkillRepository",
     "RoleTemplateRepository",

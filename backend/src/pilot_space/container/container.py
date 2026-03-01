@@ -21,7 +21,7 @@ from pilot_space.application.services.ai_context import (
     RefineAIContextService,
 )
 from pilot_space.application.services.annotation import CreateAnnotationService
-from pilot_space.application.services.auth import AuthService
+from pilot_space.application.services.auth import AuthService, ValidateAPIKeyService
 from pilot_space.application.services.cycle import (
     AddIssueToCycleService,
     CreateCycleService,
@@ -46,6 +46,7 @@ from pilot_space.application.services.issue import (
     ActivityService,
     CreateIssueService,
     DeleteIssueService,
+    GetImplementContextService,
     GetIssueService,
     ListIssuesService,
     UpdateIssueService,
@@ -133,6 +134,7 @@ class Container(InfraContainer):
         modules=[
             "pilot_space.dependencies",
             "pilot_space.api.v1.dependencies",
+            "pilot_space.api.v1.dependencies_pilot",
             "pilot_space.api.v1.repository_deps",
             "pilot_space.api.v1.intent_deps",
         ],
@@ -268,6 +270,16 @@ class Container(InfraContainer):
         session=providers.Callable(get_current_session),
         issue_repository=InfraContainer.issue_repository,
         activity_repository=InfraContainer.activity_repository,
+    )
+
+    # Issue Implement Context Service
+    get_implement_context_service = providers.Factory(
+        GetImplementContextService,
+        issue_repository=InfraContainer.issue_repository,
+        note_issue_link_repository=InfraContainer.note_issue_link_repository,
+        note_repository=InfraContainer.note_repository,
+        integration_repository=InfraContainer.integration_repository,
+        workspace_repository=InfraContainer.workspace_repository,
     )
 
     # Cycle Services
@@ -494,6 +506,13 @@ class Container(InfraContainer):
             get_default_redirect_origin,
             InfraContainer.config,
         ),
+    )
+
+    # CLI API Key Validation Service
+    validate_api_key_service = providers.Factory(
+        ValidateAPIKeyService,
+        api_key_repository=InfraContainer.pilot_api_key_repository,
+        workspace_repository=InfraContainer.workspace_repository,
     )
 
     # AI Services (PR Review)

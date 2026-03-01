@@ -1,17 +1,25 @@
 """Authentication service for Pilot Space (CQRS-lite).
 
-Handles OAuth login URL construction, user profile retrieval/update, and logout.
+Handles OAuth login URL construction, user profile retrieval/update, logout,
+and CLI API key validation.
 Migrated from direct repo/settings usage in auth router per DD-064.
 """
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass, field
 from uuid import UUID
 
 from pilot_space.infrastructure.database.models.user import User
+from pilot_space.infrastructure.database.repositories.pilot_api_key_repository import (
+    PilotAPIKeyRepository,
+)
 from pilot_space.infrastructure.database.repositories.user_repository import (
     UserRepository,
+)
+from pilot_space.infrastructure.database.repositories.workspace_repository import (
+    WorkspaceRepository,
 )
 from pilot_space.infrastructure.logging import get_logger
 
@@ -200,6 +208,107 @@ class AuthService:
         return LogoutResult(success=True)
 
 
+@dataclass
+class ValidateAPIKeyPayload:
+    """Payload for validating a CLI API key.
+
+    Attributes:
+        raw_key: The plaintext API key from the Authorization: Bearer header.
+                 Never stored or logged.
+    """
+
+    raw_key: str
+
+
+@dataclass
+class ValidateAPIKeyResult:
+    """Result returned on successful CLI API key validation.
+
+    Attributes:
+        workspace_slug: URL-friendly slug of the key's workspace.
+        user_id: UUID string of the key's owning user.
+    """
+
+    workspace_slug: str
+    user_id: str
+
+
+class ValidateAPIKeyService:
+    """Validate a CLI API key and return workspace context.
+
+    Follows CQRS-lite pattern per DD-064. The raw key is hashed with
+    SHA-256 before any database lookup; plaintext is never persisted or logged.
+    """
+
+    def __init__(
+        self,
+        api_key_repository: PilotAPIKeyRepository,
+        workspace_repository: WorkspaceRepository,
+    ) -> None:
+        """Initialize ValidateAPIKeyService.
+
+        Args:
+            api_key_repository: Repository for pilot_api_keys table.
+            workspace_repository: Repository for workspaces table.
+        """
+        self._api_key_repo = api_key_repository
+        self._workspace_repo = workspace_repository
+
+    async def execute(self, payload: ValidateAPIKeyPayload) -> ValidateAPIKeyResult:
+        """Validate a raw CLI API key and return workspace info.
+
+        Hashes the raw key with SHA-256, looks it up in the database, checks
+        expiry, updates last_used_at, and returns the associated workspace slug.
+
+        Args:
+            payload: Payload containing the raw API key.
+
+        Returns:
+            ValidateAPIKeyResult with workspace_slug and user_id.
+
+        Raises:
+            ValueError: With code "invalid_api_key" if key not found.
+            ValueError: With code "expired_api_key" if key has expired.
+            ValueError: With code "workspace_not_found" if workspace missing.
+        """
+        key_hash = hashlib.sha256(payload.raw_key.encode()).hexdigest()
+
+        api_key = await self._api_key_repo.get_by_key_hash(key_hash)
+        if api_key is None:
+            logger.warning("api_key_validation_failed", reason="key_not_found")
+            msg = "invalid_api_key"
+            raise ValueError(msg)
+
+        # get_by_key_hash already filters expired keys in SQL, but we defend
+        # in depth against any clock skew edge cases.
+        if api_key.is_expired:
+            logger.warning(
+                "api_key_validation_failed",
+                reason="key_expired",
+                key_id=str(api_key.id),
+            )
+            msg = "expired_api_key"
+            raise ValueError(msg)
+
+        await self._api_key_repo.mark_last_used(api_key.id)
+
+        workspace = await self._workspace_repo.get_by_id(api_key.workspace_id)
+        if workspace is None:
+            logger.error(
+                "api_key_workspace_not_found",
+                key_id=str(api_key.id),
+                workspace_id=str(api_key.workspace_id),
+            )
+            msg = "workspace_not_found"
+            raise ValueError(msg)
+
+        logger.info("api_key_validated", workspace_slug=workspace.slug)
+        return ValidateAPIKeyResult(
+            workspace_slug=workspace.slug,
+            user_id=str(api_key.user_id),
+        )
+
+
 __all__ = [
     "AuthService",
     "GetLoginUrlPayload",
@@ -210,4 +319,7 @@ __all__ = [
     "LogoutResult",
     "UpdateProfilePayload",
     "UpdateProfileResult",
+    "ValidateAPIKeyPayload",
+    "ValidateAPIKeyResult",
+    "ValidateAPIKeyService",
 ]
