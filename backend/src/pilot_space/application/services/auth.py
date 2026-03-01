@@ -9,11 +9,9 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
 from uuid import UUID
 
-if TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from pilot_space.infrastructure.database.models.user import User
 from pilot_space.infrastructure.database.repositories.pilot_api_key_repository import (
@@ -248,20 +246,19 @@ class ValidateAPIKeyService:
         self,
         api_key_repository: PilotAPIKeyRepository,
         workspace_repository: WorkspaceRepository,
-        session: AsyncSession,
     ) -> None:
         """Initialize ValidateAPIKeyService.
 
         Args:
             api_key_repository: Repository for pilot_api_keys table.
             workspace_repository: Repository for workspaces table.
-            session: Async database session for RLS context setup.
         """
         self._api_key_repo = api_key_repository
         self._workspace_repo = workspace_repository
-        self._session = session
 
-    async def execute(self, payload: ValidateAPIKeyPayload) -> ValidateAPIKeyResult:
+    async def execute(
+        self, payload: ValidateAPIKeyPayload, session: AsyncSession
+    ) -> ValidateAPIKeyResult:
         """Validate a raw CLI API key and return workspace info.
 
         Hashes the raw key with SHA-256, looks it up in the database (the
@@ -293,7 +290,7 @@ class ValidateAPIKeyService:
         await self._api_key_repo.mark_last_used(api_key.id)
 
         # Set RLS context so workspace_repository.get_by_id() is scoped correctly.
-        await set_rls_context(self._session, api_key.user_id, api_key.workspace_id)
+        await set_rls_context(session, api_key.user_id, api_key.workspace_id)
 
         workspace = await self._workspace_repo.get_by_id(api_key.workspace_id)
         if workspace is None:

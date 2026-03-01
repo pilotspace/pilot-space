@@ -252,8 +252,8 @@ def _raise_rate_limited() -> None:
 async def validate_api_key(
     request: Request,
     response: Response,
-    service: ValidateAPIKeyServiceDep,
     _session: SessionDep,
+    service: ValidateAPIKeyServiceDep,
 ) -> dict[str, str]:
     """POST /api/v1/auth/validate-key
 
@@ -290,7 +290,7 @@ async def validate_api_key(
 
     raw_key = auth_header[len("Bearer ") :]
     try:
-        result = await service.execute(ValidateAPIKeyPayload(raw_key=raw_key))
+        result = await service.execute(ValidateAPIKeyPayload(raw_key=raw_key), _session)
     except ValueError as exc:
         await asyncio.sleep(0.05)  # constant-time response prevents timing oracle
         raise HTTPException(

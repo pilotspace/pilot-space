@@ -513,7 +513,6 @@ class Container(InfraContainer):
         ValidateAPIKeyService,
         api_key_repository=InfraContainer.pilot_api_key_repository,
         workspace_repository=InfraContainer.workspace_repository,
-        session=providers.Callable(get_current_session),
     )
 
     # AI Services (PR Review)
