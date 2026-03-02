@@ -65,7 +65,6 @@ if TYPE_CHECKING:
         MemorySearchService,
     )
 
-
 logger = get_logger(__name__)
 
 
@@ -92,11 +91,19 @@ class ChatOutput:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass(frozen=True, slots=True)
+class _StreamConfig:
+    sdk_options: ClaudeAgentOptions
+    ref_map: Any  # BlockRefMap | None
+
+
 class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
     """Main orchestrator agent — routes to skills, subagents, or direct responses."""
 
     AGENT_NAME = "pilotspace_agent"
     DEFAULT_MODEL_TIER: ClassVar[ModelTier] = ModelTier.SONNET
+
+    _DEFAULT_SESSION_ID: ClassVar[str] = "default"
 
     SUBAGENT_MAP: ClassVar[dict[str, str]] = {
         "pr-review": "PRReviewSubagent",
@@ -169,7 +176,10 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
             await asyncio.wait_for(client.interrupt(), timeout=3.0)
             logger.info("[SDK/Interrupt] Interrupted session %s", session_id)
             return True
-        except (TimeoutError, Exception) as e:
+        except (
+            TimeoutError,
+            Exception,
+        ) as e:  # Intentional catch-all: corrupt client must not crash caller
             logger.warning(
                 "[SDK/Interrupt] Failed to interrupt session %s: %s",
                 session_id,
@@ -188,7 +198,18 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
             raise ValueError(f"No active client for session {session_id}")
 
         answer_msg = f"[Answer to question {tool_call_id}]: {result}"
-        await client.query(answer_msg, session_id=session_id)
+        try:
+            await asyncio.wait_for(
+                client.query(answer_msg, session_id=session_id),
+                timeout=10.0,
+            )
+        except TimeoutError:
+            logger.exception(
+                "[SDK/Answer] Timed out submitting tool result: tool_call=%s session=%s",
+                tool_call_id,
+                session_id,
+            )
+            raise TimeoutError("Tool result submission timed out") from None
         logger.info("[SDK/Answer] tool_call=%s session=%s", tool_call_id, session_id)
 
     @staticmethod
@@ -246,6 +267,159 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
             app_session_id=session_id,
             user_id=context.user_id,
         )
+
+    async def _build_stream_config(
+        self,
+        db_session: Any,
+        space_context: Any,
+        input_data: ChatInput,
+        context: AgentContext,
+        hook_executor: Any,
+        tool_event_queue: asyncio.Queue[str],
+        subagent_definitions: dict[str, AgentDefinition],
+        api_key: str,
+        resume_id: str | None,
+    ) -> _StreamConfig:
+        """Build SDK options and MCP config for a streaming session."""
+        from pilot_space.ai.sdk.output_schemas import get_skill_output_format
+        from pilot_space.ai.sdk.question_adapter import create_can_use_tool_callback
+        from pilot_space.ai.tools.mcp_server import ToolContext
+        from pilot_space.infrastructure.database.repositories.role_skill_repository import (
+            RoleSkillRepository,
+        )
+        from pilot_space.infrastructure.database.rls import set_rls_context
+
+        assert context.workspace_id is not None
+        assert context.user_id is not None
+
+        await set_rls_context(db_session, context.user_id, context.workspace_id)
+
+        skill_count = await materialize_role_skills(
+            db_session=db_session,
+            user_id=context.user_id,
+            workspace_id=context.workspace_id,
+            skills_dir=space_context.skills_dir,
+        )
+
+        has_skills = skill_count > 0 or await asyncio.to_thread(
+            has_skill_files,
+            space_context.skills_dir,
+        )
+
+        _role_repo = RoleSkillRepository(db_session)
+        _primary_role = await _role_repo.get_primary_by_user_workspace(
+            context.user_id,
+            context.workspace_id,
+        )
+        _role_type = _primary_role.role_type if _primary_role else None
+
+        if input_data.user_id is None:
+            raise ValueError("user_id is required for AI interactions")
+
+        tool_context = ToolContext(
+            db_session=db_session,
+            workspace_id=str(context.workspace_id),
+            user_id=str(context.user_id) if context.user_id else None,
+        )
+
+        mcp_servers, ref_map = build_mcp_servers(
+            tool_event_queue,
+            tool_context,
+            input_data,
+        )
+
+        skill_name = detect_skill_from_message(input_data.message)
+        output_format = get_skill_output_format(skill_name) if skill_name else None
+        effort = classify_effort(input_data.message)
+        streaming_input = estimate_tokens(input_data) > 30_000
+
+        # T-048: recall memory context before prompt assembly
+        memory_entries = await recall_workspace_context(
+            workspace_id=context.workspace_id,
+            query=input_data.message,
+            memory_search_service=self._memory_search_service,
+        )
+
+        # Scaffolding: pending_approvals, budget_warning, conversation_summary
+        # not yet wired — wire when session manager provides these values.
+        assembled = await assemble_system_prompt(
+            PromptLayerConfig(
+                role_type=_role_type,
+                workspace_name=input_data.context.get("workspace_name"),
+                project_names=input_data.context.get("project_names"),
+                user_message=input_data.message,
+                has_note_context="<note_context>" in input_data.message,
+                memory_entries=memory_entries,
+            )
+        )
+
+        sdk_config = configure_sdk_for_space(
+            space_context,
+            permission_mode="default",
+            model=self.DEFAULT_MODEL_TIER,
+            additional_tools=ALL_TOOL_NAMES,
+            additional_env={
+                "ANTHROPIC_API_KEY": api_key,
+            },
+            hook_executor=hook_executor,
+            include_partial_messages=True,
+            memory_enabled=True,
+            citations_enabled=True,
+            system_prompt_base=assembled.prompt,
+            output_format=output_format,
+            enable_file_checkpointing=True,
+            effort=effort,
+            streaming_input_mode=streaming_input,
+            skills_available=has_skills,
+        )
+
+        sdk_params = sdk_config.to_sdk_params()
+        sdk_env = sdk_params.get("env", {})
+        if "PATH" not in sdk_env:
+            sdk_env["PATH"] = os.environ.get("PATH", "")
+
+        can_use_tool_cb = create_can_use_tool_callback(tool_event_queue, context.user_id)
+
+        sdk_options = ClaudeAgentOptions(
+            model=sdk_params.get("model", self.DEFAULT_MODEL_TIER.model_id),
+            cwd=sdk_params.get("cwd"),
+            setting_sources=sdk_params.get("setting_sources", ["project"]),
+            allowed_tools=sdk_params.get("allowed_tools", []),
+            mcp_servers=mcp_servers,
+            sandbox=sdk_params.get("sandbox"),
+            permission_mode=sdk_params.get("permission_mode", "default"),
+            env=sdk_env,
+            hooks=sdk_params.get("hooks"),
+            agents=subagent_definitions,
+            resume=resume_id,
+            continue_conversation=resume_id is not None,
+            include_partial_messages=sdk_params.get(
+                "include_partial_messages",
+                True,
+            ),
+            system_prompt=sdk_config.system_prompt_base,
+            max_thinking_tokens=sdk_config.max_thinking_tokens,
+            max_budget_usd=sdk_config.max_budget_usd,
+            max_turns=sdk_config.max_turns,
+            fallback_model=sdk_config.fallback_model,
+            output_format=sdk_config.output_format,
+            enable_file_checkpointing=sdk_config.enable_file_checkpointing,
+            can_use_tool=can_use_tool_cb,
+        )
+
+        set_workspace_context(context.workspace_id, context.user_id)
+        logger.info(
+            "[SDK/Space] Config: cwd=%s, env_keys=%s, claude_bin=%s, "
+            "thinking_tokens=%s, system_prompt=%s, budget=%.2f",
+            sdk_params.get("cwd"),
+            list(sdk_env.keys()),
+            shutil.which("claude"),
+            sdk_config.max_thinking_tokens,
+            bool(sdk_config.system_prompt_base),
+            sdk_config.max_budget_usd or 0,
+        )
+
+        return _StreamConfig(sdk_options=sdk_options, ref_map=ref_map)
 
     async def stream(
         self,
@@ -307,7 +481,7 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
                     space_context.hooks_file,
                     cwd=space_context.path,
                 )
-                logger.debug(f"[SDK/Space] Loaded hooks from {space_context.hooks_file}")
+                logger.debug("[SDK/Space] Loaded hooks from %s", space_context.hooks_file)
 
             from pilot_space.ai.sdk.hooks import PermissionAwareHookExecutor
 
@@ -319,155 +493,33 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
                 event_queue=tool_event_queue,
             )
 
-            from pilot_space.ai.tools.mcp_server import ToolContext
             from pilot_space.infrastructure.database import get_db_session
 
             db_session_cm = get_db_session()
-            db_session = await db_session_cm.__aenter__()
+            db_session: Any = None  # AsyncSession | None; typed as Any to avoid import
 
             client: ClaudeSDKClient | None = None
-            query_session_id = session_id_str or "default"
+            query_session_id = session_id_str or self._DEFAULT_SESSION_ID
             stream_completed = False
             content_blocks: dict[str, dict[str, Any]] = {}
             _stream_error: BaseException | None = None
 
             try:
-                from pilot_space.infrastructure.database.rls import set_rls_context
+                db_session = await db_session_cm.__aenter__()
 
-                await set_rls_context(db_session, context.user_id, context.workspace_id)
-
-                skill_count = await materialize_role_skills(
+                config = await self._build_stream_config(
                     db_session=db_session,
-                    user_id=context.user_id,
-                    workspace_id=context.workspace_id,
-                    skills_dir=space_context.skills_dir,
-                )
-
-                has_skills = skill_count > 0 or await asyncio.to_thread(
-                    has_skill_files,
-                    space_context.skills_dir,
-                )
-
-                from pilot_space.infrastructure.database.repositories.role_skill_repository import (
-                    RoleSkillRepository,
-                )
-
-                _role_repo = RoleSkillRepository(db_session)
-                _primary_role = await _role_repo.get_primary_by_user_workspace(
-                    context.user_id,
-                    context.workspace_id,
-                )
-                _role_type = _primary_role.role_type if _primary_role else None
-
-                if input_data.user_id is None:
-                    raise ValueError("user_id is required for AI interactions")
-
-                tool_context = ToolContext(
-                    db_session=db_session,
-                    workspace_id=str(context.workspace_id),
-                    user_id=str(context.user_id) if context.user_id else None,
-                )
-
-                mcp_servers, ref_map = build_mcp_servers(
-                    tool_event_queue,
-                    tool_context,
-                    input_data,
-                )
-
-                from pilot_space.ai.sdk.output_schemas import get_skill_output_format
-
-                skill_name = detect_skill_from_message(input_data.message)
-                output_format = get_skill_output_format(skill_name) if skill_name else None
-                effort = classify_effort(input_data.message)
-                streaming_input = estimate_tokens(input_data) > 30_000
-
-                # T-048: recall memory context before prompt assembly
-                memory_entries = await recall_workspace_context(
-                    workspace_id=context.workspace_id,
-                    query=input_data.message,
-                    memory_search_service=self._memory_search_service,
-                )
-
-                # Scaffolding: pending_approvals, budget_warning, conversation_summary
-                # not yet wired — wire when session manager provides these values.
-                assembled = await assemble_system_prompt(
-                    PromptLayerConfig(
-                        role_type=_role_type,
-                        workspace_name=input_data.context.get("workspace_name"),
-                        project_names=input_data.context.get("project_names"),
-                        user_message=input_data.message,
-                        has_note_context="<note_context>" in input_data.message,
-                        memory_entries=memory_entries,
-                    )
-                )
-
-                sdk_config = configure_sdk_for_space(
-                    space_context,
-                    permission_mode="default",
-                    model=self.DEFAULT_MODEL_TIER,
-                    additional_tools=ALL_TOOL_NAMES,
-                    additional_env={
-                        "ANTHROPIC_API_KEY": api_key,
-                    },
+                    space_context=space_context,
+                    input_data=input_data,
+                    context=context,
                     hook_executor=hook_executor,
-                    include_partial_messages=True,
-                    memory_enabled=True,
-                    citations_enabled=True,
-                    system_prompt_base=assembled.prompt,
-                    output_format=output_format,
-                    enable_file_checkpointing=True,
-                    effort=effort,
-                    streaming_input_mode=streaming_input,
-                    skills_available=has_skills,
+                    tool_event_queue=tool_event_queue,
+                    subagent_definitions=subagent_definitions,
+                    api_key=api_key,
+                    resume_id=resume_id,
                 )
-
-                sdk_params = sdk_config.to_sdk_params()
-                sdk_env = sdk_params.get("env", {})
-                if "PATH" not in sdk_env:
-                    sdk_env["PATH"] = os.environ.get("PATH", "")
-
-                from pilot_space.ai.sdk.question_adapter import create_can_use_tool_callback
-
-                can_use_tool_cb = create_can_use_tool_callback(tool_event_queue, context.user_id)
-
-                sdk_options = ClaudeAgentOptions(
-                    model=sdk_params.get("model", self.DEFAULT_MODEL_TIER.model_id),
-                    cwd=sdk_params.get("cwd"),
-                    setting_sources=sdk_params.get("setting_sources", ["project"]),
-                    allowed_tools=sdk_params.get("allowed_tools", []),
-                    mcp_servers=mcp_servers,
-                    sandbox=sdk_params.get("sandbox"),
-                    permission_mode=sdk_params.get("permission_mode", "default"),
-                    env=sdk_env,
-                    hooks=sdk_params.get("hooks"),
-                    agents=subagent_definitions,
-                    resume=resume_id,
-                    continue_conversation=resume_id is not None,
-                    include_partial_messages=sdk_params.get(
-                        "include_partial_messages",
-                        True,
-                    ),
-                    system_prompt=sdk_config.system_prompt_base,
-                    max_thinking_tokens=sdk_config.max_thinking_tokens,
-                    max_budget_usd=sdk_config.max_budget_usd,
-                    max_turns=sdk_config.max_turns,
-                    fallback_model=sdk_config.fallback_model,
-                    output_format=sdk_config.output_format,
-                    enable_file_checkpointing=sdk_config.enable_file_checkpointing,
-                    can_use_tool=can_use_tool_cb,
-                )
-
-                set_workspace_context(context.workspace_id, context.user_id)
-                logger.info(
-                    "[SDK/Space] Config: cwd=%s, env_keys=%s, claude_bin=%s, "
-                    "thinking_tokens=%s, system_prompt=%s, budget=%.2f",
-                    sdk_params.get("cwd"),
-                    list(sdk_env.keys()),
-                    shutil.which("claude"),
-                    sdk_config.max_thinking_tokens,
-                    bool(sdk_config.system_prompt_base),
-                    sdk_config.max_budget_usd or 0,
-                )
+                sdk_options = config.sdk_options
+                ref_map = config.ref_map
 
                 client = ClaudeSDKClient(sdk_options)
 
@@ -615,71 +667,19 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
 
                 clear_context()
                 # Propagate error info so db_session_cm rolls back on failure (D-1 fix).
-                active_err = _stream_error or sys.exc_info()[1]
-                try:
-                    if active_err is not None:
-                        await db_session_cm.__aexit__(
-                            type(active_err), active_err, active_err.__traceback__
-                        )
-                    else:
-                        await db_session_cm.__aexit__(None, None, None)
-                except Exception as db_err:
-                    logger.warning("[SDK/Space] DB session cleanup error: %s", db_err)
-
-    async def create_client(
-        self,
-        input_data: ChatInput,
-        context: AgentContext,
-    ) -> tuple[ClaudeSDKClient, str]:
-        """Create unconnected ClaudeSDKClient. Caller manages connect()/disconnect()."""
-        api_key = await self._get_api_key(context.workspace_id)
-        subagent_definitions = self._build_subagent_definitions()
-
-        session_id_str = "default"
-        if input_data.session_id and self._session_handler:
-            existing = await self._session_handler.get_session(input_data.session_id)
-            if existing:
-                session_id_str = str(existing.session_id)
-
-        if not (self._space_manager and context.workspace_id and context.user_id):
-            raise ValueError(
-                "SpaceManager, workspace_id, and user_id are required. Legacy mode has been removed."
-            )
-
-        space = self._space_manager.get_space(context.workspace_id, context.user_id)
-        async with space.session() as space_context:
-            sdk_config = configure_sdk_for_space(
-                space_context,
-                permission_mode="default",
-                additional_env={"ANTHROPIC_API_KEY": api_key},
-            )
-            sdk_params = sdk_config.to_sdk_params()
-
-            sdk_env = sdk_params.get("env", {})
-            if "PATH" not in sdk_env:
-                sdk_env["PATH"] = os.environ.get("PATH", "")
-
-            sdk_options = ClaudeAgentOptions(
-                model=sdk_params.get("model", self.DEFAULT_MODEL_TIER.model_id),
-                cwd=sdk_params.get("cwd"),
-                setting_sources=sdk_params.get("setting_sources", ["project"]),
-                allowed_tools=sdk_params.get("allowed_tools", []),
-                sandbox=sdk_params.get("sandbox"),
-                permission_mode=sdk_params.get("permission_mode", "default"),
-                env=sdk_env,
-                hooks=sdk_params.get("hooks"),
-                agents=subagent_definitions,
-                resume=session_id_str if session_id_str != "default" else None,
-                system_prompt=sdk_config.system_prompt_base,
-                max_thinking_tokens=sdk_config.max_thinking_tokens,
-                max_budget_usd=sdk_config.max_budget_usd,
-                max_turns=sdk_config.max_turns,
-                fallback_model=sdk_config.fallback_model,
-                output_format=sdk_config.output_format,
-                enable_file_checkpointing=sdk_config.enable_file_checkpointing,
-            )
-
-            return ClaudeSDKClient(sdk_options), session_id_str
+                # Manual __aexit__ is necessary: caught stream errors (in _stream_error)
+                # must trigger DB rollback even though they are not re-raised.
+                if db_session is not None:
+                    active_err = _stream_error or sys.exc_info()[1]
+                    try:
+                        if active_err is not None:
+                            await db_session_cm.__aexit__(
+                                type(active_err), active_err, active_err.__traceback__
+                            )
+                        else:
+                            await db_session_cm.__aexit__(None, None, None)
+                    except Exception as db_err:
+                        logger.warning("[SDK/Space] DB session cleanup error: %s", db_err)
 
     async def execute(self, input_data: ChatInput, context: AgentContext) -> ChatOutput:
         """Non-streaming execution that collects all chunks into ChatOutput."""

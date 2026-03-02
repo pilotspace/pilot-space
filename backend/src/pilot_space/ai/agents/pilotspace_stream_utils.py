@@ -61,11 +61,6 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-# ---------------------------------------------------------------------------
-# Monkey-patch: SDK 0.1.x crashes on thinking blocks without 'signature'
-# (KeyError → MessageParseError).  Patch the parser to default signature="".
-# Remove once claude-agent-sdk ships a fix.
-# ---------------------------------------------------------------------------
 _original_parse_message = _sdk_parser.parse_message
 
 
@@ -195,6 +190,8 @@ def estimate_tokens(input_data: ChatInput) -> int:
 def capture_content_from_sse(
     sse_event: str,
     content_blocks: dict[str, dict[str, Any]],
+    *,
+    max_blocks: int = 500,
 ) -> None:
     """Capture structured content from SSE events for session persistence.
 
@@ -204,8 +201,11 @@ def capture_content_from_sse(
     Args:
         sse_event: SSE-formatted event string (may contain multiple events)
         content_blocks: Mutable dict to accumulate content by block key
+        max_blocks: Safety cap to prevent unbounded memory growth.
     """
     for event_line in sse_event.split("\n\n"):
+        if len(content_blocks) >= max_blocks:
+            return
         if not event_line.strip():
             continue
 
