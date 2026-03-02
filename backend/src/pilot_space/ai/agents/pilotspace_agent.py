@@ -6,7 +6,6 @@ import asyncio
 import contextlib
 import json
 import os
-import shutil
 import sys
 import time
 from collections.abc import AsyncIterator
@@ -48,9 +47,12 @@ from pilot_space.infrastructure.logging import get_logger
 from pilot_space.spaces.manager import SpaceManager
 
 if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
+
     from pilot_space.ai.infrastructure.cost_tracker import CostTracker
     from pilot_space.ai.infrastructure.key_storage import SecureKeyStorage
     from pilot_space.ai.infrastructure.resilience import ResilientExecutor
+    from pilot_space.ai.mcp.block_ref_map import BlockRefMap
     from pilot_space.ai.providers.provider_selector import ProviderSelector
     from pilot_space.ai.sdk.permission_handler import PermissionHandler
     from pilot_space.ai.sdk.session_handler import SessionHandler
@@ -64,6 +66,7 @@ if TYPE_CHECKING:
     from pilot_space.application.services.memory.memory_search_service import (
         MemorySearchService,
     )
+    from pilot_space.spaces.base import SpaceContext
 
 logger = get_logger(__name__)
 
@@ -94,7 +97,7 @@ class ChatOutput:
 @dataclass(frozen=True, slots=True)
 class _StreamConfig:
     sdk_options: ClaudeAgentOptions
-    ref_map: Any  # BlockRefMap | None
+    ref_map: BlockRefMap | None
 
 
 class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
@@ -176,10 +179,7 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
             await asyncio.wait_for(client.interrupt(), timeout=3.0)
             logger.info("[SDK/Interrupt] Interrupted session %s", session_id)
             return True
-        except (
-            TimeoutError,
-            Exception,
-        ) as e:  # Intentional catch-all: corrupt client must not crash caller
+        except Exception as e:  # Intentional catch-all: corrupt client must not crash caller
             logger.warning(
                 "[SDK/Interrupt] Failed to interrupt session %s: %s",
                 session_id,
@@ -203,13 +203,13 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
                 client.query(answer_msg, session_id=session_id),
                 timeout=10.0,
             )
-        except TimeoutError:
-            logger.exception(
+        except TimeoutError as exc:
+            logger.warning(
                 "[SDK/Answer] Timed out submitting tool result: tool_call=%s session=%s",
                 tool_call_id,
                 session_id,
             )
-            raise TimeoutError("Tool result submission timed out") from None
+            raise TimeoutError("Tool result submission timed out") from exc
         logger.info("[SDK/Answer] tool_call=%s session=%s", tool_call_id, session_id)
 
     @staticmethod
@@ -270,8 +270,8 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
 
     async def _build_stream_config(
         self,
-        db_session: Any,
-        space_context: Any,
+        db_session: AsyncSession,
+        space_context: SpaceContext,
         input_data: ChatInput,
         context: AgentContext,
         hook_executor: Any,
@@ -288,9 +288,6 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
             RoleSkillRepository,
         )
         from pilot_space.infrastructure.database.rls import set_rls_context
-
-        assert context.workspace_id is not None
-        assert context.user_id is not None
 
         await set_rls_context(db_session, context.user_id, context.workspace_id)
 
@@ -409,15 +406,13 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
 
         set_workspace_context(context.workspace_id, context.user_id)
         logger.info(
-            "[SDK/Space] Config: cwd=%s, env_keys=%s, claude_bin=%s, "
-            "thinking_tokens=%s, system_prompt=%s, budget=%.2f",
+            "[SDK/Space] Config: cwd=%s, thinking_tokens=%s, system_prompt=%s, budget=%.2f",
             sdk_params.get("cwd"),
-            list(sdk_env.keys()),
-            shutil.which("claude"),
             sdk_config.max_thinking_tokens,
             bool(sdk_config.system_prompt_base),
             sdk_config.max_budget_usd or 0,
         )
+        logger.debug("[SDK/Space] Detail: env_keys=%s", list(sdk_env.keys()))
 
         return _StreamConfig(sdk_options=sdk_options, ref_map=ref_map)
 
@@ -464,9 +459,8 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
         session_id_str: str | None,
         resume_id: str | None = None,
     ) -> AsyncIterator[str]:
-        assert self._space_manager is not None
-        assert context.workspace_id is not None
-        assert context.user_id is not None
+        if not (self._space_manager and context.workspace_id and context.user_id):
+            raise ValueError("SpaceManager, workspace_id, and user_id are required for streaming")
 
         space = self._space_manager.get_space(context.workspace_id, context.user_id)
 
@@ -496,7 +490,7 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
             from pilot_space.infrastructure.database import get_db_session
 
             db_session_cm = get_db_session()
-            db_session: Any = None  # AsyncSession | None; typed as Any to avoid import
+            db_session: AsyncSession | None = None
 
             client: ClaudeSDKClient | None = None
             query_session_id = session_id_str or self._DEFAULT_SESSION_ID
@@ -644,7 +638,7 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
                 self._active_clients.pop(query_session_id, None)
                 if client is not None:
                     if not stream_completed:
-                        with contextlib.suppress(TimeoutError, Exception):
+                        with contextlib.suppress(Exception):
                             await asyncio.wait_for(client.interrupt(), timeout=2.0)
                     if stream_completed:
                         await self._save_session_messages(input_data, content_blocks)
