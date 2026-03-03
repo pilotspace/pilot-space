@@ -578,10 +578,8 @@ def build_graph_search_service_for_session(db_session: Any) -> Any:
 def build_graph_write_service_for_session(db_session: Any, queue_client: Any) -> Any:
     """Build a fresh GraphWriteService bound to the active request DB session.
 
-    Returns None if queue_client is absent (graph writes are then skipped).
+    queue_client may be None; node upsert still occurs, only embedding enqueue is skipped.
     """
-    if queue_client is None:
-        return None
     from pilot_space.application.services.memory.graph_write_service import GraphWriteService
     from pilot_space.infrastructure.database.repositories.knowledge_graph_repository import (
         KnowledgeGraphRepository,

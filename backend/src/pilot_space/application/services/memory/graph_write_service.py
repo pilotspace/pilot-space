@@ -137,14 +137,14 @@ class GraphWriteService:
     def __init__(
         self,
         knowledge_graph_repository: KnowledgeGraphRepository,
-        queue: SupabaseQueueClient,
+        queue: SupabaseQueueClient | None,
         session: AsyncSession,
     ) -> None:
         """Initialize service.
 
         Args:
             knowledge_graph_repository: Repository for graph persistence.
-            queue: Queue client for embedding job enqueue.
+            queue: Queue client for embedding job enqueue (None to skip enqueue).
             session: Async DB session.
         """
         self._repo = knowledge_graph_repository
@@ -206,9 +206,13 @@ class GraphWriteService:
         persisted_edges = persisted_edges + auto_edges
         await self._session.commit()
 
-        # Step 7: enqueue embedding jobs
+        # Step 7: enqueue embedding jobs (skipped when no queue client configured)
         node_ids = [n.id for n in persisted_nodes]
-        embedding_enqueued = await self._enqueue_embedding_jobs(node_ids, payload.workspace_id)
+        embedding_enqueued = (
+            await self._enqueue_embedding_jobs(node_ids, payload.workspace_id)
+            if self._queue is not None
+            else False
+        )
 
         logger.info(
             "GraphWriteService: workspace=%s nodes=%d edges=%d embedding=%s",
@@ -351,6 +355,7 @@ class GraphWriteService:
                 "enqueued_at": enqueued_at,
             }
             try:
+                assert self._queue is not None  # only called when queue is present
                 await self._queue.enqueue(QueueName.AI_NORMAL, job_payload)
                 return True
             except Exception:
