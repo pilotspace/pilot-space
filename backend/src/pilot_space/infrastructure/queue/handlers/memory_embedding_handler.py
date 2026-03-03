@@ -1,14 +1,17 @@
-"""MemoryEmbeddingJobHandler — embed memory entries and constitution rules.
+"""MemoryEmbeddingJobHandler — embed memory entries, constitution rules, and graph nodes.
 
-T-067: Handles both 'memory_embedding' task_type for memory_entries
-and constitution_rules tables. Embeds via Gemini 768-dim.
-Updates row embedding column. On constitution rules: active flag stays True.
+T-067: Handles 'memory_embedding' task_type for memory_entries and
+constitution_rules tables via Gemini 768-dim embeddings.
+
+Feature 016: Also handles 'graph_embedding' task_type for graph_nodes table
+via OpenAI text-embedding-3-large (1536-dim).
 
 Feature 015: AI Workforce Platform — Memory Engine
 """
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
@@ -22,8 +25,11 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 _GEMINI_EMBEDDING_MODEL = "models/gemini-embedding-exp-03-07"
+_OPENAI_EMBEDDING_MODEL = "text-embedding-3-large"
 _MEMORY_TABLE = "memory_entries"
 _CONSTITUTION_TABLE = "constitution_rules"
+_GRAPH_NODES_TABLE = "graph_nodes"
+_GRAPH_EMBEDDING_DIMS = 1536
 
 
 async def _embed_text(content: str, api_key: str | None) -> list[float] | None:
@@ -53,21 +59,59 @@ async def _embed_text(content: str, api_key: str | None) -> list[float] | None:
         return None
 
 
-class MemoryEmbeddingJobHandler:
-    """Handles memory embedding jobs from the ai_normal queue.
+async def _embed_text_openai(content: str, api_key: str | None) -> list[float] | None:
+    """Embed text via OpenAI text-embedding-3-large (1536-dim).
 
-    Routes by payload['table']:
-    - memory_entries: embed and store vector in embedding column
-    - constitution_rules: embed and store vector in embedding column
+    Args:
+        content: Text to embed.
+        api_key: OpenAI API key.
+
+    Returns:
+        1536-dim float list or None on failure.
+    """
+    if not api_key:
+        return None
+    try:
+        import openai  # type: ignore[import-untyped]
+
+        client = openai.OpenAI(api_key=api_key)
+        response = await asyncio.to_thread(
+            client.embeddings.create,
+            model=_OPENAI_EMBEDDING_MODEL,
+            input=content,
+        )
+        embedding: list[float] = response.data[0].embedding
+        return embedding
+    except Exception:
+        logger.warning(
+            "OpenAI embedding failed in MemoryEmbeddingJobHandler",
+            exc_info=True,
+        )
+        return None
+
+
+class MemoryEmbeddingJobHandler:
+    """Handles memory and graph embedding jobs from the ai_normal queue.
+
+    Routes by payload type:
+    - payload['table'] in {memory_entries, constitution_rules}: embed via Gemini (768-dim)
+    - handle_graph_node(payload): embed graph_nodes row via OpenAI (1536-dim)
 
     Args:
         session: Async DB session.
-        google_api_key: Google AI API key for Gemini.
+        google_api_key: Google AI API key for Gemini embeddings.
+        openai_api_key: OpenAI API key for graph node embeddings.
     """
 
-    def __init__(self, session: AsyncSession, google_api_key: str | None = None) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        google_api_key: str | None = None,
+        openai_api_key: str | None = None,
+    ) -> None:
         self._session = session
         self._api_key = google_api_key
+        self._openai_api_key = openai_api_key
 
     async def handle(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Process a memory embedding job.
@@ -114,8 +158,72 @@ class MemoryEmbeddingJobHandler:
         )
         return {"success": True, "entry_id": str(entry_id), "table": table}
 
+    async def handle_graph_node(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Embed a graph node using OpenAI text-embedding-3-large (1536-dim).
+
+        Fetches the node's content from graph_nodes, generates a 1536-dim
+        embedding via OpenAI, and stores it back via a raw SQL UPDATE.
+
+        Args:
+            payload: Queue message payload with node_id and workspace_id.
+
+        Returns:
+            Result dict with success status and node_id.
+        """
+        if not self._openai_api_key:
+            return {"success": False, "error": "no OpenAI api_key configured"}
+
+        node_id_str = payload.get("node_id")
+        workspace_id_str = payload.get("workspace_id")
+
+        if not node_id_str:
+            return {"success": False, "error": "missing node_id"}
+        if not workspace_id_str:
+            return {"success": False, "error": "missing workspace_id"}
+
+        node_id = UUID(node_id_str)
+        workspace_id = UUID(workspace_id_str)
+
+        # Fetch node content from graph_nodes table
+        content = await self._fetch_graph_node_content(node_id, workspace_id)
+        if content is None:
+            logger.warning(
+                "MemoryEmbeddingJobHandler: graph node %s not found in workspace %s",
+                node_id,
+                workspace_id,
+            )
+            return {
+                "success": False,
+                "error": f"graph node {node_id} not found",
+            }
+
+        # Generate 1536-dim embedding via OpenAI
+        embedding = await _embed_text_openai(content, self._openai_api_key)
+        if embedding is None:
+            return {
+                "success": False,
+                "error": "OpenAI embedding generation failed",
+            }
+
+        # Store embedding back to graph_nodes
+        embedding_str = "[" + ",".join(str(v) for v in embedding) + "]"
+        await self._store_graph_node_embedding(node_id, embedding_str)
+        await self._session.commit()
+
+        logger.info(
+            "MemoryEmbeddingJobHandler: embedded graph node %s (%d dims)",
+            node_id,
+            len(embedding),
+        )
+        return {
+            "success": True,
+            "node_id": str(node_id),
+            "workspace_id": str(workspace_id),
+            "dims": len(embedding),
+        }
+
     async def _fetch_content(self, entry_id: UUID, table: str) -> str | None:
-        """Fetch text content for embedding.
+        """Fetch text content for memory/constitution embedding.
 
         Args:
             entry_id: Record UUID.
@@ -133,6 +241,27 @@ class MemoryEmbeddingJobHandler:
         row = result.first()
         return row[0] if row else None
 
+    async def _fetch_graph_node_content(self, node_id: UUID, workspace_id: UUID) -> str | None:
+        """Fetch content from the graph_nodes table for embedding.
+
+        Args:
+            node_id: Graph node UUID.
+            workspace_id: Owning workspace UUID (used for RLS-safe filtering).
+
+        Returns:
+            Content text or None if not found.
+        """
+        query = text(
+            "SELECT content FROM graph_nodes "
+            "WHERE id = :id AND workspace_id = :workspace_id AND is_deleted = false"
+        )
+        result = await self._session.execute(
+            query,
+            {"id": str(node_id), "workspace_id": str(workspace_id)},
+        )
+        row = result.first()
+        return row[0] if row else None
+
     _ALLOWED_TABLES: frozenset[str] = frozenset({_MEMORY_TABLE, _CONSTITUTION_TABLE})
 
     async def _store_embedding(
@@ -141,7 +270,7 @@ class MemoryEmbeddingJobHandler:
         table: str,
         embedding_str: str,
     ) -> None:
-        """Store vector embedding in the table.
+        """Store vector embedding in a memory/constitution table.
 
         Args:
             entry_id: Record UUID.
@@ -156,4 +285,25 @@ class MemoryEmbeddingJobHandler:
         await self._session.execute(
             update_sql,
             {"embedding": embedding_str, "id": str(entry_id)},
+        )
+
+    async def _store_graph_node_embedding(
+        self,
+        node_id: UUID,
+        embedding_str: str,
+    ) -> None:
+        """Store 1536-dim vector embedding in graph_nodes table.
+
+        Args:
+            node_id: Graph node UUID.
+            embedding_str: Embedding as '[0.1,0.2,...]' string.
+        """
+        update_sql = text(
+            "UPDATE graph_nodes "
+            f"SET embedding = CAST(:emb AS vector({_GRAPH_EMBEDDING_DIMS})) "
+            "WHERE id = :id"
+        )
+        await self._session.execute(
+            update_sql,
+            {"emb": embedding_str, "id": str(node_id)},
         )
