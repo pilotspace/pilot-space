@@ -65,10 +65,7 @@ class GraphEdge:
     def __post_init__(self) -> None:
         """Validate edge invariants after construction."""
         if not (_WEIGHT_MIN <= self.weight <= _WEIGHT_MAX):
-            msg = (
-                f"Edge weight must be between {_WEIGHT_MIN} and {_WEIGHT_MAX}, "
-                f"got {self.weight}"
-            )
+            msg = f"Edge weight must be between {_WEIGHT_MIN} and {_WEIGHT_MAX}, got {self.weight}"
             raise ValueError(msg)
         if self.source_id == self.target_id:
             msg = f"Self-loop edges are not allowed: source_id == target_id == {self.source_id}"

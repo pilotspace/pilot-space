@@ -120,9 +120,7 @@ class GraphContext:
             Subset of self.edges with both endpoints in self.nodes.
         """
         return [
-            e
-            for e in self.edges
-            if e.source_id in self._node_ids and e.target_id in self._node_ids
+            e for e in self.edges if e.source_id in self._node_ids and e.target_id in self._node_ids
         ]
 
 

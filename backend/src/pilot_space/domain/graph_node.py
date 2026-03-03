@@ -24,6 +24,8 @@ class NodeType(StrEnum):
     CYCLE = "cycle"
     USER = "user"
     PULL_REQUEST = "pull_request"
+    BRANCH = "branch"
+    COMMIT = "commit"
     CODE_REFERENCE = "code_reference"
     DECISION = "decision"
     SKILL_OUTCOME = "skill_outcome"
