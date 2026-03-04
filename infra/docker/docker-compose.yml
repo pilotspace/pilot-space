@@ -7,7 +7,7 @@
 #   Full stack:  docker compose --profile supabase up -d
 #
 # Services:
-#   - postgres:        PostgreSQL 16 with pgvector (port 5432)
+#   - postgres:        PostgreSQL 17 with pgvector (port 5432)
 #   - redis:           Redis 7 cache (port 6379)
 #   - meilisearch:     Typo-tolerant search (port 7700)
 #   - supabase-studio: Database GUI (port 54323, optional)
@@ -21,9 +21,15 @@ services:
   # ============================================================================
 
   postgres:
-    image: pgvector/pgvector:pg17
+    build:
+      context: .
+      dockerfile: Dockerfile.postgres
     container_name: pilot-space-postgres
     restart: unless-stopped
+    command: >
+      postgres
+      -c shared_preload_libraries=pg_cron
+      -c cron.database_name=${POSTGRES_DB:-pilot_space}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     environment:
@@ -163,7 +169,7 @@ services:
     restart: "no"
     environment:
       # env.py converts postgresql+asyncpg:// -> postgresql:// for psycopg2
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST:-postgres}:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-pilot_space}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@${POSTGRES_HOST:-postgres}:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-pilot_space}
       SUPABASE_URL: ${SUPABASE_URL:-}
       SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:-}
     depends_on:

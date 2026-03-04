@@ -23,6 +23,9 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 -- Enable pg_stat_statements for query performance monitoring (optional but recommended)
 CREATE EXTENSION IF NOT EXISTS "pg_stat_statements";
 
+-- Enable pg_cron for scheduling background jobs (optional, can be used for periodic tasks)
+CREATE EXTENSION IF NOT EXISTS "pg_cron";
+
 -- Log successful initialization
 DO $$
 BEGIN
