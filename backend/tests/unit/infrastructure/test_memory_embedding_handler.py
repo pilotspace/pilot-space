@@ -46,16 +46,24 @@ def _make_handler(
 class TestHandleGraphNodeEarlyReturns:
     """Guard clause tests — no DB calls should be made."""
 
-    async def test_returns_error_when_openai_api_key_is_none(self) -> None:
+    async def test_returns_error_when_all_providers_fail(self) -> None:
+        """When both OpenAI (no key) and Ollama fail, error is returned."""
         session = _make_session()
+        mock_result = MagicMock()
+        mock_result.first.return_value = ("Node content text.",)
+        session.execute = AsyncMock(return_value=mock_result)
         handler = _make_handler(session, openai_api_key=None)
 
-        result = await handler.handle_graph_node(
-            {"node_id": str(_NODE_ID), "workspace_id": str(_WORKSPACE_ID)}
-        )
+        with patch(
+            "pilot_space.infrastructure.queue.handlers.memory_embedding_handler._embed_text_ollama",
+            new=AsyncMock(return_value=None),
+        ):
+            result = await handler.handle_graph_node(
+                {"node_id": str(_NODE_ID), "workspace_id": str(_WORKSPACE_ID)}
+            )
 
-        assert result == {"success": False, "error": "no OpenAI api_key configured"}
-        session.execute.assert_not_called()
+        assert result["success"] is False
+        assert "all embedding providers failed" in result["error"]
 
     async def test_returns_error_when_node_id_missing(self) -> None:
         session = _make_session()
@@ -134,14 +142,20 @@ class TestHandleGraphNodeHappyPath:
 
         handler = _make_handler(session)
 
-        with patch(
-            "pilot_space.infrastructure.queue.handlers.memory_embedding_handler._embed_text_openai",
-            new=AsyncMock(return_value=None),
+        with (
+            patch(
+                "pilot_space.infrastructure.queue.handlers.memory_embedding_handler._embed_text_openai",
+                new=AsyncMock(return_value=None),
+            ),
+            patch(
+                "pilot_space.infrastructure.queue.handlers.memory_embedding_handler._embed_text_ollama",
+                new=AsyncMock(return_value=None),
+            ),
         ):
             result = await handler.handle_graph_node(
                 {"node_id": str(_NODE_ID), "workspace_id": str(_WORKSPACE_ID)}
             )
 
         assert result["success"] is False
-        assert "OpenAI embedding generation failed" in result["error"]
+        assert "all embedding providers failed" in result["error"]
         session.commit.assert_not_called()
