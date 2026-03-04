@@ -48,9 +48,10 @@ def node_model_to_domain(model: GraphNodeModel) -> GraphNode:
             embedding = [float(v) for v in raw.strip("[]").split(",") if v.strip()]
         elif hasattr(raw, "__iter__"):
             embedding = list(raw)
-        if embedding is not None and len(embedding) != 1536:
+        if embedding is not None and len(embedding) != GRAPH_EMBEDDING_DIMS:
             logger.warning(
-                "Embedding dim mismatch: expected 1536, got %d for node %s",
+                "Embedding dim mismatch: expected %d, got %d for node %s",
+                GRAPH_EMBEDDING_DIMS,
                 len(embedding),
                 model.id,
             )

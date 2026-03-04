@@ -176,15 +176,9 @@ class TestBuildPreferenceNodes:
 
 
 @pytest.fixture
-def mock_session() -> AsyncMock:
-    """Mock async DB session."""
-    return AsyncMock()
-
-
-@pytest.fixture
-def service(mock_session: AsyncMock) -> GraphExtractionService:
-    """GraphExtractionService with mocked session."""
-    return GraphExtractionService(session=mock_session)
+def service() -> GraphExtractionService:
+    """GraphExtractionService instance."""
+    return GraphExtractionService()
 
 
 @pytest.fixture
@@ -203,14 +197,14 @@ def base_messages() -> list[dict[str, str]]:
 
 
 def _make_anthropic_mock(llm_response: str) -> MagicMock:
-    """Build a mock anthropic.Anthropic client returning the given response."""
+    """Build a mock anthropic.AsyncAnthropic client returning the given response."""
     mock_message = MagicMock()
     mock_content_block = MagicMock()
     mock_content_block.text = llm_response
     mock_message.content = [mock_content_block]
 
     mock_client = MagicMock()
-    mock_client.messages.create.return_value = mock_message
+    mock_client.messages.create = AsyncMock(return_value=mock_message)
 
     return MagicMock(return_value=mock_client)
 
@@ -228,7 +222,7 @@ class TestGraphExtractionServiceReturnEmptyOnMissingApiKey:
             api_key=None,
         )
 
-        with patch("anthropic.Anthropic") as mock_client_cls:
+        with patch("anthropic.AsyncAnthropic") as mock_client_cls:
             result = await service.execute(payload)
 
         mock_client_cls.assert_not_called()
@@ -259,7 +253,7 @@ class TestGraphExtractionServiceDecisions:
 
         mock_anthropic_cls = _make_anthropic_mock(llm_response)
 
-        with patch("anthropic.Anthropic", mock_anthropic_cls):
+        with patch("anthropic.AsyncAnthropic", mock_anthropic_cls):
             payload = ConversationExtractionPayload(
                 messages=base_messages,
                 workspace_id=uuid4(),
@@ -295,7 +289,7 @@ class TestGraphExtractionServiceUserPreferences:
 
         mock_anthropic_cls = _make_anthropic_mock(llm_response)
 
-        with patch("anthropic.Anthropic", mock_anthropic_cls):
+        with patch("anthropic.AsyncAnthropic", mock_anthropic_cls):
             payload = ConversationExtractionPayload(
                 messages=base_messages,
                 workspace_id=uuid4(),
@@ -319,7 +313,7 @@ class TestGraphExtractionServiceMalformedJson:
     ) -> None:
         mock_anthropic_cls = _make_anthropic_mock("This is totally not JSON: {broken")
 
-        with patch("anthropic.Anthropic", mock_anthropic_cls):
+        with patch("anthropic.AsyncAnthropic", mock_anthropic_cls):
             payload = ConversationExtractionPayload(
                 messages=base_messages,
                 workspace_id=uuid4(),
@@ -337,10 +331,10 @@ class TestGraphExtractionServiceMalformedJson:
         self, service: GraphExtractionService, base_messages: list[dict[str, str]]
     ) -> None:
         mock_client = MagicMock()
-        mock_client.messages.create.side_effect = RuntimeError("API error")
+        mock_client.messages.create = AsyncMock(side_effect=RuntimeError("API error"))
         mock_anthropic_cls = MagicMock(return_value=mock_client)
 
-        with patch("anthropic.Anthropic", mock_anthropic_cls):
+        with patch("anthropic.AsyncAnthropic", mock_anthropic_cls):
             payload = ConversationExtractionPayload(
                 messages=base_messages,
                 workspace_id=uuid4(),
@@ -372,7 +366,7 @@ class TestGraphExtractionServicePatterns:
 
         mock_anthropic_cls = _make_anthropic_mock(llm_response)
 
-        with patch("anthropic.Anthropic", mock_anthropic_cls):
+        with patch("anthropic.AsyncAnthropic", mock_anthropic_cls):
             payload = ConversationExtractionPayload(
                 messages=base_messages,
                 workspace_id=uuid4(),

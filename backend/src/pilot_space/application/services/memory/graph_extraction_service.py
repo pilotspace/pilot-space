@@ -12,19 +12,15 @@ Feature 016: Knowledge Graph — Memory Engine replacement
 
 from __future__ import annotations
 
-import asyncio
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from uuid import UUID
 
-from pilot_space.domain.graph_edge import EdgeType
+from pilot_space.application.services.memory.graph_write_service import EdgeInput, NodeInput
 from pilot_space.domain.graph_node import NodeType
 from pilot_space.infrastructure.logging import get_logger
-
-if TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = get_logger(__name__)
 
@@ -51,50 +47,6 @@ Focus on explicit decisions and clear patterns. Skip generic statements."""
 # ---------------------------------------------------------------------------
 # Input / output data structures
 # ---------------------------------------------------------------------------
-
-
-@dataclass(frozen=True, slots=True)
-class NodeInput:
-    """Input specification for a single graph node.
-
-    Attributes:
-        node_type: Discriminator type for the node.
-        label: Human-readable display name.
-        content: Searchable text content.
-        properties: Type-specific metadata.
-        external_id: FK reference to the originating entity.
-        user_id: Optional user scope for personal nodes.
-    """
-
-    node_type: NodeType
-    label: str
-    content: str
-    properties: dict[str, object] = field(default_factory=dict)
-    external_id: UUID | None = None
-    user_id: UUID | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class EdgeInput:
-    """Input specification for a directed graph edge.
-
-    Attributes:
-        source_external_id: External FK of the source entity.
-        target_external_id: External FK of the target entity.
-        source_node_id: Direct node UUID (takes precedence over external lookup).
-        target_node_id: Direct node UUID (takes precedence over external lookup).
-        edge_type: Semantic relationship type.
-        weight: Relationship strength [0.0, 1.0].
-        properties: Optional JSONB metadata for this edge.
-    """
-
-    source_external_id: UUID | None
-    target_external_id: UUID | None
-    source_node_id: UUID | None = None
-    target_node_id: UUID | None = None
-    edge_type: EdgeType = EdgeType.RELATES_TO
-    weight: float = 0.5
-    properties: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -345,7 +297,7 @@ class GraphExtractionService:
     or when the LLM response cannot be parsed — never raises.
 
     Example:
-        service = GraphExtractionService(session)
+        service = GraphExtractionService()
         result = await service.execute(ConversationExtractionPayload(
             messages=[{"role": "user", "content": "We decided to use Redis..."}],
             workspace_id=workspace_id,
@@ -353,13 +305,8 @@ class GraphExtractionService:
         ))
     """
 
-    def __init__(self, session: AsyncSession) -> None:
-        """Initialize service.
-
-        Args:
-            session: Async DB session (reserved for future repository access).
-        """
-        self._session = session
+    def __init__(self) -> None:
+        """Initialize service."""
 
     async def execute(self, payload: ConversationExtractionPayload) -> ExtractionResult:
         """Extract graph nodes from conversation messages.
@@ -407,10 +354,8 @@ class GraphExtractionService:
             import anthropic  # type: ignore[import-untyped]
 
             prompt = _build_prompt(messages)
-            client = anthropic.Anthropic(api_key=api_key)
-            # Run synchronous Anthropic client in a thread to avoid blocking the event loop
-            message = await asyncio.to_thread(
-                client.messages.create,
+            client = anthropic.AsyncAnthropic(api_key=api_key)
+            message = await client.messages.create(
                 model=_EXTRACTION_MODEL,
                 max_tokens=_MAX_TOKENS,
                 messages=[{"role": "user", "content": prompt}],

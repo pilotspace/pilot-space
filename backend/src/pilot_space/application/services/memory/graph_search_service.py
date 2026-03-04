@@ -17,6 +17,13 @@ from uuid import UUID
 from pilot_space.domain.graph_edge import GraphEdge
 from pilot_space.domain.graph_node import NodeType
 from pilot_space.domain.graph_query import ScoredNode
+from pilot_space.infrastructure.database.repositories._graph_helpers import (
+    GRAPH_EMBEDDING_DIMS,
+    GRAPH_EMBEDDING_WEIGHT,
+    GRAPH_RECENCY_WEIGHT,
+    GRAPH_SECONDS_PER_DAY,
+    GRAPH_TEXT_WEIGHT,
+)
 from pilot_space.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
@@ -27,14 +34,7 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 _OPENAI_EMBEDDING_MODEL = "text-embedding-3-large"
-
-# Score fusion weights (must sum ≤ 1.0)
-_EMBEDDING_WEIGHT = 0.5
-_TEXT_WEIGHT = 0.2
-_RECENCY_WEIGHT = 0.2
 _EDGE_DENSITY_WEIGHT = 0.1
-
-_SECONDS_PER_DAY = 86_400.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -162,7 +162,7 @@ class GraphSearchService:
 
     @staticmethod
     async def _get_embedding(query: str, api_key: str | None) -> tuple[list[float] | None, bool]:
-        """Generate a 1536-dim OpenAI embedding for the query.
+        """Generate a query embedding for hybrid graph search.
 
         Uses AsyncOpenAI to avoid blocking the event loop. A 10s client
         timeout and a 15s asyncio.wait_for guard prevent the call from
@@ -185,7 +185,7 @@ class GraphSearchService:
                 client.embeddings.create(
                     model=_OPENAI_EMBEDDING_MODEL,
                     input=query,
-                    dimensions=1536,
+                    dimensions=GRAPH_EMBEDDING_DIMS,
                 ),
                 timeout=15.0,
             )
@@ -235,12 +235,12 @@ class GraphSearchService:
         for node in user_nodes:
             if node.id in existing_ids:
                 continue
-            age_days = (now - node.updated_at).total_seconds() / _SECONDS_PER_DAY
+            age_days = (now - node.updated_at).total_seconds() / GRAPH_SECONDS_PER_DAY
             recency = 1.0 / (1.0 + age_days)
             scored_nodes.append(
                 ScoredNode(
                     node=node,
-                    score=_RECENCY_WEIGHT * recency,
+                    score=GRAPH_RECENCY_WEIGHT * recency,
                     embedding_score=0.0,
                     text_score=0.0,
                     recency_score=recency,
@@ -305,9 +305,9 @@ def _rerank(scored_nodes: list[ScoredNode]) -> list[ScoredNode]:
         ScoredNode(
             node=sn.node,
             score=(
-                _EMBEDDING_WEIGHT * sn.embedding_score
-                + _TEXT_WEIGHT * sn.text_score
-                + _RECENCY_WEIGHT * sn.recency_score
+                GRAPH_EMBEDDING_WEIGHT * sn.embedding_score
+                + GRAPH_TEXT_WEIGHT * sn.text_score
+                + GRAPH_RECENCY_WEIGHT * sn.recency_score
                 + _EDGE_DENSITY_WEIGHT * sn.edge_density_score
             ),
             embedding_score=sn.embedding_score,

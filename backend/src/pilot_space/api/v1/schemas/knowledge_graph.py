@@ -54,48 +54,8 @@ class GraphResponse(BaseModel):
     )
 
 
-class GraphSearchRequest(BaseModel):
-    """Request body for hybrid knowledge graph search."""
-
-    model_config = ConfigDict(from_attributes=True)
-
-    q: str = Field(description="Natural-language query text", min_length=1, max_length=2000)
-    node_types: list[str] | None = Field(
-        default=None,
-        description="Restrict to these NodeType values",
-    )
-    limit: int = Field(
-        default=10,
-        ge=1,
-        le=50,
-        description="Maximum results to return",
-    )
-
-
-class SubgraphRequest(BaseModel):
-    """Request body for subgraph extraction."""
-
-    model_config = ConfigDict(from_attributes=True)
-
-    root_id: UUID = Field(description="UUID of the root node")
-    max_depth: int = Field(
-        default=2,
-        ge=1,
-        le=4,
-        description="Maximum traversal depth from root",
-    )
-    max_nodes: int = Field(
-        default=50,
-        ge=5,
-        le=100,
-        description="Maximum nodes to include in subgraph",
-    )
-
-
 __all__ = [
     "GraphEdgeDTO",
     "GraphNodeDTO",
     "GraphResponse",
-    "GraphSearchRequest",
-    "SubgraphRequest",
 ]

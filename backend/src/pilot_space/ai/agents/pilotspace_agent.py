@@ -68,6 +68,7 @@ if TYPE_CHECKING:
     from pilot_space.application.services.memory.memory_search_service import (
         MemorySearchService,
     )
+    from pilot_space.infrastructure.queue.supabase_queue import SupabaseQueueClient
     from pilot_space.spaces.base import SpaceContext
 
 logger = get_logger(__name__)
@@ -129,7 +130,7 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
         intent_detection_service: IntentDetectionService | None = None,
         memory_search_service: MemorySearchService | None = None,
         memory_save_service: MemorySaveService | None = None,
-        graph_queue_client: Any = None,
+        graph_queue_client: SupabaseQueueClient | None = None,
     ) -> None:
         super().__init__(
             provider_selector=provider_selector,

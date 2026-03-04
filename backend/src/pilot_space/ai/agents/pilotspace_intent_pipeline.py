@@ -14,11 +14,12 @@ Feature 015: AI Workforce Platform
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, ClassVar
 from uuid import UUID
+
+from pilot_space.api.v1.streaming import format_sse_event
 
 if TYPE_CHECKING:
     from pilot_space.application.services.intent.detection_service import (
@@ -123,10 +124,6 @@ class ConfirmationBus:
 # ---------------------------------------------------------------------------
 
 
-def _make_sse(event_type: str, data: dict[str, Any]) -> str:
-    return f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
-
-
 def _intent_to_sse_data(intent: Any) -> dict[str, Any]:
     """Serialize a WorkIntent ORM model to SSE payload dict."""
     return {
@@ -192,7 +189,7 @@ async def emit_intent_detected_events(
     events: list[str] = []
     for intent in intents:
         data = _intent_to_sse_data(intent)
-        events.append(_make_sse(INTENT_DETECTED, data))
+        events.append(format_sse_event(INTENT_DETECTED, data))
     return events
 
 
@@ -237,7 +234,7 @@ def make_intent_executing_event(
     skill_name: str,
 ) -> str:
     """Build intent_executing SSE string."""
-    return _make_sse(
+    return format_sse_event(
         INTENT_EXECUTING,
         {"intent_id": intent_id, "skill_name": skill_name},
     )
@@ -249,7 +246,7 @@ def make_intent_completed_event(
     artifacts: list[dict[str, Any]] | None = None,
 ) -> str:
     """Build intent_completed SSE string."""
-    return _make_sse(
+    return format_sse_event(
         INTENT_COMPLETED,
         {
             "intent_id": intent_id,
@@ -261,7 +258,7 @@ def make_intent_completed_event(
 
 def make_intent_confirmed_event(intent_id: str) -> str:
     """Build intent_confirmed SSE string."""
-    return _make_sse(INTENT_CONFIRMED, {"intent_id": intent_id})
+    return format_sse_event(INTENT_CONFIRMED, {"intent_id": intent_id})
 
 
 # ---------------------------------------------------------------------------
