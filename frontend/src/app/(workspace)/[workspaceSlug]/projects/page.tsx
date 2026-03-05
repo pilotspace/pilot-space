@@ -64,11 +64,16 @@ export default function ProjectsPage() {
   const router = useRouter();
   const workspaceStore = useWorkspaceStore();
   const workspaceId = workspaceStore.currentWorkspaceId ?? '';
+  const isAdmin = workspaceStore.isAdmin;
 
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('recent');
   const [leadFilter, setLeadFilter] = useState<string>('all');
-  const viewMode = useSyncExternalStore(subscribeToViewMode, getViewModeSnapshot, getViewModeServerSnapshot);
+  const viewMode = useSyncExternalStore(
+    subscribeToViewMode,
+    getViewModeSnapshot,
+    getViewModeServerSnapshot
+  );
   const handleViewModeChange = useCallback((mode: ViewMode) => {
     localStorage.setItem(VIEW_MODE_KEY, mode);
     // Force re-render since useSyncExternalStore only triggers on storage events from other tabs
@@ -123,9 +128,9 @@ export default function ProjectsPage() {
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-border px-6 py-4">
+      <div className="flex items-center justify-between border-b border-border px-4 py-3 sm:px-6 sm:py-4">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">Projects</h1>
+          <h1 className="text-xl font-semibold text-foreground sm:text-2xl">Projects</h1>
           <p className="text-sm text-muted-foreground">
             {allProjects.length} project{allProjects.length !== 1 ? 's' : ''}
           </p>
@@ -151,16 +156,19 @@ export default function ProjectsPage() {
               <List className="h-4 w-4" />
             </Button>
           </div>
-          <Button className="gap-2 shadow-warm-sm" onClick={() => setCreateModalOpen(true)}>
-            <Plus className="h-4 w-4" />
-            New Project
-          </Button>
+          {isAdmin && (
+            <Button className="gap-2 shadow-warm-sm" onClick={() => setCreateModalOpen(true)}>
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">New Project</span>
+              <span className="sm:hidden">New</span>
+            </Button>
+          )}
         </div>
       </div>
 
       {/* Filters */}
-      <div className="flex items-center gap-3 border-b border-border/50 px-6 py-3">
-        <div className="relative flex-1 max-w-sm">
+      <div className="flex flex-col gap-2 border-b border-border/50 px-4 py-3 sm:flex-row sm:items-center sm:gap-3 sm:px-6">
+        <div className="relative sm:flex-1 sm:max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search projects..."
@@ -170,36 +178,38 @@ export default function ProjectsPage() {
             aria-label="Search projects"
           />
         </div>
-        <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
-          <SelectTrigger className="w-[160px]">
-            <SelectValue placeholder="Sort by" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="recent">Most Recent</SelectItem>
-            <SelectItem value="name">Name (A-Z)</SelectItem>
-            <SelectItem value="issues">Most Issues</SelectItem>
-            <SelectItem value="progress">Least Progress</SelectItem>
-          </SelectContent>
-        </Select>
-        {leads.length > 0 && (
-          <Select value={leadFilter} onValueChange={setLeadFilter}>
-            <SelectTrigger className="w-[160px]">
-              <SelectValue placeholder="Filter by lead" />
+        <div className="flex items-center gap-2">
+          <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
+            <SelectTrigger className="w-[140px] sm:w-[160px]">
+              <SelectValue placeholder="Sort by" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Leads</SelectItem>
-              {leads.map(([id, name]) => (
-                <SelectItem key={id} value={id}>
-                  {name}
-                </SelectItem>
-              ))}
+              <SelectItem value="recent">Most Recent</SelectItem>
+              <SelectItem value="name">Name (A-Z)</SelectItem>
+              <SelectItem value="issues">Most Issues</SelectItem>
+              <SelectItem value="progress">Least Progress</SelectItem>
             </SelectContent>
           </Select>
-        )}
+          {leads.length > 0 && (
+            <Select value={leadFilter} onValueChange={setLeadFilter}>
+              <SelectTrigger className="w-[130px] sm:w-[160px]">
+                <SelectValue placeholder="Filter by lead" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Leads</SelectItem>
+                {leads.map(([id, name]) => (
+                  <SelectItem key={id} value={id}>
+                    {name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-auto p-6">
+      <div className="flex-1 overflow-auto p-4 sm:p-6">
         {isLoading ? (
           <div
             className={
@@ -234,7 +244,7 @@ export default function ProjectsPage() {
                 ? 'Try adjusting your search or filters.'
                 : 'Create your first project to get started.'}
             </p>
-            {!search && leadFilter === 'all' && (
+            {!search && leadFilter === 'all' && isAdmin && (
               <Button onClick={() => setCreateModalOpen(true)} className="gap-2">
                 <Plus className="h-4 w-4" />
                 Create your first project
