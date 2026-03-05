@@ -122,7 +122,7 @@ CREATE EXTENSION IF NOT EXISTS "vector";
 CREATE EXTENSION IF NOT EXISTS "pgmq";
 
 -- pg_cron for scheduled jobs (background tasks, cleanup, etc.)
-CREATE EXTENSION IF NOT EXISTS pg_cron WITH SCHEMA extensions;
+CREATE EXTENSION IF NOT EXISTS "pg_cron" WITH SCHEMA extensions;
 
 -- =============================================================================
 -- SEARCH/TEXT EXTENSIONS
