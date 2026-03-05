@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from pilot_space.dependencies.auth import DbSession, get_current_user, get_session
 from pilot_space.infrastructure.auth import TokenPayload
+from pilot_space.infrastructure.cache.redis import RedisClient
 
 if TYPE_CHECKING:
     from pilot_space.ai.agents.pilotspace_agent import PilotSpaceAgent
@@ -29,7 +30,6 @@ if TYPE_CHECKING:
         GenerateAIContextService,
         RefineAIContextService,
     )
-    from pilot_space.infrastructure.cache.redis import RedisClient
     from pilot_space.infrastructure.database.models import AIConfiguration
     from pilot_space.infrastructure.queue.supabase_queue import SupabaseQueueClient
 
@@ -560,7 +560,7 @@ async def get_ghost_text_service(
 
 # Type aliases for AI dependencies (using string forward references)
 SessionManagerDep = Annotated["SessionManager | None", Depends(get_session_manager)]
-RedisDep = Annotated["RedisClient", Depends(get_redis_client)]
+RedisDep = Annotated[RedisClient, Depends(get_redis_client)]
 ProviderSelectorDep = Annotated["ProviderSelector", Depends(get_provider_selector)]
 ResilientExecutorDep = Annotated["ResilientExecutor", Depends(get_resilient_executor)]
 ToolRegistryDep = Annotated["ToolRegistry", Depends(get_tool_registry)]
