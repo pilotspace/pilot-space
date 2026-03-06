@@ -17,8 +17,10 @@ Pilot Space embeds an AI agent directly into your software development lifecycle
 - [Prerequisites](#prerequisites)
 - [Setup](#setup)
   - [1. Copy environment files](#1-copy-environment-files)
-  - [2. Start the full stack](#2-start-the-full-stack)
-  - [3. Verify](#3-verify)
+  - [2. Generate Supabase secrets](#2-generate-supabase-secrets)
+  - [3. Start Supabase services](#3-start-supabase-services)
+  - [4. Start application services](#4-start-application-services)
+  - [5. Verify](#5-verify)
 - [Environment Variables](#environment-variables)
 - [Development Commands](#development-commands)
 - [Project Structure](#project-structure)
@@ -193,7 +195,7 @@ Backend (FastAPI, port 8000)
 
 ## Setup
 
-The entire stack — PostgreSQL, Supabase Auth, Redis, Meilisearch, Backend, and Frontend — runs inside Docker Compose. No local Supabase CLI or `supabase start` needed.
+The stack runs in two phases: Supabase infrastructure first, then the application services. No local Supabase CLI or `supabase start` needed.
 
 ### 1. Copy environment files
 
@@ -205,10 +207,42 @@ cp infra/docker/.env.example infra/docker/.env
 cp infra/supabase/.env.example infra/supabase/.env
 ```
 
-Edit `infra/docker/.env` with your values (see [Environment Variables](#environment-variables) below).
-The `infra/supabase/.env` works out-of-the-box for local development — change only if you need custom Supabase secrets.
+### 2. Generate Supabase secrets
 
-### 2. Start the full stack
+Run the key generation script to produce fresh JWT secrets, tokens, and passwords:
+
+```bash
+cd infra/supabase
+sh scripts/generate-keys.sh
+```
+
+The script prints all generated values. Copy them into `infra/supabase/.env` (the script will offer to do this automatically if you run it interactively and answer `y`).
+
+Then update the matching keys in `infra/docker/.env`:
+
+```env
+SUPABASE_ANON_KEY=<ANON_KEY from infra/supabase/.env>
+SUPABASE_JWT_SECRET=<JWT_SECRET from infra/supabase/.env>
+```
+
+Edit any remaining values in `infra/docker/.env` as needed (see [Environment Variables](#environment-variables) below).
+
+### 3. Start Supabase services
+
+```bash
+cd infra/supabase
+docker compose up -d
+```
+
+Wait until all Supabase containers are healthy before proceeding:
+
+```bash
+docker compose ps   # all services should show "healthy" or "running"
+```
+
+### 4. Start application services
+
+Once Supabase is healthy:
 
 ```bash
 cd infra/docker
@@ -216,11 +250,10 @@ docker compose up -d
 ```
 
 Docker Compose will:
-1. Start all Supabase services (PostgreSQL, Auth/GoTrue, Realtime, Storage, Studio, Kong)
+1. Run database migrations (`migration` service — runs once and exits)
 2. Start Redis and Meilisearch
-3. Run database migrations (`migration` service — runs once and exits)
-4. Start the FastAPI backend
-5. Start the Next.js frontend
+3. Start the FastAPI backend
+4. Start the Next.js frontend
 
 **Services after startup:**
 
@@ -229,21 +262,20 @@ Docker Compose will:
 | Frontend | http://localhost:3000 |
 | Backend API | http://localhost:8000/docs |
 | Supabase Studio | http://localhost:54323 |
-| Supabase API (Kong) | http://localhost:8000 (internal) |
 | PostgreSQL | localhost:5432 |
 | Redis | localhost:6379 |
 | Meilisearch | localhost:7700 |
 
-### 3. Verify
+### 5. Verify
 
 ```bash
-# Check all containers are healthy
-docker compose ps
+# Check Supabase containers
+cd infra/supabase && docker compose ps
 
-# Tail logs (all services)
-docker compose logs -f
+# Check application containers
+cd infra/docker && docker compose ps
 
-# Tail a specific service
+# Tail logs for a specific service
 docker compose logs -f backend
 ```
 
