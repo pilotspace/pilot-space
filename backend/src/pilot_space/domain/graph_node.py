@@ -9,6 +9,8 @@ Feature 016: Knowledge Graph — Memory Engine replacement
 
 from __future__ import annotations
 
+import hashlib
+import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -20,6 +22,7 @@ class NodeType(StrEnum):
 
     ISSUE = "issue"
     NOTE = "note"
+    NOTE_CHUNK = "note_chunk"
     PROJECT = "project"
     CYCLE = "cycle"
     USER = "user"
@@ -70,6 +73,7 @@ class GraphNode:
     embedding: list[float] | None = None
     user_id: UUID | None = None
     external_id: UUID | None = None
+    content_hash: str | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(tz=UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(tz=UTC))
 
@@ -89,6 +93,7 @@ class GraphNode:
         properties: dict[str, object] | None = None,
         user_id: UUID | None = None,
         external_id: UUID | None = None,
+        content_hash: str | None = None,
     ) -> GraphNode:
         """Factory method for constructing a new unsaved GraphNode.
 
@@ -100,6 +105,7 @@ class GraphNode:
             properties: Optional type-specific metadata dict.
             user_id: Optional user scope for personal nodes.
             external_id: Optional FK to originating entity.
+            content_hash: Optional SHA-256 digest for unkeyed node dedup.
 
         Returns:
             A new GraphNode instance with defaults applied.
@@ -112,6 +118,7 @@ class GraphNode:
             properties=properties or {},
             user_id=user_id,
             external_id=external_id,
+            content_hash=content_hash,
         )
 
 
@@ -377,6 +384,36 @@ class ConversationSummaryNode(GraphNode):
         )
 
 
+def compute_content_hash(
+    workspace_id: UUID,
+    node_type: str,
+    content: str,
+    user_id: UUID | None = None,
+) -> str:
+    """SHA-256 of normalized (workspace_id:node_type[:user_id]:stripped_lowered_content).
+
+    Used for deduplication of unkeyed nodes (no external_id) such as
+    DECISION, LEARNED_PATTERN, USER_PREFERENCE — which have no stable FK.
+
+    user_id is included in the hash for user-scoped node types (USER_PREFERENCE,
+    LEARNED_PATTERN) so two users writing the same content produce distinct nodes
+    rather than silently merging.
+
+    Args:
+        workspace_id: Owning workspace UUID.
+        node_type: NodeType string (e.g. "decision").
+        content: Node content text.
+        user_id: Optional user UUID; included in hash when set.
+
+    Returns:
+        64-char hex SHA-256 digest.
+    """
+    normalized = re.sub(r"\s+", " ", content.strip().lower())
+    user_segment = f":{user_id}" if user_id is not None else ""
+    raw = f"{workspace_id}:{node_type}{user_segment}:{normalized}"
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+
 __all__ = [
     "ConversationSummaryNode",
     "DecisionNode",
@@ -387,4 +424,5 @@ __all__ = [
     "NoteNode",
     "SkillOutcomeNode",
     "UserPreferenceNode",
+    "compute_content_hash",
 ]

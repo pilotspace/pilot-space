@@ -2,7 +2,7 @@
 
 Each node represents a typed semantic entity within a workspace
 (issue, note, concept, agent, user, project, etc.) and may carry a
-1536-dim OpenAI embedding for vector-similarity retrieval.
+768-dim embedding for vector-similarity retrieval.
 
 Nodes are workspace-scoped with RLS enforcement. The optional user_id
 column pins a node to a specific workspace member (e.g. per-user agent
@@ -129,6 +129,13 @@ class GraphNodeModel(WorkspaceScopedModel):
         nullable=True,
     )
 
+    # SHA-256 content hash for deduplication of unkeyed nodes (no external_id).
+    # Hex string of sha256(workspace_id:node_type:normalized_content).
+    content_hash: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+    )
+
     # ------------------------------------------------------------------
     # Relationships
     # ------------------------------------------------------------------
@@ -170,6 +177,8 @@ class GraphNodeModel(WorkspaceScopedModel):
             "properties",
             postgresql_using="gin",
         ),
+        # Content-hash dedup for unkeyed nodes
+        Index("ix_graph_nodes_content_hash", "workspace_id", "content_hash"),
     )
 
     def __repr__(self) -> str:

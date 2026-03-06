@@ -9,7 +9,7 @@ Tests cover:
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
 import pytest
@@ -129,6 +129,7 @@ class TestGraphSearchServiceReturnsNodes:
             workspace_id=workspace_id,
             node_types=None,
             limit=10,
+            since=None,
         )
 
     @pytest.mark.asyncio
@@ -184,17 +185,12 @@ class TestGraphSearchServiceEmbeddingFallback:
         mock_repo: AsyncMock,
         workspace_id: UUID,
     ) -> None:
-        """When OpenAI raises, text-only search still runs and embedding_used is False."""
+        """When no EmbeddingService is configured, text-only search runs and embedding_used is False."""
         node = _make_node(workspace_id)
         mock_repo.hybrid_search.return_value = [_make_scored_node(node)]
 
-        with patch("openai.AsyncOpenAI", side_effect=RuntimeError("OpenAI network error")):
-            payload = GraphSearchPayload(
-                query="decisions",
-                workspace_id=workspace_id,
-                openai_api_key="sk-fake",  # pragma: allowlist secret
-            )
-            result = await service.execute(payload)
+        payload = GraphSearchPayload(query="decisions", workspace_id=workspace_id)
+        result = await service.execute(payload)
 
         assert result.embedding_used is False
         assert len(result.nodes) == 1
@@ -205,6 +201,7 @@ class TestGraphSearchServiceEmbeddingFallback:
             workspace_id=workspace_id,
             node_types=None,
             limit=10,
+            since=None,
         )
 
     @pytest.mark.asyncio
@@ -214,14 +211,10 @@ class TestGraphSearchServiceEmbeddingFallback:
         mock_repo: AsyncMock,
         workspace_id: UUID,
     ) -> None:
-        """No API key → embedding skipped, embedding_used is False."""
+        """No EmbeddingService configured → embedding skipped, embedding_used is False."""
         mock_repo.hybrid_search.return_value = []
 
-        payload = GraphSearchPayload(
-            query="architecture decisions",
-            workspace_id=workspace_id,
-            openai_api_key=None,
-        )
+        payload = GraphSearchPayload(query="architecture decisions", workspace_id=workspace_id)
         result = await service.execute(payload)
 
         assert result.embedding_used is False
@@ -231,6 +224,7 @@ class TestGraphSearchServiceEmbeddingFallback:
             workspace_id=workspace_id,
             node_types=None,
             limit=10,
+            since=None,
         )
 
 

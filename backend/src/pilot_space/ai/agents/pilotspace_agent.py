@@ -329,14 +329,14 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
         effort = classify_effort(input_data.message)
         streaming_input = estimate_tokens(input_data) > 30_000
 
-        _graph_search_svc = build_graph_search_service_for_session(db_session)  # fresh per-req
         _openai_key_for_recall = await get_workspace_openai_key(db_session, context.workspace_id)
         graph_context = await recall_graph_context(
             workspace_id=context.workspace_id,
             user_id=context.user_id,
             query=input_data.message,
-            graph_search_service=_graph_search_svc,
-            openai_api_key=_openai_key_for_recall,
+            graph_search_service=build_graph_search_service_for_session(  # fresh per-req
+                db_session, openai_api_key=_openai_key_for_recall
+            ),
         )
 
         assembled = await assemble_system_prompt(
@@ -661,10 +661,10 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
                                         {"role": "assistant", "content": assistant_texts[-1]},
                                     ],
                                     issue_id=_issue_id_uuid,
+                                    anthropic_api_key=api_key,
                                 )
 
                     await client.disconnect()
-
                 clear_context()
                 # Propagate error info so db_session_cm rolls back on failure (D-1 fix).
                 # Manual __aexit__ is necessary: caught stream errors (in _stream_error)

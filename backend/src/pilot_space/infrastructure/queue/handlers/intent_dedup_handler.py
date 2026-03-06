@@ -1,7 +1,7 @@
 """Intent dedup background job handler (J-1).
 
 T-012: IntentDedupJobHandler
-- Embeds intent `what` via Gemini embeddings
+- Embeds intent `what` via EmbeddingService (OpenAI → Ollama cascade)
 - Finds near-duplicates via pgvector HNSW (cosine distance <=> operator)
 - Merges intents with cosine similarity >= 0.9 (keeps higher confidence)
 - Stores embedding on the intent for future HNSW queries
@@ -22,6 +22,7 @@ from pilot_space.infrastructure.queue.models import QueueName
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
+    from pilot_space.application.services.embedding_service import EmbeddingService
     from pilot_space.infrastructure.database.repositories.intent_repository import (
         WorkIntentRepository,
     )
@@ -64,57 +65,27 @@ class IntentDedupJobPayload:
         )
 
 
-async def _embed_text(text: str, api_key: str | None) -> list[float] | None:
-    """Embed text using Gemini embeddings API.
-
-    Args:
-        text: Text to embed.
-        api_key: Google AI API key.
-
-    Returns:
-        Embedding vector or None on failure.
-    """
-    if api_key is None:
-        return None
-    try:
-        import google.generativeai as genai  # type: ignore[import-untyped]
-
-        genai.configure(api_key=api_key)  # type: ignore[attr-defined]
-        result = genai.embed_content(  # type: ignore[attr-defined]
-            model="models/text-embedding-004",
-            content=text,
-            task_type="SEMANTIC_SIMILARITY",
-        )
-        return list(result["embedding"])
-    except Exception:
-        logger.warning("Gemini embedding call failed during dedup", exc_info=True)
-        return None
-
-
 async def process_intent_dedup(
     payload: IntentDedupJobPayload,
     session: AsyncSession,
     intent_repository: WorkIntentRepository,
-    google_api_key: str | None = None,
+    embedding_service: EmbeddingService | None = None,
 ) -> None:
     """Process intent deduplication for a newly created intent.
 
     Algorithm:
     1. Fetch the target intent.
-    2. Embed its `what` text (single Gemini API call).
+    2. Embed its `what` text via EmbeddingService (OpenAI → Ollama cascade).
     3. Persist the embedding on the target intent for future queries.
     4. Query pgvector HNSW index for near-duplicates (single DB query).
     5. If any duplicate found: merge (keep higher confidence, soft-delete lower).
     6. Mark the target intent dedup_status='complete'.
 
-    Replaces the previous O(N) Gemini API calls + Python cosine loop with
-    a single embedding call + one pgvector HNSW query.
-
     Args:
         payload: Job parameters.
         session: Database session.
         intent_repository: Repository for WorkIntent CRUD.
-        google_api_key: Google AI API key for embeddings.
+        embedding_service: EmbeddingService for vector embeddings.
     """
     from pilot_space.infrastructure.database.models.work_intent import (
         DedupStatus as DBDedupStatus,
@@ -133,7 +104,7 @@ async def process_intent_dedup(
         return
 
     # Single embedding call for the target intent
-    target_embedding = await _embed_text(target.what, google_api_key)
+    target_embedding = await embedding_service.embed(target.what) if embedding_service else None
 
     if target_embedding is not None:
         # Persist embedding so future queries can use the HNSW index
@@ -197,11 +168,11 @@ class IntentDedupJobHandler:
         self,
         session: AsyncSession,
         intent_repository: WorkIntentRepository,
-        google_api_key: str | None = None,
+        embedding_service: EmbeddingService | None = None,
     ) -> None:
         self._session = session
         self._intent_repo = intent_repository
-        self._google_api_key = google_api_key
+        self._embedding = embedding_service
 
     async def handle(self, message: dict[str, Any]) -> None:
         """Process a dedup job message from the queue.
@@ -215,7 +186,7 @@ class IntentDedupJobHandler:
                 payload=payload,
                 session=self._session,
                 intent_repository=self._intent_repo,
-                google_api_key=self._google_api_key,
+                embedding_service=self._embedding,
             )
         except Exception:
             logger.exception(

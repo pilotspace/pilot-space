@@ -61,6 +61,7 @@ _GRAPH_NODE_TABLE = sa.Table(
     sa.Column("content", sa.Text, nullable=False, default=""),
     sa.Column("properties", sa.JSON, nullable=False, default=dict),
     sa.Column("embedding", sa.Text, nullable=True),
+    sa.Column("content_hash", sa.String(64), nullable=True),
     sa.Column("is_deleted", sa.Boolean, nullable=False, default=False),
     sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
     sa.Column(

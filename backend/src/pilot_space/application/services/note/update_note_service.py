@@ -10,6 +10,10 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from pilot_space.infrastructure.logging import get_logger
+
+logger = get_logger(__name__)
+
 if TYPE_CHECKING:
     from datetime import datetime
     from uuid import UUID
@@ -20,6 +24,7 @@ if TYPE_CHECKING:
     from pilot_space.infrastructure.database.repositories.note_repository import (
         NoteRepository,
     )
+    from pilot_space.infrastructure.queue.supabase_queue import SupabaseQueueClient
 
 
 class OptimisticLockError(Exception):
@@ -80,15 +85,18 @@ class UpdateNoteService:
         self,
         session: AsyncSession,
         note_repository: NoteRepository,
+        queue: SupabaseQueueClient | None = None,
     ) -> None:
         """Initialize UpdateNoteService.
 
         Args:
             session: The async database session.
             note_repository: Repository for note operations.
+            queue: Optional queue client for KG populate jobs.
         """
         self._session = session
         self._note_repo = note_repository
+        self._queue = queue
 
     async def execute(self, payload: UpdateNotePayload) -> UpdateNoteResult:
         """Execute note update.
@@ -155,6 +163,28 @@ class UpdateNoteService:
             updated_note = await self._note_repo.update(note)
         else:
             updated_note = note
+
+        # Enqueue KG populate job if content changed and note belongs to a project (non-fatal)
+        if (
+            self._queue is not None
+            and "content" in fields_updated
+            and updated_note.project_id is not None
+        ):
+            try:
+                from pilot_space.infrastructure.queue.models import QueueName
+
+                await self._queue.enqueue(
+                    QueueName.AI_NORMAL,
+                    {
+                        "task_type": "kg_populate",
+                        "entity_type": "note",
+                        "entity_id": str(updated_note.id),
+                        "workspace_id": str(updated_note.workspace_id),
+                        "project_id": str(updated_note.project_id),
+                    },
+                )
+            except Exception as exc:
+                logger.warning("UpdateNoteService: failed to enqueue kg_populate: %s", exc)
 
         return UpdateNoteResult(
             note=updated_note,

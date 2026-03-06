@@ -4,38 +4,42 @@ T-067: Handles 'memory_embedding' task_type for memory_entries and
 constitution_rules tables via Gemini 768-dim embeddings.
 
 Feature 016: Also handles 'graph_embedding' task_type for graph_nodes table
-via OpenAI text-embedding-3-large (1536-dim).
+via EmbeddingService (OpenAI → Ollama cascade).
 
 Feature 015: AI Workforce Platform — Memory Engine
 """
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from sqlalchemy import text
 
+from pilot_space.infrastructure.database.repositories._graph_helpers import (
+    GRAPH_EMBEDDING_DIMS,
+    serialize_embedding,
+)
 from pilot_space.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
+    from pilot_space.application.services.embedding_service import EmbeddingService
+
 logger = get_logger(__name__)
 
 _GEMINI_EMBEDDING_MODEL = "models/gemini-embedding-exp-03-07"
-_OPENAI_EMBEDDING_MODEL = "text-embedding-3-large"
-_OLLAMA_EMBEDDING_MODEL = "nomic-embed-text-v2-moe"
-_OLLAMA_BASE_URL = "http://localhost:11434"
 _MEMORY_TABLE = "memory_entries"
 _CONSTITUTION_TABLE = "constitution_rules"
 _GRAPH_NODES_TABLE = "graph_nodes"
-_GRAPH_EMBEDDING_DIMS = 768
 
 
 async def _embed_text(content: str, api_key: str | None) -> list[float] | None:
     """Embed text via Gemini gemini-embedding-exp-03-07 (768-dim).
+
+    DEPRECATED: Used only for memory_entries and constitution_rules (sunset 2026-06-01).
+    Graph nodes use EmbeddingService instead.
 
     Args:
         content: Text to embed.
@@ -61,99 +65,30 @@ async def _embed_text(content: str, api_key: str | None) -> list[float] | None:
         return None
 
 
-async def _embed_text_openai(content: str, api_key: str | None) -> list[float] | None:
-    """Embed text via OpenAI text-embedding-3-large (768-dim, truncated).
-
-    Args:
-        content: Text to embed.
-        api_key: OpenAI API key.
-
-    Returns:
-        768-dim float list or None on failure.
-    """
-    if not api_key:
-        return None
-    try:
-        from openai import AsyncOpenAI  # type: ignore[import-untyped]
-
-        client = AsyncOpenAI(api_key=api_key)
-        response = await client.embeddings.create(
-            model=_OPENAI_EMBEDDING_MODEL,
-            input=content,
-            dimensions=_GRAPH_EMBEDDING_DIMS,
-        )
-        embedding: list[float] = response.data[0].embedding
-        return embedding
-    except Exception:
-        logger.warning(
-            "OpenAI embedding failed in MemoryEmbeddingJobHandler",
-            exc_info=True,
-        )
-        return None
-
-
-def _ollama_embed_sync(content: str, base_url: str) -> list[float] | None:
-    """Synchronous Ollama embed call — run inside asyncio.to_thread."""
-    import json
-    import urllib.request
-
-    payload = json.dumps({"model": _OLLAMA_EMBEDDING_MODEL, "input": content}).encode()
-    req = urllib.request.Request(
-        f"{base_url}/api/embed",
-        data=payload,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        body = json.loads(resp.read())
-    embeddings = body.get("embeddings")
-    return list(embeddings[0]) if embeddings else None
-
-
-async def _embed_text_ollama(content: str, base_url: str = _OLLAMA_BASE_URL) -> list[float] | None:
-    """Embed text via Ollama nomic-embed-text-v2-moe (768-dim, local).
-
-    Args:
-        content: Text to embed.
-        base_url: Ollama API base URL (default: http://localhost:11434).
-
-    Returns:
-        768-dim float list or None on failure.
-    """
-    try:
-        return await asyncio.to_thread(_ollama_embed_sync, content, base_url)
-    except Exception:
-        logger.warning("Ollama embedding failed in MemoryEmbeddingJobHandler", exc_info=True)
-        return None
-
-
 class MemoryEmbeddingJobHandler:
     """Handles memory and graph embedding jobs from the ai_normal queue.
 
     Routes by payload type:
     - payload['table'] in {memory_entries, constitution_rules}: embed via Gemini (768-dim)
-    - handle_graph_node(payload): embed graph_nodes row (768-dim).
-      Provider priority: OpenAI → Ollama local (nomic-embed-text-v2-moe).
+    - handle_graph_node(payload): embed graph_nodes row via EmbeddingService (OpenAI → Ollama).
 
     Args:
         session: Async DB session.
-        google_api_key: Google AI API key for Gemini embeddings.
-        openai_api_key: OpenAI API key for graph node embeddings (optional;
-            falls back to Ollama when absent).
-        ollama_base_url: Ollama API base URL for local embeddings.
+        google_api_key: Google AI API key for Gemini embeddings (deprecated tables).
+        embedding_service: EmbeddingService for graph node embeddings (OpenAI → Ollama cascade).
     """
+
+    _ALLOWED_TABLES: frozenset[str] = frozenset({_MEMORY_TABLE, _CONSTITUTION_TABLE})
 
     def __init__(
         self,
         session: AsyncSession,
         google_api_key: str | None = None,
-        openai_api_key: str | None = None,
-        ollama_base_url: str = _OLLAMA_BASE_URL,
+        embedding_service: EmbeddingService | None = None,
     ) -> None:
         self._session = session
         self._api_key = google_api_key
-        self._openai_api_key = openai_api_key
-        self._ollama_base_url = ollama_base_url
+        self._embedding = embedding_service
 
     async def handle(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Process a memory embedding job.
@@ -187,10 +122,9 @@ class MemoryEmbeddingJobHandler:
         if embedding is None:
             return {"success": False, "error": "embedding generation failed"}
 
-        # Store embedding
-        embedding_str = "[" + ",".join(str(v) for v in embedding) + "]"
-        await self._store_embedding(entry_id, table, embedding_str)
-        await self._session.commit()
+        # Store embedding — worker owns the commit
+        await self._store_embedding(entry_id, table, serialize_embedding(embedding))
+        await self._session.flush()
 
         logger.info(
             "MemoryEmbeddingJobHandler: embedded entry %s in %s (%d dims)",
@@ -201,11 +135,7 @@ class MemoryEmbeddingJobHandler:
         return {"success": True, "entry_id": str(entry_id), "table": table}
 
     async def handle_graph_node(self, payload: dict[str, Any]) -> dict[str, Any]:
-        """Embed a graph node (768-dim).
-
-        Provider priority:
-          1. OpenAI text-embedding-3-large (if openai_api_key is set)
-          2. Ollama nomic-embed-text-v2-moe (local fallback)
+        """Embed a graph node (768-dim) using EmbeddingService (OpenAI → Ollama).
 
         Args:
             payload: Queue message payload with node_id and workspace_id.
@@ -237,30 +167,23 @@ class MemoryEmbeddingJobHandler:
                 "error": f"graph node {node_id} not found",
             }
 
-        # Provider priority: OpenAI → Ollama local
-        embedding: list[float] | None = None
-        provider = "none"
-        if self._openai_api_key:
-            embedding = await _embed_text_openai(content, self._openai_api_key)
-            provider = "openai"
-        if embedding is None:
-            embedding = await _embed_text_ollama(content, self._ollama_base_url)
-            provider = "ollama"
+        if self._embedding is None:
+            return {"success": False, "error": "no EmbeddingService configured"}
+
+        embedding = await self._embedding.embed(content)
         if embedding is None:
             return {
                 "success": False,
                 "error": "all embedding providers failed (OpenAI + Ollama)",
             }
 
-        # Store embedding back to graph_nodes
-        embedding_str = "[" + ",".join(str(v) for v in embedding) + "]"
-        await self._store_graph_node_embedding(node_id, embedding_str)
-        await self._session.commit()
+        # Store embedding back to graph_nodes — worker owns the commit
+        await self._store_graph_node_embedding(node_id, serialize_embedding(embedding))
+        await self._session.flush()
 
         logger.info(
-            "MemoryEmbeddingJobHandler: embedded graph node %s via %s (%d dims)",
+            "MemoryEmbeddingJobHandler: embedded graph node %s (%d dims)",
             node_id,
-            provider,
             len(embedding),
         )
         return {
@@ -268,7 +191,6 @@ class MemoryEmbeddingJobHandler:
             "node_id": str(node_id),
             "workspace_id": str(workspace_id),
             "dims": len(embedding),
-            "provider": provider,
         }
 
     async def _fetch_content(self, entry_id: UUID, table: str) -> str | None:
@@ -281,7 +203,7 @@ class MemoryEmbeddingJobHandler:
         Returns:
             Content text or None if not found.
         """
-        if table not in (_MEMORY_TABLE, _CONSTITUTION_TABLE):
+        if table not in self._ALLOWED_TABLES:
             logger.error("Unknown table for memory embedding: %s", table)
             return None
 
@@ -301,7 +223,7 @@ class MemoryEmbeddingJobHandler:
             Content text or None if not found.
         """
         query = text(
-            "SELECT content FROM graph_nodes "
+            f"SELECT content FROM {_GRAPH_NODES_TABLE} "
             "WHERE id = :id AND workspace_id = :workspace_id AND is_deleted = false"
         )
         result = await self._session.execute(
@@ -310,8 +232,6 @@ class MemoryEmbeddingJobHandler:
         )
         row = result.first()
         return row[0] if row else None
-
-    _ALLOWED_TABLES: frozenset[str] = frozenset({_MEMORY_TABLE, _CONSTITUTION_TABLE})
 
     async def _store_embedding(
         self,
@@ -323,13 +243,13 @@ class MemoryEmbeddingJobHandler:
 
         Args:
             entry_id: Record UUID.
-            table: Table name.
+            table: Table name (must be in _ALLOWED_TABLES).
             embedding_str: Embedding as '[0.1,0.2,...]' string.
         """
         if table not in self._ALLOWED_TABLES:
-            raise ValueError(f"Disallowed table: {table!r}")
+            raise ValueError(f"Unknown table for embedding storage: {table}")
         update_sql = text(
-            f"UPDATE {table} SET embedding = CAST(:embedding AS vector(768)) WHERE id = :id"
+            f"UPDATE {table} SET embedding = CAST(:embedding AS vector({GRAPH_EMBEDDING_DIMS})) WHERE id = :id"
         )
         await self._session.execute(
             update_sql,
@@ -348,11 +268,14 @@ class MemoryEmbeddingJobHandler:
             embedding_str: Embedding as '[0.1,0.2,...]' string.
         """
         update_sql = text(
-            "UPDATE graph_nodes "
-            f"SET embedding = CAST(:emb AS vector({_GRAPH_EMBEDDING_DIMS})) "
+            f"UPDATE {_GRAPH_NODES_TABLE} "
+            f"SET embedding = CAST(:emb AS vector({GRAPH_EMBEDDING_DIMS})) "
             "WHERE id = :id"
         )
         await self._session.execute(
             update_sql,
             {"emb": embedding_str, "id": str(node_id)},
         )
+
+
+__all__ = ["MemoryEmbeddingJobHandler"]

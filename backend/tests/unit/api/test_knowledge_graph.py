@@ -29,6 +29,7 @@ from pilot_space.api.v1.routers.knowledge_graph import (
     search_knowledge_graph,
 )
 from pilot_space.api.v1.schemas.knowledge_graph import GraphResponse
+from pilot_space.domain.graph_edge import EdgeType, GraphEdge
 
 pytestmark = pytest.mark.asyncio
 
@@ -119,6 +120,7 @@ def _make_repo(**kwargs: Any) -> AsyncMock:
     repo = AsyncMock()
     repo.hybrid_search = AsyncMock(return_value=[])
     repo.get_neighbors = AsyncMock(return_value=[])
+    repo.get_node_by_id = AsyncMock(return_value=None)
     repo.get_subgraph = AsyncMock(return_value=([], []))
     repo.get_user_context = AsyncMock(return_value=[])
     for key, value in kwargs.items():
@@ -221,40 +223,34 @@ class TestEdgeToDto:
 
     def test_known_edge_type_uses_human_readable_label(self) -> None:
         """A known edge_type maps to its human-readable label via _EDGE_LABELS."""
-        dto = _edge_to_dto(
-            edge_id=uuid4(),
-            source_id=uuid4(),
-            target_id=uuid4(),
-            edge_type="relates_to",
-            weight=0.8,
-            properties={},
+        edge = GraphEdge(
+            source_id=uuid4(), target_id=uuid4(), edge_type=EdgeType.RELATES_TO, weight=0.8
         )
+        dto = _edge_to_dto(edge)
         assert dto.label == "related to"
         assert dto.edge_type == "relates_to"
 
     def test_unknown_edge_type_falls_back_to_raw_value(self) -> None:
-        """An unrecognised edge_type falls back to the raw enum string."""
-        dto = _edge_to_dto(
-            edge_id=uuid4(),
-            source_id=uuid4(),
-            target_id=uuid4(),
-            edge_type="custom_edge",
-            weight=0.5,
-            properties={},
+        """An unrecognised edge_type string falls back to the raw value (via KeyError catch)."""
+        # Use a valid EdgeType but patch _EDGE_LABELS to simulate an unknown key.
+        edge = GraphEdge(
+            source_id=uuid4(), target_id=uuid4(), edge_type=EdgeType.RELATES_TO, weight=0.5
         )
-        assert dto.label == "custom_edge"
+        import pilot_space.api.v1.routers.knowledge_graph as kg_module
+
+        original = kg_module._EDGE_LABELS.copy()
+        del kg_module._EDGE_LABELS[EdgeType.RELATES_TO]
+        try:
+            dto = _edge_to_dto(edge)
+            assert dto.label == "relates_to"
+        finally:
+            kg_module._EDGE_LABELS.update(original)
 
     def test_all_known_edge_labels_present(self) -> None:
         """Every entry in _EDGE_LABELS round-trips through _edge_to_dto correctly."""
         for edge_type, expected_label in _EDGE_LABELS.items():
-            dto = _edge_to_dto(
-                edge_id=uuid4(),
-                source_id=uuid4(),
-                target_id=uuid4(),
-                edge_type=edge_type.value,
-                weight=1.0,
-                properties={},
-            )
+            edge = GraphEdge(source_id=uuid4(), target_id=uuid4(), edge_type=edge_type, weight=1.0)
+            dto = _edge_to_dto(edge)
             assert dto.label == expected_label, f"Failed for edge_type={edge_type}"
 
 
@@ -404,11 +400,17 @@ class TestGetNodeNeighbors:
     """GET /workspaces/{workspace_id}/knowledge-graph/nodes/{node_id}/neighbors"""
 
     async def test_neighbors_returns_subgraph(self) -> None:
-        """Valid node_id returns GraphResponse with neighbor nodes."""
+        """Valid node_id returns GraphResponse with center node + neighbor nodes."""
         from unittest.mock import patch
 
+        center_node = _make_graph_node(
+            node_id=TEST_NODE_ID, label="Center issue", node_type="issue"
+        )
         neighbors = [_make_graph_node(label="Neighbor note", node_type="note")]
-        repo = _make_repo(get_neighbors=AsyncMock(return_value=neighbors))
+        repo = _make_repo(
+            get_neighbors=AsyncMock(return_value=neighbors),
+            get_node_by_id=AsyncMock(return_value=center_node),
+        )
         session = _make_session()
 
         with (
@@ -431,9 +433,11 @@ class TestGetNodeNeighbors:
             )
 
         assert isinstance(result, GraphResponse)
-        assert len(result.nodes) == 1
+        assert len(result.nodes) == 2  # center node + 1 neighbor
         assert result.center_node_id == TEST_NODE_ID
-        assert result.nodes[0].node_type == "note"
+        node_types = {str(n.node_type) for n in result.nodes}
+        assert "note" in node_types
+        assert "issue" in node_types
 
     async def test_neighbors_passes_edge_type_filter(self) -> None:
         """edge_types param is forwarded to repo as EdgeType list."""
@@ -514,7 +518,10 @@ class TestGetSubgraph:
         node1 = _make_graph_node(node_id=TEST_NODE_ID, label="Root issue")
         node2 = _make_graph_node(label="Related note", node_type="note")
         edge = _make_graph_edge(source_id=TEST_NODE_ID, target_id=node2.id)
-        repo = _make_repo(get_subgraph=AsyncMock(return_value=([node1, node2], [edge])))
+        repo = _make_repo(
+            get_node_by_id=AsyncMock(return_value=node1),
+            get_subgraph=AsyncMock(return_value=([node1, node2], [edge])),
+        )
         session = _make_session()
 
         with (
@@ -1075,7 +1082,7 @@ class TestIssueKnowledgeGraph:
 
         node_types_in_result = {n.node_type for n in result.nodes}
         assert "branch" in node_types_in_result
-        assert "code_reference" in node_types_in_result
+        assert "commit" in node_types_in_result
         assert "note" in node_types_in_result
         assert all(n.properties.get("ephemeral") is True for n in result.nodes)
 

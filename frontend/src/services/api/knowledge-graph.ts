@@ -1,5 +1,10 @@
 import { apiClient } from './client';
-import type { GraphNodeType, GraphResponse, GraphQueryParams } from '@/types/knowledge-graph';
+import type {
+  GraphEdgeType,
+  GraphNodeType,
+  GraphResponse,
+  GraphQueryParams,
+} from '@/types/knowledge-graph';
 
 export const knowledgeGraphApi = {
   getIssueGraph(
@@ -7,12 +12,13 @@ export const knowledgeGraphApi = {
     issueId: string,
     params?: GraphQueryParams
   ): Promise<GraphResponse> {
-    const queryParams: Record<string, string | number | boolean | string[]> = {};
+    const queryParams: Record<string, string | number | boolean> = {};
 
     if (params?.depth !== undefined) queryParams.depth = params.depth;
     if (params?.maxNodes !== undefined) queryParams.max_nodes = params.maxNodes;
     if (params?.includeGithub !== undefined) queryParams.include_github = params.includeGithub;
-    if (params?.nodeTypes?.length) queryParams.node_types = params.nodeTypes;
+    // Backend expects comma-separated string, not array
+    if (params?.nodeTypes?.length) queryParams.node_types = params.nodeTypes.join(',');
 
     return apiClient.get<GraphResponse>(
       `/workspaces/${workspaceId}/issues/${issueId}/knowledge-graph`,
@@ -20,9 +26,16 @@ export const knowledgeGraphApi = {
     );
   },
 
-  getNodeNeighbors(workspaceId: string, nodeId: string, depth?: number): Promise<GraphResponse> {
-    const queryParams: Record<string, number> = {};
+  getNodeNeighbors(
+    workspaceId: string,
+    nodeId: string,
+    depth?: number,
+    edgeTypes?: GraphEdgeType[]
+  ): Promise<GraphResponse> {
+    const queryParams: Record<string, string | number> = {};
     if (depth !== undefined) queryParams.depth = depth;
+    // Backend expects comma-separated string for edge_types
+    if (edgeTypes?.length) queryParams.edge_types = edgeTypes.join(',');
 
     return apiClient.get<GraphResponse>(
       `/workspaces/${workspaceId}/knowledge-graph/nodes/${nodeId}/neighbors`,
@@ -33,12 +46,38 @@ export const knowledgeGraphApi = {
   searchGraph(
     workspaceId: string,
     query: string,
-    nodeTypes?: GraphNodeType[]
+    nodeTypes?: GraphNodeType[],
+    limit?: number
   ): Promise<GraphResponse> {
-    const queryParams: Record<string, string | string[]> = { query };
-    if (nodeTypes?.length) queryParams.node_types = nodeTypes;
+    const queryParams: Record<string, string | number> = { q: query };
+    // Backend expects comma-separated string, not array
+    if (nodeTypes?.length) queryParams.node_types = nodeTypes.join(',');
+    if (limit !== undefined) queryParams.limit = limit;
 
     return apiClient.get<GraphResponse>(`/workspaces/${workspaceId}/knowledge-graph/search`, {
+      params: queryParams,
+    });
+  },
+
+  getSubgraph(
+    workspaceId: string,
+    rootId: string,
+    params?: { maxDepth?: number; maxNodes?: number }
+  ): Promise<GraphResponse> {
+    const queryParams: Record<string, string | number> = { root_id: rootId };
+    if (params?.maxDepth !== undefined) queryParams.max_depth = params.maxDepth;
+    if (params?.maxNodes !== undefined) queryParams.max_nodes = params.maxNodes;
+
+    return apiClient.get<GraphResponse>(`/workspaces/${workspaceId}/knowledge-graph/subgraph`, {
+      params: queryParams,
+    });
+  },
+
+  getUserContext(workspaceId: string, limit?: number): Promise<GraphResponse> {
+    const queryParams: Record<string, number> = {};
+    if (limit !== undefined) queryParams.limit = limit;
+
+    return apiClient.get<GraphResponse>(`/workspaces/${workspaceId}/knowledge-graph/user-context`, {
       params: queryParams,
     });
   },

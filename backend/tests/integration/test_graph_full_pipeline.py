@@ -84,7 +84,7 @@ def _make_write_service(session: AsyncSession, mock_queue: MagicMock) -> GraphWr
 
 def _make_search_service(session: AsyncSession) -> GraphSearchService:
     repo = KnowledgeGraphRepository(session)
-    return GraphSearchService(repo, session)
+    return GraphSearchService(repo, embedding_service=None)
 
 
 # ---------------------------------------------------------------------------

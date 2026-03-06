@@ -15,7 +15,8 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
-from sqlalchemy import and_, func, or_, select, text, union_all
+from sqlalchemy import and_, or_, select, text
+from sqlalchemy.exc import IntegrityError
 
 from pilot_space.domain.graph_edge import EdgeType, GraphEdge
 from pilot_space.domain.graph_node import GraphNode, NodeType
@@ -23,10 +24,17 @@ from pilot_space.domain.graph_query import ScoredNode
 from pilot_space.infrastructure.database.models.graph_edge import GraphEdgeModel
 from pilot_space.infrastructure.database.models.graph_node import GraphNodeModel
 from pilot_space.infrastructure.database.repositories._graph_helpers import (
+    build_graph_node_model,
+    compute_degree_map,
     edge_model_to_domain,
+    ensure_utc_aware,
+    find_node_by_content_hash,
+    find_node_by_external,
     hybrid_search_pg,
+    insert_node_helper,
     keyword_search,
     node_model_to_domain,
+    update_node_helper,
 )
 from pilot_space.infrastructure.logging import get_logger
 
@@ -47,25 +55,29 @@ class KnowledgeGraphRepository:
     def __init__(self, session: AsyncSession) -> None:
         """Initialize with an async session."""
         self._session = session
-
-    # Expose mappers as class attributes for external callers
-    _model_to_domain = staticmethod(node_model_to_domain)
-    edge_model_to_domain = staticmethod(edge_model_to_domain)
-
-    def _is_sqlite(self) -> bool:
-        """Return True when the session is connected to SQLite."""
-        bind = self._session.get_bind()
-        return getattr(bind, "dialect", None) is not None and bind.dialect.name == "sqlite"
+        bind = session.get_bind()
+        self._is_sqlite: bool = (
+            getattr(bind, "dialect", None) is not None and bind.dialect.name == "sqlite"
+        )
 
     # ------------------------------------------------------------------
     # Node upsert
     # ------------------------------------------------------------------
 
+    async def _touch_and_return(self, model: GraphNodeModel) -> GraphNode:
+        """Refresh the updated_at timestamp, flush, and return domain object."""
+        model.updated_at = datetime.now(UTC)
+        await self._session.flush()
+        await self._session.refresh(model)
+        return node_model_to_domain(model)
+
     async def upsert_node(self, node: GraphNode) -> GraphNode:
         """Idempotently persist a graph node.
 
-        Matches by ``(workspace_id, node_type, external_id)`` when external_id
-        is set; otherwise always inserts.
+        Lookup priority:
+        1. external_id match — for entity-keyed nodes (issues, notes, etc.)
+        2. content_hash match — for unkeyed nodes (decisions, patterns, preferences)
+        3. Insert new — when neither match found.
         """
         if node.external_id is not None:
             existing = await self._find_node_by_external(
@@ -75,45 +87,46 @@ class KnowledgeGraphRepository:
             )
             if existing is not None:
                 return await self._update_node_model(existing, node)
-        return await self._insert_node(node)
+        elif node.content_hash is not None:
+            existing = await self._find_node_by_content_hash(
+                workspace_id=node.workspace_id,
+                content_hash=node.content_hash,
+            )
+            if existing is not None:
+                # Same normalized content — just refresh the timestamp.
+                # Hash collision here means semantically identical content.
+                return await self._touch_and_return(existing)
+        try:
+            return await self._insert_node(node)
+        except IntegrityError:
+            # Concurrent insert raced past the content_hash check above.
+            # The UNIQUE partial index on (workspace_id, content_hash) enforces
+            # dedup at the DB level — recover by querying the winner.
+            await self._session.rollback()
+            if node.content_hash is not None:
+                existing = await self._find_node_by_content_hash(
+                    workspace_id=node.workspace_id,
+                    content_hash=node.content_hash,
+                )
+                if existing is not None:
+                    return await self._touch_and_return(existing)
+            raise
 
     async def _find_node_by_external(
         self, workspace_id: UUID, node_type: NodeType, external_id: UUID
     ) -> GraphNodeModel | None:
-        stmt = select(GraphNodeModel).where(
-            GraphNodeModel.workspace_id == workspace_id,
-            GraphNodeModel.node_type == str(node_type),
-            GraphNodeModel.external_id == external_id,
-            GraphNodeModel.is_deleted == False,  # noqa: E712
-        )
-        return (await self._session.execute(stmt)).scalar_one_or_none()
+        return await find_node_by_external(self._session, workspace_id, node_type, external_id)
+
+    async def _find_node_by_content_hash(
+        self, workspace_id: UUID, content_hash: str
+    ) -> GraphNodeModel | None:
+        return await find_node_by_content_hash(self._session, workspace_id, content_hash)
 
     async def _insert_node(self, node: GraphNode) -> GraphNode:
-        model = GraphNodeModel(
-            id=node.id,
-            workspace_id=node.workspace_id,
-            node_type=str(node.node_type),
-            label=node.label,
-            content=node.content,
-            properties=node.properties,
-            embedding=node.embedding,
-            user_id=node.user_id,
-            external_id=node.external_id,
-        )
-        self._session.add(model)
-        await self._session.flush()
-        await self._session.refresh(model)
-        return node_model_to_domain(model)
+        return await insert_node_helper(self._session, node)
 
     async def _update_node_model(self, model: GraphNodeModel, node: GraphNode) -> GraphNode:
-        model.label = node.label
-        model.content = node.content
-        model.properties = node.properties
-        if node.embedding is not None:
-            model.embedding = node.embedding
-        await self._session.flush()
-        await self._session.refresh(model)
-        return node_model_to_domain(model)
+        return await update_node_helper(self._session, model, node)
 
     # ------------------------------------------------------------------
     # Edge upsert
@@ -134,17 +147,23 @@ class KnowledgeGraphRepository:
             await self._session.refresh(existing)
             return edge_model_to_domain(existing)
 
-        # Derive workspace_id from source node; validate both endpoints exist.
+        # Derive workspace_id from source node; validate both endpoints are active.
         ws_result = await self._session.execute(
-            select(GraphNodeModel.workspace_id).where(GraphNodeModel.id == edge.source_id)
+            select(GraphNodeModel.workspace_id).where(
+                GraphNodeModel.id == edge.source_id,
+                GraphNodeModel.is_deleted == False,  # noqa: E712
+            )
         )
         workspace_id = ws_result.scalar_one_or_none()
         if workspace_id is None:
-            raise ValueError(f"Source node {edge.source_id} not found")
+            raise ValueError(f"Source node {edge.source_id} not found or is deleted")
 
         target_ws = (
             await self._session.execute(
-                select(GraphNodeModel.workspace_id).where(GraphNodeModel.id == edge.target_id)
+                select(GraphNodeModel.workspace_id).where(
+                    GraphNodeModel.id == edge.target_id,
+                    GraphNodeModel.is_deleted == False,  # noqa: E712
+                )
             )
         ).scalar_one_or_none()
         if target_ws != workspace_id:
@@ -180,7 +199,7 @@ class KnowledgeGraphRepository:
         Uses recursive CTE on PostgreSQL; iterative BFS on SQLite.
         workspace_id is required to enforce cross-workspace boundary.
         """
-        if self._is_sqlite():
+        if self._is_sqlite:
             return await self._get_neighbors_bfs(node_id, edge_types, depth, workspace_id)
         return await self._get_neighbors_cte(node_id, edge_types, depth, workspace_id)
 
@@ -322,16 +341,19 @@ class KnowledgeGraphRepository:
         workspace_id: UUID,
         node_types: list[NodeType] | None = None,
         limit: int = 10,
+        since: datetime | None = None,
     ) -> list[ScoredNode]:
         """Hybrid vector + full-text + recency search.
 
         Falls back to keyword-only LIKE search on SQLite or when no embedding
         is provided. Fusion: 0.5 * embedding + 0.2 * text + 0.2 * recency.
         """
-        if self._is_sqlite() or not query_embedding:
-            return await keyword_search(self._session, query_text, workspace_id, node_types, limit)
+        if self._is_sqlite or not query_embedding:
+            return await keyword_search(
+                self._session, query_text, workspace_id, node_types, limit, since=since
+            )
         return await hybrid_search_pg(
-            self._session, query_embedding, query_text, workspace_id, node_types, limit
+            self._session, query_embedding, query_text, workspace_id, node_types, limit, since=since
         )
 
     # ------------------------------------------------------------------
@@ -351,12 +373,12 @@ class KnowledgeGraphRepository:
         workspace_id enforces cross-workspace isolation during BFS (C-2).
         """
         visited: set[UUID] = {root_id}
-        frontier: list[UUID] = [root_id]
+        frontier: deque[UUID] = deque([root_id])
         all_ids: list[UUID] = [root_id]
         for _ in range(max_depth):
             if not frontier:
                 break
-            next_frontier: list[UUID] = []
+            next_frontier: deque[UUID] = deque()
             for current_id in frontier:
                 for nid in await self._direct_neighbors(current_id, None, workspace_id):
                     if nid not in visited:
@@ -366,7 +388,7 @@ class KnowledgeGraphRepository:
             frontier = next_frontier
 
         if len(all_ids) > max_nodes:
-            all_ids = await self._prioritize_nodes(all_ids, root_id, max_nodes)
+            all_ids = await self._prioritize_nodes(all_ids, root_id, max_nodes, workspace_id)
 
         node_result = await self._session.execute(
             select(GraphNodeModel).where(
@@ -375,36 +397,25 @@ class KnowledgeGraphRepository:
             )
         )
         nodes = [node_model_to_domain(m) for m in node_result.scalars().all()]
-        edge_result = await self._session.execute(
-            select(GraphEdgeModel).where(
-                GraphEdgeModel.source_id.in_(all_ids),
-                GraphEdgeModel.target_id.in_(all_ids),
-            )
-        )
+        edge_filters: list[Any] = [
+            GraphEdgeModel.source_id.in_(all_ids),
+            GraphEdgeModel.target_id.in_(all_ids),
+        ]
+        if workspace_id is not None:
+            edge_filters.append(GraphEdgeModel.workspace_id == workspace_id)
+        edge_result = await self._session.execute(select(GraphEdgeModel).where(*edge_filters))
         edges = [edge_model_to_domain(m) for m in edge_result.scalars().all()]
         return nodes, edges
 
     async def _prioritize_nodes(
-        self, node_ids: list[UUID], root_id: UUID, max_nodes: int
+        self,
+        node_ids: list[UUID],
+        root_id: UUID,
+        max_nodes: int,
+        workspace_id: UUID | None = None,
     ) -> list[UUID]:
-        # Count outgoing and incoming edges separately, then union and sum so
-        # that nodes which only receive edges still accumulate degree (H-1).
-        out_q = (
-            select(GraphEdgeModel.source_id.label("node_id"), func.count().label("cnt"))
-            .where(GraphEdgeModel.source_id.in_(node_ids))
-            .group_by(GraphEdgeModel.source_id)
-        )
-        in_q = (
-            select(GraphEdgeModel.target_id.label("node_id"), func.count().label("cnt"))
-            .where(GraphEdgeModel.target_id.in_(node_ids))
-            .group_by(GraphEdgeModel.target_id)
-        )
-        combined = union_all(out_q, in_q).subquery()
-        degree_q = select(
-            combined.c.node_id, func.sum(combined.c.cnt).label("total_degree")
-        ).group_by(combined.c.node_id)
-        degree_result = await self._session.execute(degree_q)
-        degree_map: dict[UUID, int] = {row.node_id: row.total_degree for row in degree_result}
+        # Count outgoing + incoming edges in one UNION ALL query via shared helper.
+        degree_map = await compute_degree_map(self._session, node_ids, workspace_id)
         models = {
             m.id: m
             for m in (
@@ -418,7 +429,9 @@ class KnowledgeGraphRepository:
 
         def _sort_key(nid: UUID) -> tuple[int, int, float]:
             model = models.get(nid)
-            updated = model.updated_at if model else datetime.min.replace(tzinfo=UTC)
+            updated = (
+                ensure_utc_aware(model.updated_at) if model else datetime.min.replace(tzinfo=UTC)
+            )
             return (0 if nid == root_id else 1, -degree_map.get(nid, 0), -updated.timestamp())
 
         return sorted(node_ids, key=_sort_key)[:max_nodes]
@@ -466,7 +479,7 @@ class KnowledgeGraphRepository:
         """
         if not nodes:
             return []
-        if self._is_sqlite():
+        if self._is_sqlite:
             return [await self.upsert_node(node) for node in nodes]
         return await self._bulk_upsert_pg(nodes)
 
@@ -506,39 +519,59 @@ class KnowledgeGraphRepository:
                     existing.label = node.label
                     existing.content = node.content
                     existing.properties = node.properties
+                    existing.updated_at = datetime.now(UTC)
                     if node.embedding is not None:
                         existing.embedding = node.embedding
                     final_ids.append(existing.id)
                 else:
-                    self._session.add(
-                        GraphNodeModel(
-                            id=node.id,
-                            workspace_id=node.workspace_id,
-                            node_type=str(node.node_type),
-                            label=node.label,
-                            content=node.content,
-                            properties=node.properties,
-                            embedding=node.embedding,
-                            user_id=node.user_id,
-                            external_id=node.external_id,
-                        )
-                    )
+                    self._session.add(build_graph_node_model(node))
                     final_ids.append(node.id)
 
-        for node in unkeyed:
-            self._session.add(
-                GraphNodeModel(
-                    id=node.id,
-                    workspace_id=node.workspace_id,
-                    node_type=str(node.node_type),
-                    label=node.label,
-                    content=node.content,
-                    properties=node.properties,
-                    embedding=node.embedding,
-                    user_id=node.user_id,
-                    external_id=None,
-                )
+        # (1b) Batch-find unkeyed nodes with content_hash for dedup
+        hashed_unkeyed = [n for n in unkeyed if n.content_hash is not None]
+        unhashed_unkeyed = [n for n in unkeyed if n.content_hash is None]
+
+        if hashed_unkeyed:
+            hash_conditions = or_(
+                *[
+                    and_(
+                        GraphNodeModel.workspace_id == n.workspace_id,
+                        GraphNodeModel.content_hash == n.content_hash,
+                        GraphNodeModel.is_deleted == False,  # noqa: E712
+                    )
+                    for n in hashed_unkeyed
+                ]
             )
+            existing_hash_models = (
+                (await self._session.execute(select(GraphNodeModel).where(hash_conditions)))
+                .scalars()
+                .all()
+            )
+            hash_map: dict[str, GraphNodeModel] = {
+                m.content_hash: m for m in existing_hash_models if m.content_hash
+            }
+            # Track hashes already added in this batch to avoid same-batch
+            # IntegrityError when two NodeInputs normalize to the same content_hash.
+            # Maps content_hash → the winning node id so duplicates can reference it.
+            batch_hash_to_id: dict[str, UUID] = {}
+            for node in hashed_unkeyed:
+                node_hash = node.content_hash or ""
+                existing = hash_map.get(node_hash)
+                if existing is not None:
+                    existing.updated_at = datetime.now(UTC)
+                    final_ids.append(existing.id)
+                    batch_hash_to_id[node_hash] = existing.id
+                elif node_hash and node_hash in batch_hash_to_id:
+                    # Duplicate in this batch — the first insert wins; reference its id.
+                    final_ids.append(batch_hash_to_id[node_hash])
+                else:
+                    self._session.add(build_graph_node_model(node))
+                    final_ids.append(node.id)
+                    if node_hash:
+                        batch_hash_to_id[node_hash] = node.id
+
+        for node in unhashed_unkeyed:
+            self._session.add(build_graph_node_model(node))
             final_ids.append(node.id)
 
         # (2) Single flush for all pending changes
@@ -562,10 +595,26 @@ class KnowledgeGraphRepository:
     # ------------------------------------------------------------------
 
     async def delete_expired_nodes(self, before: datetime) -> int:
-        """Soft-delete stale unpinned nodes with updated_at < before.
+        """Soft-delete stale unpinned nodes (updated_at < before). Returns count."""
+        now = datetime.now(tz=UTC)
+        if not self._is_sqlite:
+            # PostgreSQL: bulk UPDATE — filters pinned via JSONB cast
+            result = await self._session.execute(
+                text(
+                    "UPDATE graph_nodes "
+                    "SET is_deleted = true, deleted_at = :now "
+                    "WHERE updated_at < :before "
+                    "  AND is_deleted = false "
+                    "  AND COALESCE((properties->>'pinned')::boolean, false) = false"
+                ),
+                {"before": before, "now": now},
+            )
+            count = result.rowcount  # type: ignore[union-attr]
+            if count:
+                await self._session.flush()
+            return count
 
-        Returns count of nodes soft-deleted.
-        """
+        # SQLite fallback: Python loop (tests only)
         result = await self._session.execute(
             select(GraphNodeModel).where(
                 GraphNodeModel.updated_at < before,
@@ -573,7 +622,6 @@ class KnowledgeGraphRepository:
             )
         )
         candidates = result.scalars().all()
-        now = datetime.now(tz=UTC)
         count = 0
         for model in candidates:
             if (model.properties or {}).get("pinned"):
@@ -584,6 +632,16 @@ class KnowledgeGraphRepository:
         if count:
             await self._session.flush()
         return count
+
+    async def get_node_by_id(self, node_id: UUID, workspace_id: UUID) -> GraphNode | None:
+        """Fetch a single active node by id within the given workspace."""
+        stmt = select(GraphNodeModel).where(
+            GraphNodeModel.id == node_id,
+            GraphNodeModel.workspace_id == workspace_id,
+            GraphNodeModel.is_deleted == False,  # noqa: E712
+        )
+        model = (await self._session.execute(stmt)).scalar_one_or_none()
+        return node_model_to_domain(model) if model else None
 
     async def get_edges_between(
         self,

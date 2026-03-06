@@ -10,6 +10,10 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from pilot_space.infrastructure.logging import get_logger
+
+logger = get_logger(__name__)
+
 if TYPE_CHECKING:
     from uuid import UUID
 
@@ -22,6 +26,7 @@ if TYPE_CHECKING:
     from pilot_space.infrastructure.database.repositories.template_repository import (
         TemplateRepository,
     )
+    from pilot_space.infrastructure.queue.supabase_queue import SupabaseQueueClient
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,6 +83,7 @@ class CreateNoteService:
         session: AsyncSession,
         note_repository: NoteRepository,
         template_repository: TemplateRepository,
+        queue: SupabaseQueueClient | None = None,
     ) -> None:
         """Initialize CreateNoteService.
 
@@ -85,10 +91,12 @@ class CreateNoteService:
             session: The async database session.
             note_repository: Repository for note operations.
             template_repository: Repository for template operations.
+            queue: Optional queue client for KG populate jobs.
         """
         self._session = session
         self._note_repo = note_repository
         self._template_repo = template_repository
+        self._queue = queue
 
     async def execute(self, payload: CreateNotePayload) -> CreateNoteResult:
         """Execute note creation.
@@ -138,6 +146,24 @@ class CreateNoteService:
         )
 
         created_note = await self._note_repo.create(note)
+
+        # Enqueue KG populate job if note belongs to a project (non-fatal)
+        if self._queue is not None and payload.project_id is not None:
+            try:
+                from pilot_space.infrastructure.queue.models import QueueName
+
+                await self._queue.enqueue(
+                    QueueName.AI_NORMAL,
+                    {
+                        "task_type": "kg_populate",
+                        "entity_type": "note",
+                        "entity_id": str(created_note.id),
+                        "workspace_id": str(payload.workspace_id),
+                        "project_id": str(payload.project_id),
+                    },
+                )
+            except Exception as exc:
+                logger.warning("CreateNoteService: failed to enqueue kg_populate: %s", exc)
 
         return CreateNoteResult(
             note=created_note,

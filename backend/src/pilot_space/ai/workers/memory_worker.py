@@ -5,6 +5,8 @@ T-068: Routes by task_type:
 - 'memory_embedding'          → MemoryEmbeddingJobHandler
 - 'graph_embedding'           → MemoryEmbeddingJobHandler.handle_graph_node
 - 'memory_dlq_reconciliation' → MemoryDLQJobHandler
+- 'graph_expiration'          → expire_stale_graph_nodes
+- 'kg_populate'               → KgPopulateHandler
 
 Follows DigestWorker pattern: poll → process → ack/nack/dead-letter.
 Sleeps 2s on empty queue.
@@ -17,8 +19,10 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from typing import TYPE_CHECKING, Any
 
+from pilot_space.application.services.embedding_service import EmbeddingConfig, EmbeddingService
 from pilot_space.infrastructure.logging import get_logger
 from pilot_space.infrastructure.queue.models import QueueName
 
@@ -31,29 +35,36 @@ logger = get_logger(__name__)
 
 # Task type constants
 TASK_INTENT_DEDUP = "intent_dedup"
+TASK_KG_POPULATE = "kg_populate"
 TASK_MEMORY_EMBEDDING = "memory_embedding"
 TASK_GRAPH_EMBEDDING = "graph_embedding"
 TASK_MEMORY_DLQ = "memory_dlq_reconciliation"
+TASK_GRAPH_EXPIRATION = "graph_expiration"
 
+# _BATCH_SIZE MUST remain 1: _process() handles only messages[0].
+# Increasing this without updating the loop would silently drop messages 1..N.
 _BATCH_SIZE = 1
 _VISIBILITY_TIMEOUT_S = 120
 _SLEEP_EMPTY_S = 2.0
 _SLEEP_ERROR_S = 5.0
 _MAX_NACK_ATTEMPTS = 2
+# Enqueue a graph_expiration task at most once per day per worker process.
+_EXPIRATION_INTERVAL_S = 24 * 3600
 
 
 class MemoryWorker:
     """Worker polling ai_normal queue for memory engine jobs.
 
-    Handles intent_dedup, memory_embedding, graph_embedding, and
-    memory_dlq_reconciliation task types. Uses session per job for
-    clean transaction boundaries.
+    Handles intent_dedup, memory_embedding, graph_embedding,
+    memory_dlq_reconciliation, and graph_expiration task types.
+    Uses session per job for clean transaction boundaries.
 
     Args:
         queue: Supabase queue client.
         session_factory: Async session factory for per-job sessions.
-        google_api_key: Optional Google API key for Gemini embedding.
-        openai_api_key: Optional OpenAI API key for graph node embedding.
+        google_api_key: Optional Google API key for Gemini embedding (deprecated tables).
+        openai_api_key: Optional OpenAI API key for EmbeddingService.
+        ollama_base_url: Ollama base URL for EmbeddingService fallback.
     """
 
     def __init__(
@@ -62,12 +73,19 @@ class MemoryWorker:
         session_factory: async_sessionmaker[AsyncSession],
         google_api_key: str | None = None,
         openai_api_key: str | None = None,
+        ollama_base_url: str = "http://localhost:11434",
     ) -> None:
         self.queue = queue
         self._session_factory = session_factory
         self._google_api_key = google_api_key
-        self._openai_api_key = openai_api_key
+        self._embedding_service = EmbeddingService(
+            EmbeddingConfig(openai_api_key=openai_api_key, ollama_base_url=ollama_base_url)
+        )
         self._running = False
+        # Tracks monotonic time of last graph_expiration enqueue.
+        # float('-inf') guarantees the first call always enqueues regardless of system uptime.
+        # Resets on worker restart, which is acceptable — daily cleanup is best-effort.
+        self._last_expiration_enqueue: float = float("-inf")
 
     async def start(self) -> None:
         """Poll loop: dequeue → process → ack/nack."""
@@ -83,6 +101,7 @@ class MemoryWorker:
                 if messages:
                     await self._process(messages[0])
                 else:
+                    await self._maybe_enqueue_expiration()
                     await asyncio.sleep(_SLEEP_EMPTY_S)
             except asyncio.CancelledError:
                 logger.info("MemoryWorker cancelled")
@@ -94,6 +113,21 @@ class MemoryWorker:
     async def stop(self) -> None:
         """Signal the worker to stop polling."""
         self._running = False
+
+    async def _maybe_enqueue_expiration(self) -> None:
+        """Enqueue a graph_expiration task once per day per process lifetime."""
+        now = time.monotonic()
+        if now - self._last_expiration_enqueue < _EXPIRATION_INTERVAL_S:
+            return
+        try:
+            await self.queue.enqueue(
+                QueueName.AI_NORMAL,
+                {"task_type": TASK_GRAPH_EXPIRATION},
+            )
+            self._last_expiration_enqueue = now
+            logger.info("MemoryWorker: enqueued graph_expiration task")
+        except Exception:
+            logger.exception("MemoryWorker: failed to enqueue graph_expiration")
 
     async def _process(self, message: object) -> None:
         """Process a single queue message by routing to the correct handler.
@@ -107,9 +141,11 @@ class MemoryWorker:
 
         if task_type not in (
             TASK_INTENT_DEDUP,
+            TASK_KG_POPULATE,
             TASK_MEMORY_EMBEDDING,
             TASK_GRAPH_EMBEDDING,
             TASK_MEMORY_DLQ,
+            TASK_GRAPH_EXPIRATION,
         ):
             logger.debug("MemoryWorker: skipping unknown task_type %s", task_type)
             await self.queue.nack(
@@ -129,8 +165,8 @@ class MemoryWorker:
         try:
             async with self._session_factory() as session:
                 result = await self._dispatch(task_type, payload, session)
-                await self.queue.ack(QueueName.AI_NORMAL, msg_id)
                 await session.commit()
+                await self.queue.ack(QueueName.AI_NORMAL, msg_id)
 
             logger.info("MemoryWorker: completed %s: %s", task_type, json.dumps(result))
 
@@ -182,11 +218,11 @@ class MemoryWorker:
                 job_payload,
                 session,
                 intent_repo,
-                google_api_key=self._google_api_key,
+                embedding_service=self._embedding_service,
             )
             return {"task_type": task_type, "intent_id": payload.get("intent_id")}
 
-        if task_type == TASK_MEMORY_EMBEDDING:
+        if task_type in (TASK_MEMORY_EMBEDDING, TASK_GRAPH_EMBEDDING):
             from pilot_space.infrastructure.queue.handlers.memory_embedding_handler import (
                 MemoryEmbeddingJobHandler,
             )
@@ -194,21 +230,11 @@ class MemoryWorker:
             handler = MemoryEmbeddingJobHandler(
                 session,
                 google_api_key=self._google_api_key,
-                openai_api_key=self._openai_api_key,
+                embedding_service=self._embedding_service,
             )
+            if task_type == TASK_GRAPH_EMBEDDING:
+                return await handler.handle_graph_node(payload)
             return await handler.handle(payload)
-
-        if task_type == TASK_GRAPH_EMBEDDING:
-            from pilot_space.infrastructure.queue.handlers.memory_embedding_handler import (
-                MemoryEmbeddingJobHandler,
-            )
-
-            handler = MemoryEmbeddingJobHandler(
-                session,
-                google_api_key=self._google_api_key,
-                openai_api_key=self._openai_api_key,
-            )
-            return await handler.handle_graph_node(payload)
 
         if task_type == TASK_MEMORY_DLQ:
             from pilot_space.infrastructure.queue.handlers.memory_dlq_handler import (
@@ -218,7 +244,21 @@ class MemoryWorker:
             handler = MemoryDLQJobHandler(session, self.queue)
             return await handler.handle(payload)
 
-        return {}  # unreachable — guarded in _process
+        if task_type == TASK_GRAPH_EXPIRATION:
+            from pilot_space.infrastructure.jobs.expire_graph_nodes import expire_stale_graph_nodes
+
+            count = await expire_stale_graph_nodes(session)
+            return {"task_type": task_type, "expired_count": count}
+
+        if task_type == TASK_KG_POPULATE:
+            from pilot_space.infrastructure.queue.handlers.kg_populate_handler import (
+                KgPopulateHandler,
+            )
+
+            handler = KgPopulateHandler(session, self._embedding_service, self.queue)
+            return await handler.handle(payload)
+
+        raise AssertionError(f"Unreachable: _dispatch called with unknown task_type {task_type!r}")
 
 
 __all__ = ["MemoryWorker"]

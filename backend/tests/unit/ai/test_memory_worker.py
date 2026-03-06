@@ -94,12 +94,12 @@ class TestMemoryWorkerDispatchGraphEmbedding:
         MockHandler.assert_called_once_with(
             session,
             google_api_key=None,
-            openai_api_key="sk-test",  # pragma: allowlist secret
+            embedding_service=worker._embedding_service,
         )
         mock_instance.handle_graph_node.assert_awaited_once_with(payload)
         assert result == expected_result
 
-    async def test_graph_embedding_passes_openai_key_to_handler(self) -> None:
+    async def test_graph_embedding_passes_openai_key_to_embedding_service(self) -> None:
         custom_key = "sk-custom-openai-key"  # pragma: allowlist secret
         session = _make_session()
         queue = _make_queue()
@@ -109,6 +109,9 @@ class TestMemoryWorkerDispatchGraphEmbedding:
             session_factory=factory,
             openai_api_key=custom_key,
         )
+
+        # EmbeddingService is built internally with the provided openai_api_key
+        assert worker._embedding_service._config.openai_api_key == custom_key
 
         payload = {
             "task_type": TASK_GRAPH_EMBEDDING,
@@ -125,7 +128,7 @@ class TestMemoryWorkerDispatchGraphEmbedding:
             await worker._dispatch(TASK_GRAPH_EMBEDDING, payload, session)
 
         _call_kwargs = MockHandler.call_args.kwargs
-        assert _call_kwargs["openai_api_key"] == custom_key
+        assert _call_kwargs["embedding_service"] is worker._embedding_service
 
 
 class TestMemoryWorkerDispatchMemoryEmbedding:

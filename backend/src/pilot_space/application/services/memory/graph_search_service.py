@@ -18,23 +18,21 @@ from pilot_space.domain.graph_edge import GraphEdge
 from pilot_space.domain.graph_node import GraphNode, NodeType
 from pilot_space.domain.graph_query import ScoredNode
 from pilot_space.infrastructure.database.repositories._graph_helpers import (
-    GRAPH_EMBEDDING_DIMS,
+    GRAPH_EDGE_DENSITY_WEIGHT,
     GRAPH_EMBEDDING_WEIGHT,
     GRAPH_RECENCY_WEIGHT,
-    GRAPH_SECONDS_PER_DAY,
     GRAPH_TEXT_WEIGHT,
+    compute_recency_score,
 )
 from pilot_space.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
+    from pilot_space.application.services.embedding_service import EmbeddingService
     from pilot_space.infrastructure.database.repositories.knowledge_graph_repository import (
         KnowledgeGraphRepository,
     )
 
 logger = get_logger(__name__)
-
-_OPENAI_EMBEDDING_MODEL = "text-embedding-3-large"
-_EDGE_DENSITY_WEIGHT = 0.1
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,7 +45,7 @@ class GraphSearchPayload:
         user_id: Optional user scope; surface personal nodes when set.
         node_types: Restrict search to these node types (None = all).
         limit: Maximum number of scored nodes to return.
-        openai_api_key: Optional OpenAI API key for embedding generation.
+        since: Optional lower bound on updated_at for temporal filtering.
     """
 
     query: str
@@ -55,7 +53,7 @@ class GraphSearchPayload:
     user_id: UUID | None = None
     node_types: list[NodeType] | None = None
     limit: int = 10
-    openai_api_key: str | None = None
+    since: datetime | None = None
 
 
 @dataclass
@@ -83,28 +81,30 @@ class GraphSearchService:
 
         score = 0.5 * embedding + 0.2 * text + 0.2 * recency + 0.1 * edge_density
 
-    Falls back to text-only search when no OpenAI key is provided or
+    Falls back to text-only search when no EmbeddingService is provided or
     when the embedding call fails.
 
     Example:
-        service = GraphSearchService(knowledge_graph_repository)
-        result = await service.execute(GraphSearchPayload(
+        svc = GraphSearchService(repo, embedding_service=EmbeddingService(cfg))
+        result = await svc.execute(GraphSearchPayload(
             query="rate limiting design decision",
             workspace_id=workspace_id,
-            openai_api_key=api_key,
         ))
     """
 
     def __init__(
         self,
         knowledge_graph_repository: KnowledgeGraphRepository,
+        embedding_service: EmbeddingService | None = None,
     ) -> None:
         """Initialize service.
 
         Args:
             knowledge_graph_repository: Repository for graph queries.
+            embedding_service: Optional EmbeddingService for vector embedding.
         """
         self._repo = knowledge_graph_repository
+        self._embedding = embedding_service
 
     async def execute(self, payload: GraphSearchPayload) -> GraphSearchResult:
         """Execute hybrid knowledge graph search.
@@ -119,8 +119,9 @@ class GraphSearchService:
             GraphSearchResult with ranked nodes and intra-result edges.
         """
         if payload.user_id is not None:
+            embedding_coro = self._get_embedding(payload.query)
             (embedding, embedding_used), user_nodes = await asyncio.gather(
-                self._get_embedding(payload.query, payload.openai_api_key),
+                embedding_coro,
                 self._repo.get_user_context(
                     user_id=payload.user_id,
                     workspace_id=payload.workspace_id,
@@ -128,9 +129,7 @@ class GraphSearchService:
                 ),
             )
         else:
-            embedding, embedding_used = await self._get_embedding(
-                payload.query, payload.openai_api_key
-            )
+            embedding, embedding_used = await self._get_embedding(payload.query)
             user_nodes = None
 
         # Primary hybrid search (includes edge-density scoring internally)
@@ -140,6 +139,7 @@ class GraphSearchService:
             workspace_id=payload.workspace_id,
             node_types=payload.node_types,
             limit=payload.limit,
+            since=payload.since,
         )
 
         # Merge pre-fetched user-scoped context nodes
@@ -171,53 +171,24 @@ class GraphSearchService:
     # Private helpers
     # ------------------------------------------------------------------
 
-    @staticmethod
-    async def _get_embedding(query: str, api_key: str | None) -> tuple[list[float] | None, bool]:
-        """Generate a query embedding for hybrid graph search.
-
-        Uses AsyncOpenAI to avoid blocking the event loop. A 10s client
-        timeout and a 15s asyncio.wait_for guard prevent the call from
-        stalling the request indefinitely (H-3).
+    async def _get_embedding(self, query: str) -> tuple[list[float] | None, bool]:
+        """Generate a query embedding using the configured EmbeddingService.
 
         Args:
             query: Text to embed.
-            api_key: OpenAI API key.
 
         Returns:
             Tuple of (embedding or None, embedding_used flag).
         """
-        if not api_key:
+        if self._embedding is None:
             return None, False
-        try:
-            from openai import AsyncOpenAI  # type: ignore[import-untyped]
-
-            client = AsyncOpenAI(api_key=api_key, timeout=10.0)
-            response = await asyncio.wait_for(
-                client.embeddings.create(
-                    model=_OPENAI_EMBEDDING_MODEL,
-                    input=query,
-                    dimensions=GRAPH_EMBEDDING_DIMS,
-                ),
-                timeout=15.0,
-            )
-            embedding: list[float] = response.data[0].embedding
-            return embedding, True
-        except TimeoutError:
-            logger.warning(
-                "OpenAI embedding timed out for graph search — falling back to text-only"
-            )
-            return None, False
-        except Exception:
-            logger.warning(
-                "OpenAI embedding failed for graph search — falling back to text-only",
-                exc_info=True,
-            )
-            return None, False
+        result = await self._embedding.embed(query)
+        return result, result is not None
 
     async def _collect_edges(
         self,
         scored_nodes: list[ScoredNode],
-        workspace_id: UUID | None = None,
+        workspace_id: UUID,
     ) -> list[GraphEdge]:
         """Collect edges between the result nodes.
 
@@ -269,8 +240,7 @@ def _merge_user_context(
     for node in user_nodes:
         if node.id in existing_ids:
             continue
-        age_days = (now - node.updated_at).total_seconds() / GRAPH_SECONDS_PER_DAY
-        recency = 1.0 / (1.0 + age_days)
+        recency = compute_recency_score(node.updated_at, now)
         scored_nodes.append(
             ScoredNode(
                 node=node,
@@ -292,30 +262,24 @@ def _rerank(scored_nodes: list[ScoredNode]) -> list[ScoredNode]:
     Formula:
         score = 0.5 * embedding + 0.2 * text + 0.2 * recency + 0.1 * edge_density
 
+    ScoredNode is a mutable dataclass; mutating `.score` in place avoids
+    rebuilding N objects that were just created by enrich_edge_density.
+
     Args:
-        scored_nodes: Unsorted nodes with partial scores.
+        scored_nodes: Nodes with all four component scores already populated.
 
     Returns:
-        Nodes sorted by combined score descending.
+        The same list, sorted by combined score descending.
     """
-    reranked = [
-        ScoredNode(
-            node=sn.node,
-            score=(
-                GRAPH_EMBEDDING_WEIGHT * sn.embedding_score
-                + GRAPH_TEXT_WEIGHT * sn.text_score
-                + GRAPH_RECENCY_WEIGHT * sn.recency_score
-                + _EDGE_DENSITY_WEIGHT * sn.edge_density_score
-            ),
-            embedding_score=sn.embedding_score,
-            text_score=sn.text_score,
-            recency_score=sn.recency_score,
-            edge_density_score=sn.edge_density_score,
+    for sn in scored_nodes:
+        sn.score = (
+            GRAPH_EMBEDDING_WEIGHT * sn.embedding_score
+            + GRAPH_TEXT_WEIGHT * sn.text_score
+            + GRAPH_RECENCY_WEIGHT * sn.recency_score
+            + GRAPH_EDGE_DENSITY_WEIGHT * sn.edge_density_score
         )
-        for sn in scored_nodes
-    ]
-    reranked.sort(key=lambda s: s.score, reverse=True)
-    return reranked
+    scored_nodes.sort(key=lambda s: s.score, reverse=True)
+    return scored_nodes
 
 
 __all__ = ["GraphSearchPayload", "GraphSearchResult", "GraphSearchService"]

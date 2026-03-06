@@ -14,12 +14,13 @@ Feature 015: AI Workforce Platform
 from __future__ import annotations
 
 import asyncio
-import logging
 from collections.abc import Sequence
+from datetime import datetime
 from typing import TYPE_CHECKING, Any, ClassVar
 from uuid import UUID
 
 from pilot_space.api.v1.streaming import format_sse_event
+from pilot_space.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
     from pilot_space.application.services.intent.detection_service import (
@@ -39,7 +40,7 @@ if TYPE_CHECKING:
         MemorySearchService,
     )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # SSE event type constants (T-017)
@@ -176,7 +177,7 @@ async def detect_intents(
     return await detection_service.detect(payload)
 
 
-async def emit_intent_detected_events(
+def emit_intent_detected_events(
     intents: Sequence[Any],
 ) -> list[str]:
     """Build SSE strings for each detected intent.
@@ -467,7 +468,7 @@ async def recall_graph_context(
     query: str,
     graph_search_service: GraphSearchService | None,
     limit: int = 10,
-    openai_api_key: str | None = None,
+    since: datetime | None = None,
 ) -> list[dict[str, Any]]:
     """Graph-aware context recall replacing recall_workspace_context.
 
@@ -477,7 +478,7 @@ async def recall_graph_context(
         query: Search query derived from user message.
         graph_search_service: Optional injected GraphSearchService.
         limit: Maximum number of scored nodes to return.
-        openai_api_key: Optional OpenAI key for vector embedding.
+        since: Optional lower bound on updated_at for temporal filtering.
 
     Returns:
         List of graph context dicts; empty on failure or missing service.
@@ -499,7 +500,7 @@ async def recall_graph_context(
             workspace_id=workspace_id,
             user_id=user_id,
             limit=limit,
-            openai_api_key=openai_api_key,
+            since=since,
         )
         result = await graph_search_service.execute(payload)
         entries = [
@@ -532,59 +533,71 @@ async def extract_and_persist_to_graph(
     user_id: UUID | None,
     messages: list[dict[str, str]],
     issue_id: UUID | None = None,
+    anthropic_api_key: str | None = None,
 ) -> bool:
-    """Persist conversation outcome as a skill-outcome node in the knowledge graph.
+    """Extract structured knowledge from a conversation and persist to the graph.
 
-    Replaces save_skill_outcome_to_memory with structured graph persistence.
+    Uses GraphExtractionService (Claude Haiku) to identify decisions, patterns,
+    and user preferences. Only saves when the LLM finds meaningful content.
+    Trivial conversations (greetings, simple Q&A) produce no nodes and return False.
 
     Args:
         graph_write_service: Injected GraphWriteService.
-        workspace_id: Workspace to save the node in.
-        user_id: Optional user scope for the node.
-        messages: List of conversation messages (role/content dicts).
-        issue_id: Optional originating issue UUID for external_id linking.
+        workspace_id: Workspace to save nodes in.
+        user_id: Optional user scope for personal nodes.
+        messages: Conversation messages [{role, content}].
+        issue_id: Optional originating issue UUID.
+        anthropic_api_key: BYOK Anthropic key. None → returns False immediately.
 
     Returns:
-        True if persisted successfully, False otherwise.
+        True if meaningful nodes were extracted and persisted, False otherwise.
     """
-    if not messages:
+    if not messages or not anthropic_api_key:
         return False
 
     try:
-        from pilot_space.application.services.memory.graph_write_service import (
-            GraphWritePayload,
-            NodeInput,
+        from pilot_space.application.services.memory.graph_extraction_service import (
+            ConversationExtractionPayload,
+            GraphExtractionService,
         )
-        from pilot_space.domain.graph_node import NodeType
+        from pilot_space.application.services.memory.graph_write_service import GraphWritePayload
 
-        assistant_messages = [m for m in messages if m.get("role") == "assistant"]
-        if not assistant_messages:
+        extraction_svc = GraphExtractionService()
+        result = await extraction_svc.execute(
+            ConversationExtractionPayload(
+                messages=messages,
+                workspace_id=workspace_id,
+                user_id=user_id,
+                issue_id=issue_id,
+                api_key=anthropic_api_key,
+            )
+        )
+
+        if not result.nodes:
+            logger.debug(
+                "[IntentPipeline] No meaningful nodes extracted workspace=%s",
+                workspace_id,
+            )
             return False
 
-        content = assistant_messages[-1].get("content", "")[:500]
-        node = NodeInput(
-            node_type=NodeType.SKILL_OUTCOME,
-            label="Skill outcome",
-            content=content,
-            properties={},
-            external_id=issue_id,
-            user_id=user_id,
+        await graph_write_service.execute(
+            GraphWritePayload(
+                workspace_id=workspace_id,
+                nodes=result.nodes,
+                edges=result.edges,
+                user_id=user_id,
+            )
         )
-        payload = GraphWritePayload(
-            workspace_id=workspace_id,
-            nodes=[node],
-            edges=[],
-            user_id=user_id,
-        )
-        await graph_write_service.execute(payload)
         logger.info(
-            "[IntentPipeline] Persisted skill outcome to knowledge graph workspace=%s",
+            "[IntentPipeline] Extracted %d nodes, %d edges to knowledge graph workspace=%s",
+            len(result.nodes),
+            len(result.edges),
             workspace_id,
         )
         return True
     except Exception:
         logger.warning(
-            "[IntentPipeline] Graph persistence failed (non-fatal)",
+            "[IntentPipeline] Graph extraction/persistence failed (non-fatal)",
             exc_info=True,
         )
         return False
@@ -631,7 +644,7 @@ async def run_intent_pipeline_step(
         if not result.intents:
             return []
 
-        events = await emit_intent_detected_events(result.intents)
+        events = emit_intent_detected_events(result.intents)
         logger.info(
             "[IntentPipeline] Detected %d intents for session=%s",
             len(result.intents),

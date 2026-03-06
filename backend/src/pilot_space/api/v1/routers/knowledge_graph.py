@@ -16,8 +16,9 @@ Feature 016: Knowledge Graph — Unit 7 REST API
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Annotated
-from uuid import UUID, uuid4
+from enum import StrEnum
+from typing import Annotated, TypeVar
+from uuid import NAMESPACE_URL, UUID, uuid5
 
 from fastapi import APIRouter, HTTPException, Path, Query, status
 from sqlalchemy import select
@@ -28,12 +29,13 @@ from pilot_space.api.v1.schemas.knowledge_graph import (
     GraphNodeDTO,
     GraphResponse,
 )
+from pilot_space.application.services.embedding_service import EmbeddingConfig, EmbeddingService
 from pilot_space.application.services.memory.graph_search_service import (
     GraphSearchPayload,
     GraphSearchService,
 )
 from pilot_space.dependencies.auth import SessionDep, SyncedUserId
-from pilot_space.domain.graph_edge import EdgeType
+from pilot_space.domain.graph_edge import EdgeType, GraphEdge
 from pilot_space.domain.graph_node import GraphNode, NodeType
 from pilot_space.infrastructure.database.models.graph_node import GraphNodeModel
 from pilot_space.infrastructure.database.models.integration import (
@@ -48,6 +50,26 @@ from pilot_space.infrastructure.database.rls import set_rls_context
 from pilot_space.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
+
+_EnumT = TypeVar("_EnumT", bound=StrEnum)
+
+
+def _parse_csv_enum(
+    raw: str | None,
+    enum_cls: type[_EnumT],
+    param_name: str,
+) -> list[_EnumT] | None:
+    """Parse a comma-separated enum string into a list of enum values.
+
+    Raises HTTP 422 with a descriptive message on invalid values.
+    """
+    if not raw:
+        return None
+    try:
+        return [enum_cls(t.strip()) for t in raw.split(",") if t.strip()]  # type: ignore[call-arg]
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=f"Invalid {param_name}: {exc}") from exc
+
 
 # ---------------------------------------------------------------------------
 # Routers
@@ -82,6 +104,7 @@ _TIER_MID: frozenset[str] = frozenset(
     {
         NodeType.PULL_REQUEST.value,
         NodeType.BRANCH.value,
+        NodeType.COMMIT.value,
         NodeType.CODE_REFERENCE.value,
         NodeType.WORK_INTENT.value,
     }
@@ -133,7 +156,7 @@ def _node_to_dto(node: GraphNode, score: float | None = None) -> GraphNodeDTO:
         id=str(node.id),
         node_type=node.node_type.value,
         label=node.label,
-        summary=node.summary if node.content else None,
+        summary=node.summary or None,
         properties=node.properties,  # type: ignore[arg-type]
         created_at=node.created_at,
         updated_at=node.updated_at,
@@ -141,28 +164,24 @@ def _node_to_dto(node: GraphNode, score: float | None = None) -> GraphNodeDTO:
     )
 
 
-def _edge_to_dto(
-    edge_id: UUID,
-    source_id: UUID,
-    target_id: UUID,
-    edge_type: str,
-    weight: float,
-    properties: dict[str, object],
-) -> GraphEdgeDTO:
-    """Build a GraphEdgeDTO from edge fields."""
-    try:
-        label = _EDGE_LABELS[EdgeType(edge_type)]
-    except ValueError:
-        label = edge_type
+def _edge_to_dto(edge: GraphEdge) -> GraphEdgeDTO:
+    """Map a domain GraphEdge to a GraphEdgeDTO."""
+    edge_type_str = edge.edge_type.value
+    label = _EDGE_LABELS.get(edge.edge_type, edge_type_str)
     return GraphEdgeDTO(
-        id=str(edge_id),
-        source_id=str(source_id),
-        target_id=str(target_id),
-        edge_type=edge_type,
+        id=str(edge.id),
+        source_id=str(edge.source_id),
+        target_id=str(edge.target_id),
+        edge_type=edge_type_str,
         label=label,
-        weight=weight,
-        properties=properties,
+        weight=edge.weight,
+        properties=edge.properties,  # type: ignore[arg-type]
     )
+
+
+def _edges_to_dtos(edges: list[GraphEdge]) -> list[GraphEdgeDTO]:
+    """Batch-convert domain edges to DTOs."""
+    return [_edge_to_dto(e) for e in edges]
 
 
 # ---------------------------------------------------------------------------
@@ -195,18 +214,14 @@ async def search_knowledge_graph(
     """Search knowledge graph nodes with hybrid scoring."""
     await set_rls_context(session, current_user_id, workspace_id)
 
-    parsed_types: list[NodeType] | None = None
-    if node_types:
-        try:
-            parsed_types = [NodeType(t.strip()) for t in node_types.split(",") if t.strip()]
-        except ValueError as exc:
-            raise HTTPException(status_code=422, detail=f"Invalid node_type: {exc}") from exc
+    parsed_types: list[NodeType] | None = _parse_csv_enum(node_types, NodeType, "node_type")
 
     # Look up workspace OpenAI key for vector embedding (BYOK pattern)
     openai_api_key = await get_workspace_openai_key(session, workspace_id)
+    embedding_svc = EmbeddingService(EmbeddingConfig(openai_api_key=openai_api_key))
 
     repo = KnowledgeGraphRepository(session)
-    service = GraphSearchService(repo)
+    service = GraphSearchService(repo, embedding_service=embedding_svc)
     result = await service.execute(
         GraphSearchPayload(
             query=q,
@@ -214,23 +229,11 @@ async def search_knowledge_graph(
             user_id=current_user_id,
             node_types=parsed_types,
             limit=limit,
-            openai_api_key=openai_api_key,
         )
     )
 
     node_dtos = [_node_to_dto(sn.node, score=sn.score) for sn in result.nodes]
-    edge_dtos = [
-        _edge_to_dto(
-            edge_id=e.id,
-            source_id=e.source_id,
-            target_id=e.target_id,
-            edge_type=e.edge_type.value,
-            weight=e.weight,
-            properties=e.properties,  # type: ignore[arg-type]
-        )
-        for e in result.edges
-    ]
-    return GraphResponse(nodes=node_dtos, edges=edge_dtos)
+    return GraphResponse(nodes=node_dtos, edges=_edges_to_dtos(result.edges))
 
 
 @router.get(
@@ -254,12 +257,7 @@ async def get_node_neighbors(
     """Return local neighborhood subgraph around the given node."""
     await set_rls_context(session, current_user_id, workspace_id)
 
-    parsed_edge_types: list[EdgeType] | None = None
-    if edge_types:
-        try:
-            parsed_edge_types = [EdgeType(t.strip()) for t in edge_types.split(",") if t.strip()]
-        except ValueError as exc:
-            raise HTTPException(status_code=422, detail=f"Invalid edge_type: {exc}") from exc
+    parsed_edge_types: list[EdgeType] | None = _parse_csv_enum(edge_types, EdgeType, "edge_type")
 
     repo = KnowledgeGraphRepository(session)
     neighbors = await repo.get_neighbors(
@@ -269,8 +267,15 @@ async def get_node_neighbors(
         workspace_id=workspace_id,
     )
 
-    node_dtos = [_node_to_dto(n) for n in neighbors]
-    return GraphResponse(nodes=node_dtos, edges=[], center_node_id=node_id)
+    # Fetch center node so it is included in `nodes` alongside neighbors.
+    # Without this, edges referencing center_node_id would be dangling references
+    # in any graph renderer that relies solely on the `nodes` array.
+    center_node = await repo.get_node_by_id(node_id, workspace_id)
+    all_nodes = ([center_node] if center_node else []) + neighbors
+    all_ids = [n.id for n in all_nodes]
+    edges = await repo.get_edges_between(all_ids, workspace_id=workspace_id)
+    node_dtos = [_node_to_dto(n) for n in all_nodes]
+    return GraphResponse(nodes=node_dtos, edges=_edges_to_dtos(edges), center_node_id=node_id)
 
 
 @router.get(
@@ -292,6 +297,8 @@ async def get_subgraph(
     await set_rls_context(session, current_user_id, workspace_id)
 
     repo = KnowledgeGraphRepository(session)
+    if not await repo.get_node_by_id(root_id, workspace_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Root node not found")
     nodes, edges = await repo.get_subgraph(
         root_id=root_id,
         max_depth=max_depth,
@@ -300,18 +307,7 @@ async def get_subgraph(
     )
 
     node_dtos = [_node_to_dto(n) for n in nodes]
-    edge_dtos = [
-        _edge_to_dto(
-            edge_id=e.id,
-            source_id=e.source_id,
-            target_id=e.target_id,
-            edge_type=e.edge_type.value,
-            weight=e.weight,
-            properties=e.properties,  # type: ignore[arg-type]
-        )
-        for e in edges
-    ]
-    return GraphResponse(nodes=node_dtos, edges=edge_dtos, center_node_id=root_id)
+    return GraphResponse(nodes=node_dtos, edges=_edges_to_dtos(edges), center_node_id=root_id)
 
 
 @router.get(
@@ -348,10 +344,10 @@ async def get_user_context(
 # Issue-scoped endpoint
 # ---------------------------------------------------------------------------
 
-_GITHUB_NODE_TYPE_MAP: dict[str, str] = {
+_GITHUB_NODE_TYPE_MAP: dict[IntegrationLinkType, str] = {
     IntegrationLinkType.PULL_REQUEST: NodeType.PULL_REQUEST.value,
     IntegrationLinkType.BRANCH: NodeType.BRANCH.value,
-    IntegrationLinkType.COMMIT: NodeType.CODE_REFERENCE.value,
+    IntegrationLinkType.COMMIT: NodeType.COMMIT.value,
     IntegrationLinkType.MENTION: NodeType.NOTE.value,
 }
 
@@ -423,32 +419,26 @@ async def get_issue_knowledge_graph(
 
     center_node_id = graph_node_model.id
 
-    # Step 3: Extract subgraph from the graph node
+    # Step 3: Extract subgraph from the graph node.
+    # When node_types filter is active, fetch the maximum pool (100) before filtering
+    # to avoid silently dropping valid nodes that were pruned by max_nodes before the
+    # filter was applied (devil's advocate W-2).
     repo = KnowledgeGraphRepository(session)
+    _fetch_max = 100 if node_types else max_nodes
     nodes, edges = await repo.get_subgraph(
         root_id=center_node_id,
         max_depth=depth,
-        max_nodes=max_nodes,
+        max_nodes=_fetch_max,
         workspace_id=workspace_id,
     )
 
-    # Apply node type filter if requested
+    # Apply node type filter, then trim to requested max_nodes
     if node_types:
         allowed = {t.strip() for t in node_types.split(",") if t.strip()}
-        nodes = [n for n in nodes if n.node_type.value in allowed]
+        nodes = [n for n in nodes if n.node_type.value in allowed][:max_nodes]
 
     node_dtos = [_node_to_dto(n) for n in nodes]
-    edge_dtos = [
-        _edge_to_dto(
-            edge_id=e.id,
-            source_id=e.source_id,
-            target_id=e.target_id,
-            edge_type=e.edge_type.value,
-            weight=e.weight,
-            properties=e.properties,  # type: ignore[arg-type]
-        )
-        for e in edges
-    ]
+    edge_dtos = _edges_to_dtos(edges)
 
     # Step 4: Synthesize ephemeral GitHub nodes if requested
     if include_github:
@@ -460,7 +450,11 @@ async def get_issue_knowledge_graph(
         gh_result = await session.execute(gh_stmt)
         integration_links = gh_result.scalars().all()
 
-        existing_external_ids = {n.properties.get("external_id") for n in node_dtos if n.properties}
+        existing_external_ids = {
+            str(n.properties["external_id"])
+            for n in node_dtos
+            if n.properties and n.properties.get("external_id") is not None
+        }
         now = datetime.now(tz=UTC)
 
         for link in integration_links:
@@ -468,10 +462,12 @@ async def get_issue_knowledge_graph(
             if str(link.external_id) in existing_external_ids:
                 continue
 
-            mapped_type = _GITHUB_NODE_TYPE_MAP.get(link.link_type.value, "note")
+            mapped_type = _GITHUB_NODE_TYPE_MAP.get(link.link_type, NodeType.NOTE.value)
             node_dtos.append(
                 GraphNodeDTO(
-                    id=str(uuid4()),
+                    # Deterministic ID from external_id so repeated fetches
+                    # produce stable node IDs for frontend graph reconciliation.
+                    id=str(uuid5(NAMESPACE_URL, f"ephemeral:{link.external_id}")),
                     node_type=mapped_type,
                     label=link.title or link.external_id,
                     summary=f"GitHub {link.link_type.value}: {link.title or link.external_id}",

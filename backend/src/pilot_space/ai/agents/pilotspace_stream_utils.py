@@ -561,18 +561,29 @@ async def save_session_messages(
         )
 
 
-def build_graph_search_service_for_session(db_session: Any) -> Any:
+def build_graph_search_service_for_session(
+    db_session: Any, openai_api_key: str | None = None
+) -> Any:
     """Build a fresh GraphSearchService bound to the active request DB session.
 
     Called once per request inside _build_stream_config to avoid the
     session=None singleton-capture bug.
+
+    Args:
+        db_session: Active async DB session for the current request.
+        openai_api_key: Optional workspace BYOK OpenAI key for embeddings.
     """
+    from pilot_space.application.services.embedding_service import EmbeddingConfig, EmbeddingService
     from pilot_space.application.services.memory.graph_search_service import GraphSearchService
     from pilot_space.infrastructure.database.repositories.knowledge_graph_repository import (
         KnowledgeGraphRepository,
     )
 
-    return GraphSearchService(knowledge_graph_repository=KnowledgeGraphRepository(db_session))
+    embedding_service = EmbeddingService(EmbeddingConfig(openai_api_key=openai_api_key))
+    return GraphSearchService(
+        knowledge_graph_repository=KnowledgeGraphRepository(db_session),
+        embedding_service=embedding_service,
+    )
 
 
 def build_graph_write_service_for_session(db_session: Any, queue_client: Any) -> Any:

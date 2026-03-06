@@ -44,6 +44,20 @@ export const GRAPH_NODE_STYLES: Record<GraphNodeType | 'default', NodeStyle> = {
     abbr: 'PR',
     label: 'Pull Request',
   },
+  branch: {
+    bg: '#6366f1',
+    tailwind: 'bg-indigo-500',
+    text: '#ffffff',
+    abbr: 'BR',
+    label: 'Branch',
+  },
+  commit: {
+    bg: '#0ea5e9',
+    tailwind: 'bg-sky-500',
+    text: '#ffffff',
+    abbr: 'CM',
+    label: 'Commit',
+  },
   code_reference: {
     bg: '#f97316',
     tailwind: 'bg-orange-500',
@@ -175,9 +189,9 @@ export function computeForceLayout(
 
   // Use a Set for O(1) edge validity checks instead of O(n) .some()
   const validIds = new Set(graphNodes.map((n) => n.id));
-  const simLinks = graphEdges
-    .filter((e) => validIds.has(e.sourceId) && validIds.has(e.targetId))
-    .map((e) => ({ source: e.sourceId, target: e.targetId }));
+  // Filter once and reuse for both simulation links and ReactFlow edges.
+  const validEdges = graphEdges.filter((e) => validIds.has(e.sourceId) && validIds.has(e.targetId));
+  const simLinks = validEdges.map((e) => ({ source: e.sourceId, target: e.targetId }));
 
   const simulation = d3Force
     .forceSimulation<SimNode>(simNodes)
@@ -208,16 +222,14 @@ export function computeForceLayout(
     },
   }));
 
-  const edges: Edge[] = graphEdges
-    .filter((e) => validIds.has(e.sourceId) && validIds.has(e.targetId))
-    .map((e) => ({
-      id: e.id,
-      source: e.sourceId,
-      target: e.targetId,
-      label: e.label,
-      animated: e.edgeType === 'blocks',
-      style: { stroke: '#94a3b8', strokeWidth: edgeStrokeWidth },
-    }));
+  const edges: Edge[] = validEdges.map((e) => ({
+    id: e.id,
+    source: e.sourceId,
+    target: e.targetId,
+    label: e.label,
+    animated: e.edgeType === 'blocks',
+    style: { stroke: '#94a3b8', strokeWidth: edgeStrokeWidth },
+  }));
 
   return [nodes, edges];
 }

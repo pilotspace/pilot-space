@@ -16,8 +16,11 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
+from sqlalchemy import and_, select
+
 from pilot_space.domain.graph_edge import EdgeType, GraphEdge
-from pilot_space.domain.graph_node import GraphNode, NodeType
+from pilot_space.domain.graph_node import GraphNode, NodeType, compute_content_hash
+from pilot_space.infrastructure.database.models.graph_node import GraphNodeModel
 from pilot_space.infrastructure.logging import get_logger
 from pilot_space.infrastructure.queue.models import QueueName
 
@@ -32,6 +35,14 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 _GRAPH_EMBEDDING_TASK_TYPE = "graph_embedding"
+_MAX_EMBEDDING_CONCURRENCY = 10  # max in-flight enqueue coroutines per batch
+
+# Node types that carry per-user identity in their content hash.
+# For all other types the hash is workspace-scoped only, so two agents writing the
+# same DECISION content under different user contexts share a single node.
+_USER_SCOPED_NODE_TYPES: frozenset[NodeType] = frozenset(
+    {NodeType.USER_PREFERENCE, NodeType.LEARNED_PATTERN}
+)
 
 # Regex for detecting issue identifiers like "PS-42" inside node content
 _ISSUE_REF_PATTERN = re.compile(r"\b([A-Z]{1,10}-\d+)\b")
@@ -169,9 +180,10 @@ class GraphWriteService:
         Returns:
             GraphWriteResult with persisted IDs and enqueue status.
         """
-        # Step 1: build domain nodes
-        domain_nodes = [
-            GraphNode.create(
+        # Step 1: build domain nodes (compute content_hash for unkeyed nodes)
+        domain_nodes: list[GraphNode] = []
+        for ni in payload.nodes:
+            node = GraphNode.create(
                 workspace_id=payload.workspace_id,
                 node_type=ni.node_type,
                 label=ni.label,
@@ -179,9 +191,23 @@ class GraphWriteService:
                 properties=dict(ni.properties),
                 user_id=ni.user_id if ni.user_id is not None else payload.user_id,
                 external_id=ni.external_id,
+                content_hash=(
+                    compute_content_hash(
+                        payload.workspace_id,
+                        str(ni.node_type),
+                        ni.content,
+                        # Only include user_id for user-scoped types so that
+                        # workspace-shared nodes (DECISION, SKILL_OUTCOME, etc.)
+                        # are not duplicated per-user when payload.user_id is set.
+                        (ni.user_id if ni.user_id is not None else payload.user_id)
+                        if ni.node_type in _USER_SCOPED_NODE_TYPES
+                        else None,
+                    )
+                    if ni.external_id is None and ni.content
+                    else None
+                ),
             )
-            for ni in payload.nodes
-        ]
+            domain_nodes.append(node)
 
         # Step 2: bulk upsert — returns persisted nodes (ids may differ on update)
         persisted_nodes = await self._repo.bulk_upsert_nodes(domain_nodes)
@@ -262,7 +288,7 @@ class GraphWriteService:
                 ei.source_external_id,
                 ei.target_external_id,
             )
-            return None, 0
+            return None, 1
 
         if source_id == target_id:
             logger.warning("GraphWriteService: skipping self-loop edge for node %s", source_id)
@@ -293,8 +319,9 @@ class GraphWriteService:
     ) -> list[GraphEdge]:
         """Best-effort: detect issue identifiers (e.g. "PS-42") in content.
 
-        For each ISSUE node whose content references another node in the
-        current batch (matched by label), create a RELATES_TO edge.
+        For each ISSUE node whose content references another node, create a
+        RELATES_TO edge. Checks both the current batch (by label) and
+        previously persisted nodes in the same workspace (cross-batch).
 
         Args:
             nodes: Persisted nodes from the current batch.
@@ -303,12 +330,38 @@ class GraphWriteService:
             List of auto-detected and persisted edges.
         """
         label_map: dict[str, UUID] = {n.label: n.id for n in nodes}
-        auto_edges: list[GraphEdge] = []
 
+        # Cache regex results per-node to avoid scanning content twice.
+        issue_refs: dict[UUID, list[str]] = {
+            node.id: _ISSUE_REF_PATTERN.findall(node.content)
+            for node in nodes
+            if node.node_type == NodeType.ISSUE
+        }
+
+        # Collect all referenced labels and resolve cross-batch ones from DB.
+        all_refs: set[str] = {ref for refs in issue_refs.values() for ref in refs}
+        cross_batch_refs = all_refs - label_map.keys()
+        if cross_batch_refs:
+            workspace_ids = {n.workspace_id for n in nodes}
+            for workspace_id in workspace_ids:
+                rows = await self._session.execute(
+                    select(GraphNodeModel.label, GraphNodeModel.id).where(
+                        and_(
+                            GraphNodeModel.workspace_id == workspace_id,
+                            GraphNodeModel.label.in_(list(cross_batch_refs)),
+                            GraphNodeModel.is_deleted == False,  # noqa: E712
+                        )
+                    )
+                )
+                for label, node_id in rows.all():
+                    if label not in label_map:
+                        label_map[label] = node_id
+
+        auto_edges: list[GraphEdge] = []
         for node in nodes:
             if node.node_type != NodeType.ISSUE:
                 continue
-            matches = _ISSUE_REF_PATTERN.findall(node.content)
+            matches = issue_refs.get(node.id, [])
             for ref in matches:
                 target_id = label_map.get(ref)
                 if target_id is None or target_id == node.id:
@@ -345,34 +398,29 @@ class GraphWriteService:
             True if all jobs enqueued successfully, False if any failed.
         """
         enqueued_at = datetime.now(tz=UTC).isoformat()
-        sem = asyncio.Semaphore(10)
+        sem = asyncio.Semaphore(_MAX_EMBEDDING_CONCURRENCY)
 
         async def _enqueue_one(node_id: UUID) -> bool:
-            job_payload: dict[str, Any] = {
-                "task_type": _GRAPH_EMBEDDING_TASK_TYPE,
-                "node_id": str(node_id),
-                "workspace_id": str(workspace_id),
-                "enqueued_at": enqueued_at,
-            }
-            try:
-                await self._queue.enqueue(QueueName.AI_NORMAL, job_payload)  # type: ignore[union-attr]
-                return True
-            except Exception:
-                logger.error(
-                    "GraphWriteService: failed to enqueue embedding for node %s",
-                    node_id,
-                    exc_info=True,
-                )
-                return False
-
-        async def _bounded_enqueue(nid: UUID) -> bool:
             async with sem:
-                return await _enqueue_one(nid)
+                job_payload: dict[str, Any] = {
+                    "task_type": _GRAPH_EMBEDDING_TASK_TYPE,
+                    "node_id": str(node_id),
+                    "workspace_id": str(workspace_id),
+                    "enqueued_at": enqueued_at,
+                }
+                try:
+                    await self._queue.enqueue(QueueName.AI_NORMAL, job_payload)  # type: ignore[union-attr]
+                    return True
+                except Exception:
+                    logger.error(
+                        "GraphWriteService: failed to enqueue embedding for node %s",
+                        node_id,
+                        exc_info=True,
+                    )
+                    return False
 
-        results = await asyncio.gather(
-            *(_bounded_enqueue(nid) for nid in node_ids), return_exceptions=True
-        )
-        return all(r is True for r in results)
+        results = await asyncio.gather(*(_enqueue_one(nid) for nid in node_ids))
+        return all(results)
 
 
 __all__ = [

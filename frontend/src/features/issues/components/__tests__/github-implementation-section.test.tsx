@@ -96,8 +96,11 @@ function createGraphNode(overrides?: Partial<GraphNodeDTO>): GraphNodeDTO {
     id: 'node-1',
     nodeType: 'code_reference',
     label: 'auth_module',
+    summary: null,
+    score: null,
     properties: {},
     createdAt: '2024-01-01T00:00:00Z',
+    updatedAt: '2024-01-01T00:00:00Z',
     ...overrides,
   };
 }

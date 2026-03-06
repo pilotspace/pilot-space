@@ -16,13 +16,13 @@ from pilot_space.infrastructure.logging import get_logger
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
+    from pilot_space.application.services.embedding_service import EmbeddingService
     from pilot_space.infrastructure.database.repositories.memory_repository import (
         MemoryEntryRepository,
     )
 
 logger = get_logger(__name__)
 
-_GEMINI_EMBEDDING_MODEL = "models/gemini-embedding-exp-03-07"
 _DEFAULT_LIMIT = 5
 
 
@@ -34,13 +34,13 @@ class MemorySearchPayload:
         query: Natural language query text.
         workspace_id: Workspace to search in.
         limit: Maximum results to return (default 5).
-        google_api_key: Optional Gemini API key for embedding.
+        google_api_key: Optional Gemini API key for embedding (deprecated tables).
     """
 
     query: str
     workspace_id: UUID
     limit: int = _DEFAULT_LIMIT
-    google_api_key: str | None = None
+    google_api_key: str | None = None  # kept for deprecated memory_entries hybrid search
 
 
 @dataclass
@@ -59,20 +59,19 @@ class MemorySearchResult:
 
 
 class MemorySearchService:
-    """Hybrid memory search service.
+    """Hybrid memory search service (deprecated tables: memory_entries).
 
-    Combines vector similarity (via Gemini embeddings) and full-text search
+    Combines vector similarity (via EmbeddingService) and full-text search
     (tsvector ts_rank) with 0.7/0.3 fusion scoring.
 
     Falls back to keyword-only search when embeddings are unavailable.
     SLA: <200ms at 1000 entries.
 
     Example:
-        service = MemorySearchService(memory_repository, session)
+        service = MemorySearchService(memory_repository, session, embedding_service=svc)
         result = await service.execute(MemorySearchPayload(
             query="API rate limiting",
             workspace_id=workspace_id,
-            google_api_key=api_key,
         ))
     """
 
@@ -80,15 +79,18 @@ class MemorySearchService:
         self,
         memory_repository: MemoryEntryRepository,
         session: AsyncSession,
+        embedding_service: EmbeddingService | None = None,
     ) -> None:
         """Initialize service.
 
         Args:
             memory_repository: Repository for MemoryEntry access.
             session: Async DB session.
+            embedding_service: Optional EmbeddingService for vector embedding.
         """
         self._memory_repo = memory_repository
         self._session = session
+        self._embedding = embedding_service
 
     async def execute(self, payload: MemorySearchPayload) -> MemorySearchResult:
         """Execute hybrid memory search.
@@ -99,7 +101,7 @@ class MemorySearchService:
         Returns:
             MemorySearchResult with ranked entries.
         """
-        embedding = await self._embed_query(payload.query, payload.google_api_key)
+        embedding = await self._embedding.embed(payload.query) if self._embedding else None
 
         if embedding is not None:
             results = await self._memory_repo.hybrid_search(
@@ -116,7 +118,7 @@ class MemorySearchService:
 
         # Fallback: keyword-only via list_by_workspace (no vector scoring)
         logger.warning(
-            "Gemini embedding unavailable — using keyword-only memory search for workspace %s",
+            "Embedding unavailable — using keyword-only memory search for workspace %s",
             payload.workspace_id,
         )
         entries = await self._memory_repo.list_by_workspace(
@@ -140,36 +142,3 @@ class MemorySearchService:
             query=payload.query,
             embedding_used=False,
         )
-
-    @staticmethod
-    async def _embed_query(text: str, api_key: str | None) -> list[float] | None:
-        """Embed query text using Gemini.
-
-        Args:
-            text: Query text to embed.
-            api_key: Google API key.
-
-        Returns:
-            768-dim embedding vector or None on failure.
-        """
-        if not api_key:
-            return None
-        try:
-            import asyncio
-
-            import google.generativeai as genai  # type: ignore[import-untyped]
-
-            genai.configure(api_key=api_key)  # type: ignore[attr-defined]
-            loop = asyncio.get_event_loop()
-            result = await loop.run_in_executor(
-                None,
-                lambda: genai.embed_content(  # type: ignore[attr-defined]
-                    model=_GEMINI_EMBEDDING_MODEL,
-                    content=text,
-                    task_type="SEMANTIC_SIMILARITY",
-                ),
-            )
-            return list(result["embedding"])
-        except Exception:
-            logger.warning("Gemini embedding failed for memory search", exc_info=True)
-            return None

@@ -176,6 +176,7 @@ class Container(InfraContainer):
         issue_repository=InfraContainer.issue_repository,
         activity_repository=InfraContainer.activity_repository,
         label_repository=InfraContainer.label_repository,
+        queue=InfraContainer.queue_client,
     )
 
     update_issue_service = providers.Factory(
@@ -207,12 +208,14 @@ class Container(InfraContainer):
         session=providers.Callable(get_current_session),
         note_repository=InfraContainer.note_repository,
         template_repository=InfraContainer.template_repository,
+        queue=InfraContainer.queue_client,
     )
 
     update_note_service = providers.Factory(
         UpdateNoteService,
         session=providers.Callable(get_current_session),
         note_repository=InfraContainer.note_repository,
+        queue=InfraContainer.queue_client,
     )
 
     get_note_service = providers.Factory(

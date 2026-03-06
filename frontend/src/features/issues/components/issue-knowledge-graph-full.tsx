@@ -117,11 +117,13 @@ function GraphCanvas({
   // M-9: validate centerNodeId exists in the node set
   const effectiveCenterNodeId = useMemo(() => {
     if (!data) return '';
-    const exists = data.nodes.some((n) => n.id === data.centerNodeId);
+    const center = data.centerNodeId;
+    if (!center) return data.nodes[0]?.id ?? '';
+    const exists = data.nodes.some((n) => n.id === center);
     if (!exists) {
-      console.warn('[KnowledgeGraph] centerNodeId not found in nodes:', data.centerNodeId);
+      console.warn('[KnowledgeGraph] centerNodeId not found in nodes:', center);
     }
-    return exists ? data.centerNodeId : (data.nodes[0]?.id ?? '');
+    return exists ? center : (data.nodes[0]?.id ?? '');
   }, [data]);
 
   // H-6: move layout computation to useEffect with startTransition to yield to browser
@@ -174,7 +176,11 @@ function GraphCanvas({
         return;
       }
       try {
-        const neighbors = await knowledgeGraphApi.getNodeNeighbors(workspaceId, nodeId, depth + 1);
+        const neighbors = await knowledgeGraphApi.getNodeNeighbors(
+          workspaceId,
+          nodeId,
+          Math.min(depth + 1, 4)
+        );
         setExtraNodes((prev) => {
           const ids = new Set(prev.map((n) => n.id));
           return [...prev, ...neighbors.nodes.filter((n) => !ids.has(n.id))];
@@ -299,11 +305,6 @@ function GraphCanvas({
               <X className="size-4 text-muted-foreground" />
             </button>
           </div>
-          {(selectedNode.nodeType === 'issue' || selectedNode.nodeType === 'note') && (
-            <div>
-              <span className="text-xs text-primary cursor-pointer hover:underline">Open →</span>
-            </div>
-          )}
         </div>
       )}
     </>

@@ -5,6 +5,8 @@ export type GraphNodeType =
   | 'cycle'
   | 'user'
   | 'pull_request'
+  | 'branch'
+  | 'commit'
   | 'code_reference'
   | 'decision'
   | 'skill_outcome'
@@ -33,10 +35,11 @@ export interface GraphNodeDTO {
   id: string;
   nodeType: GraphNodeType;
   label: string;
-  summary?: string;
+  summary: string | null;
   properties: Record<string, unknown>;
   createdAt: string;
-  score?: number;
+  updatedAt: string;
+  score: number | null;
 }
 
 export interface GraphEdgeDTO {
@@ -46,13 +49,13 @@ export interface GraphEdgeDTO {
   edgeType: GraphEdgeType;
   label: string;
   weight: number;
-  properties?: Record<string, unknown>;
+  properties: Record<string, unknown>;
 }
 
 export interface GraphResponse {
   nodes: GraphNodeDTO[];
   edges: GraphEdgeDTO[];
-  centerNodeId: string;
+  centerNodeId: string | null;
 }
 
 export interface GraphQueryParams {

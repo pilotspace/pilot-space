@@ -3,7 +3,9 @@
 Tests:
     - recall_graph_context returns empty list when service is None
     - extract_and_persist_to_graph returns False on empty messages
-    - extract_and_persist_to_graph returns False when no assistant message present
+    - extract_and_persist_to_graph returns False when no anthropic_api_key (BYOK gate)
+    - extract_and_persist_to_graph extracts and persists when key + nodes present
+    - extract_and_persist_to_graph returns False on service error
     - format_graph_context formats nodes correctly
     - format_graph_context returns empty string on empty input
     - _build_session_section uses graph_context when available
@@ -14,7 +16,7 @@ from __future__ import annotations
 
 import uuid
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -114,6 +116,11 @@ async def test_recall_graph_context_returns_empty_on_service_error() -> None:
 # ---------------------------------------------------------------------------
 
 
+_EXTRACTION_SVC_PATH = (
+    "pilot_space.application.services.memory.graph_extraction_service.GraphExtractionService"
+)
+
+
 @pytest.mark.asyncio
 async def test_extract_and_persist_returns_false_on_empty_messages() -> None:
     """extract_and_persist_to_graph returns False when messages list is empty."""
@@ -123,65 +130,75 @@ async def test_extract_and_persist_returns_false_on_empty_messages() -> None:
         workspace_id=_WORKSPACE_ID,
         user_id=_USER_ID,
         messages=[],
+        anthropic_api_key="sk-test",  # pragma: allowlist secret
     )
     assert result is False
     mock_service.execute.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_extract_and_persist_returns_false_when_no_assistant_message() -> None:
-    """extract_and_persist_to_graph returns False when no assistant role is present."""
+async def test_extract_and_persist_returns_false_when_no_api_key() -> None:
+    """extract_and_persist_to_graph returns False when no anthropic_api_key (BYOK gate)."""
     mock_service = AsyncMock()
     result = await extract_and_persist_to_graph(
         graph_write_service=mock_service,
         workspace_id=_WORKSPACE_ID,
         user_id=_USER_ID,
-        messages=[{"role": "user", "content": "Hello"}],
+        messages=[{"role": "user", "content": "Hello"}, {"role": "assistant", "content": "Hi"}],
+        anthropic_api_key=None,
     )
     assert result is False
     mock_service.execute.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_extract_and_persist_calls_service_with_skill_outcome_node() -> None:
-    """extract_and_persist_to_graph calls service with a SKILL_OUTCOME node."""
+async def test_extract_and_persist_calls_write_service_when_nodes_found() -> None:
+    """extract_and_persist_to_graph calls GraphWriteService when extraction yields nodes."""
     mock_service = AsyncMock()
     messages = [
         {"role": "user", "content": "Plan the sprint"},
         {"role": "assistant", "content": "Sprint 6 planned with 12 issues"},
     ]
+    node_mock = MagicMock()
+    extraction_result = MagicMock()
+    extraction_result.nodes = [node_mock]
+    extraction_result.edges = []
 
-    result = await extract_and_persist_to_graph(
-        graph_write_service=mock_service,
-        workspace_id=_WORKSPACE_ID,
-        user_id=_USER_ID,
-        messages=messages,
-    )
+    with patch(_EXTRACTION_SVC_PATH) as MockExtraction:
+        MockExtraction.return_value.execute = AsyncMock(return_value=extraction_result)
+        result = await extract_and_persist_to_graph(
+            graph_write_service=mock_service,
+            workspace_id=_WORKSPACE_ID,
+            user_id=_USER_ID,
+            messages=messages,
+            anthropic_api_key="sk-test",  # pragma: allowlist secret
+        )
 
     assert result is True
     mock_service.execute.assert_called_once()
     call_args = mock_service.execute.call_args[0][0]
-    assert len(call_args.nodes) == 1
-    assert call_args.nodes[0].content == "Sprint 6 planned with 12 issues"
     assert call_args.workspace_id == _WORKSPACE_ID
 
 
 @pytest.mark.asyncio
-async def test_extract_and_persist_returns_false_on_service_error() -> None:
-    """extract_and_persist_to_graph returns False gracefully when service raises."""
+async def test_extract_and_persist_returns_false_on_extraction_error() -> None:
+    """extract_and_persist_to_graph returns False gracefully when extraction raises."""
     mock_service = AsyncMock()
-    mock_service.execute.side_effect = RuntimeError("Queue unavailable")
 
-    result = await extract_and_persist_to_graph(
-        graph_write_service=mock_service,
-        workspace_id=_WORKSPACE_ID,
-        user_id=None,
-        messages=[
-            {"role": "user", "content": "Hello"},
-            {"role": "assistant", "content": "World"},
-        ],
-    )
+    with patch(_EXTRACTION_SVC_PATH) as MockExtraction:
+        MockExtraction.return_value.execute = AsyncMock(side_effect=RuntimeError("LLM down"))
+        result = await extract_and_persist_to_graph(
+            graph_write_service=mock_service,
+            workspace_id=_WORKSPACE_ID,
+            user_id=None,
+            messages=[
+                {"role": "user", "content": "Hello"},
+                {"role": "assistant", "content": "World"},
+            ],
+            anthropic_api_key="sk-test",  # pragma: allowlist secret
+        )
     assert result is False
+    mock_service.execute.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

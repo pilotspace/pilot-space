@@ -10,12 +10,19 @@ from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
+from pydantic.alias_generators import to_camel
+
+_CAMEL_CONFIG = ConfigDict(
+    from_attributes=True,
+    alias_generator=to_camel,
+    populate_by_name=True,
+)
 
 
 class GraphNodeDTO(BaseModel):
     """A single knowledge graph node for API responses."""
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _CAMEL_CONFIG
 
     id: str = Field(description="Node UUID as string")
     node_type: str = Field(description="NodeType enum value (e.g. 'issue', 'note')")
@@ -30,7 +37,7 @@ class GraphNodeDTO(BaseModel):
 class GraphEdgeDTO(BaseModel):
     """A directed relationship between two graph nodes."""
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _CAMEL_CONFIG
 
     id: str = Field(description="Edge UUID as string")
     source_id: str = Field(description="Source node UUID")
@@ -44,7 +51,7 @@ class GraphEdgeDTO(BaseModel):
 class GraphResponse(BaseModel):
     """Graph subgraph response containing nodes and connecting edges."""
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = _CAMEL_CONFIG
 
     nodes: list[GraphNodeDTO] = Field(default_factory=list, description="Graph nodes")
     edges: list[GraphEdgeDTO] = Field(default_factory=list, description="Edges between the nodes")
