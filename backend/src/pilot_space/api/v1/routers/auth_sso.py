@@ -25,8 +25,11 @@ from fastapi.responses import Response
 from pilot_space.api.v1.schemas.sso import (
     OidcConfigRequest,
     OidcConfigResponse,
+    RoleClaimMappingConfig,
     SamlConfigRequest,
     SamlConfigResponse,
+    SsoClaimRoleRequest,
+    SsoClaimRoleResponse,
     SsoEnforcementRequest,
     SsoInitiateResponse,
     SsoStatusResponse,
@@ -497,3 +500,149 @@ async def get_sso_status(
         sso_required=status_dict["sso_required"],
         oidc_provider=status_dict["oidc_provider"],
     )
+
+
+# ---------------------------------------------------------------------------
+# Role claim mapping (AUTH-03)
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/role-mapping",
+    status_code=status.HTTP_200_OK,
+    summary="Configure IdP role-claim → workspace role mapping (admin-only)",
+)
+async def configure_role_claim_mapping(
+    workspace_id: UUID,
+    body: RoleClaimMappingConfig,
+    session: SessionDep,
+    _admin: UUID = require_workspace_admin,  # type: ignore[assignment]
+    current_user: CurrentUser = None,  # type: ignore[assignment]
+) -> dict[str, str]:
+    """Store or update the role claim mapping configuration for a workspace.
+
+    When a user logs in via OIDC/SAML, their IdP group claim is mapped to a
+    workspace role using this configuration.
+
+    Args:
+        workspace_id: Target workspace UUID (query param).
+        body: Claim key and list of claim_value → role mappings.
+        session: DB session.
+        _admin: Requires workspace ADMIN or OWNER role.
+
+    Returns:
+        Confirmation message.
+    """
+    sso_service = _get_sso_service()
+    if sso_service is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="SSO service unavailable"
+        )
+
+    try:
+        await sso_service.configure_role_claim_mapping(
+            workspace_id,
+            claim_key=body.claim_key,
+            mappings=body.mappings,
+        )
+        await session.commit()
+    except LookupError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    return {"status": "ok"}
+
+
+@router.get(
+    "/role-mapping",
+    summary="Get the current role claim mapping configuration (admin-only)",
+)
+async def get_role_claim_mapping(
+    workspace_id: UUID,
+    session: SessionDep,
+    _admin: UUID = require_workspace_admin,  # type: ignore[assignment]
+    current_user: CurrentUser = None,  # type: ignore[assignment]
+) -> RoleClaimMappingConfig | None:
+    """Return the current role claim mapping configuration for a workspace.
+
+    Args:
+        workspace_id: Target workspace UUID.
+        session: DB session.
+        _admin: Requires workspace ADMIN or OWNER role.
+
+    Returns:
+        Mapping config or None if not configured.
+    """
+    sso_service = _get_sso_service()
+    if sso_service is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="SSO service unavailable"
+        )
+
+    config = await sso_service.get_role_claim_mapping(workspace_id)
+    if config is None:
+        return None
+
+    return RoleClaimMappingConfig(
+        claim_key=config["claim_key"],
+        mappings=config["mappings"],
+    )
+
+
+@router.post(
+    "/claim-role",
+    response_model=SsoClaimRoleResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Apply SSO-mapped role from JWT claims after login (authenticated)",
+)
+async def claim_sso_role(
+    body: SsoClaimRoleRequest,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> SsoClaimRoleResponse:
+    """Apply the workspace role mapped from the user's SSO JWT claims.
+
+    Called by the frontend immediately after OIDC/SAML login to apply the
+    correct workspace role from the IdP's group/role claims.
+
+    Server-side validated: frontend sends raw claims; backend applies mapping.
+    Unmapped claims always default to "member".
+
+    Args:
+        body: workspace_id + jwt_claims extracted from the Supabase JWT.
+        session: DB session (required for DI ContextVar).
+        current_user: Authenticated user from Supabase JWT.
+
+    Returns:
+        Applied role name.
+
+    Raises:
+        404: If workspace or membership not found.
+        503: If SSO service unavailable.
+    """
+    sso_service = _get_sso_service()
+    if sso_service is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="SSO service unavailable"
+        )
+
+    try:
+        member = await sso_service.apply_sso_role(
+            user_id=current_user.user_id,
+            workspace_id=body.workspace_id,
+            jwt_claims=body.jwt_claims,
+        )
+        await session.commit()
+    except LookupError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    logger.info(
+        "sso_claim_role_applied",
+        user_id=str(current_user.user_id),
+        workspace_id=str(body.workspace_id),
+        role=str(member.role.value if hasattr(member.role, "value") else member.role),
+    )
+
+    role_str = (
+        member.role.value.lower() if hasattr(member.role, "value") else str(member.role).lower()
+    )
+    return SsoClaimRoleResponse(role=role_str)

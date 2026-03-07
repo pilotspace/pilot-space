@@ -311,6 +311,194 @@ class SsoService:
 
         return {"user_id": user_id, "email": email, "is_new": is_new}
 
+    # ------------------------------------------------------------------
+    # Role claim mapping (AUTH-03)
+    # ------------------------------------------------------------------
+
+    async def configure_role_claim_mapping(
+        self,
+        workspace_id: UUID,
+        claim_key: str,
+        mappings: list[dict[str, str]],
+    ) -> None:
+        """Store IdP role-claim → workspace role mapping in workspace.settings.
+
+        Merges into existing JSONB — preserves other settings keys.
+
+        Args:
+            workspace_id: Target workspace UUID.
+            claim_key: JWT claim key to inspect (e.g. "groups").
+            mappings: List of {"claim_value": "...", "role": "..."} dicts.
+
+        Raises:
+            LookupError: If workspace not found.
+        """
+        workspace = await self._workspace_repo.get_by_id(workspace_id)
+        if workspace is None:
+            raise LookupError(f"Workspace {workspace_id} not found")
+
+        existing: dict[str, Any] = dict(workspace.settings or {})
+        existing["role_claim_mapping"] = {
+            "claim_key": claim_key,
+            "mappings": mappings,
+        }
+        workspace.settings = existing
+        await self._workspace_repo.session.flush()
+        logger.info("role_claim_mapping_stored", workspace_id=str(workspace_id))
+
+    async def get_role_claim_mapping(
+        self,
+        workspace_id: UUID,
+    ) -> dict[str, Any] | None:
+        """Retrieve the role claim mapping configuration for a workspace.
+
+        Args:
+            workspace_id: Target workspace UUID.
+
+        Returns:
+            Role claim mapping config dict or None if not configured.
+        """
+        workspace = await self._workspace_repo.get_by_id(workspace_id)
+        if workspace is None or not workspace.settings:
+            return None
+        return workspace.settings.get("role_claim_mapping")  # type: ignore[return-value]
+
+    @staticmethod
+    def map_claims_to_role(
+        claim_value: str | list[str],
+        mapping_config: dict[str, Any],
+    ) -> str:
+        """Map a JWT claim value to a workspace role using the mapping config.
+
+        Rules:
+        - claim_value is matched case-insensitively against config claim_values.
+        - If claim_value is a list, each item is checked and the first match wins.
+        - "owner" role in config is silently capped to "admin" (OWNER not assignable via SSO).
+        - Unmatched claims default to "member" — never "owner" or "admin".
+
+        Args:
+            claim_value: Raw claim value from the JWT (string or list of strings).
+            mapping_config: The workspace's role_claim_mapping config dict.
+
+        Returns:
+            Lowercase role string: "admin", "member", or "guest".
+        """
+        mappings: list[dict[str, str]] = mapping_config.get("mappings") or []
+
+        # Normalise to list for uniform handling
+        values: list[str] = claim_value if isinstance(claim_value, list) else [claim_value]
+        values_lower = [v.lower() for v in values]
+
+        for mapping in mappings:
+            config_value = mapping.get("claim_value", "").lower()
+            if config_value in values_lower:
+                raw_role = mapping.get("role", "member").lower()
+                # Security guard: owner cannot be granted via SSO claim mapping
+                if raw_role == "owner":
+                    logger.warning(
+                        "sso_owner_mapping_capped",
+                        claim_value=str(claim_value),
+                        mapped_to="admin",
+                    )
+                    return "admin"
+                return raw_role
+
+        # No match — safe default
+        return "member"
+
+    async def _get_member_for_user(
+        self,
+        user_id: UUID,
+        workspace_id: UUID,
+    ) -> Any:
+        """Retrieve the WorkspaceMember row for a user in a workspace.
+
+        Args:
+            user_id: The user's UUID.
+            workspace_id: The workspace UUID.
+
+        Returns:
+            WorkspaceMember instance or None.
+        """
+        from sqlalchemy import and_, select
+
+        from pilot_space.infrastructure.database.models.workspace_member import WorkspaceMember
+
+        session = self._workspace_repo.session
+        stmt = select(WorkspaceMember).where(
+            and_(
+                WorkspaceMember.user_id == user_id,
+                WorkspaceMember.workspace_id == workspace_id,
+            )
+        )
+        result = await session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def apply_sso_role(
+        self,
+        user_id: UUID,
+        workspace_id: UUID,
+        jwt_claims: dict[str, Any],
+    ) -> Any:
+        """Apply the mapped SSO role to a user's workspace membership.
+
+        Extracts the configured claim key from jwt_claims, maps its value to a
+        workspace role, and updates the WorkspaceMember row.
+
+        Args:
+            user_id: The authenticated user's UUID.
+            workspace_id: The workspace to apply the role in.
+            jwt_claims: Claims dict extracted from the Supabase JWT by the frontend.
+
+        Returns:
+            Updated WorkspaceMember instance.
+
+        Raises:
+            LookupError: If workspace or member not found.
+        """
+        from pilot_space.infrastructure.database.models.workspace_member import WorkspaceRole
+
+        # Get role claim mapping config
+        mapping_config = await self.get_role_claim_mapping(workspace_id)
+        if not mapping_config:
+            # No mapping configured — leave role unchanged; return current membership
+            member = await self._get_member_for_user(user_id, workspace_id)
+            if member is None:
+                raise LookupError(
+                    f"No workspace membership found for user {user_id} in workspace {workspace_id}"
+                )
+            return member
+
+        # Extract the claim value
+        claim_key: str = mapping_config.get("claim_key", "")
+        raw_claim = jwt_claims.get(claim_key)
+
+        if raw_claim is None:
+            # Claim not present in JWT — default to member
+            mapped_role_str = "member"
+        else:
+            mapped_role_str = self.map_claims_to_role(raw_claim, mapping_config)
+
+        # Convert to WorkspaceRole enum (stored uppercase)
+        role_enum = WorkspaceRole(mapped_role_str.upper())
+
+        # Fetch and update the membership
+        member = await self._get_member_for_user(user_id, workspace_id)
+        if member is None:
+            raise LookupError(
+                f"No workspace membership found for user {user_id} in workspace {workspace_id}"
+            )
+
+        member.role = role_enum
+        await self._workspace_repo.session.flush()
+        logger.info(
+            "sso_role_applied",
+            user_id=str(user_id),
+            workspace_id=str(workspace_id),
+            role=mapped_role_str,
+        )
+        return member
+
     async def _ensure_workspace_member(
         self,
         user_id: str,

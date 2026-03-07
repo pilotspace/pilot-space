@@ -173,3 +173,154 @@ async def test_get_sso_status_unknown_workspace() -> None:
         "sso_required": False,
         "oidc_provider": None,
     }
+
+
+# ---------------------------------------------------------------------------
+# AUTH-03: Role claim mapping (map_claims_to_role, configure, apply)
+# ---------------------------------------------------------------------------
+
+_SAMPLE_MAPPING_CONFIG = {
+    "claim_key": "groups",
+    "mappings": [
+        {"claim_value": "eng-leads", "role": "admin"},
+        {"claim_value": "developers", "role": "member"},
+    ],
+}
+
+
+def test_role_claim_mapping_applies_correct_role() -> None:
+    """map_claims_to_role returns 'admin' when claim matches eng-leads mapping."""
+    from pilot_space.application.services.sso_service import SsoService
+
+    result = SsoService.map_claims_to_role("eng-leads", _SAMPLE_MAPPING_CONFIG)
+    assert result == "admin"
+
+
+def test_unmapped_claim_defaults_to_member() -> None:
+    """map_claims_to_role returns 'member' for unmapped claim values."""
+    from pilot_space.application.services.sso_service import SsoService
+
+    result = SsoService.map_claims_to_role("unknown-group", _SAMPLE_MAPPING_CONFIG)
+    assert result == "member"
+
+
+def test_owner_mapping_capped_at_admin() -> None:
+    """map_claims_to_role caps 'owner' mapping to 'admin' — OWNER cannot be assigned via SSO."""
+    from pilot_space.application.services.sso_service import SsoService
+
+    config_with_owner = {
+        "claim_key": "groups",
+        "mappings": [{"claim_value": "super-admins", "role": "owner"}],
+    }
+    result = SsoService.map_claims_to_role("super-admins", config_with_owner)
+    assert result == "admin"
+
+
+def test_list_claim_value_matches_any() -> None:
+    """map_claims_to_role handles list claim values — matches first item in list."""
+    from pilot_space.application.services.sso_service import SsoService
+
+    result = SsoService.map_claims_to_role(["devs", "eng-leads"], _SAMPLE_MAPPING_CONFIG)
+    assert result == "admin"
+
+
+def test_case_insensitive_claim_matching() -> None:
+    """map_claims_to_role matches case-insensitively — ENG-LEADS matches eng-leads config."""
+    from pilot_space.application.services.sso_service import SsoService
+
+    result = SsoService.map_claims_to_role("ENG-LEADS", _SAMPLE_MAPPING_CONFIG)
+    assert result == "admin"
+
+
+def test_empty_mapping_config_defaults_to_member() -> None:
+    """map_claims_to_role returns 'member' when mappings list is empty."""
+    from pilot_space.application.services.sso_service import SsoService
+
+    result = SsoService.map_claims_to_role("any-group", {"claim_key": "groups", "mappings": []})
+    assert result == "member"
+
+
+@pytest.mark.asyncio
+async def test_sso_required_flag_stored() -> None:
+    """set_sso_required(True) stores sso_required=True in workspace.settings."""
+    ws = _make_workspace()
+    service, _ = _make_service(ws)
+    await service.set_sso_required(UUID(str(ws.id)), required=True)
+    assert ws.settings is not None
+    assert ws.settings["sso_required"] is True
+
+
+@pytest.mark.asyncio
+async def test_oidc_config_stored_merges_not_replaces() -> None:
+    """configure_oidc preserves other settings keys when storing oidc_config."""
+    ws = _make_workspace(settings={"existing_key": "preserved", "saml_config": {"entity_id": "x"}})
+    service, _ = _make_service(ws)
+    config = {"provider": "okta", "client_id": "c", "client_secret": "s"}
+    await service.configure_oidc(UUID(str(ws.id)), config)
+    assert ws.settings is not None
+    assert ws.settings.get("existing_key") == "preserved"
+    assert ws.settings.get("saml_config", {}).get("entity_id") == "x"
+    assert "oidc_config" in ws.settings
+
+
+@pytest.mark.asyncio
+async def test_configure_role_claim_mapping_stores_config() -> None:
+    """configure_role_claim_mapping stores mapping config in workspace.settings."""
+    ws = _make_workspace()
+    service, _ = _make_service(ws)
+    await service.configure_role_claim_mapping(
+        UUID(str(ws.id)),
+        claim_key="groups",
+        mappings=[{"claim_value": "eng-leads", "role": "admin"}],
+    )
+    assert ws.settings is not None
+    mapping = ws.settings["role_claim_mapping"]
+    assert mapping["claim_key"] == "groups"
+    assert len(mapping["mappings"]) == 1
+    assert mapping["mappings"][0]["claim_value"] == "eng-leads"
+
+
+@pytest.mark.asyncio
+async def test_get_role_claim_mapping_returns_none_when_not_configured() -> None:
+    """get_role_claim_mapping returns None when no mapping config exists."""
+    ws = _make_workspace(settings=None)
+    service, _ = _make_service(ws)
+    result = await service.get_role_claim_mapping(UUID(str(ws.id)))
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_apply_sso_role_updates_member_role() -> None:
+    """apply_sso_role updates WorkspaceMember.role based on JWT claims."""
+    from unittest.mock import patch
+
+    from pilot_space.infrastructure.database.models.workspace_member import (
+        WorkspaceMember,
+        WorkspaceRole,
+    )
+
+    ws = _make_workspace(
+        settings={
+            "role_claim_mapping": {
+                "claim_key": "groups",
+                "mappings": [{"claim_value": "eng-leads", "role": "admin"}],
+            }
+        }
+    )
+    workspace_id = UUID(str(ws.id))
+    user_id = uuid4()
+
+    mock_member = MagicMock(spec=WorkspaceMember)
+    mock_member.role = WorkspaceRole.MEMBER
+
+    service, workspace_repo = _make_service(ws)
+
+    with patch.object(service, "_get_member_for_user", new=AsyncMock(return_value=mock_member)):
+        result = await service.apply_sso_role(
+            user_id=user_id,
+            workspace_id=workspace_id,
+            jwt_claims={"groups": "eng-leads"},
+        )
+
+    assert mock_member.role == WorkspaceRole.ADMIN
+    assert result is mock_member

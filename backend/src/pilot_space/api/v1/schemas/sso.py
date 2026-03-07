@@ -6,6 +6,9 @@ and SSO enforcement (AUTH-04).
 
 from __future__ import annotations
 
+from typing import Any
+from uuid import UUID
+
 from pydantic import BaseModel, HttpUrl
 
 
@@ -74,3 +77,27 @@ class SsoEnforcementRequest(BaseModel):
     """Request body for toggling SSO-only enforcement."""
 
     sso_required: bool
+
+
+class SsoClaimRoleRequest(BaseModel):
+    """Request body for applying SSO role from JWT claims.
+
+    Frontend extracts JWT claims after OIDC/SAML login and sends them here
+    for server-side validated role mapping.
+    """
+
+    workspace_id: UUID
+    jwt_claims: dict[str, Any]  # claims extracted from Supabase JWT by frontend
+
+
+class RoleClaimMappingConfig(BaseModel):
+    """Request body for configuring IdP group-claim → workspace role mappings."""
+
+    claim_key: str  # e.g. "groups"
+    mappings: list[dict[str, str]]  # [{"claim_value": "eng-leads", "role": "admin"}]
+
+
+class SsoClaimRoleResponse(BaseModel):
+    """Response after SSO role has been applied."""
+
+    role: str  # applied role name, e.g. "admin", "member"
