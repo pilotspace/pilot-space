@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-identity-and-access 01-02-PLAN.md
-last_updated: "2026-03-07T15:20:42.166Z"
+stopped_at: Completed 01-identity-and-access 01-05-PLAN.md
+last_updated: "2026-03-07T15:31:41.485Z"
 last_activity: "2026-03-07 — Completed plan 01-06 (SCIM 2.0: ScimService + 7-endpoint router + deprovisioned member gate in session middleware)"
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 9
-  completed_plans: 5
+  completed_plans: 6
   percent: 15
 ---
 
@@ -51,6 +51,7 @@ Progress: [██░░░░░░░░] 15%
 
 *Updated after each plan completion*
 | Phase 01-identity-and-access P03 | 45 | 2 tasks | 14 files |
+| Phase 01-identity-and-access P05 | 28 | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -74,6 +75,9 @@ Recent decisions affecting current work:
 - WorkspaceSessionRepository.get_session_by_id not get_by_id — avoids BaseRepository.get_by_id signature override incompatibility (01-04)
 - [Phase 01-identity-and-access]: Custom role precedence: custom_role_id set → use custom permissions; NULL → fall back to built-in WorkspaceRole
 - [Phase 01-identity-and-access]: WorkspaceRole enum UPPERCASE vs BUILTIN_ROLE_PERMISSIONS lowercase — normalized via .lower() in check_permission
+- [Phase 01-identity-and-access]: map_claims_to_role is @staticmethod — pure claim mapping logic, no DB access, easily unit testable
+- [Phase 01-identity-and-access]: owner role cap in SSO mapping is silent (log + downgrade to admin) — prevents accidental privilege escalation via IdP misconfiguration
+- [Phase 01-identity-and-access]: GET /auth/sso/check-login for pre-login enforcement check — idempotent, called before credentials are submitted
 
 ### Pending Todos
 
@@ -89,6 +93,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-07T15:20:42.164Z
-Stopped at: Completed 01-identity-and-access 01-02-PLAN.md
+Last session: 2026-03-07T15:31:41.483Z
+Stopped at: Completed 01-identity-and-access 01-05-PLAN.md
 Resume file: None
