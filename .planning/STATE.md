@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-identity-and-access 01-07-PLAN.md
-last_updated: "2026-03-07T15:35:56.763Z"
-last_activity: "2026-03-07 — Completed plan 01-06 (SCIM 2.0: ScimService + 7-endpoint router + deprovisioned member gate in session middleware)"
+stopped_at: Completed 01-identity-and-access 01-08-PLAN.md
+last_updated: "2026-03-07T15:49:22Z"
+last_activity: "2026-03-07 — Completed plan 01-08 (SecuritySettingsPage: sessions table + SCIM token UI)"
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 9
-  completed_plans: 7
-  percent: 15
+  completed_plans: 8
+  percent: 17
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-03-07)
 ## Current Position
 
 Phase: 1 of 5 (Identity & Access)
-Plan: 6 of 9 in current phase
+Plan: 8 of 9 in current phase
 Status: In progress
-Last activity: 2026-03-07 — Completed plan 01-06 (SCIM 2.0: ScimService + 7-endpoint router + deprovisioned member gate in session middleware)
+Last activity: 2026-03-07 — Completed plan 01-08 (SecuritySettingsPage: sessions table + SCIM token UI)
 
-Progress: [██░░░░░░░░] 15%
+Progress: [███░░░░░░░] 17%
 
 ## Performance Metrics
 
@@ -53,6 +53,7 @@ Progress: [██░░░░░░░░] 15%
 | Phase 01-identity-and-access P03 | 45 | 2 tasks | 14 files |
 | Phase 01-identity-and-access P05 | 28 | 2 tasks | 5 files |
 | Phase 01-identity-and-access P07 | 35 | 2 tasks | 11 files |
+| Phase 01-identity-and-access P08 | 12 | 1 task | 7 files |
 
 ## Accumulated Context
 
@@ -81,6 +82,9 @@ Recent decisions affecting current work:
 - [Phase 01-identity-and-access]: GET /auth/sso/check-login for pre-login enforcement check — idempotent, called before credentials are submitted
 - [Phase 01-identity-and-access]: SsoSettingsPage uses plain React component (not observer()) — no MobX observables; TanStack Query covers all data needs
 - [Phase 01-identity-and-access]: 409 conflict errors in useCreateRole/useUpdateRole bubble to callers for inline error display rather than toast
+- [Phase 01-identity-and-access]: SecuritySettingsPage is plain React (no observer()) — no MobX observables; TanStack Query handles all data needs
+- [Phase 01-identity-and-access]: Token reveal uses separate Dialog (not AlertDialog) — allows more content for copy UX
+- [Phase 01-identity-and-access]: Terminate-all shown as inline "All" button per row — avoids extra expand/collapse complexity (YAGNI)
 
 ### Pending Todos
 
@@ -96,6 +100,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-07T15:35:56.761Z
-Stopped at: Completed 01-identity-and-access 01-07-PLAN.md
+Last session: 2026-03-07T15:49:22Z
+Stopped at: Completed 01-identity-and-access 01-08-PLAN.md
 Resume file: None
