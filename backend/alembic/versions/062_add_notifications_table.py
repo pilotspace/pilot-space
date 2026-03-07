@@ -127,7 +127,10 @@ def upgrade() -> None:
         ),
     )
 
-    # Cast text columns to the enum types now that the table exists
+    # Cast text columns to the enum types now that the table exists.
+    # Drop defaults first — PostgreSQL cannot auto-cast a text default when changing column type.
+    op.execute(text("ALTER TABLE notifications ALTER COLUMN type DROP DEFAULT"))
+    op.execute(text("ALTER TABLE notifications ALTER COLUMN priority DROP DEFAULT"))
     op.execute(
         text(
             "ALTER TABLE notifications "

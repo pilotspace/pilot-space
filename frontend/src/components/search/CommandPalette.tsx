@@ -27,6 +27,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { observer } from 'mobx-react-lite';
 import { useUIStore, useWorkspaceStore } from '@/stores';
 import { notesApi } from '@/services/api/notes';
 import { issuesApi } from '@/services/api/issues';
@@ -85,27 +86,22 @@ function ResultSkeleton() {
   );
 }
 
-export function CommandPalette() {
+export const CommandPalette = observer(function CommandPalette() {
   const uiStore = useUIStore();
   const workspaceStore = useWorkspaceStore();
   const router = useRouter();
   const params = useParams<{ workspaceSlug: string }>();
 
-  const [open, setOpen] = useState(false);
+  // Read open state directly from MobX (component is observer())
+  const open = uiStore.commandPaletteOpen;
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResults>({ notes: [], issues: [] });
   const [isLoading, setIsLoading] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
-  // Sync MobX open state → local state
-  useEffect(() => {
-    setOpen(uiStore.commandPaletteOpen);
-  }, [uiStore.commandPaletteOpen]);
-
   // When dialog closes (by cmdk or Escape), sync back to store
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
-      setOpen(nextOpen);
       if (!nextOpen) {
         uiStore.closeCommandPalette();
         setQuery('');
@@ -263,4 +259,4 @@ export function CommandPalette() {
       )}
     </CommandDialog>
   );
-}
+});
