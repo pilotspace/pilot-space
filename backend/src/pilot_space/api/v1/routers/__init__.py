@@ -28,6 +28,7 @@ from pilot_space.api.v1.routers.ai_extraction import router as ai_extraction_rou
 from pilot_space.api.v1.routers.ai_sessions import router as ai_sessions_router
 from pilot_space.api.v1.routers.ai_tasks import router as ai_tasks_router
 from pilot_space.api.v1.routers.auth import router as auth_router
+from pilot_space.api.v1.routers.auth_sso import router as auth_sso_router
 from pilot_space.api.v1.routers.block_ownership import router as block_ownership_router
 from pilot_space.api.v1.routers.cycles import router as cycles_router
 from pilot_space.api.v1.routers.dependency_graph import router as dependency_graph_router
@@ -67,6 +68,7 @@ from pilot_space.api.v1.routers.role_skills import (
     role_templates_router,
     router as role_skills_router,
 )
+from pilot_space.api.v1.routers.scim import router as scim_router
 from pilot_space.api.v1.routers.skill_approvals import router as skill_approvals_router
 from pilot_space.api.v1.routers.skills import router as skills_router
 from pilot_space.api.v1.routers.webhooks import router as webhooks_router
@@ -143,6 +145,7 @@ __all__ = [
     "ai_sessions_router",
     "ai_tasks_router",
     "auth_router",
+    "auth_sso_router",
     "block_ownership_router",
     "cycles_router",
     "debug_router",
@@ -176,6 +179,7 @@ __all__ = [
     "projects_router",
     "role_skills_router",
     "role_templates_router",
+    "scim_router",
     "skill_approvals_router",
     "skills_router",
     "webhooks_router",

@@ -39,13 +39,16 @@ PUBLIC_ROUTES: set[str] = {
 def is_public_route(path: str) -> bool:
     """Check if path is a public route.
 
+    SCIM routes (/api/v1/scim/v2/*) use their own bearer token auth
+    (workspace SCIM token, not Supabase JWT) and must bypass JWT middleware.
+
     Args:
         path: Request path.
 
     Returns:
-        True if route is public.
+        True if route is public (no JWT auth required).
     """
-    return path in PUBLIC_ROUTES or path.startswith("/static")
+    return path in PUBLIC_ROUTES or path.startswith(("/static", "/api/v1/scim/v2/"))
 
 
 class AuthMiddleware(BaseHTTPMiddleware):

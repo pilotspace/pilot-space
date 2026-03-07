@@ -105,11 +105,28 @@ class SessionRecordingMiddleware(BaseHTTPMiddleware):
                 # Redis error — fail open (do not block the request)
                 logger.warning("Redis revocation check failed — proceeding without check")
 
+        # ── Deprovisioned member check (blocking — SCIM is_active=False) ─────
+        user_id = _extract_user_id(request)
+        if user_id is not None and workspace_id is not None:
+            try:
+                is_deprovisioned = await _check_member_deprovisioned(
+                    session_factory=self._session_factory,
+                    user_id=user_id,
+                    workspace_id=workspace_id,
+                )
+                if is_deprovisioned:
+                    return JSONResponse(
+                        {"detail": "Your account has been deactivated."},
+                        status_code=401,
+                    )
+            except Exception:
+                # DB error — fail open (do not block the request)
+                logger.warning("Deprovisioned member check failed — proceeding without check")
+
         # ── Continue to handler ───────────────────────────────────────────────
         response = await call_next(request)
 
         # ── Session recording (fire-and-forget, never blocks) ─────────────────
-        user_id = _extract_user_id(request)
         if user_id is not None and workspace_id is not None:
             ip_address = _extract_ip(request)
             user_agent = request.headers.get("User-Agent")
@@ -197,6 +214,44 @@ def _extract_ip(request: Request) -> str | None:
     if request.client:
         return request.client.host
     return None
+
+
+async def _check_member_deprovisioned(
+    *,
+    session_factory: object,
+    user_id: UUID,
+    workspace_id: UUID,
+) -> bool:
+    """Check if a workspace member has been deprovisioned (is_active=False).
+
+    Opens a short-lived DB session for the check. Returns False on any error
+    so the check fails open (request proceeds).
+
+    Args:
+        session_factory: SQLAlchemy async session factory.
+        user_id: User UUID.
+        workspace_id: Workspace UUID.
+
+    Returns:
+        True if member exists and is_active=False (deprovisioned), False otherwise.
+    """
+    from sqlalchemy import select
+
+    from pilot_space.infrastructure.database.models.workspace_member import WorkspaceMember
+
+    async with session_factory() as db_session:  # type: ignore[operator]
+        result = await db_session.execute(
+            select(WorkspaceMember.is_active).where(
+                WorkspaceMember.user_id == user_id,
+                WorkspaceMember.workspace_id == workspace_id,
+                WorkspaceMember.is_deleted == False,  # noqa: E712
+            )
+        )
+        row = result.scalar_one_or_none()
+        # row is None: member not found (not in this workspace) — allow through
+        # row is True: active member — allow through
+        # row is False: deprovisioned — block
+        return row is not None and row is False
 
 
 async def _record_session_safe(
