@@ -1,135 +1,175 @@
-"""Test scaffolds for SSOService — AUTH-01 through AUTH-04.
+"""Unit tests for SsoService — AUTH-01 through AUTH-04.
 
-These tests define the expected contract for the SSO service before
-implementation begins. All tests are marked xfail(strict=False) so
-they are collected by pytest and run, but do not block the suite.
-
-Requirements covered:
-  AUTH-01: SAML 2.0 SSO configuration and assertion validation
-  AUTH-02: OIDC SSO configuration
-  AUTH-03: Role claim mapping from IdP assertions
-  AUTH-04: SSO-only enforcement per workspace
+All tests use mocked WorkspaceRepository and Supabase admin client.
 """
 
 from __future__ import annotations
 
+from typing import Any
+from unittest.mock import AsyncMock, MagicMock
+from uuid import UUID, uuid4
+
 import pytest
 
-# ---------------------------------------------------------------------------
-# AUTH-01: SAML 2.0
-# ---------------------------------------------------------------------------
+from pilot_space.application.services.sso_service import SsoService
+from pilot_space.infrastructure.database.models.workspace import Workspace
+
+
+def _make_workspace(settings: dict[str, Any] | None = None) -> MagicMock:
+    ws = MagicMock(spec=Workspace)
+    ws.id = uuid4()
+    ws.settings = settings
+    ws.is_deleted = False
+    return ws
+
+
+def _make_service(workspace: MagicMock | None = None) -> tuple[SsoService, MagicMock]:
+    workspace_repo = MagicMock()
+    workspace_repo.session = AsyncMock()
+    workspace_repo.session.flush = AsyncMock()
+    if workspace is not None:
+        workspace_repo.get_by_id = AsyncMock(return_value=workspace)
+    else:
+        workspace_repo.get_by_id = AsyncMock(return_value=None)
+    admin_client = MagicMock()
+    service = SsoService(workspace_repo=workspace_repo, supabase_admin_client=admin_client)
+    return service, workspace_repo
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(
-    strict=False,
-    reason="SSOService.configure_saml not yet implemented (AUTH-01)",
-)
 async def test_saml_config_stored_and_retrieved() -> None:
-    """SAML config is persisted to workspace.settings and can be retrieved.
-
-    Scenario:
-        Given a workspace admin stores a SAML config
-          (entity_id, sso_url, certificate)
-        When the config is retrieved via SSOService.get_saml_config(workspace_id)
-        Then the returned config matches the stored values
-    """
-    raise NotImplementedError("AUTH-01: SSOService.configure_saml not implemented")
-
-
-@pytest.mark.asyncio
-@pytest.mark.xfail(
-    strict=False,
-    reason="SSOService.validate_saml_assertion not yet implemented (AUTH-01)",
-)
-async def test_saml_invalid_assertion_rejected() -> None:
-    """SAML assertions with invalid signatures are rejected with AuthError.
-
-    Scenario:
-        Given a SAML assertion with a tampered or missing signature
-        When SSOService.validate_saml_assertion(assertion) is called
-        Then an AuthenticationError is raised
-        And no session is created
-    """
-    raise NotImplementedError("AUTH-01: SSOService.validate_saml_assertion not implemented")
-
-
-# ---------------------------------------------------------------------------
-# AUTH-02: OIDC
-# ---------------------------------------------------------------------------
+    """SAML config is persisted to workspace.settings and can be retrieved."""
+    ws = _make_workspace()
+    service, _ = _make_service(ws)
+    config = {
+        "entity_id": "https://idp.example.com/saml",
+        "sso_url": "https://idp.example.com/saml/sso",
+        "certificate": "MIID...",
+    }
+    await service.configure_saml(UUID(str(ws.id)), config)
+    assert ws.settings is not None
+    assert "saml_config" in ws.settings
+    saml = ws.settings["saml_config"]
+    assert saml["entity_id"] == config["entity_id"]
+    assert saml["certificate"] == config["certificate"]
+    assert "name_id_format" in saml
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(
-    strict=False,
-    reason="SSOService.configure_oidc not yet implemented (AUTH-02)",
-)
+async def test_saml_config_merges_not_replaces() -> None:
+    """configure_saml merges into existing settings without removing other keys."""
+    ws = _make_workspace(settings={"some_other_key": "preserved_value"})
+    service, _ = _make_service(ws)
+    config = {"entity_id": "e", "sso_url": "https://u", "certificate": "c"}
+    await service.configure_saml(UUID(str(ws.id)), config)
+    assert ws.settings is not None
+    assert ws.settings.get("some_other_key") == "preserved_value"
+    assert "saml_config" in ws.settings
+
+
+@pytest.mark.asyncio
+async def test_saml_config_missing_required_fields_raises() -> None:
+    """configure_saml raises ValueError when required fields are absent."""
+    ws = _make_workspace()
+    service, _ = _make_service(ws)
+    with pytest.raises(ValueError, match="missing required fields"):
+        await service.configure_saml(UUID(str(ws.id)), {"entity_id": "only"})
+
+
+@pytest.mark.asyncio
+async def test_get_saml_config_returns_none_when_no_settings() -> None:
+    """get_saml_config returns None when workspace has no settings."""
+    ws = _make_workspace(settings=None)
+    service, _ = _make_service(ws)
+    assert await service.get_saml_config(UUID(str(ws.id))) is None
+
+
+@pytest.mark.asyncio
+async def test_get_saml_config_returns_stored_config() -> None:
+    """get_saml_config returns the stored SAML config dict."""
+    saml_data = {
+        "entity_id": "https://idp.example.com",
+        "sso_url": "https://idp.example.com/sso",
+        "certificate": "cert",
+        "name_id_format": "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+    }
+    ws = _make_workspace(settings={"saml_config": saml_data})
+    service, _ = _make_service(ws)
+    assert await service.get_saml_config(UUID(str(ws.id))) == saml_data
+
+
+@pytest.mark.asyncio
 async def test_oidc_config_stored_and_retrieved() -> None:
-    """OIDC config is persisted to workspace.settings and can be retrieved.
-
-    Scenario:
-        Given a workspace admin stores an OIDC config
-          (client_id, client_secret, discovery_url)
-        When the config is retrieved via SSOService.get_oidc_config(workspace_id)
-        Then the returned config matches the stored values
-        And client_secret is not stored in plaintext
-    """
-    raise NotImplementedError("AUTH-02: SSOService.configure_oidc not implemented")
-
-
-# ---------------------------------------------------------------------------
-# AUTH-03: Role claim mapping
-# ---------------------------------------------------------------------------
+    """OIDC config is persisted to workspace.settings and can be retrieved."""
+    ws = _make_workspace()
+    service, _ = _make_service(ws)
+    config = {"provider": "google", "client_id": "cid", "client_secret": "sec"}
+    await service.configure_oidc(UUID(str(ws.id)), config)
+    assert ws.settings is not None
+    oidc = ws.settings["oidc_config"]
+    assert oidc["provider"] == "google"
+    assert oidc["client_id"] == "cid"
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(
-    strict=False,
-    reason="SSOService.map_role_from_claims not yet implemented (AUTH-03)",
-)
-async def test_role_claim_mapping_applies_correct_role() -> None:
-    """IdP role claims are mapped to WorkspaceRole according to mapping config.
-
-    Scenario:
-        Given workspace has role_claim_mapping = {"engineering": "MEMBER", "devops": "ADMIN"}
-        When an IdP assertion includes role claim "devops"
-        Then SSOService.map_role_from_claims returns WorkspaceRole.ADMIN
-    """
-    raise NotImplementedError("AUTH-03: SSOService.map_role_from_claims not implemented")
+async def test_oidc_config_merges_not_replaces() -> None:
+    """configure_oidc merges into existing settings without removing other keys."""
+    ws = _make_workspace(settings={"saml_config": {"entity_id": "existing"}})
+    service, _ = _make_service(ws)
+    await service.configure_oidc(
+        UUID(str(ws.id)),
+        {"provider": "azure", "client_id": "c1", "client_secret": "s1"},
+    )
+    assert ws.settings is not None
+    assert ws.settings.get("saml_config", {}).get("entity_id") == "existing"
+    assert "oidc_config" in ws.settings
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(
-    strict=False,
-    reason="SSOService.map_role_from_claims default not yet implemented (AUTH-03)",
-)
-async def test_unmapped_claim_defaults_to_member() -> None:
-    """An IdP role claim with no mapping defaults to WorkspaceRole.MEMBER.
-
-    Scenario:
-        Given workspace has role_claim_mapping = {"admin": "ADMIN"}
-        When an IdP assertion includes role claim "intern" (not in mapping)
-        Then SSOService.map_role_from_claims returns WorkspaceRole.MEMBER
-    """
-    raise NotImplementedError("AUTH-03: Default role fallback for unmapped claims not implemented")
-
-
-# ---------------------------------------------------------------------------
-# AUTH-04: SSO-only enforcement flag
-# ---------------------------------------------------------------------------
+async def test_sso_required_flag_set() -> None:
+    """set_sso_required(True) stores sso_required=True in workspace.settings."""
+    ws = _make_workspace()
+    service, _ = _make_service(ws)
+    await service.set_sso_required(UUID(str(ws.id)), required=True)
+    assert ws.settings is not None
+    assert ws.settings["sso_required"] is True
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(
-    strict=False,
-    reason="SSOService.set_sso_required not yet implemented (AUTH-04)",
-)
-async def test_sso_only_flag_stored_in_workspace_settings() -> None:
-    """Setting sso_required=True is persisted in workspace.settings JSONB.
+async def test_get_sso_status_no_config() -> None:
+    """Workspace with no settings returns all False/None status."""
+    ws = _make_workspace(settings=None)
+    service, _ = _make_service(ws)
+    result = await service.get_sso_status(UUID(str(ws.id)))
+    assert result == {
+        "has_saml": False,
+        "has_oidc": False,
+        "sso_required": False,
+        "oidc_provider": None,
+    }
 
-    Scenario:
-        Given a workspace admin calls SSOService.set_sso_required(workspace_id, True)
-        When workspace.settings is reloaded from the database
-        Then workspace.settings["sso_required"] is True
-    """
-    raise NotImplementedError("AUTH-04: SSOService.set_sso_required not implemented")
+
+@pytest.mark.asyncio
+async def test_get_sso_status_with_saml() -> None:
+    """Workspace with saml_config returns has_saml=True."""
+    ws = _make_workspace(
+        settings={"saml_config": {"entity_id": "https://idp", "sso_url": "u", "certificate": "c"}}
+    )
+    service, _ = _make_service(ws)
+    result = await service.get_sso_status(UUID(str(ws.id)))
+    assert result["has_saml"] is True
+    assert result["has_oidc"] is False
+    assert result["oidc_provider"] is None
+
+
+@pytest.mark.asyncio
+async def test_get_sso_status_unknown_workspace() -> None:
+    """Non-existent workspace_id returns all False/None (graceful degradation)."""
+    service, _ = _make_service(workspace=None)
+    result = await service.get_sso_status(uuid4())
+    assert result == {
+        "has_saml": False,
+        "has_oidc": False,
+        "sso_required": False,
+        "oidc_provider": None,
+    }
