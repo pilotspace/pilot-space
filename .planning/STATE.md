@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: in-progress
-stopped_at: "Completed 01-identity-and-access 01-06-PLAN.md"
-last_updated: "2026-03-07T18:00:00Z"
-last_activity: 2026-03-07 — Completed plan 01-06 (SCIM 2.0 provisioning endpoint)
+status: executing
+stopped_at: Completed 01-identity-and-access 01-03-PLAN.md
+last_updated: "2026-03-07T15:20:00.118Z"
+last_activity: "2026-03-07 — Completed plan 01-06 (SCIM 2.0: ScimService + 7-endpoint router + deprovisioned member gate in session middleware)"
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 9
-  completed_plans: 6
+  completed_plans: 4
   percent: 15
 ---
 
@@ -50,6 +50,7 @@ Progress: [██░░░░░░░░] 15%
 - Trend: consistent 25-35 min/plan
 
 *Updated after each plan completion*
+| Phase 01-identity-and-access P03 | 45 | 2 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -68,6 +69,11 @@ Recent decisions affecting current work:
 - ScimService uses factory function pattern not DI container — avoids complex wiring for a service needing custom per-request auth context (01-06)
 - SCIM routes bypass JWT middleware via is_public_route() — SCIM uses workspace bearer token, not Supabase JWT (01-06)
 - Deprovision = is_active=False on WorkspaceMember — data preserved; deprovisioned check in SessionRecordingMiddleware fails open on DB error (01-06)
+- SessionRecordingMiddleware uses lazy-init for redis/session_factory from app.state.container — enables add_middleware at module load time before lifespan (01-04)
+- Sessions router instantiates SessionService directly (SCIM pattern) — avoids @inject DI wiring for a service with external client dependencies (01-04)
+- WorkspaceSessionRepository.get_session_by_id not get_by_id — avoids BaseRepository.get_by_id signature override incompatibility (01-04)
+- [Phase 01-identity-and-access]: Custom role precedence: custom_role_id set → use custom permissions; NULL → fall back to built-in WorkspaceRole
+- [Phase 01-identity-and-access]: WorkspaceRole enum UPPERCASE vs BUILTIN_ROLE_PERMISSIONS lowercase — normalized via .lower() in check_permission
 
 ### Pending Todos
 
@@ -83,6 +89,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-07T18:00:00Z
-Stopped at: Completed 01-identity-and-access 01-06-PLAN.md
-Resume file: .planning/phases/01-identity-and-access/01-07-PLAN.md
+Last session: 2026-03-07T15:20:00.116Z
+Stopped at: Completed 01-identity-and-access 01-03-PLAN.md
+Resume file: None
