@@ -70,6 +70,7 @@ from pilot_space.api.v1.routers import (
     workspace_note_links_router,
     workspace_notes_ai_router,
     workspace_notes_router,
+    workspace_sessions_router,
     workspace_tasks_router,
     workspaces_router,
 )
@@ -287,6 +288,7 @@ app.include_router(workspace_issues_router, prefix=f"{API_V1_PREFIX}/workspaces"
 app.include_router(workspace_issue_branches_router, prefix=f"{API_V1_PREFIX}/workspaces")
 app.include_router(workspace_invitations_router, prefix=API_V1_PREFIX)
 app.include_router(workspace_members_router, prefix=f"{API_V1_PREFIX}/workspaces")
+app.include_router(workspace_sessions_router, prefix=f"{API_V1_PREFIX}/workspaces")
 app.include_router(workspace_note_issue_links_router, prefix=f"{API_V1_PREFIX}/workspaces")
 app.include_router(workspace_note_links_router, prefix=f"{API_V1_PREFIX}/workspaces")
 app.include_router(workspace_notes_router, prefix=f"{API_V1_PREFIX}/workspaces")

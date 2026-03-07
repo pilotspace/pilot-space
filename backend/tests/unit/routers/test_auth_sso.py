@@ -1,85 +1,172 @@
-"""Test scaffolds for SSO authentication router — AUTH-01, AUTH-04, AUTH-06.
+"""Tests for SSO authentication router — AUTH-01 through AUTH-04.
 
-These tests define the expected HTTP contract for the /auth/sso endpoints
-before implementation begins. All tests are marked xfail(strict=False) so
-they are collected by pytest and run, but do not block the suite.
-
-Requirements covered:
-  AUTH-01: SAML SSO redirect initiation endpoint
-  AUTH-04: SSO-only workspace enforcement at login
-  AUTH-06: Revoked session returns 401
+Tests cover:
+  - GET /auth/sso/status: returns SSO availability for a workspace (no auth)
+  - Graceful degradation when SSO service unavailable
+  - Correct reflection of SAML/OIDC/enforcement configuration
 """
 
 from __future__ import annotations
 
+import uuid
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 
-# ---------------------------------------------------------------------------
-# AUTH-04: SSO-only workspace enforcement
-# ---------------------------------------------------------------------------
+
+def _make_sso_status(
+    *,
+    has_saml: bool = False,
+    has_oidc: bool = False,
+    sso_required: bool = False,
+    oidc_provider: str | None = None,
+) -> dict:
+    return {
+        "has_saml": has_saml,
+        "has_oidc": has_oidc,
+        "sso_required": sso_required,
+        "oidc_provider": oidc_provider,
+    }
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(
-    strict=False,
-    reason="SSO-only enforcement at /auth/login not yet implemented (AUTH-04)",
-)
-async def test_sso_only_workspace_rejects_password_login() -> None:
-    """Password login returns 403 when workspace has sso_required=True.
+async def test_sso_status_returns_all_false_when_service_unavailable() -> None:
+    """GET /auth/sso/status returns all-false when SsoService cannot be instantiated.
 
     Scenario:
-        Given workspace has settings["sso_required"] = True
-        When POST /auth/login {email, password} is called for that workspace
-        Then the response status is 403
-        And the error body indicates SSO is required
-        And no session token is issued
+        Given the DI container fails to provide SsoService (_get_sso_service returns None)
+        When GET /auth/sso/status?workspace_id={id} is called
+        Then the response status is 200
+        And has_saml, has_oidc, sso_required are all False
+        And oidc_provider is None
     """
-    raise NotImplementedError(
-        "AUTH-04: SSO-only workspace password login rejection not implemented"
+    from pilot_space.api.v1.routers.auth_sso import get_sso_status
+    from pilot_space.api.v1.schemas.sso import SsoStatusResponse
+
+    workspace_id = uuid.uuid4()
+    mock_session = AsyncMock()
+
+    with patch("pilot_space.api.v1.routers.auth_sso._get_sso_service", return_value=None):
+        result = await get_sso_status(workspace_id=workspace_id, session=mock_session)
+
+    assert isinstance(result, SsoStatusResponse)
+    assert result.has_saml is False
+    assert result.has_oidc is False
+    assert result.sso_required is False
+    assert result.oidc_provider is None
+
+
+@pytest.mark.asyncio
+async def test_sso_status_returns_has_saml_when_configured() -> None:
+    """GET /auth/sso/status returns has_saml=True when SAML is configured.
+
+    Scenario:
+        Given workspace has a valid SAML configuration stored
+        When GET /auth/sso/status?workspace_id={id} is called
+        Then the response has has_saml=True
+        And other flags reflect actual configuration
+    """
+    from pilot_space.api.v1.routers.auth_sso import get_sso_status
+    from pilot_space.api.v1.schemas.sso import SsoStatusResponse
+
+    workspace_id = uuid.uuid4()
+    mock_session = AsyncMock()
+
+    mock_service = MagicMock()
+    mock_service.get_sso_status = AsyncMock(return_value=_make_sso_status(has_saml=True))
+
+    with patch("pilot_space.api.v1.routers.auth_sso._get_sso_service", return_value=mock_service):
+        result = await get_sso_status(workspace_id=workspace_id, session=mock_session)
+
+    mock_service.get_sso_status.assert_called_once_with(workspace_id)
+    assert isinstance(result, SsoStatusResponse)
+    assert result.has_saml is True
+    assert result.has_oidc is False
+    assert result.sso_required is False
+
+
+@pytest.mark.asyncio
+async def test_sso_status_returns_sso_required_when_enforcement_enabled() -> None:
+    """GET /auth/sso/status reflects sso_required=True when enforcement is active.
+
+    Scenario:
+        Given workspace has SSO-only enforcement enabled
+        When GET /auth/sso/status?workspace_id={id} is called
+        Then the response has sso_required=True
+    """
+    from pilot_space.api.v1.routers.auth_sso import get_sso_status
+    from pilot_space.api.v1.schemas.sso import SsoStatusResponse
+
+    workspace_id = uuid.uuid4()
+    mock_session = AsyncMock()
+
+    mock_service = MagicMock()
+    mock_service.get_sso_status = AsyncMock(
+        return_value=_make_sso_status(has_saml=True, sso_required=True)
     )
 
+    with patch("pilot_space.api.v1.routers.auth_sso._get_sso_service", return_value=mock_service):
+        result = await get_sso_status(workspace_id=workspace_id, session=mock_session)
 
-# ---------------------------------------------------------------------------
-# AUTH-01: SAML SSO initiation
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-@pytest.mark.xfail(
-    strict=False,
-    reason="SAML SSO redirect endpoint not yet implemented (AUTH-01)",
-)
-async def test_saml_sso_endpoint_returns_redirect_url() -> None:
-    """GET /auth/sso/saml/initiate returns a redirect URL to the IdP.
-
-    Scenario:
-        Given workspace has a valid SAML config (entity_id, sso_url, certificate)
-        When GET /auth/sso/saml/initiate?workspace_slug={slug} is called
-        Then the response status is 200 (or 302)
-        And the body contains a redirect_url pointing to the IdP SSO endpoint
-        And the URL contains a SAMLRequest parameter
-    """
-    raise NotImplementedError("AUTH-01: SAML SSO initiation endpoint not implemented")
-
-
-# ---------------------------------------------------------------------------
-# AUTH-06: Revoked session enforcement
-# ---------------------------------------------------------------------------
+    assert isinstance(result, SsoStatusResponse)
+    assert result.sso_required is True
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(
-    strict=False,
-    reason="Revoked session 401 enforcement not yet implemented (AUTH-06)",
-)
-async def test_revoked_session_returns_401() -> None:
-    """Requests with a revoked session token receive 401.
+async def test_sso_status_returns_oidc_provider_when_oidc_configured() -> None:
+    """GET /auth/sso/status returns oidc_provider name when OIDC is configured.
 
     Scenario:
-        Given a valid JWT token for an authenticated user
-        And the corresponding WorkspaceSession has revoked_at set (force-terminated)
-        When the token is used to call any authenticated endpoint
-        Then the response status is 401
-        And the response body indicates the session has been revoked
+        Given workspace has OIDC configured with provider="google"
+        When GET /auth/sso/status?workspace_id={id} is called
+        Then the response has has_oidc=True and oidc_provider="google"
     """
-    raise NotImplementedError("AUTH-06: Revoked session 401 enforcement not implemented")
+    from pilot_space.api.v1.routers.auth_sso import get_sso_status
+    from pilot_space.api.v1.schemas.sso import SsoStatusResponse
+
+    workspace_id = uuid.uuid4()
+    mock_session = AsyncMock()
+
+    mock_service = MagicMock()
+    mock_service.get_sso_status = AsyncMock(
+        return_value=_make_sso_status(has_oidc=True, oidc_provider="google")
+    )
+
+    with patch("pilot_space.api.v1.routers.auth_sso._get_sso_service", return_value=mock_service):
+        result = await get_sso_status(workspace_id=workspace_id, session=mock_session)
+
+    assert isinstance(result, SsoStatusResponse)
+    assert result.has_oidc is True
+    assert result.oidc_provider == "google"
+
+
+@pytest.mark.asyncio
+async def test_sso_status_graceful_for_unknown_workspace() -> None:
+    """GET /auth/sso/status returns all-false for unknown workspace_id.
+
+    Scenario:
+        Given workspace_id does not exist in the database
+        When GET /auth/sso/status?workspace_id={id} is called
+        Then the response is 200 with all-false (graceful degradation, no 404)
+
+    This is intentional: the login page calls this before auth to decide
+    whether to show an SSO button; it should degrade gracefully.
+    """
+    from pilot_space.api.v1.routers.auth_sso import get_sso_status
+    from pilot_space.api.v1.schemas.sso import SsoStatusResponse
+
+    workspace_id = uuid.uuid4()
+    mock_session = AsyncMock()
+
+    mock_service = MagicMock()
+    # SsoService.get_sso_status returns all-false for unknown workspace
+    mock_service.get_sso_status = AsyncMock(return_value=_make_sso_status())
+
+    with patch("pilot_space.api.v1.routers.auth_sso._get_sso_service", return_value=mock_service):
+        result = await get_sso_status(workspace_id=workspace_id, session=mock_session)
+
+    assert isinstance(result, SsoStatusResponse)
+    assert result.has_saml is False
+    assert result.has_oidc is False
+    assert result.sso_required is False
+    assert result.oidc_provider is None

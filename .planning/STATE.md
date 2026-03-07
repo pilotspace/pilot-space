@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in-progress
-stopped_at: "Completed 01-identity-and-access 01-01-PLAN.md"
-last_updated: "2026-03-07T14:39:22Z"
-last_activity: 2026-03-07 — Completed plan 01-01 (DB foundation + test scaffolds)
+stopped_at: "Completed 01-identity-and-access 01-06-PLAN.md"
+last_updated: "2026-03-07T18:00:00Z"
+last_activity: 2026-03-07 — Completed plan 01-06 (SCIM 2.0 provisioning endpoint)
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 9
-  completed_plans: 1
-  percent: 2
+  completed_plans: 6
+  percent: 15
 ---
 
 # Project State
@@ -26,28 +26,28 @@ See: .planning/PROJECT.md (updated 2026-03-07)
 ## Current Position
 
 Phase: 1 of 5 (Identity & Access)
-Plan: 1 of 9 in current phase
+Plan: 6 of 9 in current phase
 Status: In progress
-Last activity: 2026-03-07 — Completed plan 01-01 (DB foundation: migration 064, CustomRole/WorkspaceSession models, 23 test scaffolds)
+Last activity: 2026-03-07 — Completed plan 01-06 (SCIM 2.0: ScimService + 7-endpoint router + deprovisioned member gate in session middleware)
 
-Progress: [█░░░░░░░░░] 2%
+Progress: [██░░░░░░░░] 15%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 1
-- Average duration: 5 min
-- Total execution time: 0.08 hours
+- Total plans completed: 6
+- Average duration: ~27 min
+- Total execution time: ~2.7 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01 Identity & Access | 1/9 | 5 min | 5 min |
+| 01 Identity & Access | 6/9 | ~165 min | ~27 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (5 min)
-- Trend: establishing baseline
+- Last 5 plans: 01-02 (SSO), 01-03 (RBAC), 01-04 (Audit Log), 01-05 (Session Mgmt), 01-06 (SCIM 2.0)
+- Trend: consistent 25-35 min/plan
 
 *Updated after each plan completion*
 
@@ -65,10 +65,13 @@ Recent decisions affecting current work:
 - custom_roles RLS uses workspace_members subquery join — same pattern as graph_nodes, isolates per workspace without per-user policy rows (01-01)
 - is_active added to workspace_members not via soft_delete — SCIM deactivation must be reversible without touching is_deleted semantics (01-01)
 - Test scaffolds use xfail(strict=False) not skip — xfail runs the test body and reports XFAIL/XPASS, giving better visibility when implementation begins (01-01)
+- ScimService uses factory function pattern not DI container — avoids complex wiring for a service needing custom per-request auth context (01-06)
+- SCIM routes bypass JWT middleware via is_public_route() — SCIM uses workspace bearer token, not Supabase JWT (01-06)
+- Deprovision = is_active=False on WorkspaceMember — data preserved; deprovisioned check in SessionRecordingMiddleware fails open on DB error (01-06)
 
 ### Pending Todos
 
-None yet.
+- POST /workspaces/{slug}/settings/scim-token admin endpoint not yet implemented (ScimService.generate_scim_token exists, router endpoint missing)
 
 ### Blockers/Concerns
 
@@ -76,9 +79,10 @@ None yet.
 - CONCERNS: RLS enum case mismatch (UPPERCASE in policies vs lowercase in some migrations) — must be resolved before Phase 3 isolation verification
 - CONCERNS: CostTracker/ApprovalService singletons with session=None silently drop cost/approval records — must be fixed in Phase 4 before AI governance wiring
 - CONCERNS: BYOK env fallback exposes platform key — blocking requirement for AIGOV-05
+- CONCERNS: SessionRecordingMiddleware deprovisioned check adds 1 DB query per authenticated workspace request — consider Redis caching if latency becomes an issue
 
 ## Session Continuity
 
-Last session: 2026-03-07T14:39:22Z
-Stopped at: Completed 01-identity-and-access 01-01-PLAN.md
-Resume file: .planning/phases/01-identity-and-access/01-02-PLAN.md
+Last session: 2026-03-07T18:00:00Z
+Stopped at: Completed 01-identity-and-access 01-06-PLAN.md
+Resume file: .planning/phases/01-identity-and-access/01-07-PLAN.md

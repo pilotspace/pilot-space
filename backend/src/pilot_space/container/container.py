@@ -86,6 +86,8 @@ from pilot_space.application.services.role_skill import (
 )
 from pilot_space.application.services.skill.concurrency_manager import SkillConcurrencyManager
 from pilot_space.application.services.skill.skill_execution_service import SkillExecutionService
+from pilot_space.application.services.rbac_service import RbacService
+from pilot_space.application.services.sso_service import SsoService
 from pilot_space.application.services.task_service import TaskService
 from pilot_space.application.services.version.diff_service import VersionDiffService
 from pilot_space.application.services.version.digest_service import VersionDigestService
@@ -654,6 +656,13 @@ class Container(InfraContainer):
         session=providers.Callable(get_current_session),
         constitution_repository=InfraContainer.constitution_rule_repository,
         queue=InfraContainer.queue_client,
+    )
+
+    # SSO Service (AUTH-01 through AUTH-04)
+    sso_service = providers.Factory(
+        SsoService,
+        workspace_repo=InfraContainer.workspace_repository,
+        supabase_admin_client=InfraContainer.supabase_auth,
     )
 
 
