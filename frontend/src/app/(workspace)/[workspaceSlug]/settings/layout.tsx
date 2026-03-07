@@ -13,7 +13,17 @@ import * as React from 'react';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useWorkspaceStore } from '@/stores/RootStore';
-import { Building2, CreditCard, Menu, Plug, Settings, Sparkles, User } from 'lucide-react';
+import {
+  Building2,
+  CreditCard,
+  Menu,
+  Plug,
+  Settings,
+  Shield,
+  Sparkles,
+  User,
+  Users,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -54,6 +64,18 @@ const settingsNavSections: NavSection[] = [
         label: 'Integrations',
         icon: Plug,
         href: (slug: string) => `/${slug}/settings/integrations`,
+      },
+      {
+        id: 'sso',
+        label: 'SSO',
+        icon: Shield,
+        href: (slug: string) => `/${slug}/settings/sso`,
+      },
+      {
+        id: 'roles',
+        label: 'Custom Roles',
+        icon: Users,
+        href: (slug: string) => `/${slug}/settings/roles`,
       },
       {
         id: 'billing',
