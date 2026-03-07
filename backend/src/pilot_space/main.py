@@ -29,6 +29,7 @@ from pilot_space.api.v1.routers import (
     auth_router,
     auth_sso_router,
     block_ownership_router,
+    custom_roles_router,
     cycles_router,
     debug_router,
     dependency_graph_router,
@@ -260,6 +261,7 @@ API_V1_PREFIX = "/api/v1"
 app.include_router(scim_router, prefix=API_V1_PREFIX)
 app.include_router(auth_router, prefix=API_V1_PREFIX)
 app.include_router(auth_sso_router, prefix=API_V1_PREFIX)
+app.include_router(custom_roles_router, prefix=API_V1_PREFIX)
 app.include_router(workspaces_router, prefix=API_V1_PREFIX)
 app.include_router(projects_router, prefix=API_V1_PREFIX)
 app.include_router(issues_router, prefix=API_V1_PREFIX)
