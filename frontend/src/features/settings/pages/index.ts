@@ -8,3 +8,4 @@ export { WorkspaceGeneralPage } from './workspace-general-page';
 export { SkillsSettingsPage } from './skills-settings-page';
 export { SsoSettingsPage } from './sso-settings-page';
 export { RolesSettingsPage } from './roles-settings-page';
+export { SecuritySettingsPage } from './security-settings-page';

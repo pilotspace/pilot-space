@@ -140,7 +140,7 @@ describe('SecuritySettingsPage', () => {
     await user.click(terminateBtn);
 
     expect(screen.getByRole('alertdialog')).toBeInTheDocument();
-    expect(screen.getByText(/Terminate session/i)).toBeInTheDocument();
+    expect(screen.getByRole('alertdialog')).toHaveTextContent(/Terminate session/i);
   });
 
   it('SCIM URL displays workspace slug in URL', () => {

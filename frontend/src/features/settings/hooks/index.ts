@@ -37,3 +37,12 @@ export {
   type UpdateRoleInput,
   type AssignRoleInput,
 } from './use-custom-roles';
+
+export {
+  useSessions,
+  useTerminateSession,
+  useTerminateAllUserSessions,
+  type Session,
+} from './use-sessions';
+
+export { useGenerateScimToken, type ScimTokenResponse } from './use-scim';
