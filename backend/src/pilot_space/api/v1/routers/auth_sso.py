@@ -503,6 +503,55 @@ async def get_sso_status(
 
 
 # ---------------------------------------------------------------------------
+# SSO enforcement check — AUTH-04
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/check-login",
+    summary="Check whether password login is allowed for a workspace (no auth required)",
+    description=(
+        "Returns whether email/password login is allowed for a workspace. "
+        "Returns 403 with a clear message if the workspace requires SSO-only login. "
+        "No authentication required — called by the login page before submitting credentials."
+    ),
+)
+async def check_sso_login_allowed(
+    workspace_id: UUID,
+    session: SessionDep,
+) -> dict[str, bool]:
+    """Return whether password login is allowed for this workspace.
+
+    If the workspace has sso_required=True, raises 403 with a clear SSO enforcement message.
+    This endpoint is called by the login form BEFORE submitting email+password credentials,
+    so the frontend can redirect to SSO instead of showing password fields.
+
+    Args:
+        workspace_id: Target workspace UUID (query param).
+        session: DB session.
+
+    Returns:
+        {"password_login_allowed": True} if password login is permitted.
+
+    Raises:
+        403: If workspace requires SSO login.
+    """
+    sso_service = _get_sso_service()
+    if sso_service is None:
+        # Service unavailable — fail open (allow password login) to avoid lockouts
+        return {"password_login_allowed": True}
+
+    sso_status = await sso_service.get_sso_status(workspace_id)
+    if sso_status.get("sso_required"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This workspace requires SSO login. Use your identity provider account.",
+        )
+
+    return {"password_login_allowed": True}
+
+
+# ---------------------------------------------------------------------------
 # Role claim mapping (AUTH-03)
 # ---------------------------------------------------------------------------
 
