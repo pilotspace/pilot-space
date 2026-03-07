@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-identity-and-access 01-08-PLAN.md
-last_updated: "2026-03-07T15:49:22Z"
+stopped_at: Completed 01-identity-and-access 01-09-PLAN.md
+last_updated: "2026-03-07T16:01:13.109Z"
 last_activity: "2026-03-07 — Completed plan 01-08 (SecuritySettingsPage: sessions table + SCIM token UI)"
 progress:
   total_phases: 5
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 9
-  completed_plans: 8
+  completed_plans: 9
   percent: 17
 ---
 
@@ -54,6 +54,7 @@ Progress: [███░░░░░░░] 17%
 | Phase 01-identity-and-access P05 | 28 | 2 tasks | 5 files |
 | Phase 01-identity-and-access P07 | 35 | 2 tasks | 11 files |
 | Phase 01-identity-and-access P08 | 12 | 1 task | 7 files |
+| Phase 01-identity-and-access P09 | 7 | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -85,6 +86,9 @@ Recent decisions affecting current work:
 - [Phase 01-identity-and-access]: SecuritySettingsPage is plain React (no observer()) — no MobX observables; TanStack Query handles all data needs
 - [Phase 01-identity-and-access]: Token reveal uses separate Dialog (not AlertDialog) — allows more content for copy UX
 - [Phase 01-identity-and-access]: Terminate-all shown as inline "All" button per row — avoids extra expand/collapse complexity (YAGNI)
+- [Phase 01-identity-and-access]: SSO button visible only when workspace_id is in URL query param — avoids showing SSO for non-SSO workspaces
+- [Phase 01-identity-and-access]: Claims role application in auth callback is non-fatal — unmapped claims default to member on backend (graceful degradation)
+- [Phase 01-identity-and-access]: MemberRoleBadge: data-testid role-badge-{role} for built-in, role-badge-custom for custom roles; unified component for all member list views
 
 ### Pending Todos
 
@@ -100,6 +104,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-07T15:49:22Z
-Stopped at: Completed 01-identity-and-access 01-08-PLAN.md
+Last session: 2026-03-07T16:01:04.537Z
+Stopped at: Completed 01-identity-and-access 01-09-PLAN.md
 Resume file: None

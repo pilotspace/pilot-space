@@ -12,7 +12,7 @@ The MVP is working: note canvas, issue management, cycles, AI PR review, and not
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Identity & Access** - SSO, custom RBAC, session control, and SCIM provisioning so enterprise teams can use their existing identity provider
+- [x] **Phase 1: Identity & Access** - SSO, custom RBAC, session control, and SCIM provisioning so enterprise teams can use their existing identity provider (completed 2026-03-07)
 - [ ] **Phase 2: Compliance & Audit** - Immutable audit log covering every user and AI action, with export and retention controls
 - [ ] **Phase 3: Multi-Tenant Isolation** - Verified data isolation, workspace encryption, rate limiting, and operator dashboard
 - [ ] **Phase 4: AI Governance** - Configurable approval policies, AI audit trail, rollback, strict BYOK enforcement, and cost visibility
@@ -103,7 +103,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Identity & Access | 8/9 | In Progress|  |
+| 1. Identity & Access | 9/9 | Complete   | 2026-03-07 |
 | 2. Compliance & Audit | 0/TBD | Not started | - |
 | 3. Multi-Tenant Isolation | 0/TBD | Not started | - |
 | 4. AI Governance | 0/TBD | Not started | - |
