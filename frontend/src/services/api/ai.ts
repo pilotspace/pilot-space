@@ -74,6 +74,8 @@ export interface CostSummary {
     request_count: number;
   }>;
   by_day: Array<{ date: string; total_cost_usd: number; request_count: number }>;
+  /** Cost breakdown by operation_type. Present only when group_by=operation_type is requested. */
+  by_feature: Record<string, number> | null;
 }
 
 export interface ApprovalListResponse {
@@ -244,9 +246,13 @@ export const aiApi = {
    * @param endDate - End date (YYYY-MM-DD format)
    * @returns Cost summary with breakdowns by agent, user, and day
    */
-  getCostSummary: (workspaceId: string, startDate: string, endDate: string) =>
+  getCostSummary: (workspaceId: string, startDate: string, endDate: string, groupBy?: string) =>
     apiClient.get<CostSummary>(`/ai/costs/summary`, {
-      params: { start_date: startDate, end_date: endDate },
+      params: {
+        start_date: startDate,
+        end_date: endDate,
+        ...(groupBy ? { group_by: groupBy } : {}),
+      },
       headers: { 'X-Workspace-Id': workspaceId },
     }),
 
