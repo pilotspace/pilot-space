@@ -106,14 +106,19 @@ export const CostDashboardPage = observer(function CostDashboardPage({
 
   const [activeTab, setActiveTab] = useState<'by_agent' | 'by_feature'>('by_agent');
 
+  // Resolve the actual workspace UUID from the store.
+  // The page prop `workspaceId` may be the slug (see costs/page.tsx); the store
+  // holds the authoritative UUID required for X-Workspace-Id header lookups.
+  const resolvedWorkspaceId = workspaceStore.currentWorkspace?.id ?? workspaceId;
+
   // Load cost summary on mount
   useEffect(() => {
-    cost.loadSummary(workspaceId);
-  }, [cost, workspaceId]);
+    cost.loadSummary(resolvedWorkspaceId);
+  }, [cost, resolvedWorkspaceId]);
 
   // Handle date range change
   const handleDateRangeChange = async (range: { start: Date; end: Date }) => {
-    await cost.setDateRange(range, workspaceId);
+    await cost.setDateRange(range, resolvedWorkspaceId);
   };
 
   // Lazy-load feature breakdown only when tab is active
@@ -121,9 +126,9 @@ export const CostDashboardPage = observer(function CostDashboardPage({
   const endDate = format(cost.dateRange.end, 'yyyy-MM-dd');
 
   const { data: featureSummary, isLoading: isFeatureLoading } = useQuery({
-    queryKey: ['costs-by-feature', workspaceId, startDate, endDate],
-    queryFn: () => aiApi.getCostSummary(workspaceId, startDate, endDate, 'operation_type'),
-    enabled: activeTab === 'by_feature' && !!workspaceId,
+    queryKey: ['costs-by-feature', resolvedWorkspaceId, startDate, endDate],
+    queryFn: () => aiApi.getCostSummary(resolvedWorkspaceId, startDate, endDate, 'operation_type'),
+    enabled: activeTab === 'by_feature' && !!resolvedWorkspaceId,
     staleTime: 60_000,
   });
 
@@ -180,7 +185,7 @@ export const CostDashboardPage = observer(function CostDashboardPage({
           type="button"
           variant="outline"
           size="sm"
-          onClick={() => cost.loadSummary(workspaceId)}
+          onClick={() => cost.loadSummary(resolvedWorkspaceId)}
           className="flex items-center gap-2"
           aria-label="Retry loading cost data"
         >
