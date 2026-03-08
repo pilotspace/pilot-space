@@ -25,10 +25,26 @@ from fastapi import APIRouter, HTTPException, Path, status
 from pydantic import BaseModel
 
 from pilot_space.ai.infrastructure.key_storage import SecureKeyStorage
+from pilot_space.application.services.issue.update_issue_service import (
+    UNCHANGED,
+    UpdateIssuePayload,
+    UpdateIssueService,
+)
+from pilot_space.application.services.note.update_note_service import (
+    UpdateNotePayload,
+    UpdateNoteService,
+)
 from pilot_space.config import get_settings
 from pilot_space.dependencies.auth import CurrentUser, SessionDep
+from pilot_space.infrastructure.database.models import IssuePriority
 from pilot_space.infrastructure.database.models.audit_log import ActorType, AuditLog
 from pilot_space.infrastructure.database.permissions import check_permission
+from pilot_space.infrastructure.database.repositories import (
+    ActivityRepository,
+    IssueRepository,
+    LabelRepository,
+    NoteRepository,
+)
 from pilot_space.infrastructure.database.repositories.audit_log_repository import (
     AuditLogRepository,
 )
@@ -208,21 +224,91 @@ async def _dispatch_rollback(
     Raises:
         HTTPException: 422 if resource_type not supported.
     """
-    # Phase 4 v1: rollback dispatch is wired in plan 04-05 (AIGOV-04) after
-    # UpdateIssueService and UpdateNoteService payloads are finalized.
-    # Raise 501 so callers know the audit trail was written but restoration is pending.
     if resource_type not in _ROLLBACK_RESOURCE_TYPES:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Rollback not supported for resource_type '{resource_type}'.",
         )
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail=(
-            f"Service dispatch for '{resource_type}' rollback is not yet wired. "
-            "Audit trail will still be recorded."
+
+    if resource_type == "issue":
+        await _rollback_issue(resource_id, before_state, session)
+    elif resource_type == "note":
+        await _rollback_note(resource_id, before_state, session)
+
+
+# System actor UUID for rollback operations (nil UUID, not user-initiated)
+_SYSTEM_ACTOR_ID = uuid.UUID(int=0)
+
+# Priority string → enum mapping for issue rollback
+_PRIORITY_MAP: dict[str, IssuePriority] = {
+    "urgent": IssuePriority.URGENT,
+    "high": IssuePriority.HIGH,
+    "medium": IssuePriority.MEDIUM,
+    "low": IssuePriority.LOW,
+    "none": IssuePriority.NONE,
+}
+
+
+async def _rollback_issue(
+    resource_id: uuid.UUID,
+    before_state: dict,  # type: ignore[type-arg]
+    session: object,
+) -> None:
+    """Restore an issue to its before_state via UpdateIssueService.
+
+    Args:
+        resource_id: Issue UUID to restore.
+        before_state: Dict of field values captured before the AI action.
+        session: Async database session.
+    """
+    raw_state_id = before_state.get("state_id")
+    payload = UpdateIssuePayload(
+        issue_id=resource_id,
+        actor_id=_SYSTEM_ACTOR_ID,
+        name=before_state.get("title", UNCHANGED),
+        description=before_state.get("description", UNCHANGED),
+        priority=(
+            _PRIORITY_MAP.get(str(before_state["priority"]).lower(), UNCHANGED)
+            if "priority" in before_state
+            else UNCHANGED
         ),
+        state_id=uuid.UUID(raw_state_id) if raw_state_id else UNCHANGED,
     )
+
+    svc = UpdateIssueService(
+        session=session,  # type: ignore[arg-type]
+        issue_repository=IssueRepository(session),  # type: ignore[arg-type]
+        activity_repository=ActivityRepository(session),  # type: ignore[arg-type]
+        label_repository=LabelRepository(session),  # type: ignore[arg-type]
+    )
+    await svc.execute(payload)
+
+
+async def _rollback_note(
+    resource_id: uuid.UUID,
+    before_state: dict,  # type: ignore[type-arg]
+    session: object,
+) -> None:
+    """Restore a note to its before_state via UpdateNoteService.
+
+    Args:
+        resource_id: Note UUID to restore.
+        before_state: Dict of field values captured before the AI action.
+        session: Async database session.
+    """
+    payload = UpdateNotePayload(
+        note_id=resource_id,
+        title=before_state.get("title"),
+        content=before_state.get("content"),
+        summary=before_state.get("summary"),
+        # Omit expected_updated_at to skip optimistic lock for rollback
+    )
+
+    svc = UpdateNoteService(
+        session=session,  # type: ignore[arg-type]
+        note_repository=NoteRepository(session),  # type: ignore[arg-type]
+    )
+    await svc.execute(payload)
 
 
 # ---------------------------------------------------------------------------
