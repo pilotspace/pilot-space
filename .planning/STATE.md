@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-identity-and-access 01-09-PLAN.md
-last_updated: "2026-03-07T16:11:04.609Z"
+stopped_at: Completed 02-01-PLAN.md
+last_updated: "2026-03-08T01:53:57.603Z"
 last_activity: "2026-03-07 — Completed plan 01-08 (SecuritySettingsPage: sessions table + SCIM token UI)"
 progress:
   total_phases: 5
   completed_phases: 1
-  total_plans: 9
-  completed_plans: 9
+  total_plans: 14
+  completed_plans: 10
   percent: 17
 ---
 
@@ -55,6 +55,7 @@ Progress: [███░░░░░░░] 17%
 | Phase 01-identity-and-access P07 | 35 | 2 tasks | 11 files |
 | Phase 01-identity-and-access P08 | 12 | 1 task | 7 files |
 | Phase 01-identity-and-access P09 | 7 | 2 tasks | 9 files |
+| Phase 02-compliance-and-audit P01 | 27 | 2 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -89,6 +90,9 @@ Recent decisions affecting current work:
 - [Phase 01-identity-and-access]: SSO button visible only when workspace_id is in URL query param — avoids showing SSO for non-SSO workspaces
 - [Phase 01-identity-and-access]: Claims role application in auth callback is non-fatal — unmapped claims default to member on backend (graceful degradation)
 - [Phase 01-identity-and-access]: MemberRoleBadge: data-testid role-badge-{role} for built-in, role-badge-custom for custom roles; unified component for all member list views
+- [Phase 02-compliance-and-audit]: AuditLog uses Base+TimestampMixin+WorkspaceScopedMixin (not WorkspaceScopedModel) to exclude SoftDeleteMixin — audit records are immutable
+- [Phase 02-compliance-and-audit]: pg_cron bypass via app.audit_purge session variable — BEFORE trigger checks current_setting, purge function sets/resets it around DELETE
+- [Phase 02-compliance-and-audit]: Migration dollar-quoting: DO $outer$ with single-quoted cron command — nested $$ inside DO $$ causes PostgreSQL SyntaxError
 
 ### Pending Todos
 
@@ -104,6 +108,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-07T16:01:04.537Z
-Stopped at: Completed 01-identity-and-access 01-09-PLAN.md
+Last session: 2026-03-08T01:53:57.601Z
+Stopped at: Completed 02-01-PLAN.md
 Resume file: None

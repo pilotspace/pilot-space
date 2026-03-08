@@ -19,12 +19,12 @@ Requirements for the enterprise milestone. Goal: first enterprise customer (50-5
 
 ### Compliance & Audit (AUDIT)
 
-- [ ] **AUDIT-01**: Every user action (create/update/delete on any resource) is recorded in an immutable audit log with actor, timestamp, and payload diff
-- [ ] **AUDIT-02**: Every AI action is recorded in the audit log with input, output, model used, token cost, and AI rationale
-- [ ] **AUDIT-03**: Admin can query and filter the audit log by actor, action type, resource, and date range
-- [ ] **AUDIT-04**: Admin can export audit log as JSON or CSV for compliance review
-- [ ] **AUDIT-05**: Admin can configure data retention policies (auto-purge data older than N days)
-- [ ] **AUDIT-06**: Audit log entries cannot be modified or deleted by any user, including workspace owners
+- [x] **AUDIT-01**: Every user action (create/update/delete on any resource) is recorded in an immutable audit log with actor, timestamp, and payload diff
+- [x] **AUDIT-02**: Every AI action is recorded in the audit log with input, output, model used, token cost, and AI rationale
+- [x] **AUDIT-03**: Admin can query and filter the audit log by actor, action type, resource, and date range
+- [x] **AUDIT-04**: Admin can export audit log as JSON or CSV for compliance review
+- [x] **AUDIT-05**: Admin can configure data retention policies (auto-purge data older than N days)
+- [x] **AUDIT-06**: Audit log entries cannot be modified or deleted by any user, including workspace owners
 
 ### Multi-Tenant Isolation (TENANT)
 
@@ -102,12 +102,12 @@ Updated during roadmap creation: 2026-03-07
 | AUTH-05 | Phase 1 | Complete |
 | AUTH-06 | Phase 1 | Complete |
 | AUTH-07 | Phase 1 | Complete |
-| AUDIT-01 | Phase 2 | Pending |
-| AUDIT-02 | Phase 2 | Pending |
-| AUDIT-03 | Phase 2 | Pending |
-| AUDIT-04 | Phase 2 | Pending |
-| AUDIT-05 | Phase 2 | Pending |
-| AUDIT-06 | Phase 2 | Pending |
+| AUDIT-01 | Phase 2 | Complete |
+| AUDIT-02 | Phase 2 | Complete |
+| AUDIT-03 | Phase 2 | Complete |
+| AUDIT-04 | Phase 2 | Complete |
+| AUDIT-05 | Phase 2 | Complete |
+| AUDIT-06 | Phase 2 | Complete |
 | TENANT-01 | Phase 3 | Pending |
 | TENANT-02 | Phase 3 | Pending |
 | TENANT-03 | Phase 3 | Pending |
