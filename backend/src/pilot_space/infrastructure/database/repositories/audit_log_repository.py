@@ -185,6 +185,18 @@ class AuditLogRepository:
         await self.session.refresh(row)
         return row
 
+    async def get_by_id(self, entry_id: uuid.UUID) -> AuditLog | None:
+        """Fetch a single AuditLog row by primary key.
+
+        Args:
+            entry_id: UUID primary key of the audit log entry.
+
+        Returns:
+            AuditLog instance or None if not found.
+        """
+        result = await self.session.execute(select(AuditLog).where(AuditLog.id == entry_id))
+        return result.scalar_one_or_none()
+
     async def list_filtered(
         self,
         *,

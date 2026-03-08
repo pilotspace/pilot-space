@@ -23,6 +23,7 @@ from pilot_space.api.v1.routers import (
     ai_costs_router,
     ai_drive_router,
     ai_extraction_router,
+    ai_governance_router,
     ai_pr_review_router,
     ai_router,
     ai_sessions_router,
@@ -267,6 +268,7 @@ app.include_router(admin_router, prefix=f"{API_V1_PREFIX}/admin")
 
 app.include_router(scim_router, prefix=API_V1_PREFIX)
 app.include_router(audit_router, prefix=API_V1_PREFIX)
+app.include_router(ai_governance_router, prefix=API_V1_PREFIX)
 app.include_router(auth_router, prefix=API_V1_PREFIX)
 app.include_router(auth_sso_router, prefix=API_V1_PREFIX)
 app.include_router(custom_roles_router, prefix=API_V1_PREFIX)
