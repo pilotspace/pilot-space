@@ -185,6 +185,15 @@ class Settings(BaseSettings):
         description="Directory containing system-provided .claude templates",
     )
 
+    # Super-admin operator dashboard token (TENANT-04)
+    pilot_space_super_admin_token: SecretStr | None = Field(
+        default=None,
+        description=(
+            "Opaque bearer token for super-admin operator dashboard access. "
+            "Set at deployment time. Never log or expose this value."
+        ),
+    )
+
     # GitHub OAuth Integration
     github_client_id: str = Field(
         default="",

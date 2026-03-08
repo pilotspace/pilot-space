@@ -14,6 +14,7 @@ from pilot_space.api.middleware.error_handler import register_exception_handlers
 from pilot_space.api.middleware.request_context import RequestContextMiddleware
 from pilot_space.api.v1.middleware.session_recording import SessionRecordingMiddleware
 from pilot_space.api.v1.routers import (
+    admin_router,
     ai_annotations_router,
     ai_approvals_router,
     ai_attachments_router,
@@ -260,6 +261,9 @@ async def readiness_check() -> dict[str, str]:
 
 # Mount all routers under /api/v1
 API_V1_PREFIX = "/api/v1"
+
+# Super-admin operator dashboard (TENANT-04) — separate from workspace JWT auth
+app.include_router(admin_router, prefix=f"{API_V1_PREFIX}/admin")
 
 app.include_router(scim_router, prefix=API_V1_PREFIX)
 app.include_router(audit_router, prefix=API_V1_PREFIX)
