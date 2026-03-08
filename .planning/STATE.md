@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Completed 03-08-PLAN.md
-last_updated: "2026-03-08T08:22:35.516Z"
+stopped_at: Completed 04-ai-governance-01-PLAN.md
+last_updated: "2026-03-08T09:42:22.368Z"
 last_activity: 2026-03-08 — Completed plan 03-04 (super-admin operator dashboard backend)
 progress:
   total_phases: 5
   completed_phases: 3
-  total_plans: 22
-  completed_plans: 22
+  total_plans: 30
+  completed_plans: 23
   percent: 71
 ---
 
@@ -68,6 +68,7 @@ Progress: [███████░░░] 71%
 | Phase 03-multi-tenant-isolation P06 | 4 | 2 tasks | 5 files |
 | Phase 03-multi-tenant-isolation P07 | 18 | 2 tasks | 5 files |
 | Phase 03-multi-tenant-isolation P08 | 1 | 1 tasks | 1 files |
+| Phase 04-ai-governance P01 | 7 | 2 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -141,6 +142,9 @@ Recent decisions affecting current work:
 - [Phase 03-multi-tenant-isolation]: Admin token passed as explicit hook parameter — token state change triggers query key change and re-fetch automatically
 - [Phase 03-multi-tenant-isolation]: flush() not commit() for test data — visible in same transaction, rolls back after test
 - [Phase 03-multi-tenant-isolation]: Three primary isolation tests use module-level pytestmark skipif (not xfail) — clean skip signaling on SQLite
+- [Phase 04-ai-governance]: Migration 069 uses ADD COLUMN IF NOT EXISTS — operation_type was already present in dev DB from outside alembic; idempotent migration avoids DuplicateColumn error
+- [Phase 04-ai-governance]: workspace_ai_policy RLS: OWNER+ADMIN read (settings visible to admins), OWNER-only write (policy changes require owner authority)
+- [Phase 04-ai-governance]: xfail stubs use empty bodies (not pass) per ruff PIE790 — async functions with only docstrings are valid Python and pass trivially as xpass
 
 ### Pending Todos
 
@@ -156,6 +160,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-08T07:15:38.875Z
-Stopped at: Completed 03-08-PLAN.md
+Last session: 2026-03-08T09:42:22.366Z
+Stopped at: Completed 04-ai-governance-01-PLAN.md
 Resume file: None
