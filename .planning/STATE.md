@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Completed 05-02-PLAN.md — trace_id/actor/action ContextVars in structlog, actor wired in AuthMiddleware (OPS-04)
-last_updated: "2026-03-08T16:54:17.768Z"
+stopped_at: Completed 05-03-PLAN.md — Unified docker-compose.yml with all services, nginx production profile, deployment guide
+last_updated: "2026-03-08T16:58:02.763Z"
 last_activity: 2026-03-08 — Implemented /health/live and /health/ready endpoints (05-01)
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 38
-  completed_plans: 35
+  completed_plans: 36
   percent: 100
 ---
 
@@ -80,6 +80,7 @@ Progress: [██████████] 100%
 | Phase 04-ai-governance P10 | 8 | 2 tasks | 4 files |
 | Phase 05-operational-readiness P01 | 4 | 2 tasks | 6 files |
 | Phase 05-operational-readiness P05 | 28 | 2 tasks | 10 files |
+| Phase 05-operational-readiness P03 | 11 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -197,6 +198,9 @@ Recent decisions affecting current work:
 - [Phase 05-operational-readiness]: trace_id aliases request_id from RequestContextMiddleware — single source of truth, backward compatible with monitoring tools
 - [Phase 05-operational-readiness]: actor uses 'user:{uuid}' convention in AuthMiddleware — filterable with glob patterns in Datadog/Loki
 - [Phase 05-operational-readiness]: set_action() is standalone helper not a param of set_request_context — action changes mid-request, decoupled from request setup
+- [Phase 05-operational-readiness]: Supabase services merged inline (no include:) — single-file guarantee for docker compose up
+- [Phase 05-operational-readiness]: nginx under --profile production only — direct service port access in dev
+- [Phase 05-operational-readiness]: BACKEND_IMAGE/FRONTEND_IMAGE vars with build: fallback — CI can override without rebuild
 
 ### Pending Todos
 
@@ -212,6 +216,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-08T16:54:17.766Z
-Stopped at: Completed 05-02-PLAN.md — trace_id/actor/action ContextVars in structlog, actor wired in AuthMiddleware (OPS-04)
+Last session: 2026-03-08T16:58:02.761Z
+Stopped at: Completed 05-03-PLAN.md — Unified docker-compose.yml with all services, nginx production profile, deployment guide
 Resume file: None
