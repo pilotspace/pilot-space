@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: completed
-stopped_at: Completed 04-09-PLAN — DB-backed approval routing wired into all 4 MCP servers; check_approval_from_db() helper + ToolContext.user_role
-last_updated: "2026-03-08T15:45:07.454Z"
-last_activity: 2026-03-08 — Wired ApprovalService into MCP server pipeline (04-09); DB-backed approval routing active
+status: in-progress
+stopped_at: Completed 05-01-PLAN — Two-tier health check endpoints; /health/live liveness + /health/ready readiness with DB/Redis/Supabase checks
+last_updated: "2026-03-08T16:49:00.000Z"
+last_activity: 2026-03-08 — Implemented health check endpoints (OPS-03); liveness probe + deep readiness probe
 progress:
   total_phases: 5
   completed_phases: 4
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-03-07)
 
 ## Current Position
 
-Phase: 4 of 5 (AI Governance) — COMPLETE
-Plan: 9 of 10 in current phase (gap-closure plans 09 + 10 added post-verification)
-Status: Phase 4 gap-closure complete — AIGOV-01 satisfied; ApprovalService fully wired into MCP pipeline
-Last activity: 2026-03-08 — Wired ApprovalService into MCP server pipeline (04-09); DB-backed approval routing active
+Phase: 5 of 5 (Operational Readiness) — IN PROGRESS
+Plan: 1 of 6 in current phase (05-01 complete)
+Status: 05-01 complete — Two-tier health check endpoints (OPS-03) implemented
+Last activity: 2026-03-08 — Implemented /health/live and /health/ready endpoints (05-01)
 
 Progress: [██████████] 100%
 
@@ -78,6 +78,7 @@ Progress: [██████████] 100%
 | Phase 04-ai-governance P08 | 130 | 2 tasks complete (4 bugs fixed) | 21 files |
 | Phase 04-ai-governance P09 | ~120 | 2 tasks + 1 fix | 6 files |
 | Phase 04-ai-governance P10 | 8 | 2 tasks | 4 files |
+| Phase 05-operational-readiness P01 | 4 | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -184,6 +185,11 @@ Recent decisions affecting current work:
 - [Phase 04-ai-governance]: enhance_text passes None as action_type to check_approval_from_db — no ActionType maps cleanly; None triggers fallback preserving AUTO_EXECUTE
 - [Phase 04-ai-governance]: note_server uses AT/lvl/_chk local aliases to keep all lines <=88 chars while staying <=700 lines after ruff-format expansion
 - [Phase 04-ai-governance]: check_approval_from_db uses lazy imports inside try block to avoid circular import between mcp_server and approval module
+
+- [Phase 05-operational-readiness]: health_router mounted at root (not /api/v1) — health checks are infra, Kubernetes probes expect stable paths
+- [Phase 05-operational-readiness]: CRITICAL_CHECKS = {database, redis} — Supabase failure yields degraded not unhealthy; supabase outage must not stop traffic routing
+- [Phase 05-operational-readiness]: check_redis creates short-lived RedisClient for probe — isolates health check connectivity from app connection pool
+- [Phase 05-operational-readiness]: Dual @router.get decorators on readiness() for /health/ready and /health — avoids code duplication while maintaining backward compat
 
 ### Pending Todos
 
