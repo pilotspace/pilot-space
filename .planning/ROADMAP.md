@@ -73,7 +73,16 @@ Plans:
   2. Admin can upload a workspace-level encryption key and confirm that stored data is encrypted with their key (bring-your-own-key model)
   3. Admin can set per-workspace API rate limits and storage quotas, and requests exceeding those limits receive a 429 with a meaningful error
   4. Super-admin (self-hosted operator) can open an admin dashboard and see workspace health metrics, member activity, and usage stats across all workspaces
-**Plans**: TBD
+**Plans**: 7 plans
+
+Plans:
+- [ ] 03-01-PLAN.md — Migration 066 (RLS enum case fix) + Phase 3 test scaffolds for all TENANT requirements (TENANT-01)
+- [ ] 03-02-PLAN.md — Workspace encryption backend: model + migration 067 + helpers + 4 API endpoints (TENANT-02)
+- [ ] 03-03-PLAN.md — Per-workspace rate limits + storage quota enforcement + GET/PATCH quota API (TENANT-03)
+- [ ] 03-04-PLAN.md — Super-admin operator dashboard backend: get_super_admin dependency + admin_router (TENANT-04)
+- [ ] 03-05-PLAN.md — Encryption settings UI: EncryptionSettingsPage + TanStack Query hooks + nav entry (TENANT-02)
+- [ ] 03-06-PLAN.md — Usage settings UI: UsageSettingsPage with quota bars + owner edit controls (TENANT-03)
+- [ ] 03-07-PLAN.md — Admin dashboard frontend: (admin) route group + token form + workspace health table (TENANT-04)
 
 ### Phase 4: AI Governance
 **Goal**: Admins can configure exactly which AI actions run automatically and which require human approval, with a complete traceable record of every AI decision and the ability to undo any AI-created artifact
@@ -112,7 +121,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 |-------|----------------|--------|-----------|
 | 1. Identity & Access | 9/9 | Complete   | 2026-03-07 |
 | 2. Compliance & Audit | 5/5 | Complete   | 2026-03-08 |
-| 3. Multi-Tenant Isolation | 0/TBD | Not started | - |
+| 3. Multi-Tenant Isolation | 0/7 | Not started | - |
 | 4. AI Governance | 0/TBD | Not started | - |
 | 5. Operational Readiness | 0/TBD | Not started | - |
 
@@ -121,3 +130,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 *Coverage: 30/30 v1 requirements mapped*
 *Phase 1 planned: 2026-03-07 — 9 plans across 5 waves*
 *Phase 2 planned: 2026-03-08 — 5 plans across 4 waves*
+*Phase 3 planned: 2026-03-08 — 7 plans across 3 waves*
