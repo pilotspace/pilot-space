@@ -51,8 +51,9 @@ patterns-established:
 requirements-completed: [AUDIT-03, AUDIT-04, AUDIT-05, AUDIT-06]
 
 # Metrics
-duration: 7min
+duration: 12min
 completed: 2026-03-08
+checkpoint-approved: 2026-03-08
 ---
 
 # Phase 02 Plan 05: Audit Settings UI Summary
@@ -64,8 +65,8 @@ completed: 2026-03-08
 - **Duration:** ~7 min
 - **Started:** 2026-03-08T02:21:18Z
 - **Completed:** 2026-03-08T02:28:05Z
-- **Tasks:** 2 of 2 (+ checkpoint pending human verify)
-- **Files modified:** 6
+- **Tasks:** 2 of 2 + human-verify checkpoint (APPROVED)
+- **Files modified:** 10 (6 initial + 4 post-verify fixes)
 
 ## Accomplishments
 
@@ -79,6 +80,7 @@ completed: 2026-03-08
 1. **RED: Failing tests** - `7ee0730b` (test)
 2. **Task 1: Hooks + AuditSettingsPage** - `af63756c` (feat)
 3. **Task 2: Route shell + nav** - `3078a765` (feat)
+4. **Post-verify fixes** - `31d2be49` (fix)
 
 ## Files Created/Modified
 
@@ -121,15 +123,36 @@ completed: 2026-03-08
 **Total deviations:** 2 auto-fixed (Rule 1 — both bugs caught at commit time)
 **Impact on plan:** Both fixes necessary for correctness. No scope creep.
 
+## Post-Verify Fixes (committed after checkpoint approval)
+
+**3. [Rule 1 - Bug] Fixed async streaming in audit_log_repository.py**
+- **Found during:** Human-verify checkpoint — browser verification agent
+- **Issue:** `yield_per` caused incorrect async streaming behavior in cursor pagination
+- **Fix:** Removed `yield_per`, fixed async streaming pattern
+- **Files modified:** `backend/src/pilot_space/infrastructure/database/repositories/audit_log_repository.py`
+- **Committed in:** `31d2be49`
+
+**4. [Rule 1 - Bug] Fixed snake_case field names in use-audit-log.ts**
+- **Found during:** Human-verify checkpoint — browser verification agent
+- **Issue:** Hook returned snake_case fields (`actor_id`, `resource_type`, etc.) but TypeScript interface expected camelCase
+- **Fix:** Renamed all API response fields to camelCase (actorId, actorType, resourceType, resourceId, aiModel, aiTokenCost, aiRationale, ipAddress, createdAt)
+- **Files modified:** `use-audit-log.ts`, `audit-settings-page.tsx`, `audit-settings-page.test.tsx`
+- **Committed in:** `31d2be49`
+
+## Checkpoint Result
+
+**Human-verify checkpoint APPROVED** — all 11 frontend tests pass, 60 backend tests pass, type-check clean.
+Audit log end-to-end verified: table loads, filters apply, exports download, row expansion shows payload, no write affordances visible.
+
 ## Issues Encountered
 
-None beyond the two auto-fixed deviations above.
+None beyond the four auto-fixed deviations above.
 
 ## Next Phase Readiness
 
-- Audit UI complete — admins can view, filter, and export the audit log
-- Human verification pending: start backend + frontend, log in, navigate to /settings/audit, create/update issues, check filter, export CSV/JSON, expand rows
-- After human verify: Phase 02 compliance system is fully closed
+- Phase 02 compliance system fully closed — all 5 plans complete
+- Audit UI complete: admins can view, filter, and export the audit log at /settings/audit
+- Human verification approved: backend and frontend working end-to-end
 
 ---
 *Phase: 02-compliance-and-audit*

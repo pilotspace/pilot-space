@@ -13,7 +13,7 @@ The MVP is working: note canvas, issue management, cycles, AI PR review, and not
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Identity & Access** - SSO, custom RBAC, session control, and SCIM provisioning so enterprise teams can use their existing identity provider (completed 2026-03-07)
-- [ ] **Phase 2: Compliance & Audit** - Immutable audit log covering every user and AI action, with export and retention controls
+- [x] **Phase 2: Compliance & Audit** - Immutable audit log covering every user and AI action, with export and retention controls (completed 2026-03-08)
 - [ ] **Phase 3: Multi-Tenant Isolation** - Verified data isolation, workspace encryption, rate limiting, and operator dashboard
 - [ ] **Phase 4: AI Governance** - Configurable approval policies, AI audit trail, rollback, strict BYOK enforcement, and cost visibility
 - [ ] **Phase 5: Operational Readiness** - Docker Compose guide, Helm chart, health checks, structured logging, backup tooling, and migration path
@@ -111,7 +111,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Identity & Access | 9/9 | Complete   | 2026-03-07 |
-| 2. Compliance & Audit | 4/5 | In Progress|  |
+| 2. Compliance & Audit | 5/5 | Complete   | 2026-03-08 |
 | 3. Multi-Tenant Isolation | 0/TBD | Not started | - |
 | 4. AI Governance | 0/TBD | Not started | - |
 | 5. Operational Readiness | 0/TBD | Not started | - |
