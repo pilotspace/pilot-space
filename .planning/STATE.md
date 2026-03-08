@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02-02-PLAN.md
-last_updated: "2026-03-08T02:03:38Z"
-last_activity: "2026-03-08 — Completed plan 02-02 (AuditLogRepository + service instrumentation)"
+stopped_at: Completed 02-03-PLAN.md
+last_updated: "2026-03-08T02:13:47Z"
+last_activity: "2026-03-08 — Completed plan 02-03 (AuditLogHook DB write upgrade)"
 progress:
   total_phases: 5
   completed_phases: 1
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-03-07)
 ## Current Position
 
 Phase: 2 of 5 (Compliance & Audit)
-Plan: 2 of 5 in current phase
+Plan: 3 of 5 in current phase
 Status: In progress
-Last activity: 2026-03-08 — Completed plan 02-02 (AuditLogRepository + service instrumentation)
+Last activity: 2026-03-08 — Completed plan 02-03 (AuditLogHook DB write upgrade)
 
 Progress: [██░░░░░░░░] 21%
 
@@ -57,6 +57,7 @@ Progress: [██░░░░░░░░] 21%
 | Phase 01-identity-and-access P09 | 7 | 2 tasks | 9 files |
 | Phase 02-compliance-and-audit P01 | 27 | 2 tasks | 12 files |
 | Phase 02-compliance-and-audit P02 | 90 | 2 tasks | 14 files |
+| Phase 02-compliance-and-audit P03 | 10 | 1 task | 5 files |
 
 ## Accumulated Context
 
@@ -98,6 +99,9 @@ Recent decisions affecting current work:
 - [Phase 02-compliance-and-audit]: Cursor pagination uses base64(JSON{ts,id}) keyset for O(1) page seeks on (created_at DESC, id DESC) index
 - [Phase 02-compliance-and-audit]: All service audit writes non-fatal (try/except) — audit failures never interrupt primary write paths; write_audit_nonfatal() helper reduces boilerplate
 - [Phase 02-compliance-and-audit]: delete_note_service.py drops Activity tracking — Activity.issue_id is a non-nullable FK; notes structurally incompatible with Activity model
+- [Phase 02-compliance-and-audit]: AuditLogHook dual-mode injection: audit_repo for request-scoped use, session_factory for SDK lifecycle callbacks — keeps unit tests simple while enabling out-of-request writes
+- [Phase 02-compliance-and-audit]: Private state captured as local closure vars to satisfy SLF001 ruff rule — avoids hook_self._xxx access from nested closures
+- [Phase 02-compliance-and-audit]: list_for_export added to AuditLogRepository — full chronological export without cursor pagination for streaming CSV/JSON export
 
 ### Pending Todos
 
@@ -113,6 +117,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-08T02:03:38Z
-Stopped at: Completed 02-02-PLAN.md
+Last session: 2026-03-08T02:13:47Z
+Stopped at: Completed 02-03-PLAN.md
 Resume file: None
