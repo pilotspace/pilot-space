@@ -73,7 +73,7 @@ function StorageBar({ quota }: { quota: QuotaStatus }) {
 
   return (
     <div className="space-y-2">
-      <Progress value={quota.storage_quota_mb ? pct : 0} className={`h-2 ${barClass}`} />
+      <Progress value={quota.storage_quota_mb ? pct : null} className={`h-2 ${barClass}`} />
       <p className="text-sm text-muted-foreground">
         {quota.storage_used_mb.toFixed(2)} MB used
         {quota.storage_quota_mb ? ` of ${quota.storage_quota_mb} MB` : ' (Unlimited)'}

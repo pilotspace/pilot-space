@@ -51,8 +51,8 @@ def upgrade() -> None:
     op.execute(
         text("""
             UPDATE workspace_members
-            SET role = UPPER(role)
-            WHERE role != UPPER(role);
+            SET role = UPPER(role::text)::workspace_role
+            WHERE role::text != UPPER(role::text);
         """)
     )
 
