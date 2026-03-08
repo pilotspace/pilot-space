@@ -7,7 +7,11 @@
  * - Validation and error handling
  */
 import { makeAutoObservable, runInAction, computed } from 'mobx';
-import { aiApi, type WorkspaceAISettings } from '@/services/api/ai';
+import {
+  aiApi,
+  type WorkspaceAISettings,
+  type WorkspaceAISettingsUpdateResponse,
+} from '@/services/api/ai';
 import type { AIStore } from './AIStore';
 
 export class AISettingsStore {
@@ -88,7 +92,26 @@ export class AISettingsStore {
     });
 
     try {
-      await aiApi.updateWorkspaceSettings(this.currentWorkspaceId, updates);
+      const result: WorkspaceAISettingsUpdateResponse = await aiApi.updateWorkspaceSettings(
+        this.currentWorkspaceId,
+        updates
+      );
+
+      // Check per-provider validation results — backend only stores keys that pass validation
+      if (!result.success && result.validationResults.length > 0) {
+        const failed = result.validationResults.filter((r) => !r.isValid);
+        const messages = failed.map((r) => `${r.provider}: ${r.errorMessage ?? 'invalid key'}`);
+        const err = new Error(messages.join('; '));
+        runInAction(() => {
+          this.validationErrors = Object.fromEntries(
+            failed.map((r) => [r.provider, r.errorMessage ?? 'API key validation failed'])
+          );
+          this.error = err.message;
+          this.isSaving = false;
+        });
+        throw err;
+      }
+
       // Reload full settings so provider isConfigured status reflects the saved key
       const refreshed = await aiApi.getWorkspaceSettings(this.currentWorkspaceId);
       runInAction(() => {
@@ -97,10 +120,9 @@ export class AISettingsStore {
       });
     } catch (err) {
       runInAction(() => {
-        if (err instanceof Error && err.message.includes('validation')) {
-          this.validationErrors = { api_key: 'Invalid API key' };
+        if (!(err instanceof Error && this.error)) {
+          this.error = err instanceof Error ? err.message : 'Failed to save settings';
         }
-        this.error = err instanceof Error ? err.message : 'Failed to save settings';
         this.isSaving = false;
       });
       throw err;

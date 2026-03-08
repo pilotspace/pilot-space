@@ -52,6 +52,17 @@ export interface WorkspaceAISettings {
   costLimitUsd: number | null;
 }
 
+export interface WorkspaceAISettingsUpdateResponse {
+  success: boolean;
+  validationResults: Array<{
+    provider: string;
+    isValid: boolean;
+    errorMessage: string | null;
+  }>;
+  updatedProviders: string[];
+  updatedFeatures: boolean;
+}
+
 export interface CostSummary {
   workspace_id: string;
   period_start: string;
@@ -204,7 +215,7 @@ export const aiApi = {
       anthropic_api_key?: string;
       openai_api_key?: string;
     }
-  ) => {
+  ): Promise<WorkspaceAISettingsUpdateResponse> => {
     // Transform flat keys to backend's { api_keys: [{ provider, api_key }] } format
     const apiKeys: Array<{ provider: string; api_key: string }> = [];
     if (settings.anthropic_api_key) {
@@ -214,10 +225,13 @@ export const aiApi = {
       apiKeys.push({ provider: 'openai', api_key: settings.openai_api_key });
     }
     const { anthropic_api_key: _a, openai_api_key: _o, ...rest } = settings;
-    return apiClient.patch(`/workspaces/${workspaceId}/ai/settings`, {
-      ...rest,
-      ...(apiKeys.length > 0 ? { api_keys: apiKeys } : {}),
-    });
+    return apiClient.patch<WorkspaceAISettingsUpdateResponse>(
+      `/workspaces/${workspaceId}/ai/settings`,
+      {
+        ...rest,
+        ...(apiKeys.length > 0 ? { api_keys: apiKeys } : {}),
+      }
+    );
   },
 
   /**
