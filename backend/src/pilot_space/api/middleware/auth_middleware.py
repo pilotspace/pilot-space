@@ -17,6 +17,7 @@ from pilot_space.dependencies.jwt_providers import (
     get_jwt_provider,
 )
 from pilot_space.infrastructure.auth import TokenPayload
+from pilot_space.infrastructure.logging import set_request_context
 
 if TYPE_CHECKING:
     from starlette.responses import Response
@@ -122,6 +123,13 @@ class AuthMiddleware(BaseHTTPMiddleware):
             request.state.user = payload
             request.state.user_id = payload.user_id
             request.state.token = token
+            # OPS-04: bind trace_id (= request_id from RequestContextMiddleware)
+            # and actor to logging context for every downstream log line.
+            request_id: str | None = getattr(request.state, "request_id", None)
+            set_request_context(
+                trace_id=request_id,
+                actor=f"user:{payload.user_id}",
+            )
         except JWTExpiredError as e:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
