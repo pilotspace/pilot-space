@@ -26,6 +26,8 @@ if TYPE_CHECKING:
 PUBLIC_ROUTES: set[str] = {
     "/",
     "/health",
+    "/health/live",
+    "/health/ready",
     "/docs",
     "/openapi.json",
     "/redoc",

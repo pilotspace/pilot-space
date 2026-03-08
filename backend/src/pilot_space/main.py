@@ -12,6 +12,7 @@ from fastapi import FastAPI
 from pilot_space.api.middleware.cors import configure_cors
 from pilot_space.api.middleware.error_handler import register_exception_handlers
 from pilot_space.api.middleware.request_context import RequestContextMiddleware
+from pilot_space.api.routers.health import router as health_router
 from pilot_space.api.v1.middleware.session_recording import SessionRecordingMiddleware
 from pilot_space.api.v1.routers import (
     admin_router,
@@ -237,28 +238,8 @@ app.add_middleware(SessionRecordingMiddleware)
 configure_cors(app)
 
 
-@app.get("/health", tags=["Health"])
-async def health_check() -> dict[str, str]:
-    """Health check endpoint for load balancers and monitoring.
-
-    Returns:
-        dict with status "healthy"
-    """
-    return {"status": "healthy"}
-
-
-@app.get("/ready", tags=["Health"])
-async def readiness_check() -> dict[str, str]:
-    """Readiness check endpoint for Kubernetes probes.
-
-    Verifies that the application is ready to receive traffic.
-    In Phase 2, this will check database and cache connectivity.
-
-    Returns:
-        dict with status "ready"
-    """
-    return {"status": "ready"}
-
+# Health check router (OPS-03) — mounted at root level, no /api/v1 prefix
+app.include_router(health_router)
 
 # Mount all routers under /api/v1
 API_V1_PREFIX = "/api/v1"
