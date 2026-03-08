@@ -12,6 +12,11 @@ from pilot_space.infrastructure.database.repositories.ai_configuration_repositor
 from pilot_space.infrastructure.database.repositories.ai_context_repository import (
     AIContextRepository,
 )
+from pilot_space.infrastructure.database.repositories.audit_log_repository import (
+    AuditLogPage,
+    AuditLogRepository,
+    compute_diff,
+)
 from pilot_space.infrastructure.database.repositories.base import (
     BaseRepository,
     CursorPage,
@@ -104,6 +109,8 @@ __all__ = [
     "AIConfigurationRepository",
     "AIContextRepository",
     "ActivityRepository",
+    "AuditLogPage",
+    "AuditLogRepository",
     "BaseRepository",
     "ChatAttachmentRepository",
     "CursorPage",
@@ -139,4 +146,5 @@ __all__ = [
     "UserRepository",
     "WorkIntentRepository",
     "WorkspaceRepository",
+    "compute_diff",
 ]
