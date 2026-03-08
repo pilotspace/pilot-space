@@ -17,6 +17,7 @@ import {
   Building2,
   ClipboardList,
   CreditCard,
+  KeyRound,
   Menu,
   Plug,
   Settings,
@@ -71,6 +72,12 @@ const settingsNavSections: NavSection[] = [
         label: 'SSO',
         icon: Shield,
         href: (slug: string) => `/${slug}/settings/sso`,
+      },
+      {
+        id: 'encryption',
+        label: 'Encryption',
+        icon: KeyRound,
+        href: (slug: string) => `/${slug}/settings/encryption`,
       },
       {
         id: 'audit',

@@ -10,3 +10,4 @@ export { SsoSettingsPage } from './sso-settings-page';
 export { RolesSettingsPage } from './roles-settings-page';
 export { SecuritySettingsPage } from './security-settings-page';
 export { AuditSettingsPage } from './audit-settings-page';
+export { EncryptionSettingsPage } from './encryption-settings-page';
