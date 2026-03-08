@@ -137,7 +137,13 @@ function AuditSkeletonRows() {
 
 // ---- Expanded Row ----
 
-function ExpandedRowContent({ entry }: { entry: AuditLogEntry }) {
+function ExpandedRowContent({
+  entry,
+  workspaceSlug,
+}: {
+  entry: AuditLogEntry;
+  workspaceSlug: string;
+}) {
   return (
     <div className="space-y-3 px-4 py-3 bg-muted/30 border-t">
       {/* Payload diff */}
@@ -171,9 +177,17 @@ function ExpandedRowContent({ entry }: { entry: AuditLogEntry }) {
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Rationale</p>
-              <p>{entry.aiRationale ?? '—'}</p>
+              <p className="text-xs">{entry.aiRationale ?? '—'}</p>
             </div>
           </div>
+          {entry.approvalRequestId && (
+            <a
+              href={`/${workspaceSlug}/approvals?highlight=${entry.approvalRequestId}`}
+              className="inline-block text-xs text-primary hover:underline mt-1"
+            >
+              View approval request →
+            </a>
+          )}
         </div>
       )}
 
@@ -195,6 +209,9 @@ export function AuditSettingsPage() {
   // ---- Filter state ----
   const [actorInput, setActorInput] = React.useState('');
   const [debouncedActorId, setDebouncedActorId] = React.useState('');
+  const [selectedActorType, setSelectedActorType] = React.useState<'AI' | 'USER' | 'SYSTEM' | ''>(
+    ''
+  );
   const [selectedAction, setSelectedAction] = React.useState('');
   const [selectedResourceType, setSelectedResourceType] = React.useState('');
   const [startDate, setStartDate] = React.useState('');
@@ -213,10 +230,11 @@ export function AuditSettingsPage() {
   // Reset cursor when other filters change
   React.useEffect(() => {
     setCursor(null);
-  }, [selectedAction, selectedResourceType, startDate, endDate]);
+  }, [selectedActorType, selectedAction, selectedResourceType, startDate, endDate]);
 
   const filters: AuditFilters = {
     ...(debouncedActorId ? { actor_id: debouncedActorId } : {}),
+    ...(selectedActorType ? { actor_type: selectedActorType } : {}),
     ...(selectedAction ? { action: selectedAction } : {}),
     ...(selectedResourceType ? { resource_type: selectedResourceType } : {}),
     ...(startDate ? { start_date: startDate } : {}),
@@ -296,7 +314,7 @@ export function AuditSettingsPage() {
             <CardTitle className="text-base">Filters</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
               {/* Actor search */}
               <div className="space-y-1.5">
                 <Label htmlFor="actor-search" className="text-xs">
@@ -355,6 +373,33 @@ export function AuditSettingsPage() {
                         {opt.label}
                       </SelectItem>
                     ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Actor Type filter */}
+              <div className="space-y-1.5">
+                <Label htmlFor="actor-type-select" className="text-xs">
+                  Actor Type
+                </Label>
+                <Select
+                  value={selectedActorType || '_all_'}
+                  onValueChange={(v) =>
+                    setSelectedActorType(v === '_all_' ? '' : (v as 'AI' | 'USER' | 'SYSTEM'))
+                  }
+                >
+                  <SelectTrigger
+                    id="actor-type-select"
+                    aria-label="Actor Type"
+                    className="h-8 text-sm"
+                  >
+                    <SelectValue placeholder="All types" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_all_">All types</SelectItem>
+                    <SelectItem value="USER">User</SelectItem>
+                    <SelectItem value="AI">AI</SelectItem>
+                    <SelectItem value="SYSTEM">System</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -539,7 +584,7 @@ export function AuditSettingsPage() {
                           {isExpanded && (
                             <TableRow>
                               <TableCell colSpan={7} className="p-0">
-                                <ExpandedRowContent entry={entry} />
+                                <ExpandedRowContent entry={entry} workspaceSlug={workspaceSlug} />
                               </TableCell>
                             </TableRow>
                           )}

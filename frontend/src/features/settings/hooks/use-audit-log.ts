@@ -24,12 +24,14 @@ export interface AuditLogEntry {
   aiModel: string | null;
   aiTokenCost: number | null;
   aiRationale: string | null;
+  approvalRequestId: string | null;
   ipAddress: string | null;
   createdAt: string;
 }
 
 export interface AuditFilters {
   actor_id?: string;
+  actor_type?: 'AI' | 'USER' | 'SYSTEM';
   action?: string;
   resource_type?: string;
   start_date?: string;
@@ -59,6 +61,7 @@ function buildAuditParams(
 ): URLSearchParams {
   const params = new URLSearchParams();
   if (filters.actor_id) params.set('actor_id', filters.actor_id);
+  if (filters.actor_type) params.set('actor_type', filters.actor_type);
   if (filters.action) params.set('action', filters.action);
   if (filters.resource_type) params.set('resource_type', filters.resource_type);
   if (filters.start_date) params.set('start_date', filters.start_date);
@@ -101,6 +104,7 @@ export function useExportAuditLog(workspaceSlug: string) {
     try {
       const params = new URLSearchParams({ format });
       if (filters.actor_id) params.set('actor_id', filters.actor_id);
+      if (filters.actor_type) params.set('actor_type', filters.actor_type);
       if (filters.action) params.set('action', filters.action);
       if (filters.resource_type) params.set('resource_type', filters.resource_type);
       if (filters.start_date) params.set('start_date', filters.start_date);
