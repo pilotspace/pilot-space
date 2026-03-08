@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: completed
-stopped_at: Completed 02-05-PLAN.md (awaiting human-verify checkpoint)
-last_updated: "2026-03-08T03:26:25.633Z"
-last_activity: 2026-03-08 — Completed plan 02-05 (Audit Settings UI — Phase 02 fully closed)
+status: in_progress
+stopped_at: Completed 03-01-PLAN.md
+last_updated: "2026-03-08T04:32:59.723Z"
+last_activity: 2026-03-08 — Completed plan 03-01 (RLS enum fix + Phase 3 test scaffold)
 progress:
   total_phases: 5
   completed_phases: 2
-  total_plans: 14
-  completed_plans: 14
-  percent: 21
+  total_plans: 21
+  completed_plans: 15
+  percent: 71
 ---
 
 # Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-03-07)
 
 ## Current Position
 
-Phase: 2 of 5 (Compliance & Audit) — COMPLETE
-Plan: 5 of 5 in current phase (all plans complete)
-Status: Phase complete — ready for Phase 03
-Last activity: 2026-03-08 — Completed plan 02-05 (Audit Settings UI — Phase 02 fully closed)
+Phase: 3 of 5 (Multi-Tenant Isolation) — IN PROGRESS
+Plan: 1 of 7 in current phase (03-01 complete)
+Status: Plan 03-01 complete — ready for 03-02 (TENANT-01 isolation tests implementation)
+Last activity: 2026-03-08 — Completed plan 03-01 (RLS enum fix + Phase 3 test scaffold)
 
-Progress: [██░░░░░░░░] 21%
+Progress: [███████░░░] 71%
 
 ## Performance Metrics
 
@@ -60,6 +60,7 @@ Progress: [██░░░░░░░░] 21%
 | Phase 02-compliance-and-audit P03 | 10 | 1 task | 5 files |
 | Phase 02-compliance-and-audit P04 | 10 | 2 tasks | 6 files |
 | Phase 02-compliance-and-audit P05 | 7 | 2 tasks | 6 files |
+| Phase 03-multi-tenant-isolation P01 | 11 | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -111,6 +112,9 @@ Recent decisions affecting current work:
 - [Phase 02-compliance-and-audit]: useExportAuditLog returns triggerExport function not useMutation — export is imperative browser file download, not a server state mutation
 - [Phase 02-compliance-and-audit]: Radix Select does not support empty string as value — used '_all_' sentinel for All options in action and resource_type selects
 - [Phase 02-compliance-and-audit]: async streaming in AuditLogRepository uses plain async iteration (no yield_per) — yield_per incompatible with async SQLAlchemy streaming patterns
+- [Phase 03-multi-tenant-isolation]: Migration 066 downgrade() is a no-op — RLS policies always required UPPERCASE; reverting to lowercase would break isolation
+- [Phase 03-multi-tenant-isolation]: Isolation tests use pytestmark skipif(sqlite in DB_URL) at module level — cleaner than per-test decorators, matches PostgreSQL-only RLS pattern
+- [Phase 03-multi-tenant-isolation]: test_isolation.py uses existing populated_db fixture — already provisions workspace_a and workspace_b with outsider cross-membership
 
 ### Pending Todos
 
@@ -126,6 +130,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-08T02:29:05.177Z
-Stopped at: Completed 02-05-PLAN.md (awaiting human-verify checkpoint)
+Last session: 2026-03-08T04:32:59.721Z
+Stopped at: Completed 03-01-PLAN.md
 Resume file: None
