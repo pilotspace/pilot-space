@@ -34,6 +34,7 @@ from pilot_space.api.v1.schemas.audit import (
 )
 from pilot_space.api.v1.schemas.base import SuccessResponse
 from pilot_space.dependencies.auth import CurrentUser, SessionDep
+from pilot_space.infrastructure.database.models.audit_log import ActorType
 from pilot_space.infrastructure.database.permissions import check_permission
 from pilot_space.infrastructure.database.repositories.audit_log_repository import (
     AuditLogRepository,
@@ -208,6 +209,9 @@ async def list_audit_log(
     session: SessionDep,
     current_user: CurrentUser,
     actor_id: UUID | None = Query(default=None, description="Filter by actor UUID"),
+    actor_type: ActorType | None = Query(
+        default=None, description="Filter by actor type: AI, USER, or SYSTEM"
+    ),
     action: str | None = Query(
         default=None, description="Filter by exact action string e.g. issue.create"
     ),
@@ -235,6 +239,7 @@ async def list_audit_log(
         session: Database session.
         current_user: Authenticated user.
         actor_id: Optional actor UUID filter.
+        actor_type: Optional actor type filter (AI, USER, or SYSTEM).
         action: Optional exact action filter.
         resource_type: Optional resource type filter.
         start_date: Optional inclusive start date filter.
@@ -253,6 +258,7 @@ async def list_audit_log(
     page = await repo.list_filtered(
         workspace_id=workspace_id,
         actor_id=actor_id,
+        actor_type=actor_type,
         action=action,
         resource_type=resource_type,
         start_date=start_date,
@@ -286,6 +292,9 @@ async def export_audit_log(
         default="json", description="Export format: csv or json"
     ),
     actor_id: UUID | None = Query(default=None, description="Filter by actor UUID"),
+    actor_type: ActorType | None = Query(
+        default=None, description="Filter by actor type: AI, USER, or SYSTEM"
+    ),
     action: str | None = Query(default=None, description="Filter by exact action string"),
     resource_type: str | None = Query(default=None, description="Filter by resource type"),
     start_date: datetime | None = Query(
@@ -308,6 +317,7 @@ async def export_audit_log(
         current_user: Authenticated user.
         format: "csv" or "json" (default "json").
         actor_id: Optional actor UUID filter.
+        actor_type: Optional actor type filter (AI, USER, or SYSTEM).
         action: Optional exact action filter.
         resource_type: Optional resource type filter.
         start_date: Optional inclusive start date filter.
@@ -324,6 +334,7 @@ async def export_audit_log(
     rows = await repo.list_for_export(
         workspace_id=workspace_id,
         actor_id=actor_id,
+        actor_type=actor_type,
         action=action,
         resource_type=resource_type,
         start_date=start_date,
