@@ -85,6 +85,26 @@ class Workspace(BaseModel):
         nullable=True,
     )
 
+    # Per-workspace rate limit overrides (NULL = use system default)
+    # Added by migration 067_workspace_encryption_and_quota
+    rate_limit_standard_rpm: Mapped[int | None] = mapped_column(
+        nullable=True,
+    )
+    rate_limit_ai_rpm: Mapped[int | None] = mapped_column(
+        nullable=True,
+    )
+
+    # Storage quota (NULL = unlimited)
+    # Added by migration 067_workspace_encryption_and_quota
+    storage_quota_mb: Mapped[int | None] = mapped_column(
+        nullable=True,
+    )
+    storage_used_bytes: Mapped[int] = mapped_column(
+        nullable=False,
+        default=0,
+        server_default="0",
+    )
+
     # Owner (creator of workspace)
     # M-3 fix: type annotation matches nullable=True (owner can be NULL if deleted)
     owner_id: Mapped[uuid.UUID | None] = mapped_column(
