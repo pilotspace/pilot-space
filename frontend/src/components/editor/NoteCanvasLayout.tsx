@@ -418,6 +418,7 @@ export function NoteCanvasLayout(props: NoteCanvasProps) {
           isExtracting={extractionState.isExtracting}
           error={extractionState.error}
           workspaceId={workspaceId}
+          workspaceSlug={workspaceSlug}
           noteId={noteId}
           projectId={projectId}
           onCreated={(_createdIds) => {

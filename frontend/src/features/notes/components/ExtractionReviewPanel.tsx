@@ -7,6 +7,7 @@
  * - Per-item Approve/Skip toggle
  * - Editable title per item
  * - Collapsible rationale
+ * - Info icon popover with AI rationale fetched from audit log (AIGOV-07)
  * - "Approve All" header button
  * - "Create N Issues" footer (enabled when >=1 approved)
  *
@@ -15,16 +16,19 @@
  */
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { ChevronDown, ChevronRight, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Info, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { aiApi } from '@/services/api/ai';
+import { apiClient } from '@/services/api/client';
 import type { ExtractedIssue } from './ExtractionPreviewModal';
 
 // Re-export ExtractedIssue so consumers import from one place
@@ -41,8 +45,10 @@ export interface ExtractionReviewPanelProps {
   isExtracting: boolean;
   /** Extraction error message */
   error: string | null;
-  /** Workspace ID */
+  /** Workspace ID (UUID) used for issue creation */
   workspaceId: string;
+  /** Workspace slug used for audit log API queries */
+  workspaceSlug: string;
   /** Note ID the issues were extracted from */
   noteId: string;
   /** Optional project ID for issue creation */
@@ -94,6 +100,70 @@ const CONFIDENCE_STYLES: Record<string, { label: string; className: string }> = 
   },
 };
 
+// ============================================================================
+// AI Rationale — audit log fetch (AIGOV-07)
+// ============================================================================
+
+interface AuditLogItem {
+  ai_rationale?: string | null;
+}
+
+interface AuditLogResponse {
+  items?: AuditLogItem[];
+}
+
+/**
+ * Lazily fetches AI rationale from the audit log for an extraction session.
+ *
+ * resource_id: using noteId as the extraction resource identifier.
+ * We do NOT use issue.id — extracted issues may not be persisted to the
+ * database yet at extraction review stage, making the audit lookup return nothing.
+ * noteId is always available and maps to the audit entry created when
+ * the extract-issues endpoint was called.
+ */
+function useAIRationale(workspaceSlug: string, resourceId: string | undefined, enabled: boolean) {
+  return useQuery<string | null>({
+    queryKey: ['ai-rationale', workspaceSlug, resourceId],
+    queryFn: async () => {
+      const data = await apiClient.get<AuditLogResponse>(
+        `/workspaces/${workspaceSlug}/audit?actor_type=AI&resource_id=${resourceId}&page_size=1`
+      );
+      return data?.items?.[0]?.ai_rationale ?? null;
+    },
+    enabled: enabled && !!resourceId && !!workspaceSlug,
+    staleTime: 5 * 60 * 1000, // cache for 5 min; rationale doesn't change
+  });
+}
+
+/** Popover content that fetches and displays AI rationale from the audit log */
+function RationaleContent({
+  workspaceSlug,
+  resourceId,
+}: {
+  workspaceSlug: string;
+  resourceId: string;
+}) {
+  const { data, isLoading } = useAIRationale(workspaceSlug, resourceId, true);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2 py-1">
+        <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" aria-hidden="true" />
+        <span className="text-xs text-muted-foreground">Loading rationale...</span>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <p className="text-xs font-semibold text-foreground mb-1">AI Rationale</p>
+      <p className="text-xs text-muted-foreground">
+        {data ?? 'No rationale available for this extraction.'}
+      </p>
+    </div>
+  );
+}
+
 interface ReviewItem {
   issue: ExtractedIssue;
   approved: boolean;
@@ -113,15 +183,22 @@ function buildReviewItems(issues: ExtractedIssue[]): ReviewItem[] {
 /** Single issue review card */
 function ReviewCard({
   item,
+  workspaceSlug,
+  noteId,
   onToggleApproval,
   onTitleChange,
   onToggleRationale,
 }: {
   item: ReviewItem;
+  /** Workspace slug for audit log rationale fetch */
+  workspaceSlug: string;
+  /** Note ID used as resource_id for audit query (not issue.id — issues not yet persisted) */
+  noteId: string;
   onToggleApproval: (index: number) => void;
   onTitleChange: (index: number, title: string) => void;
   onToggleRationale: (index: number) => void;
 }) {
+  const [rationalePopoverOpen, setRationalePopoverOpen] = useState(false);
   const { issue, approved, editedTitle, rationaleExpanded } = item;
   const defaultPriority = {
     label: 'Medium',
@@ -158,6 +235,26 @@ function ReviewCard({
         </Badge>
 
         <div className="flex-1" />
+
+        {/* AI Rationale popover — fetches from audit log on open (AIGOV-07) */}
+        <Popover open={rationalePopoverOpen} onOpenChange={setRationalePopoverOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 text-muted-foreground hover:text-foreground"
+              aria-label="View AI rationale"
+            >
+              <Info className="h-3.5 w-3.5" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent side="right" className="w-80 text-sm">
+            {rationalePopoverOpen && (
+              <RationaleContent workspaceSlug={workspaceSlug} resourceId={noteId} />
+            )}
+          </PopoverContent>
+        </Popover>
 
         {/* Approve/Skip toggle */}
         <Button
@@ -251,6 +348,7 @@ export function ExtractionReviewPanel({
   isExtracting,
   error,
   workspaceId,
+  workspaceSlug,
   noteId,
   projectId,
   onCreated,
@@ -434,6 +532,8 @@ export function ExtractionReviewPanel({
                 <ReviewCard
                   key={item.issue.index}
                   item={item}
+                  workspaceSlug={workspaceSlug}
+                  noteId={noteId}
                   onToggleApproval={handleToggleApproval}
                   onTitleChange={handleTitleChange}
                   onToggleRationale={handleToggleRationale}

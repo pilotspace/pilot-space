@@ -17,6 +17,22 @@ vi.mock('@/services/api/ai', () => ({
   },
 }));
 
+// Mock apiClient used by useAIRationale
+vi.mock('@/services/api/client', () => ({
+  apiClient: {
+    get: vi.fn().mockResolvedValue({ items: [] }),
+  },
+}));
+
+// Mock TanStack Query so useAIRationale doesn't fire real network requests in tests
+vi.mock('@tanstack/react-query', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@tanstack/react-query')>();
+  return {
+    ...actual,
+    useQuery: vi.fn().mockReturnValue({ data: null, isLoading: false }),
+  };
+});
+
 // Mock sonner toast
 vi.mock('sonner', () => ({
   toast: {
@@ -57,6 +73,7 @@ const defaultProps = {
   isExtracting: false,
   error: null,
   workspaceId: 'ws-123',
+  workspaceSlug: 'test-workspace',
   noteId: 'note-456',
   projectId: 'proj-789',
 };
@@ -222,5 +239,11 @@ describe('ExtractionReviewPanel', () => {
 
     fireEvent.click(screen.getByText('Cancel'));
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('renders AI rationale info buttons for each issue card (AIGOV-07)', () => {
+    render(<ExtractionReviewPanel {...defaultProps} />);
+    const infoButtons = screen.getAllByLabelText('View AI rationale');
+    expect(infoButtons).toHaveLength(2);
   });
 });
