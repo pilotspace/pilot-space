@@ -20,6 +20,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
+import { observer } from 'mobx-react-lite';
 import { useStore } from '@/stores';
 import { ApiError } from '@/services/api';
 import { useWorkspaceQuota, useUpdateWorkspaceQuota } from '../hooks/use-workspace-quota';
@@ -262,7 +263,7 @@ function RateLimitReadOnly({ quota }: { quota: QuotaStatus }) {
 
 // ---- Main Component ----
 
-export function UsageSettingsPage() {
+export const UsageSettingsPage = observer(function UsageSettingsPage() {
   const { workspaceStore } = useStore();
   const params = useParams();
   const workspaceSlug = params?.workspaceSlug as string;
@@ -332,4 +333,4 @@ export function UsageSettingsPage() {
       </div>
     </div>
   );
-}
+});

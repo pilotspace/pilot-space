@@ -194,7 +194,7 @@ async def _require_settings_manage(
 # ============================================================================
 
 
-@router.get("/{workspace_slug}/encryption/")
+@router.get("/{workspace_slug}/encryption")
 async def get_encryption_status(
     workspace_slug: WorkspaceSlugPath,
     session: SessionDep,

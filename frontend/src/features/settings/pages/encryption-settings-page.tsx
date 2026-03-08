@@ -20,6 +20,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
+import { observer } from 'mobx-react-lite';
 import { useStore } from '@/stores';
 import { ApiError } from '@/services/api';
 import {
@@ -105,7 +106,7 @@ function EncryptionStatusDisplay({
 
 // ---- Main Component ----
 
-export function EncryptionSettingsPage() {
+export const EncryptionSettingsPage = observer(function EncryptionSettingsPage() {
   const { workspaceStore } = useStore();
   const params = useParams();
   const workspaceSlug = params?.workspaceSlug as string;
@@ -324,4 +325,4 @@ export function EncryptionSettingsPage() {
       </div>
     </div>
   );
-}
+});
