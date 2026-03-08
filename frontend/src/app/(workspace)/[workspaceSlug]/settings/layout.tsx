@@ -23,6 +23,7 @@ import {
   Plug,
   Settings,
   Shield,
+  ShieldCheck,
   Sparkles,
   User,
   Users,
@@ -79,6 +80,12 @@ const settingsNavSections: NavSection[] = [
         label: 'Encryption',
         icon: KeyRound,
         href: (slug: string) => `/${slug}/settings/encryption`,
+      },
+      {
+        id: 'ai-governance',
+        label: 'AI Governance',
+        icon: ShieldCheck,
+        href: (slug: string) => `/${slug}/settings/ai-governance`,
       },
       {
         id: 'audit',

@@ -12,3 +12,4 @@ export { SecuritySettingsPage } from './security-settings-page';
 export { AuditSettingsPage } from './audit-settings-page';
 export { EncryptionSettingsPage } from './encryption-settings-page';
 export { UsageSettingsPage } from './usage-settings-page';
+export { AIGovernanceSettingsPage } from './ai-governance-settings-page';
