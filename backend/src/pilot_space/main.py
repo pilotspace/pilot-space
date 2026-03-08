@@ -74,6 +74,7 @@ from pilot_space.api.v1.routers import (
     workspace_note_links_router,
     workspace_notes_ai_router,
     workspace_notes_router,
+    workspace_quota_router,
     workspace_sessions_router,
     workspace_tasks_router,
     workspaces_router,
@@ -293,6 +294,7 @@ app.include_router(github_links_router, prefix=API_V1_PREFIX)
 app.include_router(webhooks_router, prefix=API_V1_PREFIX)
 app.include_router(workspace_ai_settings_router, prefix=f"{API_V1_PREFIX}/workspaces")
 app.include_router(workspace_encryption_router, prefix=f"{API_V1_PREFIX}/workspaces")
+app.include_router(workspace_quota_router, prefix=f"{API_V1_PREFIX}/workspaces")
 app.include_router(workspace_cycles_router, prefix=f"{API_V1_PREFIX}/workspaces")
 app.include_router(workspace_issues_router, prefix=f"{API_V1_PREFIX}/workspaces")
 app.include_router(workspace_issue_branches_router, prefix=f"{API_V1_PREFIX}/workspaces")
