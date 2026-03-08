@@ -15,8 +15,18 @@ for the two-workspace pattern is finalized in Phase 3 plan 03-02.
 from __future__ import annotations
 
 import os
+import uuid
 
 import pytest
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from pilot_space.infrastructure.database.models.audit_log import ActorType, AuditLog
+from pilot_space.infrastructure.database.models.issue import Issue
+from pilot_space.infrastructure.database.models.note import Note
+from pilot_space.infrastructure.database.models.project import Project
+from pilot_space.infrastructure.database.models.state import State
+from tests.security.conftest import SecurityTestContext, set_test_rls_context
 
 _DB_URL = os.getenv("TEST_DATABASE_URL", "sqlite")
 
@@ -25,46 +35,138 @@ pytestmark = pytest.mark.skipif(
     reason="RLS isolation tests require PostgreSQL. Set TEST_DATABASE_URL.",
 )
 
-# Imports needed for full implementation (uncommented in 03-02):
-# from sqlalchemy.ext.asyncio import AsyncSession
-# from pilot_space.infrastructure.database.rls import set_rls_context
-# from pilot_space.infrastructure.database.models.issue import Issue
-# from pilot_space.infrastructure.database.models.note import Note
-# from pilot_space.infrastructure.database.models.audit_log import AuditLog
-# from tests.security.conftest import SecurityTestContext, set_test_rls_context
 
-
-@pytest.mark.xfail(strict=False, reason="TENANT-01: workspace isolation not yet verified")
-async def test_cross_workspace_issue_access(populated_db: object, db_session: object) -> None:
+async def test_cross_workspace_issue_access(
+    populated_db: SecurityTestContext,
+    db_session: AsyncSession,
+) -> None:
     """User A cannot read workspace B issues via RLS.
 
     Setup: issue created in workspace B by outsider (workspace B owner).
     Action: set RLS context as user A (workspace A member), query all issues.
     Assert: result is empty — RLS blocks cross-workspace access.
     """
-    raise NotImplementedError("Implement after RLS enum fix (066) is applied to test DB")
+    ctx = populated_db
+
+    # Create a project in workspace B (owned by outsider)
+    project = Project(
+        id=uuid.uuid4(),
+        workspace_id=ctx.workspace_b.id,
+        name="B Project",
+        identifier="BPROJ",
+    )
+    db_session.add(project)
+    await db_session.flush()
+
+    # Create a state in workspace B for the project
+    state = State(
+        id=uuid.uuid4(),
+        workspace_id=ctx.workspace_b.id,
+        name="Backlog",
+        project_id=project.id,
+    )
+    db_session.add(state)
+    await db_session.flush()
+
+    # Create an issue in workspace B
+    issue = Issue(
+        id=uuid.uuid4(),
+        sequence_id=1,
+        workspace_id=ctx.workspace_b.id,
+        state_id=state.id,
+        project_id=project.id,
+        reporter_id=ctx.outsider.id,
+        name="WS-B Issue",
+    )
+    db_session.add(issue)
+    await db_session.flush()
+
+    # Set RLS context to workspace A owner — they have no access to workspace B
+    await set_test_rls_context(db_session, ctx.owner.id, ctx.workspace_a.id)
+
+    # Query workspace B issues — RLS must filter them all out
+    result = await db_session.execute(select(Issue).where(Issue.workspace_id == ctx.workspace_b.id))
+    issues = result.scalars().all()
+
+    assert len(issues) == 0, (
+        "RLS must block workspace B issues from a user who is only a member of workspace A. "
+        f"Found {len(issues)} issue(s) — isolation policy is not enforced."
+    )
 
 
-@pytest.mark.xfail(strict=False, reason="TENANT-01: workspace isolation not yet verified")
-async def test_cross_workspace_note_access(populated_db: object, db_session: object) -> None:
+async def test_cross_workspace_note_access(
+    populated_db: SecurityTestContext,
+    db_session: AsyncSession,
+) -> None:
     """User A cannot read workspace B notes via RLS.
 
     Setup: note created in workspace B by outsider (workspace B owner).
     Action: set RLS context as user A (workspace A member), query all notes.
     Assert: result is empty — RLS blocks cross-workspace access.
     """
-    raise NotImplementedError("Implement after RLS enum fix (066) is applied to test DB")
+    ctx = populated_db
+
+    # Create a note in workspace B (owned by outsider)
+    note = Note(
+        id=uuid.uuid4(),
+        workspace_id=ctx.workspace_b.id,
+        owner_id=ctx.outsider.id,
+        title="WS-B Note",
+        content={},
+    )
+    db_session.add(note)
+    await db_session.flush()
+
+    # Set RLS context to workspace A owner — they have no access to workspace B
+    await set_test_rls_context(db_session, ctx.owner.id, ctx.workspace_a.id)
+
+    # Query workspace B notes — RLS must filter them all out
+    result = await db_session.execute(select(Note).where(Note.workspace_id == ctx.workspace_b.id))
+    notes = result.scalars().all()
+
+    assert len(notes) == 0, (
+        "RLS must block workspace B notes from a user who is only a member of workspace A. "
+        f"Found {len(notes)} note(s) — isolation policy is not enforced."
+    )
 
 
-@pytest.mark.xfail(strict=False, reason="TENANT-01: workspace isolation not yet verified")
-async def test_cross_workspace_audit_log_access(populated_db: object, db_session: object) -> None:
+async def test_cross_workspace_audit_log_access(
+    populated_db: SecurityTestContext,
+    db_session: AsyncSession,
+) -> None:
     """User A cannot read workspace B audit log entries via RLS.
 
     Setup: audit_log entry created in workspace B.
     Action: set RLS context as user A (OWNER of workspace A), query audit_log.
     Assert: result is empty — workspace B entries not visible to workspace A OWNER.
     """
-    raise NotImplementedError("Implement after RLS enum fix (066) is applied to test DB")
+    ctx = populated_db
+
+    # Create an audit log entry in workspace B
+    log_entry = AuditLog(
+        id=uuid.uuid4(),
+        workspace_id=ctx.workspace_b.id,
+        actor_id=ctx.outsider.id,
+        actor_type=ActorType.USER,
+        action="issue.create",
+        resource_type="issue",
+    )
+    db_session.add(log_entry)
+    await db_session.flush()
+
+    # Set RLS context to workspace A owner — they have no access to workspace B
+    await set_test_rls_context(db_session, ctx.owner.id, ctx.workspace_a.id)
+
+    # Query workspace B audit log — RLS must filter all entries out
+    result = await db_session.execute(
+        select(AuditLog).where(AuditLog.workspace_id == ctx.workspace_b.id)
+    )
+    entries = result.scalars().all()
+
+    assert len(entries) == 0, (
+        "RLS must block workspace B audit log entries from a workspace A OWNER. "
+        f"Found {len(entries)} entry/entries — isolation policy is not enforced."
+    )
 
 
 @pytest.mark.xfail(strict=False, reason="TENANT-01: MCP tool RLS session sharing not yet verified")

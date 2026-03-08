@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Identity & Access** - SSO, custom RBAC, session control, and SCIM provisioning so enterprise teams can use their existing identity provider (completed 2026-03-07)
 - [x] **Phase 2: Compliance & Audit** - Immutable audit log covering every user and AI action, with export and retention controls (completed 2026-03-08)
-- [ ] **Phase 3: Multi-Tenant Isolation** - Verified data isolation, workspace encryption, rate limiting, and operator dashboard
+- [x] **Phase 3: Multi-Tenant Isolation** - Verified data isolation, workspace encryption, rate limiting, and operator dashboard (completed 2026-03-08)
 - [ ] **Phase 4: AI Governance** - Configurable approval policies, AI audit trail, rollback, strict BYOK enforcement, and cost visibility
 - [ ] **Phase 5: Operational Readiness** - Docker Compose guide, Helm chart, health checks, structured logging, backup tooling, and migration path
 
@@ -73,7 +73,7 @@ Plans:
   2. Admin can upload a workspace-level encryption key and confirm that stored data is encrypted with their key (bring-your-own-key model)
   3. Admin can set per-workspace API rate limits and storage quotas, and requests exceeding those limits receive a 429 with a meaningful error
   4. Super-admin (self-hosted operator) can open an admin dashboard and see workspace health metrics, member activity, and usage stats across all workspaces
-**Plans**: 7 plans
+**Plans**: 8 plans
 
 Plans:
 - [ ] 03-01-PLAN.md — Migration 066 (RLS enum case fix) + Phase 3 test scaffolds for all TENANT requirements (TENANT-01)
@@ -83,6 +83,7 @@ Plans:
 - [ ] 03-05-PLAN.md — Encryption settings UI: EncryptionSettingsPage + TanStack Query hooks + nav entry (TENANT-02)
 - [ ] 03-06-PLAN.md — Usage settings UI: UsageSettingsPage with quota bars + owner edit controls (TENANT-03)
 - [ ] 03-07-PLAN.md — Admin dashboard frontend: (admin) route group + token form + workspace health table (TENANT-04)
+- [ ] 03-08-PLAN.md — Gap closure: implement 3 RLS isolation integration tests replacing xfail stubs (TENANT-01)
 
 ### Phase 4: AI Governance
 **Goal**: Admins can configure exactly which AI actions run automatically and which require human approval, with a complete traceable record of every AI decision and the ability to undo any AI-created artifact
@@ -121,7 +122,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 |-------|----------------|--------|-----------|
 | 1. Identity & Access | 9/9 | Complete   | 2026-03-07 |
 | 2. Compliance & Audit | 5/5 | Complete   | 2026-03-08 |
-| 3. Multi-Tenant Isolation | 6/7 | In Progress|  |
+| 3. Multi-Tenant Isolation | 7/8 | Gap closure in progress | 2026-03-08 |
 | 4. AI Governance | 0/TBD | Not started | - |
 | 5. Operational Readiness | 0/TBD | Not started | - |
 
@@ -131,3 +132,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 *Phase 1 planned: 2026-03-07 — 9 plans across 5 waves*
 *Phase 2 planned: 2026-03-08 — 5 plans across 4 waves*
 *Phase 3 planned: 2026-03-08 — 7 plans across 3 waves*
+*Phase 3 gap closure: 2026-03-08 — 03-08-PLAN.md (TENANT-01 RLS integration tests)*
