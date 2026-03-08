@@ -88,9 +88,11 @@ export class AISettingsStore {
     });
 
     try {
-      const response = await aiApi.updateWorkspaceSettings(this.currentWorkspaceId, updates);
+      await aiApi.updateWorkspaceSettings(this.currentWorkspaceId, updates);
+      // Reload full settings so provider isConfigured status reflects the saved key
+      const refreshed = await aiApi.getWorkspaceSettings(this.currentWorkspaceId);
       runInAction(() => {
-        this.settings = response;
+        this.settings = refreshed;
         this.isSaving = false;
       });
     } catch (err) {

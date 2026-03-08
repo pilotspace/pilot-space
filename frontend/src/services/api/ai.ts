@@ -204,7 +204,21 @@ export const aiApi = {
       anthropic_api_key?: string;
       openai_api_key?: string;
     }
-  ) => apiClient.patch<WorkspaceAISettings>(`/workspaces/${workspaceId}/ai/settings`, settings),
+  ) => {
+    // Transform flat keys to backend's { api_keys: [{ provider, api_key }] } format
+    const apiKeys: Array<{ provider: string; api_key: string }> = [];
+    if (settings.anthropic_api_key) {
+      apiKeys.push({ provider: 'anthropic', api_key: settings.anthropic_api_key });
+    }
+    if (settings.openai_api_key) {
+      apiKeys.push({ provider: 'openai', api_key: settings.openai_api_key });
+    }
+    const { anthropic_api_key: _a, openai_api_key: _o, ...rest } = settings;
+    return apiClient.patch(`/workspaces/${workspaceId}/ai/settings`, {
+      ...rest,
+      ...(apiKeys.length > 0 ? { api_keys: apiKeys } : {}),
+    });
+  },
 
   /**
    * Approval endpoints for human-in-the-loop actions.
