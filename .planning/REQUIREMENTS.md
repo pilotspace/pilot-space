@@ -35,13 +35,13 @@ Requirements for the enterprise milestone. Goal: first enterprise customer (50-5
 
 ### AI Governance (AIGOV)
 
-- [ ] **AIGOV-01**: Admin can configure AI action policies: which action types auto-execute vs. require human approval, per role
-- [ ] **AIGOV-02**: When an AI action requires approval, it is queued and presented to an authorized human reviewer before execution
-- [ ] **AIGOV-03**: Admin can view a full AI audit trail: all AI actions with input, output, rationale, model, cost, and approval chain
-- [ ] **AIGOV-04**: Admin can rollback any AI-created or AI-modified artifact to its pre-AI state
-- [ ] **AIGOV-05**: AI features are fully disabled for a workspace if no valid BYOK API key is configured — no fallback to Pilot Space keys
-- [ ] **AIGOV-06**: Admin can view per-workspace AI cost dashboard: token usage by model, by feature, by time period
-- [ ] **AIGOV-07**: Users can see the AI rationale for any AI-generated suggestion, review comment, or extracted issue
+- [x] **AIGOV-01**: Admin can configure AI action policies: which action types auto-execute vs. require human approval, per role
+- [x] **AIGOV-02**: When an AI action requires approval, it is queued and presented to an authorized human reviewer before execution
+- [x] **AIGOV-03**: Admin can view a full AI audit trail: all AI actions with input, output, rationale, model, cost, and approval chain
+- [x] **AIGOV-04**: Admin can rollback any AI-created or AI-modified artifact to its pre-AI state
+- [x] **AIGOV-05**: AI features are fully disabled for a workspace if no valid BYOK API key is configured — no fallback to Pilot Space keys
+- [x] **AIGOV-06**: Admin can view per-workspace AI cost dashboard: token usage by model, by feature, by time period
+- [x] **AIGOV-07**: Users can see the AI rationale for any AI-generated suggestion, review comment, or extracted issue
 
 ### Operational Readiness (OPS)
 
@@ -112,13 +112,13 @@ Updated during roadmap creation: 2026-03-07
 | TENANT-02 | Phase 3 | Complete |
 | TENANT-03 | Phase 3 | Complete |
 | TENANT-04 | Phase 3 | Complete |
-| AIGOV-01 | Phase 4 | Pending |
-| AIGOV-02 | Phase 4 | Pending |
-| AIGOV-03 | Phase 4 | Pending |
-| AIGOV-04 | Phase 4 | Pending |
-| AIGOV-05 | Phase 4 | Pending |
-| AIGOV-06 | Phase 4 | Pending |
-| AIGOV-07 | Phase 4 | Pending |
+| AIGOV-01 | Phase 4 | Complete |
+| AIGOV-02 | Phase 4 | Complete |
+| AIGOV-03 | Phase 4 | Complete |
+| AIGOV-04 | Phase 4 | Complete |
+| AIGOV-05 | Phase 4 | Complete |
+| AIGOV-06 | Phase 4 | Complete |
+| AIGOV-07 | Phase 4 | Complete |
 | OPS-01 | Phase 5 | Pending |
 | OPS-02 | Phase 5 | Pending |
 | OPS-03 | Phase 5 | Pending |

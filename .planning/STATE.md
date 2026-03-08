@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Completed 04-ai-governance-06-PLAN.md
-last_updated: "2026-03-08T10:39:34.789Z"
+stopped_at: Completed 04-ai-governance-07-PLAN.md
+last_updated: "2026-03-08T10:56:13.378Z"
 last_activity: 2026-03-08 — Completed plan 03-04 (super-admin operator dashboard backend)
 progress:
   total_phases: 5
   completed_phases: 3
   total_plans: 30
-  completed_plans: 28
+  completed_plans: 29
   percent: 71
 ---
 
@@ -74,6 +74,7 @@ Progress: [███████░░░] 71%
 | Phase 04-ai-governance P04 | 8 | 2 tasks | 8 files |
 | Phase 04-ai-governance P05 | 25 | 2 tasks | 10 files |
 | Phase 04-ai-governance P06 | 18 | 2 tasks | 4 files |
+| Phase 04-ai-governance P07 | 21 | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -165,6 +166,9 @@ Recent decisions affecting current work:
 - [Phase 04-ai-governance]: AuditFilters.actor_type added as optional — backward-compatible; absence omits filter from API query
 - [Phase 04-ai-governance]: By Feature tab uses lazy useQuery (enabled: activeTab === 'by_feature') — avoids unnecessary API fetch on dashboard mount
 - [Phase 04-ai-governance]: Horizontal BarChart for By Feature tab (not PieChart) — ranked list reads better for 5-10 operation_type labels with long names
+- [Phase 04-ai-governance]: ExtractionReviewPanel rationale popover uses noteId as resource_id (not issue.id — issues not yet persisted at review stage)
+- [Phase 04-ai-governance]: AiNotConfiguredBanner queries ai-status only when isOwner=true — avoids unnecessary endpoint calls for non-owners
+- [Phase 04-ai-governance]: PRReviewPanel byokConfigured prop defaults to true for backward compatibility — existing callers unaffected
 
 ### Pending Todos
 
@@ -180,6 +184,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-08T10:39:34.787Z
-Stopped at: Completed 04-ai-governance-06-PLAN.md
+Last session: 2026-03-08T10:56:13.376Z
+Stopped at: Completed 04-ai-governance-07-PLAN.md
 Resume file: None
