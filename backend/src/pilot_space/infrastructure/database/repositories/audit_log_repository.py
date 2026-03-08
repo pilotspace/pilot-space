@@ -190,6 +190,7 @@ class AuditLogRepository:
         *,
         workspace_id: uuid.UUID,
         actor_id: uuid.UUID | None = None,
+        actor_type: ActorType | None = None,
         action: str | None = None,
         resource_type: str | None = None,
         start_date: datetime | None = None,
@@ -205,6 +206,7 @@ class AuditLogRepository:
         Args:
             workspace_id: Workspace to query (required — tenant isolation).
             actor_id: Optional filter by actor UUID.
+            actor_type: Optional filter by actor type (USER, AI, or SYSTEM).
             action: Optional filter by exact action string e.g. "issue.create".
             resource_type: Optional filter by resource category.
             start_date: Optional inclusive lower bound for created_at.
@@ -221,6 +223,8 @@ class AuditLogRepository:
 
         if actor_id is not None:
             stmt = stmt.where(AuditLog.actor_id == actor_id)
+        if actor_type is not None:
+            stmt = stmt.where(AuditLog.actor_type == actor_type)
         if action is not None:
             stmt = stmt.where(AuditLog.action == action)
         if resource_type is not None:
@@ -270,6 +274,7 @@ class AuditLogRepository:
         *,
         workspace_id: uuid.UUID,
         actor_id: uuid.UUID | None = None,
+        actor_type: ActorType | None = None,
         action: str | None = None,
         resource_type: str | None = None,
         start_date: datetime | None = None,
@@ -283,6 +288,7 @@ class AuditLogRepository:
         Args:
             workspace_id: Workspace to query (required — tenant isolation).
             actor_id: Optional filter by actor UUID.
+            actor_type: Optional filter by actor type (USER, AI, or SYSTEM).
             action: Optional filter by exact action string.
             resource_type: Optional filter by resource category.
             start_date: Optional inclusive lower bound for created_at.
@@ -295,6 +301,8 @@ class AuditLogRepository:
 
         if actor_id is not None:
             stmt = stmt.where(AuditLog.actor_id == actor_id)
+        if actor_type is not None:
+            stmt = stmt.where(AuditLog.actor_type == actor_type)
         if action is not None:
             stmt = stmt.where(AuditLog.action == action)
         if resource_type is not None:
