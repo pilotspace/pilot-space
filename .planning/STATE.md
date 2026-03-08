@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Completed 03-02-PLAN.md
-last_updated: "2026-03-08T04:56:45.988Z"
+stopped_at: Completed 03-03-PLAN.md
+last_updated: "2026-03-08T05:16:24.390Z"
 last_activity: 2026-03-08 — Completed plan 03-01 (RLS enum fix + Phase 3 test scaffold)
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 21
-  completed_plans: 16
+  completed_plans: 17
   percent: 71
 ---
 
@@ -62,6 +62,7 @@ Progress: [███████░░░] 71%
 | Phase 02-compliance-and-audit P05 | 7 | 2 tasks | 6 files |
 | Phase 03-multi-tenant-isolation P01 | 11 | 2 tasks | 6 files |
 | Phase 03-multi-tenant-isolation P02 | 20 | 2 tasks | 11 files |
+| Phase 03-multi-tenant-isolation PP03 | 35 | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -119,6 +120,9 @@ Recent decisions affecting current work:
 - [Phase 03-multi-tenant-isolation]: Workspace encryption is opt-in: get_workspace_content_key() returns None for unconfigured workspaces; callers check before encrypting/decrypting
 - [Phase 03-multi-tenant-isolation]: workspace_encryption_keys RLS intentionally omits user SELECT policy — encrypted key must never reach client via any API path
 - [Phase 03-multi-tenant-isolation]: workspace_encryption router mounted at /api/v1/workspaces with full {workspace_slug}/encryption/* paths — FastAPI does not support path params in include_router prefix
+- [Phase Phase 03-multi-tenant-isolation]: RateLimitMiddleware uses async_sessionmaker (not DI container) for DB fallback — avoids wiring complexity in middleware context, same SCIM pattern
+- [Phase Phase 03-multi-tenant-isolation]: Workspace quota router extracted to workspace_quota.py — keeps both workspaces.py and workspace_quota.py under 700-line limit
+- [Phase Phase 03-multi-tenant-isolation]: PATCH /settings/quota uses RedisDep for cache invalidation — consistent with ghost_text and issues_ai_context patterns
 
 ### Pending Todos
 
@@ -134,6 +138,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-08T04:56:45.986Z
-Stopped at: Completed 03-02-PLAN.md
+Last session: 2026-03-08T05:16:24.388Z
+Stopped at: Completed 03-03-PLAN.md
 Resume file: None
