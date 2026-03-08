@@ -103,8 +103,8 @@ function truncate(value: string | null, length: number): string {
   return value.length > length ? value.slice(0, length) + '…' : value;
 }
 
-function ActorTypeBadge({ actorType }: { actorType: AuditLogEntry['actor_type'] }) {
-  const variants: Record<AuditLogEntry['actor_type'], 'default' | 'secondary' | 'outline'> = {
+function ActorTypeBadge({ actorType }: { actorType: AuditLogEntry['actorType'] }) {
+  const variants: Record<AuditLogEntry['actorType'], 'default' | 'secondary' | 'outline'> = {
     USER: 'secondary',
     SYSTEM: 'outline',
     AI: 'default',
@@ -155,7 +155,7 @@ function ExpandedRowContent({ entry }: { entry: AuditLogEntry }) {
       )}
 
       {/* AI fields — only shown for AI actor */}
-      {entry.actor_type === 'AI' && (
+      {entry.actorType === 'AI' && (
         <div className="space-y-2 pt-1 border-t">
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
             AI Details
@@ -163,15 +163,15 @@ function ExpandedRowContent({ entry }: { entry: AuditLogEntry }) {
           <div className="grid grid-cols-3 gap-3 text-sm">
             <div>
               <p className="text-xs text-muted-foreground">Model</p>
-              <p className="font-mono">{entry.ai_model ?? '—'}</p>
+              <p className="font-mono">{entry.aiModel ?? '—'}</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Token Cost</p>
-              <p>{entry.ai_token_cost != null ? `$${entry.ai_token_cost.toFixed(6)}` : '—'}</p>
+              <p>{entry.aiTokenCost != null ? `$${entry.aiTokenCost.toFixed(6)}` : '—'}</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Rationale</p>
-              <p>{entry.ai_rationale ?? '—'}</p>
+              <p>{entry.aiRationale ?? '—'}</p>
             </div>
           </div>
         </div>
@@ -180,7 +180,7 @@ function ExpandedRowContent({ entry }: { entry: AuditLogEntry }) {
       {/* Full resource ID */}
       <div className="text-xs text-muted-foreground pt-1 border-t">
         <span className="font-medium">Full Resource ID:</span>{' '}
-        <span className="font-mono">{entry.resource_id ?? '—'}</span>
+        <span className="font-mono">{entry.resourceId ?? '—'}</span>
       </div>
     </div>
   );
@@ -248,7 +248,7 @@ export function AuditSettingsPage() {
 
   // ---- Export handlers ----
   const handleExportClick = (format: 'json' | 'csv') => {
-    const totalCount = data?.total_count ?? 0;
+    const totalCount = data?.items.length ?? 0;
     if (totalCount > EXPORT_WARNING_THRESHOLD) {
       setExportFormat(format);
       setShowExportWarning(true);
@@ -275,8 +275,8 @@ export function AuditSettingsPage() {
   };
 
   const entries = data?.items ?? [];
-  const totalCount = data?.total_count ?? 0;
-  const nextCursor = data?.next_cursor ?? null;
+  const totalCount = entries.length;
+  const nextCursor = data?.nextCursor ?? null;
 
   return (
     <div className="max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
@@ -497,16 +497,16 @@ export function AuditSettingsPage() {
 
                             {/* Timestamp */}
                             <TableCell className="font-mono text-xs text-muted-foreground whitespace-nowrap">
-                              {formatTimestamp(entry.created_at)}
+                              {formatTimestamp(entry.createdAt)}
                             </TableCell>
 
                             {/* Actor */}
                             <TableCell>
                               <div className="flex items-center gap-1.5">
                                 <span className="font-mono text-xs">
-                                  {truncate(entry.actor_id, 8)}
+                                  {truncate(entry.actorId, 8)}
                                 </span>
-                                <ActorTypeBadge actorType={entry.actor_type} />
+                                <ActorTypeBadge actorType={entry.actorType} />
                               </div>
                             </TableCell>
 
@@ -517,20 +517,20 @@ export function AuditSettingsPage() {
 
                             {/* Resource Type */}
                             <TableCell>
-                              <span className="text-sm">{entry.resource_type}</span>
+                              <span className="text-sm">{entry.resourceType}</span>
                             </TableCell>
 
                             {/* Resource ID (first 8 chars) */}
                             <TableCell>
                               <span className="font-mono text-xs text-muted-foreground">
-                                {truncate(entry.resource_id, 8)}
+                                {truncate(entry.resourceId, 8)}
                               </span>
                             </TableCell>
 
                             {/* IP Address */}
                             <TableCell>
                               <span className="font-mono text-xs text-muted-foreground">
-                                {entry.ip_address ?? '—'}
+                                {entry.ipAddress ?? '—'}
                               </span>
                             </TableCell>
                           </TableRow>

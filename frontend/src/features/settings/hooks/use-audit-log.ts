@@ -12,20 +12,20 @@ import { apiClient } from '@/services/api';
 
 export interface AuditLogEntry {
   id: string;
-  actor_id: string | null;
-  actor_type: 'USER' | 'SYSTEM' | 'AI';
+  actorId: string | null;
+  actorType: 'USER' | 'SYSTEM' | 'AI';
   action: string;
-  resource_type: string;
-  resource_id: string | null;
+  resourceType: string;
+  resourceId: string | null;
   payload: {
     before: Record<string, unknown>;
     after: Record<string, unknown>;
   } | null;
-  ai_model: string | null;
-  ai_token_cost: number | null;
-  ai_rationale: string | null;
-  ip_address: string | null;
-  created_at: string;
+  aiModel: string | null;
+  aiTokenCost: number | null;
+  aiRationale: string | null;
+  ipAddress: string | null;
+  createdAt: string;
 }
 
 export interface AuditFilters {
@@ -38,8 +38,9 @@ export interface AuditFilters {
 
 export interface PaginatedAuditResponse {
   items: AuditLogEntry[];
-  total_count: number;
-  next_cursor: string | null;
+  hasNext: boolean;
+  nextCursor: string | null;
+  pageSize: number;
 }
 
 // ---- Query Keys ----

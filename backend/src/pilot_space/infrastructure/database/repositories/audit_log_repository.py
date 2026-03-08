@@ -245,11 +245,7 @@ class AuditLogRepository:
                     )
                 )
 
-        stmt = (
-            stmt.order_by(AuditLog.created_at.desc(), AuditLog.id.desc())
-            .limit(page_size + 1)
-            .execution_options(yield_per=100)
-        )
+        stmt = stmt.order_by(AuditLog.created_at.desc(), AuditLog.id.desc()).limit(page_size + 1)
 
         result = await self.session.execute(stmt)
         rows: list[AuditLog] = list(result.scalars().all())
@@ -308,12 +304,10 @@ class AuditLogRepository:
         if end_date is not None:
             stmt = stmt.where(AuditLog.created_at <= end_date)
 
-        stmt = stmt.order_by(AuditLog.created_at.desc(), AuditLog.id.desc()).execution_options(
-            yield_per=100
-        )
+        stmt = stmt.order_by(AuditLog.created_at.desc(), AuditLog.id.desc())
 
-        result = await self.session.execute(stmt)
-        return list(result.scalars().all())
+        result = await self.session.stream_scalars(stmt)
+        return [row async for row in result]
 
     async def purge_expired(
         self,

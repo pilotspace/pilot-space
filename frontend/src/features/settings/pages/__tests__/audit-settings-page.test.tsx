@@ -42,44 +42,45 @@ vi.mock('@/features/settings/hooks/use-audit-log', () => ({
 const mockAuditEntries = [
   {
     id: 'audit-1',
-    actor_id: 'user-abc123de',
-    actor_type: 'USER' as const,
+    actorId: 'user-abc123de',
+    actorType: 'USER' as const,
     action: 'issue.create',
-    resource_type: 'issue',
-    resource_id: 'issue-abcdef12',
+    resourceType: 'issue',
+    resourceId: 'issue-abcdef12',
     payload: {
       before: {},
       after: { title: 'New issue', status: 'open' },
     },
-    ai_model: null,
-    ai_token_cost: null,
-    ai_rationale: null,
-    ip_address: '192.168.1.1',
-    created_at: '2026-03-08T01:00:00Z',
+    aiModel: null,
+    aiTokenCost: null,
+    aiRationale: null,
+    ipAddress: '192.168.1.1',
+    createdAt: '2026-03-08T01:00:00Z',
   },
   {
     id: 'audit-2',
-    actor_id: null,
-    actor_type: 'AI' as const,
+    actorId: null,
+    actorType: 'AI' as const,
     action: 'issue.update',
-    resource_type: 'issue',
-    resource_id: 'issue-abcdef12',
+    resourceType: 'issue',
+    resourceId: 'issue-abcdef12',
     payload: {
       before: { title: 'Old title' },
       after: { title: 'New title' },
     },
-    ai_model: 'claude-3-sonnet',
-    ai_token_cost: 0.005,
-    ai_rationale: 'Improved clarity',
-    ip_address: null,
-    created_at: '2026-03-08T02:00:00Z',
+    aiModel: 'claude-3-sonnet',
+    aiTokenCost: 0.005,
+    aiRationale: 'Improved clarity',
+    ipAddress: null,
+    createdAt: '2026-03-08T02:00:00Z',
   },
 ];
 
 const mockPaginatedResponse = {
   items: mockAuditEntries,
-  total_count: 2,
-  next_cursor: null,
+  hasNext: false,
+  nextCursor: null,
+  pageSize: 50,
 };
 
 function setupDefaultMocks() {
@@ -205,7 +206,7 @@ describe('AuditSettingsPage', () => {
 
   it('shows empty state when no results', () => {
     mockUseAuditLog.mockReturnValue({
-      data: { items: [], total_count: 0, next_cursor: null },
+      data: { items: [], hasNext: false, nextCursor: null, pageSize: 50 },
       isLoading: false,
       error: null,
       isFetchingNextPage: false,
