@@ -122,7 +122,15 @@ Plans:
   4. All application log lines are structured JSON with level, timestamp, trace_id, actor, and action fields — no unstructured string logs in production paths
   5. Admin can run a CLI backup command that produces a portable archive of all workspace data (PostgreSQL + Supabase Storage) and a restore command that applies it to a fresh instance
   6. An existing deployment running the prior MVP version can be upgraded to the enterprise release with zero downtime using documented migration steps
-**Plans**: TBD
+**Plans**: 6 plans
+
+Plans:
+- [ ] 05-01-PLAN.md — Health endpoints: /health/live (liveness) + /health/ready (deep check with DB/Redis/Supabase) + tests (OPS-03)
+- [ ] 05-02-PLAN.md — Structured logging: add trace_id, actor, action ContextVars to structlog + auth_middleware actor population (OPS-04)
+- [ ] 05-03-PLAN.md — Docker Compose consolidation: root docker-compose.yml with all services + .env.example + deployment guide (OPS-01)
+- [ ] 05-04-PLAN.md — Helm chart: convert infra/k8s/ manifests to Helm templates + values.yaml + kubernetes guide (OPS-02)
+- [ ] 05-05-PLAN.md — Backup CLI: pilot backup create/restore commands + pg_dump + Storage API + AES-256-GCM + docs (OPS-05)
+- [ ] 05-06-PLAN.md — Upgrade runbook + CI simulation: docs/operations/upgrade-guide.md + .github/workflows/upgrade-simulation.yml (OPS-06)
 
 ## Progress
 
@@ -136,7 +144,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 2. Compliance & Audit | 5/5 | Complete   | 2026-03-08 |
 | 3. Multi-Tenant Isolation | 8/8 | Complete   | 2026-03-08 |
 | 4. AI Governance | 10/10 | Complete | 2026-03-08 |
-| 5. Operational Readiness | 0/TBD | Not started | - |
+| 5. Operational Readiness | 0/6 | Not started | - |
 
 ---
 *Roadmap created: 2026-03-07*
@@ -147,3 +155,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 *Phase 3 gap closure: 2026-03-08 — 03-08-PLAN.md (TENANT-01 RLS integration tests)*
 *Phase 4 planned: 2026-03-08 — 8 plans across 5 waves*
 *Phase 4 gap closure: 2026-03-08 — 04-09-PLAN.md (AIGOV-01 MCP wiring) + 04-10-PLAN.md (AIGOV-04 rollback)*
+*Phase 5 planned: 2026-03-08 — 6 plans across 2 waves*
