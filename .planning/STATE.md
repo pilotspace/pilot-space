@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: verifying
-stopped_at: Completed 04-ai-governance Phase 4 — all plans done, AIGOV-01..07 verified, 4 regression bugs fixed
-last_updated: "2026-03-08T14:18:00.014Z"
-last_activity: 2026-03-08 — Fixed 4 browser-verification bugs (enum labels, actor_type filter, cost UUID, layout overflow)
+stopped_at: Completed 04-09-PLAN — DB-backed approval routing wired into all 4 MCP servers; check_approval_from_db() helper + ToolContext.user_role
+last_updated: "2026-03-08T14:31:27Z"
+last_activity: 2026-03-08 — Wired ApprovalService into MCP server pipeline; workspace AI policies now govern tool execution status
 progress:
   total_phases: 5
   completed_phases: 3
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-03-07)
 ## Current Position
 
 Phase: 4 of 5 (AI Governance) — COMPLETE
-Plan: 8 of 8 in current phase (all plans complete)
-Status: Phase 4 complete — all AIGOV-01..07 browser-verified; 4 regression bugs fixed post human-verify
-Last activity: 2026-03-08 — Fixed 4 browser-verification bugs (enum labels, actor_type filter, cost UUID, layout overflow)
+Plan: 9 of 10 in current phase (gap-closure plans 09 + 10 added post-verification)
+Status: Phase 4 gap-closure complete — AIGOV-01 satisfied; ApprovalService fully wired into MCP pipeline
+Last activity: 2026-03-08 — Wired ApprovalService into MCP server pipeline (04-09); DB-backed approval routing active
 
 Progress: [██████████] 100%
 
@@ -76,6 +76,7 @@ Progress: [██████████] 100%
 | Phase 04-ai-governance P06 | 18 | 2 tasks | 4 files |
 | Phase 04-ai-governance P07 | 21 | 2 tasks | 8 files |
 | Phase 04-ai-governance P08 | 130 | 2 tasks complete (4 bugs fixed) | 21 files |
+| Phase 04-ai-governance P09 | ~120 | 2 tasks + 1 fix | 6 files |
 | Phase 04-ai-governance P10 | 8 | 2 tasks | 4 files |
 
 ## Accumulated Context
@@ -180,6 +181,9 @@ Recent decisions affecting current work:
 - [Phase 04-ai-governance]: Module-level imports for UpdateIssueService/NoteService/repositories in ai_governance.py — enables patch()-based mocking without local import tricks
 - [Phase 04-ai-governance]: UNCHANGED sentinel for absent before_state fields — prevents rollback from nullifying fields not captured in the audit entry
 - [Phase 04-ai-governance]: isRollingBack gated on rollbackMutation.variables === entry.id — only the clicked row shows loading state when rollback is in flight
+- [Phase 04-ai-governance]: enhance_text passes None as action_type to check_approval_from_db — no ActionType maps cleanly; None triggers fallback preserving AUTO_EXECUTE
+- [Phase 04-ai-governance]: note_server uses AT/lvl/_chk local aliases to keep all lines <=88 chars while staying <=700 lines after ruff-format expansion
+- [Phase 04-ai-governance]: check_approval_from_db uses lazy imports inside try block to avoid circular import between mcp_server and approval module
 
 ### Pending Todos
 
@@ -195,6 +199,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-08T20:30:00.000Z
-Stopped at: Completed 04-ai-governance Phase 4 — all plans done, AIGOV-01..07 verified, 4 regression bugs fixed
+Last session: 2026-03-08T14:31:27Z
+Stopped at: Completed 04-09-PLAN — DB-backed approval routing wired into all 4 MCP servers; check_approval_from_db() helper + ToolContext.user_role
 Resume file: None

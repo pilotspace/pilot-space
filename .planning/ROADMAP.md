@@ -108,8 +108,8 @@ Plans:
 - [ ] 04-06-PLAN.md — Frontend: Audit settings actor_type filter + AI row expansion + cost dashboard By Feature tab (AIGOV-03/06)
 - [ ] 04-07-PLAN.md — Frontend: Rationale popovers (ExtractionReviewPanel + PR review) + AiNotConfiguredBanner + disabled AI controls (AIGOV-05/07)
 - [ ] 04-08-PLAN.md — Full quality gates + human verification checkpoint for all 7 AIGOV requirements (AIGOV-01/02/03/04/05/06/07)
-- [ ] 04-09-PLAN.md — Gap closure: wire ApprovalService.check_approval_required() into MCP server pipeline (AIGOV-01)
-- [ ] 04-10-PLAN.md — Gap closure: implement _dispatch_rollback() for issue/note + frontend rollback button (AIGOV-04)
+- [x] 04-09-PLAN.md — Gap closure: wire ApprovalService.check_approval_required() into MCP server pipeline (AIGOV-01)
+- [x] 04-10-PLAN.md — Gap closure: implement _dispatch_rollback() for issue/note + frontend rollback button (AIGOV-04)
 
 ### Phase 5: Operational Readiness
 **Goal**: A new enterprise customer can deploy, monitor, back up, and upgrade Pilot Space without help from Pilot Space engineers — the platform operates as a self-contained system
@@ -135,7 +135,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 1. Identity & Access | 9/9 | Complete   | 2026-03-07 |
 | 2. Compliance & Audit | 5/5 | Complete   | 2026-03-08 |
 | 3. Multi-Tenant Isolation | 8/8 | Complete   | 2026-03-08 |
-| 4. AI Governance | 8/10 | In Progress (2 gap closure plans pending) |  |
+| 4. AI Governance | 10/10 | Complete | 2026-03-08 |
 | 5. Operational Readiness | 0/TBD | Not started | - |
 
 ---
