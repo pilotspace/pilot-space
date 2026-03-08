@@ -5,7 +5,7 @@
  * AUDIT-04: Export audit log as JSON or CSV.
  */
 
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/services/api';
 
 // ---- Types ----
@@ -88,6 +88,21 @@ export function useAuditLog(
       ),
     enabled: !!workspaceSlug,
     staleTime: 30_000,
+  });
+}
+
+export function useRollbackAIArtifact(workspaceSlug: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (entryId: string) => {
+      await apiClient.post(`/workspaces/${workspaceSlug}/audit/${entryId}/rollback`);
+    },
+    onSuccess: () => {
+      // Invalidate audit log so the new ai.rollback entry appears
+      void queryClient.invalidateQueries({
+        queryKey: ['audit-log', workspaceSlug],
+      });
+    },
   });
 }
 

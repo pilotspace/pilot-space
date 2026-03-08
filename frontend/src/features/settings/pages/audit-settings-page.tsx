@@ -14,7 +14,7 @@
 
 import * as React from 'react';
 import { useParams } from 'next/navigation';
-import { AlertCircle, ChevronDown, ChevronRight, Download, Loader2 } from 'lucide-react';
+import { AlertCircle, ChevronDown, ChevronRight, Download, Loader2, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   AlertDialog,
@@ -51,6 +51,7 @@ import {
 import {
   useAuditLog,
   useExportAuditLog,
+  useRollbackAIArtifact,
   type AuditFilters,
   type AuditLogEntry,
 } from '../hooks/use-audit-log';
@@ -141,9 +142,13 @@ function AuditSkeletonRows() {
 function ExpandedRowContent({
   entry,
   workspaceSlug,
+  onRollback,
+  isRollingBack,
 }: {
   entry: AuditLogEntry;
   workspaceSlug: string;
+  onRollback?: () => void;
+  isRollingBack?: boolean;
 }) {
   return (
     <div className="space-y-3 px-4 py-3 bg-muted/30 border-t">
@@ -188,6 +193,20 @@ function ExpandedRowContent({
             >
               View approval request →
             </a>
+          )}
+          {onRollback && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onRollback();
+              }}
+              disabled={isRollingBack}
+              className="inline-flex items-center gap-1.5 text-xs text-destructive hover:underline disabled:opacity-50 mt-1"
+              aria-label="Rollback this AI action"
+            >
+              <RotateCcw className="h-3 w-3" aria-hidden />
+              {isRollingBack ? 'Rolling back\u2026' : 'Rollback'}
+            </button>
           )}
         </div>
       )}
@@ -245,6 +264,7 @@ export function AuditSettingsPage() {
   // ---- Data ----
   const { data, isLoading, error, isFetching } = useAuditLog(workspaceSlug, filters, cursor);
   const { triggerExport, isExporting } = useExportAuditLog(workspaceSlug);
+  const rollbackMutation = useRollbackAIArtifact(workspaceSlug);
 
   // ---- Export state ----
   const [exportFormat, setExportFormat] = React.useState<'json' | 'csv' | null>(null);
@@ -519,6 +539,18 @@ export function AuditSettingsPage() {
                   ) : (
                     entries.map((entry) => {
                       const isExpanded = expandedRowIds.has(entry.id);
+                      const isRollbackEligible =
+                        entry.actorType === 'AI' &&
+                        (entry.resourceType === 'issue' || entry.resourceType === 'note') &&
+                        (entry.action.endsWith('.create') || entry.action.endsWith('.update'));
+                      const handleRollback = isRollbackEligible
+                        ? () =>
+                            rollbackMutation.mutate(entry.id, {
+                              onSuccess: () => toast.success('Rolled back successfully'),
+                              onError: (err) =>
+                                toast.error(err instanceof Error ? err.message : 'Rollback failed'),
+                            })
+                        : undefined;
                       return (
                         <React.Fragment key={entry.id}>
                           <TableRow
@@ -587,7 +619,15 @@ export function AuditSettingsPage() {
                           {isExpanded && (
                             <TableRow>
                               <TableCell colSpan={7} className="p-0">
-                                <ExpandedRowContent entry={entry} workspaceSlug={workspaceSlug} />
+                                <ExpandedRowContent
+                                  entry={entry}
+                                  workspaceSlug={workspaceSlug}
+                                  onRollback={handleRollback}
+                                  isRollingBack={
+                                    rollbackMutation.isPending &&
+                                    rollbackMutation.variables === entry.id
+                                  }
+                                />
                               </TableCell>
                             </TableRow>
                           )}
