@@ -139,12 +139,10 @@ Plans:
 **Depends on**: Phase 1, Phase 3 (existing code already present)
 **Requirements**: AUTH-07 (gap closure), TENANT-03 (rate limiting gap closure)
 **Gap Closure:** Closes integration gaps from v1.0 audit
+**Plans**: 1 plan
 
-Tasks:
-1. Import + register `RateLimitMiddleware` via `app.add_middleware()` in `main.py`
-2. Add `POST /workspaces/{slug}/settings/scim-token` endpoint wrapping `ScimService.generate_scim_token()`
-3. Unit tests: rate limit returns 429 when workspace RPM exceeded
-4. Unit tests: SCIM token generation endpoint returns token + 200
+Plans:
+- [ ] 06-01-PLAN.md — Register RateLimitMiddleware in lifespan + add POST /workspaces/{slug}/settings/scim-token endpoint + unit tests for 429 wiring and token endpoint (AUTH-07, TENANT-03)
 
 ### Phase 7: Wire Storage Quota Enforcement
 **Goal:** Complete TENANT-03 by calling quota helpers on all write paths so storage limits actually enforce
@@ -184,3 +182,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 *Phase 4 planned: 2026-03-08 — 8 plans across 5 waves*
 *Phase 4 gap closure: 2026-03-08 — 04-09-PLAN.md (AIGOV-01 MCP wiring) + 04-10-PLAN.md (AIGOV-04 rollback)*
 *Phase 5 planned: 2026-03-08 — 6 plans across 2 waves*
+*Phase 6 planned: 2026-03-09 — 1 plan (gap closure: AUTH-07 + TENANT-03)*
