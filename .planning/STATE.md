@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: completed
-stopped_at: Completed 12-03-PLAN.md — WS-01 member count + WS-02 last-path workspace navigation
-last_updated: "2026-03-09T15:57:50.945Z"
-last_activity: "2026-03-09 — 12-03 complete: member count in workspace switcher, per-workspace last-path navigation (WS-01, WS-02)"
+status: in_progress
+stopped_at: Completed 13-03-PLAN.md — generalized ProviderStatusCard + CustomProviderForm + 5-provider grid
+last_updated: "2026-03-09T23:42:00.000Z"
+last_activity: "2026-03-09 — 13-03 complete: generalized ProviderStatusCard, CustomProviderForm, AISettingsStore.loadModels (AIPR-01, AIPR-02, AIPR-05)"
 progress:
   total_phases: 7
   completed_phases: 1
-  total_plans: 3
-  completed_plans: 3
-  percent: 20
+  total_plans: 4
+  completed_plans: 4
+  percent: 23
 ---
 
 # Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-03-09)
 
 ## Current Position
 
-Phase: Phase 12 — Onboarding & First-Run UX (complete)
-Plan: 3/3
-Status: 3 of 3 plans complete
-Last activity: 2026-03-09 — 12-03 complete: member count in workspace switcher, per-workspace last-path navigation (WS-01, WS-02)
+Phase: Phase 13 — AI Provider Registry + Model Selection (in progress)
+Plan: 3/?
+Status: 13-03 complete — generalized ProviderStatusCard, CustomProviderForm, AISettingsStore.loadModels
+Last activity: 2026-03-09 — 13-03 complete: generalized ProviderStatusCard, CustomProviderForm, AISettingsStore.loadModels (AIPR-01, AIPR-02, AIPR-05)
 
-Progress: [██░░░░░░░░] 20%
+Progress: [██░░░░░░░░] 23%
 
 ## Milestone: v1.0-alpha
 
@@ -108,6 +108,10 @@ Recent decisions affecting current work:
 - [Phase 12-onboarding-first-run-ux]: saveLastWorkspacePath filters /settings/ paths — workspace switch lands on last non-settings page, not inside another workspace's settings
 - [Phase 12-onboarding-first-run-ux]: getLastWorkspacePath returns null on failure; callers use ?? to fall back to workspace root without branching on empty string
 - [Phase 12-onboarding-first-run-ux]: Pathname tracking in WorkspaceSlugLayout useEffect (client-side, co-located with workspace context) rather than middleware
+- [Phase 13-ai-provider-registry-model-selection]: PROVIDER_DISPLAY_NAMES lookup table keyed by string — avoids switch statement, trivially extensible for future providers
+- [Phase 13-ai-provider-registry-model-selection]: BUILT_IN_PROVIDERS const array in ai-settings-page — 5 provider cards rendered via map(), no per-provider JSX duplication
+- [Phase 13-ai-provider-registry-model-selection]: ProviderModelItem exported from AISettingsStore — plan 04 model picker imports from single canonical location
+- [Phase 13-ai-provider-registry-model-selection]: loadModels() uses apiClient.get directly (not aiApi) — models endpoint is a different resource class than workspace AI settings
 
 ### Pending Todos
 
@@ -121,7 +125,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-09T22:51:00.000Z
-Stopped at: Completed 12-03-PLAN.md — WS-01 member count + WS-02 last-path workspace navigation
+Last session: 2026-03-09T23:42:00.000Z
+Stopped at: Completed 13-03-PLAN.md — generalized ProviderStatusCard, CustomProviderForm, AISettingsStore.loadModels
 Resume file: None
-Next action: Phase 12 complete. Ready for Phase 13 (AI Provider Registry + Model Selection).
+Next action: Phase 13 in progress. Continue with 13-04 (model picker chat UI).

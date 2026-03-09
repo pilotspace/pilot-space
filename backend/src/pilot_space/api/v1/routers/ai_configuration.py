@@ -116,6 +116,8 @@ def _config_to_response(config: AIConfiguration) -> AIConfigurationResponse:
         has_api_key=bool(config.api_key_encrypted),
         settings=config.settings,
         usage_limits=config.usage_limits,
+        base_url=config.base_url,
+        display_name=config.display_name,
         created_at=config.created_at,
         updated_at=config.updated_at,
     )
@@ -213,6 +215,8 @@ async def create_ai_configuration(
         is_active=True,
         settings=request.settings,
         usage_limits=request.usage_limits,
+        base_url=request.base_url,
+        display_name=request.display_name,
     )
     config = await ai_config_repo.create(config)
     await session.commit()
