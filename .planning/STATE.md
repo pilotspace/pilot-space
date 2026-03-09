@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Completed 06-01-PLAN.md — wire RateLimitMiddleware and SCIM token endpoint
-last_updated: "2026-03-09T05:41:03.324Z"
+stopped_at: Completed 07-01-PLAN.md — write failing test stubs for TENANT-03 storage quota wiring
+last_updated: "2026-03-09T06:32:17.922Z"
 last_activity: 2026-03-08 — Implemented /health/live and /health/ready endpoints (05-01)
 progress:
   total_phases: 7
   completed_phases: 6
-  total_plans: 40
-  completed_plans: 40
+  total_plans: 42
+  completed_plans: 41
   percent: 100
 ---
 
@@ -85,6 +85,7 @@ Progress: [██████████] 100%
 | Phase 05-operational-readiness P04 | 6 | 2 tasks | 13 files |
 | Phase 05-operational-readiness P07 | 4 | 2 tasks | 6 files |
 | Phase 06-wire-rate-limiting-scim-token P01 | 12 | 2 tasks | 5 files |
+| Phase 07-wire-storage-quota-enforcement P01 | 10 | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -214,6 +215,8 @@ Recent decisions affecting current work:
 - [Phase 05-operational-readiness]: supabase_url or api_url fallback in storage download — safe degradation for single-deployment setups
 - [Phase 06-wire-rate-limiting-scim-token]: RateLimitMiddleware registered inside lifespan after redis_client.connect() — redis_client.client is None at module scope
 - [Phase 06-wire-rate-limiting-scim-token]: workspace_scim_settings_router prefix is /api/v1/workspaces, not /scim/v2/ — SCIM prefix is JWT-exempt via is_public_route()
+- [Phase 07-wire-storage-quota-enforcement]: Tests patch at router module paths (not workspace_quota.py) — wiring contract is about router imports, not helpers themselves
+- [Phase 07-wire-storage-quota-enforcement]: pytest.raises() merged into outer multi-context with-statement to satisfy SIM117 while retaining AttributeError-as-failure semantics
 
 ### Pending Todos
 
@@ -229,6 +232,6 @@ None — all known pending todos resolved as of phase 06-01.
 
 ## Session Continuity
 
-Last session: 2026-03-09T05:37:31.608Z
-Stopped at: Completed 06-01-PLAN.md — wire RateLimitMiddleware and SCIM token endpoint
+Last session: 2026-03-09T06:32:17.920Z
+Stopped at: Completed 07-01-PLAN.md — write failing test stubs for TENANT-03 storage quota wiring
 Resume file: None

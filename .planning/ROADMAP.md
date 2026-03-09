@@ -169,7 +169,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 4. AI Governance | 10/10 | Complete | 2026-03-08 |
 | 5. Operational Readiness | 7/7 | Complete   | 2026-03-09 |
 | 6. Wire Rate Limiting + SCIM Token | 1/1 | Complete   | 2026-03-09 |
-| 7. Wire Storage Quota Enforcement | 0/2 | Pending | — |
+| 7. Wire Storage Quota Enforcement | 1/2 | In Progress|  |
 
 ---
 *Roadmap created: 2026-03-07*
