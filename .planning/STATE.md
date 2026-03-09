@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Completed 05-07-PLAN.md — backup CLI database_url wiring fix
-last_updated: "2026-03-09T01:39:45.471Z"
+stopped_at: Completed 06-01-PLAN.md — wire RateLimitMiddleware and SCIM token endpoint
+last_updated: "2026-03-09T05:37:31.610Z"
 last_activity: 2026-03-08 — Implemented /health/live and /health/ready endpoints (05-01)
 progress:
-  total_phases: 5
-  completed_phases: 5
-  total_plans: 39
-  completed_plans: 39
+  total_phases: 7
+  completed_phases: 6
+  total_plans: 40
+  completed_plans: 40
   percent: 100
 ---
 
@@ -84,6 +84,7 @@ Progress: [██████████] 100%
 | Phase 05-operational-readiness P06 | 3 | 2 tasks | 2 files |
 | Phase 05-operational-readiness P04 | 6 | 2 tasks | 13 files |
 | Phase 05-operational-readiness P07 | 4 | 2 tasks | 6 files |
+| Phase 06-wire-rate-limiting-scim-token P01 | 12 | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -211,10 +212,12 @@ Recent decisions affecting current work:
 - [Phase 05-operational-readiness]: check-yaml pre-commit hook excludes infra/helm/*/templates/ — Go template syntax is not valid YAML
 - [Phase 05-operational-readiness]: database_url/supabase_url default to empty string (not KeyError) — backup command validates at use time with clearer message
 - [Phase 05-operational-readiness]: supabase_url or api_url fallback in storage download — safe degradation for single-deployment setups
+- [Phase 06-wire-rate-limiting-scim-token]: RateLimitMiddleware registered inside lifespan after redis_client.connect() — redis_client.client is None at module scope
+- [Phase 06-wire-rate-limiting-scim-token]: workspace_scim_settings_router prefix is /api/v1/workspaces, not /scim/v2/ — SCIM prefix is JWT-exempt via is_public_route()
 
 ### Pending Todos
 
-- POST /workspaces/{slug}/settings/scim-token admin endpoint not yet implemented (ScimService.generate_scim_token exists, router endpoint missing)
+None — all known pending todos resolved as of phase 06-01.
 
 ### Blockers/Concerns
 
@@ -226,6 +229,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-09T01:39:45.469Z
-Stopped at: Completed 05-07-PLAN.md — backup CLI database_url wiring fix
+Last session: 2026-03-09T05:37:31.608Z
+Stopped at: Completed 06-01-PLAN.md — wire RateLimitMiddleware and SCIM token endpoint
 Resume file: None
