@@ -21,7 +21,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 7: Wire Storage Quota Enforcement** - Call _check_storage_quota/_update_storage_usage on write paths to complete TENANT-03 storage quota gap (Gap Closure) (completed 2026-03-09)
 - [x] **Phase 8: Fix SSO Integration** - Normalize backend SSO endpoints to workspace_slug, complete SAML JWT issuance, add frontend saml_provisioned handler (Gap Closure) (completed 2026-03-09)
 - [x] **Phase 9: Login Audit Events** - Write user.login audit events in SAML and password auth paths (Gap Closure) (completed 2026-03-09)
-- [ ] **Phase 10: Wire Audit Trail** - Wire audit_log_repository into 10 DI service factories, fix SAML audit RLS context, and pass session_factory to PermissionAwareHookExecutor to fully satisfy AUDIT-01, AUDIT-02, and AIGOV-03 (Gap Closure)
+- [x] **Phase 10: Wire Audit Trail** - Wire audit_log_repository into 10 DI service factories, fix SAML audit RLS context, and pass session_factory to PermissionAwareHookExecutor to fully satisfy AUDIT-01, AUDIT-02, and AIGOV-03 (Gap Closure) (completed 2026-03-09)
 - [x] **Phase 11: Fix Rate Limiting Architecture** - Move RateLimitMiddleware registration to module level with lazy Redis accessor so TENANT-03 rate limiting is active at runtime (Gap Closure) (completed 2026-03-09)
 
 ## Phase Details
@@ -187,7 +187,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 10-01-PLAN.md — Add audit_log_repository injection to 10 service factories in container.py + set_rls_context() in saml_callback + session_factory in PermissionAwareHookExecutor + tests (AUDIT-01, AUDIT-02, AIGOV-03)
+- [x] 10-01-PLAN.md — Add audit_log_repository injection to 10 service factories in container.py + set_rls_context() in saml_callback + session_factory in PermissionAwareHookExecutor + tests (AUDIT-01, AUDIT-02, AIGOV-03)
 
 ### Phase 11: Fix Rate Limiting Architecture
 **Goal:** Make rate limiting active at runtime by moving RateLimitMiddleware registration from inside the lifespan (where the stack is already frozen) to module level with a lazy Redis accessor
