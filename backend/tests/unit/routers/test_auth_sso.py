@@ -435,3 +435,312 @@ async def test_claim_role_applies_mapped_role() -> None:
     )
     assert isinstance(result, SsoClaimRoleResponse)
     assert result.role == "admin"
+
+
+# ---------------------------------------------------------------------------
+# New tests — slug-based admin endpoints + SAML callback redirect (RED phase)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_configure_saml_accepts_workspace_slug() -> None:
+    """POST /saml/config accepts workspace_slug string (not UUID), returns SamlConfigResponse.
+
+    Scenario:
+        Given workspace_slug="test-workspace" resolves to a valid UUID
+        And configure_saml completes successfully
+        When configure_saml endpoint is called with workspace_slug
+        Then result is SamlConfigResponse (not 422)
+    """
+    from pilot_space.api.v1.routers.auth_sso import configure_saml
+    from pilot_space.api.v1.schemas.sso import SamlConfigRequest, SamlConfigResponse
+
+    workspace_id = uuid.uuid4()
+    mock_session = AsyncMock()
+    mock_session.commit = AsyncMock()
+
+    mock_service = MagicMock()
+    mock_service.configure_saml = AsyncMock(return_value=None)
+
+    body = SamlConfigRequest(
+        entity_id="https://idp.example.com/saml",
+        sso_url="https://idp.example.com/saml/sso",  # type: ignore[arg-type]
+        certificate="MIID...",
+        name_id_format=None,
+    )
+
+    with (
+        patch("pilot_space.api.v1.routers.auth_sso._get_sso_service", return_value=mock_service),
+        patch(
+            "pilot_space.api.v1.routers.auth_sso._resolve_workspace",
+            new=AsyncMock(return_value=workspace_id),
+        ),
+        patch(
+            "pilot_space.api.v1.routers.auth_sso.check_permission",
+            new=AsyncMock(return_value=True),
+        ),
+    ):
+        result = await configure_saml(
+            workspace_slug="test-workspace",
+            body=body,
+            session=mock_session,
+            current_user=MagicMock(user_id=uuid.uuid4()),  # type: ignore[arg-type]
+        )
+
+    assert isinstance(result, SamlConfigResponse)
+
+
+@pytest.mark.asyncio
+async def test_configure_oidc_accepts_workspace_slug() -> None:
+    """POST /oidc/config accepts workspace_slug string (not UUID), returns OidcConfigResponse.
+
+    Scenario:
+        Given workspace_slug="test-workspace" resolves to a valid UUID
+        And configure_oidc completes successfully
+        When configure_oidc endpoint is called with workspace_slug
+        Then result is OidcConfigResponse (not 422)
+    """
+    from pilot_space.api.v1.routers.auth_sso import configure_oidc
+    from pilot_space.api.v1.schemas.sso import OidcConfigRequest, OidcConfigResponse
+
+    workspace_id = uuid.uuid4()
+    mock_session = AsyncMock()
+    mock_session.commit = AsyncMock()
+
+    mock_service = MagicMock()
+    mock_service.configure_oidc = AsyncMock(return_value=None)
+
+    body = OidcConfigRequest(
+        provider="google",
+        client_id="client-id-123",
+        client_secret="test-value-not-real",  # pragma: allowlist secret
+        issuer_url=None,
+    )
+
+    with (
+        patch("pilot_space.api.v1.routers.auth_sso._get_sso_service", return_value=mock_service),
+        patch(
+            "pilot_space.api.v1.routers.auth_sso._resolve_workspace",
+            new=AsyncMock(return_value=workspace_id),
+        ),
+        patch(
+            "pilot_space.api.v1.routers.auth_sso.check_permission",
+            new=AsyncMock(return_value=True),
+        ),
+    ):
+        result = await configure_oidc(
+            workspace_slug="test-workspace",
+            body=body,
+            session=mock_session,
+            current_user=MagicMock(user_id=uuid.uuid4()),  # type: ignore[arg-type]
+        )
+
+    assert isinstance(result, OidcConfigResponse)
+
+
+@pytest.mark.asyncio
+async def test_set_sso_enforcement_accepts_workspace_slug() -> None:
+    """PATCH /enforcement accepts workspace_slug string (not UUID), returns None (204).
+
+    Scenario:
+        Given workspace_slug="test-workspace" resolves to a valid UUID
+        And set_sso_required completes successfully
+        When set_sso_enforcement endpoint is called with workspace_slug
+        Then result is None (204 No Content, not 422)
+    """
+    from pilot_space.api.v1.routers.auth_sso import set_sso_enforcement
+    from pilot_space.api.v1.schemas.sso import SsoEnforcementRequest
+
+    workspace_id = uuid.uuid4()
+    mock_session = AsyncMock()
+    mock_session.commit = AsyncMock()
+
+    mock_service = MagicMock()
+    mock_service.set_sso_required = AsyncMock(return_value=None)
+
+    body = SsoEnforcementRequest(sso_required=True)
+
+    with (
+        patch("pilot_space.api.v1.routers.auth_sso._get_sso_service", return_value=mock_service),
+        patch(
+            "pilot_space.api.v1.routers.auth_sso._resolve_workspace",
+            new=AsyncMock(return_value=workspace_id),
+        ),
+        patch(
+            "pilot_space.api.v1.routers.auth_sso.check_permission",
+            new=AsyncMock(return_value=True),
+        ),
+    ):
+        result = await set_sso_enforcement(
+            workspace_slug="test-workspace",
+            body=body,
+            session=mock_session,
+            current_user=MagicMock(user_id=uuid.uuid4()),  # type: ignore[arg-type]
+        )
+
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_saml_callback_redirects_with_token_hash() -> None:
+    """POST /saml/callback returns a RedirectResponse with token_hash in URL.
+
+    Scenario:
+        Given a valid SAML assertion from the IdP
+        And provision_saml_user returns {token_hash: "abc123"}
+        When saml_callback processes the assertion
+        Then result is a RedirectResponse
+        And location header contains "token_hash=abc123"
+    """
+    from fastapi.responses import RedirectResponse
+
+    from pilot_space.api.v1.routers.auth_sso import saml_callback
+
+    workspace_id = uuid.uuid4()
+    mock_session = AsyncMock()
+    mock_session.commit = AsyncMock()
+    mock_request = MagicMock()
+
+    saml_attributes = {
+        "email": ["user@example.com"],
+        "displayName": ["Test User"],
+    }
+    saml_result = {
+        "name_id": "user@example.com",
+        "attributes": saml_attributes,
+    }
+
+    mock_service = MagicMock()
+    mock_service.get_saml_config = AsyncMock(
+        return_value={
+            "entity_id": "https://idp.example.com/saml",
+            "sso_url": "https://idp.example.com/saml/sso",
+            "certificate": "MIID...",
+        }
+    )
+    mock_service.provision_saml_user = AsyncMock(
+        return_value={
+            "user_id": str(uuid.uuid4()),
+            "email": "user@example.com",
+            "is_new": False,
+            "token_hash": "abc123",
+        }
+    )
+
+    with (
+        patch("pilot_space.api.v1.routers.auth_sso._get_sso_service", return_value=mock_service),
+        patch("pilot_space.api.v1.routers.auth_sso._get_saml_provider") as mock_provider_factory,
+        patch("pilot_space.api.v1.routers.auth_sso.get_settings") as mock_settings,
+    ):
+        mock_provider = MagicMock()
+        mock_provider.process_response.return_value = saml_result
+        mock_provider_factory.return_value = mock_provider
+
+        mock_settings_obj = MagicMock()
+        mock_settings_obj.frontend_url = "https://app.example.com"
+        mock_settings.return_value = mock_settings_obj
+
+        result = await saml_callback(
+            request=mock_request,
+            workspace_id=workspace_id,
+            session=mock_session,
+            SAMLResponse="valid-saml-response-base64",
+            RelayState="",
+        )
+
+    assert isinstance(result, RedirectResponse)
+    location = result.headers.get("location", "")
+    assert "token_hash=abc123" in location
+
+
+@pytest.mark.asyncio
+async def test_get_saml_config_accepts_workspace_slug() -> None:
+    """GET /saml/config accepts workspace_slug string, returns SamlConfigResponse.
+
+    Scenario:
+        Given workspace_slug="test-workspace" resolves to a valid UUID
+        And SAML config is stored
+        When get_saml_config is called with workspace_slug
+        Then result is SamlConfigResponse (not 422)
+    """
+    from pilot_space.api.v1.routers.auth_sso import get_saml_config
+    from pilot_space.api.v1.schemas.sso import SamlConfigResponse
+
+    workspace_id = uuid.uuid4()
+    mock_session = AsyncMock()
+
+    mock_service = MagicMock()
+    mock_service.get_saml_config = AsyncMock(
+        return_value={
+            "entity_id": "https://idp.example.com/saml",
+            "sso_url": "https://idp.example.com/saml/sso",
+        }
+    )
+
+    with (
+        patch("pilot_space.api.v1.routers.auth_sso._get_sso_service", return_value=mock_service),
+        patch(
+            "pilot_space.api.v1.routers.auth_sso._resolve_workspace",
+            new=AsyncMock(return_value=workspace_id),
+        ),
+        patch(
+            "pilot_space.api.v1.routers.auth_sso.check_permission",
+            new=AsyncMock(return_value=True),
+        ),
+        patch("pilot_space.api.v1.routers.auth_sso.get_settings") as mock_settings,
+    ):
+        mock_settings_obj = MagicMock()
+        mock_settings_obj.backend_url = "https://api.example.com"
+        mock_settings.return_value = mock_settings_obj
+
+        result = await get_saml_config(
+            workspace_slug="test-workspace",
+            session=mock_session,
+            current_user=MagicMock(user_id=uuid.uuid4()),  # type: ignore[arg-type]
+        )
+
+    assert isinstance(result, SamlConfigResponse)
+
+
+@pytest.mark.asyncio
+async def test_get_role_claim_mapping_accepts_workspace_slug() -> None:
+    """GET /role-mapping accepts workspace_slug string, returns RoleClaimMappingConfig.
+
+    Scenario:
+        Given workspace_slug="test-workspace" resolves to a valid UUID
+        And role claim mapping is stored
+        When get_role_claim_mapping is called with workspace_slug
+        Then result is RoleClaimMappingConfig (not 422)
+    """
+    from pilot_space.api.v1.routers.auth_sso import get_role_claim_mapping
+    from pilot_space.api.v1.schemas.sso import RoleClaimMappingConfig
+
+    workspace_id = uuid.uuid4()
+    mock_session = AsyncMock()
+
+    mock_service = MagicMock()
+    mock_service.get_role_claim_mapping = AsyncMock(
+        return_value={
+            "claim_key": "groups",
+            "mappings": [{"claim_value": "eng-leads", "role": "admin"}],
+        }
+    )
+
+    with (
+        patch("pilot_space.api.v1.routers.auth_sso._get_sso_service", return_value=mock_service),
+        patch(
+            "pilot_space.api.v1.routers.auth_sso._resolve_workspace",
+            new=AsyncMock(return_value=workspace_id),
+        ),
+        patch(
+            "pilot_space.api.v1.routers.auth_sso.check_permission",
+            new=AsyncMock(return_value=True),
+        ),
+    ):
+        result = await get_role_claim_mapping(
+            workspace_slug="test-workspace",
+            session=mock_session,
+            current_user=MagicMock(user_id=uuid.uuid4()),  # type: ignore[arg-type]
+        )
+
+    assert isinstance(result, RoleClaimMappingConfig)

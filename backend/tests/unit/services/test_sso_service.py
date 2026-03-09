@@ -324,3 +324,112 @@ async def test_apply_sso_role_updates_member_role() -> None:
 
     assert mock_member.role == WorkspaceRole.ADMIN
     assert result is mock_member
+
+
+# ---------------------------------------------------------------------------
+# New tests — provision_saml_user calls generate_link (RED phase)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_provision_saml_user_calls_generate_link() -> None:
+    """provision_saml_user calls admin.generate_link and returns token_hash for new user.
+
+    Scenario:
+        Given a new user (list_users returns empty)
+        And admin.create_user creates the user
+        And admin.generate_link returns a magic link with hashed_token="test-hash"
+        When provision_saml_user is called
+        Then the returned dict contains token_hash="test-hash"
+        And admin.generate_link was called with type="magiclink"
+    """
+    from unittest.mock import patch
+
+    ws = _make_workspace()
+    workspace_id = UUID(str(ws.id))
+    new_user_id = uuid4()
+
+    service, workspace_repo = _make_service(ws)
+    admin = service._admin_client.auth.admin
+
+    # New user — list_users returns empty
+    admin.list_users = AsyncMock(return_value=[])
+
+    # create_user returns a user
+    mock_created_user = MagicMock()
+    mock_created_user.user.id = new_user_id
+    admin.create_user = AsyncMock(return_value=mock_created_user)
+
+    # generate_link returns magic link result
+    mock_link_result = MagicMock()
+    mock_link_result.properties.hashed_token = "test-hash"
+    admin.generate_link = AsyncMock(return_value=mock_link_result)
+
+    with patch("pilot_space.application.services.sso_service.get_settings") as mock_get_settings:
+        mock_settings = MagicMock()
+        mock_settings.frontend_url = "https://app.example.com"
+        mock_get_settings.return_value = mock_settings
+
+        # Patch _ensure_workspace_member to avoid DB access
+        with patch.object(service, "_ensure_workspace_member", new=AsyncMock(return_value=None)):
+            result = await service.provision_saml_user(
+                email="newuser@example.com",
+                display_name="New User",
+                workspace_id=workspace_id,
+            )
+
+    assert result["token_hash"] == "test-hash"
+    admin.generate_link.assert_called_once()
+    call_kwargs = admin.generate_link.call_args[0][0]
+    assert call_kwargs["type"] == "magiclink"
+    assert call_kwargs["email"] == "newuser@example.com"
+
+
+@pytest.mark.asyncio
+async def test_provision_saml_user_returns_token_hash_for_existing_user() -> None:
+    """provision_saml_user calls generate_link and returns token_hash for existing user.
+
+    Scenario:
+        Given an existing user (list_users returns matching user)
+        And admin.update_user_by_id succeeds
+        And admin.generate_link returns a magic link with hashed_token="existing-hash"
+        When provision_saml_user is called
+        Then the returned dict contains token_hash="existing-hash"
+        And is_new is False
+    """
+    from unittest.mock import patch
+
+    ws = _make_workspace()
+    workspace_id = UUID(str(ws.id))
+    existing_user_id = uuid4()
+
+    service, workspace_repo = _make_service(ws)
+    admin = service._admin_client.auth.admin
+
+    # Existing user — list_users returns matching user
+    mock_existing_user = MagicMock()
+    mock_existing_user.email = "existing@example.com"
+    mock_existing_user.id = existing_user_id
+    admin.list_users = AsyncMock(return_value=[mock_existing_user])
+    admin.update_user_by_id = AsyncMock(return_value=None)
+
+    # generate_link returns magic link result
+    mock_link_result = MagicMock()
+    mock_link_result.properties.hashed_token = "existing-hash"
+    admin.generate_link = AsyncMock(return_value=mock_link_result)
+
+    with patch("pilot_space.application.services.sso_service.get_settings") as mock_get_settings:
+        mock_settings = MagicMock()
+        mock_settings.frontend_url = "https://app.example.com"
+        mock_get_settings.return_value = mock_settings
+
+        with patch.object(service, "_ensure_workspace_member", new=AsyncMock(return_value=None)):
+            result = await service.provision_saml_user(
+                email="existing@example.com",
+                display_name="Existing User",
+                workspace_id=workspace_id,
+            )
+
+    assert result["token_hash"] == "existing-hash"
+    assert result["is_new"] is False
+    admin.generate_link.assert_called_once()
