@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Completed 08-01-PLAN.md — fix SSO integration
-last_updated: "2026-03-09T08:01:25.023Z"
+stopped_at: Completed 09-01-PLAN.md — login audit events (AUDIT-01 SAML coverage)
+last_updated: "2026-03-09T08:39:25.636Z"
 last_activity: 2026-03-08 — Implemented /health/live and /health/ready endpoints (05-01)
 progress:
   total_phases: 9
-  completed_phases: 8
-  total_plans: 43
-  completed_plans: 43
+  completed_phases: 9
+  total_plans: 44
+  completed_plans: 44
   percent: 100
 ---
 
@@ -88,6 +88,7 @@ Progress: [██████████] 100%
 | Phase 07-wire-storage-quota-enforcement P01 | 10 | 1 tasks | 1 files |
 | Phase 07-wire-storage-quota-enforcement P02 | 18 | 2 tasks | 3 files |
 | Phase 08-fix-sso-integration P01 | 11 | 3 tasks | 6 files |
+| Phase 09-login-audit-events P01 | 7 | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -226,6 +227,8 @@ Recent decisions affecting current work:
 - [Phase 08-fix-sso-integration]: saml_callback workspace_id stays UUID — IdP posts UUID from initiate flow; changing would break IdP integration
 - [Phase 08-fix-sso-integration]: provision_saml_user raises RuntimeError on generate_link failure — token_hash required for JWT session; silent failure would lock user out
 - [Phase 08-fix-sso-integration]: SamlCallbackPage is plain component (not observer()) — no MobX observables; consistent with all existing auth pages
+- [Phase 09-login-audit-events]: saml_callback wraps write_audit_nonfatal in router-level try/except (defense-in-depth) — ensures non-fatal guarantee even when audit function is fully replaced in tests or fails unexpectedly at call site
+- [Phase 09-login-audit-events]: logger.info('saml_login_success') removed and replaced by write_audit_nonfatal — audit provides compliance-grade persistence; structured log was redundant with the audit entry
 
 ### Pending Todos
 
@@ -241,6 +244,6 @@ None — all known pending todos resolved as of phase 06-01.
 
 ## Session Continuity
 
-Last session: 2026-03-09T08:01:16.902Z
-Stopped at: Completed 08-01-PLAN.md — fix SSO integration
+Last session: 2026-03-09T08:39:25.634Z
+Stopped at: Completed 09-01-PLAN.md — login audit events (AUDIT-01 SAML coverage)
 Resume file: None
