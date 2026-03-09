@@ -19,6 +19,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 5: Operational Readiness** - Docker Compose guide, Helm chart, health checks, structured logging, backup tooling, and migration path (completed 2026-03-08)
 - [x] **Phase 6: Wire Rate Limiting + SCIM Token** - Register RateLimitMiddleware and add SCIM token generation endpoint to close AUTH-07 and TENANT-03 rate limiting gaps (Gap Closure) (completed 2026-03-09)
 - [x] **Phase 7: Wire Storage Quota Enforcement** - Call _check_storage_quota/_update_storage_usage on write paths to complete TENANT-03 storage quota gap (Gap Closure) (completed 2026-03-09)
+- [ ] **Phase 8: Fix SSO Integration** - Normalize backend SSO endpoints to workspace_slug, complete SAML JWT issuance, add frontend saml_provisioned handler (Gap Closure)
+- [ ] **Phase 9: Login Audit Events** - Write user.login audit events in SAML and password auth paths (Gap Closure)
 
 ## Phase Details
 
@@ -155,11 +157,31 @@ Plans:
 - [ ] 07-01-PLAN.md — Test scaffold: 7 failing stubs for 507 + X-Storage-Warning behaviors across issue/note/attachment write paths (TENANT-03)
 - [ ] 07-02-PLAN.md — Wire _check_storage_quota + _update_storage_usage into workspace_issues.py, workspace_notes.py, ai_attachments.py (TENANT-03)
 
+### Phase 8: Fix SSO Integration
+**Goal:** Close the two runtime blockers in SSO — frontend hooks send `workspace_slug` while backend endpoints expect `workspace_id: UUID` (HTTP 422 on all SSO config calls), and the SAML callback issues no Supabase JWT leaving the SAML login loop incomplete
+**Depends on**: Phase 1 (SSO implementations already present)
+**Requirements**: AUTH-01, AUTH-02, AUTH-03, AUTH-04
+**Gap Closure:** Closes integration gaps from v1.0 audit — SSO frontend 422 + SAML no JWT
+**Plans**: TBD
+
+Plans:
+- [ ] 08-01-PLAN.md — Normalize backend SSO endpoints to accept workspace_slug + complete SAML callback JWT issuance + frontend saml_provisioned handler + tests (AUTH-01/02/03/04)
+
+### Phase 9: Login Audit Events
+**Goal:** Record every user login (SAML and password) in the audit log so AUDIT-01 coverage is complete and compliance officers have a full login activity record
+**Depends on**: Phase 2 (AuditLog infrastructure), Phase 8 (SSO callbacks fixed)
+**Requirements**: AUDIT-01
+**Gap Closure:** Closes auth paths → audit log integration gap from v1.0 audit
+**Plans**: TBD
+
+Plans:
+- [ ] 09-01-PLAN.md — Add write_audit_nonfatal(user.login) to SAML callback + base auth router successful login path + tests (AUDIT-01)
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
-(Note: Phase 4 depends on Phase 1 only, so it can begin once Phase 1 is complete. Phases 6–7 are gap closure phases and can run independently.)
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9
+(Note: Phase 4 depends on Phase 1 only, so it can begin once Phase 1 is complete. Phases 6–7 are gap closure phases and can run independently. Phase 8 depends on Phase 1. Phase 9 depends on Phases 2 and 8.)
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -170,6 +192,8 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 5. Operational Readiness | 7/7 | Complete   | 2026-03-09 |
 | 6. Wire Rate Limiting + SCIM Token | 1/1 | Complete   | 2026-03-09 |
 | 7. Wire Storage Quota Enforcement | 2/2 | Complete   | 2026-03-09 |
+| 8. Fix SSO Integration | 0/1 | Pending    | — |
+| 9. Login Audit Events | 0/1 | Pending    | — |
 
 ---
 *Roadmap created: 2026-03-07*
@@ -183,3 +207,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 *Phase 5 planned: 2026-03-08 — 6 plans across 2 waves*
 *Phase 6 planned: 2026-03-09 — 1 plan (gap closure: AUTH-07 + TENANT-03)*
 *Phase 7 planned: 2026-03-09 — 2 plans across 2 waves (gap closure: TENANT-03 storage quota)*
+*Phase 8 planned: 2026-03-09 — 1 plan (gap closure: AUTH-01/02/03/04 SSO integration)*
+*Phase 9 planned: 2026-03-09 — 1 plan (gap closure: AUDIT-01 login events)*

@@ -9,10 +9,10 @@ Requirements for the enterprise milestone. Goal: first enterprise customer (50-5
 
 ### Identity & Access (AUTH)
 
-- [x] **AUTH-01**: Admin can configure SAML 2.0 SSO with an external identity provider (Okta, Azure AD)
-- [x] **AUTH-02**: Admin can configure OIDC SSO with Google Workspace or compatible provider
-- [x] **AUTH-03**: Users can log in via SSO and receive workspace roles from identity provider claims
-- [x] **AUTH-04**: Admin can force SSO-only login (disable password auth) for the workspace
+- [ ] **AUTH-01**: Admin can configure SAML 2.0 SSO with an external identity provider (Okta, Azure AD)
+- [ ] **AUTH-02**: Admin can configure OIDC SSO with Google Workspace or compatible provider
+- [ ] **AUTH-03**: Users can log in via SSO and receive workspace roles from identity provider claims
+- [ ] **AUTH-04**: Admin can force SSO-only login (disable password auth) for the workspace
 - [x] **AUTH-05**: Admin can define custom RBAC roles with per-resource permission grants (beyond Owner/Admin/Member/Guest)
 - [x] **AUTH-06**: Admin can view all active sessions and force-terminate any session
 - [x] **AUTH-07**: Admin can configure SCIM 2.0 to auto-provision/deprovision users from their identity provider
@@ -95,14 +95,14 @@ Updated during roadmap creation: 2026-03-07
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| AUTH-01 | Phase 1 | Complete |
-| AUTH-02 | Phase 1 | Complete |
-| AUTH-03 | Phase 1 | Complete |
-| AUTH-04 | Phase 1 | Complete |
+| AUTH-01 | Phase 8 | Pending |
+| AUTH-02 | Phase 8 | Pending |
+| AUTH-03 | Phase 8 | Pending |
+| AUTH-04 | Phase 8 | Pending |
 | AUTH-05 | Phase 1 | Complete |
 | AUTH-06 | Phase 1 | Complete |
 | AUTH-07 | Phase 6 | Complete |
-| AUDIT-01 | Phase 2 | Complete |
+| AUDIT-01 | Phase 2, Phase 9 (login events) | Pending |
 | AUDIT-02 | Phase 2 | Complete |
 | AUDIT-03 | Phase 2 | Complete |
 | AUDIT-04 | Phase 2 | Complete |
@@ -130,8 +130,8 @@ Updated during roadmap creation: 2026-03-07
 - v1 requirements: 30 total
 - Mapped to phases: 30
 - Unmapped: 0
-- Pending (gap closure): 2 (AUTH-07, TENANT-03)
+- Pending (gap closure): 5 (AUTH-01, AUTH-02, AUTH-03, AUTH-04, AUDIT-01)
 
 ---
 *Requirements defined: 2026-03-07*
-*Last updated: 2026-03-09 — AUTH-07 and TENANT-03 reset to Pending; gap closure phases 6–7 added*
+*Last updated: 2026-03-09 — AUTH-01/02/03/04 and AUDIT-01 reset to Pending; gap closure phases 8–9 added*
