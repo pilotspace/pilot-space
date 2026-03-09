@@ -7,7 +7,7 @@
  */
 
 import React from 'react';
-import { render } from '@testing-library/react';
+import { render, act } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
 // ---------------------------------------------------------------------------
@@ -83,10 +83,11 @@ describe('WorkspaceHomePage — BUG-01: workspaceId source', () => {
   });
 
   it('passes workspace.id UUID from context to OnboardingChecklist, not the slug string', async () => {
-    render(<WorkspaceHomePage params={Promise.resolve({ workspaceSlug: 'test' })} />);
-
-    // Wait for async params resolution
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await act(async () => {
+      render(<WorkspaceHomePage params={Promise.resolve({ workspaceSlug: 'test' })} />);
+      // Wait for the Promise-based params to resolve through React.use()
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
 
     expect(mockOnboardingChecklistProps).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -104,9 +105,10 @@ describe('WorkspaceHomePage — BUG-01: workspaceId source', () => {
 
   it('uses UUID from WorkspaceContext even when workspaceStore.currentWorkspace is null', async () => {
     // workspaceStore mock already returns null for currentWorkspace
-    render(<WorkspaceHomePage params={Promise.resolve({ workspaceSlug: 'test' })} />);
-
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await act(async () => {
+      render(<WorkspaceHomePage params={Promise.resolve({ workspaceSlug: 'test' })} />);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
 
     const callArg = mockOnboardingChecklistProps.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(callArg).toBeDefined();

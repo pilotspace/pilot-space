@@ -114,9 +114,13 @@ vi.mock('@/components/ui/label', () => ({
 vi.mock('@/services/api/client', () => {
   class ApiError extends Error {
     status: number;
-    constructor(message: string, status: number) {
-      super(message);
-      this.status = status;
+    type: string;
+    isRetryable: boolean;
+    constructor(problem: { title: string; status: number; type?: string }) {
+      super(problem.title);
+      this.status = problem.status;
+      this.type = problem.type ?? 'about:blank';
+      this.isRetryable = false;
       this.name = 'ApiError';
     }
   }
@@ -179,7 +183,7 @@ describe('HomePage — auto-workspace creation (ONBD-01 / BUG-02)', () => {
   });
 
   it('retries with new suffix on 409 slug collision', async () => {
-    const firstError = new ApiError('Slug taken', 409);
+    const firstError = new ApiError({ title: 'Slug taken', status: 409 });
     mockWorkspacesApiCreate
       .mockRejectedValueOnce(firstError)
       .mockResolvedValueOnce({ id: 'uuid-2', name: 'alice', slug: 'alice-xy99' });
@@ -196,7 +200,7 @@ describe('HomePage — auto-workspace creation (ONBD-01 / BUG-02)', () => {
   });
 
   it('falls back to manual form when both create attempts fail with 409', async () => {
-    const conflictError = new ApiError('Slug taken', 409);
+    const conflictError = new ApiError({ title: 'Slug taken', status: 409 });
     mockWorkspacesApiCreate.mockRejectedValue(conflictError);
 
     const { container } = render(<HomePage />);
