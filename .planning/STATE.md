@@ -109,6 +109,10 @@ Recent decisions affecting current work:
 - [Phase 12-onboarding-first-run-ux]: saveLastWorkspacePath filters /settings/ paths — workspace switch lands on last non-settings page, not inside another workspace's settings
 - [Phase 12-onboarding-first-run-ux]: getLastWorkspacePath returns null on failure; callers use ?? to fall back to workspace root without branching on empty string
 - [Phase 12-onboarding-first-run-ux]: Pathname tracking in WorkspaceSlugLayout useEffect (client-side, co-located with workspace context) rather than middleware
+- [Phase 13-ai-provider-registry-model-selection]: module-level imports in model_listing.py for AIConfigurationRepository and decrypt_api_key — enables unittest.mock.patch with simple module path; lazy imports don't create module attributes for patching
+- [Phase 13-ai-provider-registry-model-selection]: ModelListingService uses its own _google_model_listing_lock — avoids importing _google_api_lock private attr from router (reportPrivateUsage)
+- [Phase 13-ai-provider-registry-model-selection]: Anthropic model listing returns hardcoded fallback — models.list() requires beta header not in stable SDK; is_selectable=True since key is valid
+- [Phase 13-ai-provider-registry-model-selection]: base_url required for custom provider via model_validator(mode=after) on AIConfigurationCreate — raises ValidationError before reaching DB
 - [Phase 13-ai-provider-registry-model-selection]: PROVIDER_DISPLAY_NAMES lookup table keyed by string — avoids switch statement, trivially extensible for future providers
 - [Phase 13-ai-provider-registry-model-selection]: BUILT_IN_PROVIDERS const array in ai-settings-page — 5 provider cards rendered via map(), no per-provider JSX duplication
 - [Phase 13-ai-provider-registry-model-selection]: ProviderModelItem exported from AISettingsStore — plan 04 model picker imports from single canonical location
@@ -129,7 +133,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-09T16:59:24.405Z
-Stopped at: Completed 13-02-PLAN.md — per-session model override routing (AIPR-04)
+Last session: 2026-03-10T00:00:00.000Z
+Stopped at: Completed 13-01-PLAN.md — provider registry extension (AIPR-01, AIPR-02, AIPR-03, AIPR-05)
 Resume file: None
-Next action: Phase 13 in progress. Continue with 13-04 (model picker chat UI).
+Next action: Phase 13 in progress. Plans 13-01, 13-02, 13-03 complete. Continue with 13-04 (model picker chat UI).
