@@ -64,6 +64,13 @@ def create_backup(
         console.print("[red]Not logged in.[/red] Run [bold]pilot login[/bold] first.")
         raise typer.Exit(1) from e
 
+    if not config.database_url:
+        console.print(
+            "[red]database_url not configured.[/red] "
+            "Set DATABASE_URL env var or re-run [bold]pilot login[/bold]."
+        )
+        raise typer.Exit(1)
+
     output.mkdir(parents=True, exist_ok=True)
 
     if encrypt and not passphrase:
@@ -86,7 +93,7 @@ def create_backup(
 
             # Step 1: pg_dump
             try:
-                pg_dump(config.api_url, dump_path)
+                pg_dump(config.database_url, dump_path)
             except Exception as e:
                 console.print(f"[red]pg_dump failed:[/red] {e}")
                 raise typer.Exit(1) from e
@@ -99,7 +106,7 @@ def create_backup(
             try:
                 objects = asyncio.run(
                     download_storage_objects(
-                        supabase_url=config.api_url,
+                        supabase_url=config.supabase_url or config.api_url,
                         service_key=config.api_key,
                         workspace=workspace,
                     )
@@ -205,7 +212,16 @@ def restore_backup(
             tmp_dir_handle.cleanup()
         raise typer.Exit(1) from e
 
-    console.print(f"\n[yellow]Target:[/yellow] {config.api_url}")
+    if not config.database_url:
+        console.print(
+            "[red]database_url not configured.[/red] "
+            "Set DATABASE_URL env var or re-run [bold]pilot login[/bold]."
+        )
+        if tmp_dir_handle:
+            tmp_dir_handle.cleanup()
+        raise typer.Exit(1)
+
+    console.print(f"\n[yellow]Target:[/yellow] {config.database_url}")
     confirmed = typer.confirm(
         "\nThis will overwrite the target database. Continue?",
         default=False,
@@ -222,7 +238,7 @@ def restore_backup(
         dump_file = manifest.get("pg_dump_file", "postgres.dump")
         dump_path = tmp_path / dump_file
         try:
-            pg_restore(config.api_url, dump_path)
+            pg_restore(config.database_url, dump_path)
         except Exception as e:
             console.print(f"[red]pg_restore failed:[/red] {e}")
             if tmp_dir_handle:

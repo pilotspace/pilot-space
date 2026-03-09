@@ -12,6 +12,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from typer.testing import CliRunner
 
 # ── test_create_produces_archive ─────────────────────────────────────────────
 
@@ -177,3 +178,101 @@ async def test_storage_download_paginates(tmp_path: Path) -> None:
     assert call_count == 3, (
         f"expected 3 HTTP calls (1 bucket list + 2 pages), got {call_count}"
     )
+
+
+# ── CLI command layer tests ───────────────────────────────────────────────────
+
+runner = CliRunner()
+
+_MOCK_CONFIG = MagicMock(
+    database_url="postgresql://localhost/test",
+    supabase_url="https://sb.example.com",
+    api_url="https://api.example.com",
+    api_key="key",
+    workspace_slug="ws",
+)
+
+
+def _make_mock_config() -> MagicMock:
+    """Return a fresh MagicMock with all PilotConfig fields set."""
+    return MagicMock(
+        database_url="postgresql://localhost/test",
+        supabase_url="https://sb.example.com",
+        api_url="https://api.example.com",
+        api_key="key",
+        workspace_slug="ws",
+    )
+
+
+def test_create_backup_command(tmp_path: Path) -> None:
+    """create_backup command: mocked config with valid database_url → exit 0.
+
+    Mocks pg_dump, download_storage_objects, and create_archive so the command
+    completes without hitting any real external systems.
+    """
+    from pilot_cli.commands.backup import backup_app
+
+    dump_path_holder: list[Path] = []
+
+    def fake_pg_dump(url: str, output_path: Path) -> None:
+        output_path.write_bytes(b"fake pg_dump content")
+        dump_path_holder.append(output_path)
+
+    def fake_create_archive(
+        dump_path: Path,
+        objects: list,  # type: ignore[type-arg]
+        archive_path: Path,
+    ) -> dict:  # type: ignore[type-arg]
+        archive_path.write_bytes(b"fake archive content")
+        import json as _json
+        return {"pg_dump_file": "postgres.dump", "version": "1", "created_at": "now",
+                "storage_objects_count": 0, "checksum_sha256": "abc123"}
+
+    with (
+        patch("pilot_cli.commands.backup.PilotConfig.load", return_value=_make_mock_config()),
+        patch("pilot_cli.commands.backup.pg_dump", side_effect=fake_pg_dump),
+        patch(
+            "pilot_cli.commands.backup.download_storage_objects",
+            new=AsyncMock(return_value=[]),
+        ),
+        patch("pilot_cli.commands.backup.create_archive", side_effect=fake_create_archive),
+    ):
+        result = runner.invoke(backup_app, ["create", "--output", str(tmp_path)])
+
+    assert result.exit_code == 0, result.output
+    assert "Backup complete" in result.output
+
+
+def test_create_backup_missing_database_url(tmp_path: Path) -> None:
+    """create_backup command exits 1 with clear error when database_url is empty."""
+    from pilot_cli.commands.backup import backup_app
+
+    empty_db_config = _make_mock_config()
+    empty_db_config.database_url = ""
+
+    with patch("pilot_cli.commands.backup.PilotConfig.load", return_value=empty_db_config):
+        result = runner.invoke(backup_app, ["create", "--output", str(tmp_path)])
+
+    assert result.exit_code == 1
+    assert "database_url not configured" in result.output
+
+
+def test_restore_backup_dry_run_command(tmp_path: Path) -> None:
+    """restore_backup --dry-run validates archive without loading config → exit 0.
+
+    Creates a real archive, then invokes restore with --dry-run.
+    No PilotConfig mock needed because dry_run returns before loading config.
+    """
+    from pilot_cli.backup.archive import create_archive
+    from pilot_cli.commands.backup import backup_app
+
+    # Create a real archive so the command can validate it
+    dump_file = tmp_path / "postgres.dump"
+    dump_file.write_bytes(b"fake pg_dump content")
+    archive_path = tmp_path / "test-backup.tar.gz"
+    create_archive(dump_file, [], archive_path)
+
+    result = runner.invoke(backup_app, ["restore", str(archive_path), "--dry-run"])
+
+    assert result.exit_code == 0, result.output
+    assert "Dry run complete" in result.output
