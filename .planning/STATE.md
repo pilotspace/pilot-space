@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Completed 05-04-PLAN.md — Helm chart for Kubernetes with existingSecret pattern, dual-ingress, HPA/PDB
-last_updated: "2026-03-08T17:06:29.966Z"
+stopped_at: Completed 05-07-PLAN.md — backup CLI database_url wiring fix
+last_updated: "2026-03-09T01:39:45.471Z"
 last_activity: 2026-03-08 — Implemented /health/live and /health/ready endpoints (05-01)
 progress:
   total_phases: 5
   completed_phases: 5
-  total_plans: 38
-  completed_plans: 38
+  total_plans: 39
+  completed_plans: 39
   percent: 100
 ---
 
@@ -83,6 +83,7 @@ Progress: [██████████] 100%
 | Phase 05-operational-readiness P03 | 11 | 2 tasks | 4 files |
 | Phase 05-operational-readiness P06 | 3 | 2 tasks | 2 files |
 | Phase 05-operational-readiness P04 | 6 | 2 tasks | 13 files |
+| Phase 05-operational-readiness P07 | 4 | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -208,6 +209,8 @@ Recent decisions affecting current work:
 - [Phase 05-operational-readiness]: required() for existingSecret fields — helm install fails immediately with clear error if secrets not pre-created
 - [Phase 05-operational-readiness]: Dual-ingress: main ingress (100 rps) + AI ingress (10 rps, 600s timeout) for SSE streaming — mirrors infra/k8s/ingress.yaml pattern
 - [Phase 05-operational-readiness]: check-yaml pre-commit hook excludes infra/helm/*/templates/ — Go template syntax is not valid YAML
+- [Phase 05-operational-readiness]: database_url/supabase_url default to empty string (not KeyError) — backup command validates at use time with clearer message
+- [Phase 05-operational-readiness]: supabase_url or api_url fallback in storage download — safe degradation for single-deployment setups
 
 ### Pending Todos
 
@@ -223,6 +226,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-08T17:06:29.964Z
-Stopped at: Completed 05-04-PLAN.md — Helm chart for Kubernetes with existingSecret pattern, dual-ingress, HPA/PDB
+Last session: 2026-03-09T01:39:45.469Z
+Stopped at: Completed 05-07-PLAN.md — backup CLI database_url wiring fix
 Resume file: None
