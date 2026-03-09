@@ -515,3 +515,46 @@ class TestScimRouterServiceProviderConfig:
         assert "urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig" in body["schemas"]
         assert body["patch"]["supported"] is True
         assert body["bulk"]["supported"] is False
+
+
+class TestScimTokenEndpoint:
+    """Tests for POST /api/v1/workspaces/{slug}/settings/scim-token (AUTH-07 gap)."""
+
+    @pytest.mark.asyncio
+    async def test_scim_token_endpoint_calls_service(self) -> None:
+        """POST /settings/scim-token calls generate_scim_token and commits session."""
+        import uuid as _uuid
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        from pilot_space.api.v1.routers.workspace_scim_settings import generate_scim_token
+
+        fake_token = "raw_token_43chars_urlsafe"
+        fake_workspace = MagicMock()
+        fake_workspace.id = _uuid.uuid4()
+        fake_workspace.slug = "acme"
+
+        mock_session = AsyncMock()
+        mock_service = AsyncMock()
+        mock_service.generate_scim_token.return_value = fake_token
+
+        with (
+            patch(
+                "pilot_space.api.v1.routers.workspace_scim_settings._resolve_workspace_scim",
+                new=AsyncMock(return_value=fake_workspace),
+            ),
+            patch(
+                "pilot_space.api.v1.routers.workspace_scim_settings.get_scim_service",
+                return_value=mock_service,
+            ),
+        ):
+            result = await generate_scim_token(
+                workspace_slug="acme",
+                session=mock_session,
+                current_user=MagicMock(user_id=_uuid.uuid4()),
+            )
+
+        assert result == {"token": fake_token}
+        mock_service.generate_scim_token.assert_awaited_once_with(
+            workspace_id=fake_workspace.id, db=mock_session
+        )
+        mock_session.commit.assert_awaited_once()

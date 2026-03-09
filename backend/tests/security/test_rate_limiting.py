@@ -791,6 +791,68 @@ class TestRateLimitingEdgeCases:
 # =============================================================================
 
 
+class TestRateLimitMiddlewareWiring:
+    """Verify RateLimitMiddleware wiring — registered and returns 429."""
+
+    @pytest.mark.asyncio
+    async def test_rate_limit_middleware_registered_returns_429(
+        self,
+        mock_redis: AsyncMock,
+    ) -> None:
+        """RateLimitMiddleware is present in app stack and returns 429 when limit exceeded.
+
+        Two assertions:
+        1. Middleware stack inspection confirms RateLimitMiddleware is registered.
+        2. Direct dispatch() call confirms 429 + Retry-After when INCR > limit.
+        """
+        from fastapi import FastAPI
+        from fastapi.responses import PlainTextResponse
+        from starlette.testclient import TestClient
+
+        inner = FastAPI()
+
+        @inner.get("/api/v1/issues")
+        async def homepage() -> PlainTextResponse:
+            return PlainTextResponse("ok")
+
+        inner.add_middleware(
+            RateLimitMiddleware,
+            redis_client=mock_redis,
+            enabled=True,
+        )
+
+        # Part 1: verify middleware is in the stack (built lazily via TestClient.__enter__).
+        with TestClient(inner, raise_server_exceptions=False):
+            stack = inner.middleware_stack
+            found_rate_limit = False
+            for _ in range(10):  # walk at most 10 layers
+                if "RateLimitMiddleware" in type(stack).__name__:
+                    found_rate_limit = True
+                    break
+                stack = getattr(stack, "app", None)
+                if stack is None:
+                    break
+        assert found_rate_limit, "RateLimitMiddleware not found in FastAPI middleware stack"
+
+        # Part 2: direct dispatch() call proves 429 + Retry-After header are raised.
+        # BaseHTTPMiddleware wraps HTTPException as 500 in TestClient, so we use
+        # pytest.raises(HTTPException) — the same pattern as existing tests in this file.
+        mock_redis.incr.side_effect = None
+        mock_redis.incr.return_value = 9999  # exceeds all standard/workspace limits
+        middleware_instance = RateLimitMiddleware(
+            app=MagicMock(), redis_client=mock_redis, enabled=True
+        )
+
+        request = create_mock_request(
+            "/api/v1/issues",
+            headers={"X-Workspace-ID": str(uuid.uuid4())},
+        )
+        with pytest.raises(HTTPException) as exc_info:
+            await middleware_instance.dispatch(request, mock_call_next)
+        assert exc_info.value.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+        assert "Retry-After" in exc_info.value.headers
+
+
 @pytest.mark.integration
 class TestRateLimitingIntegration:
     """Integration tests requiring real Redis connection.
