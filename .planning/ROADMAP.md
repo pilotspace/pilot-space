@@ -17,6 +17,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3: Multi-Tenant Isolation** - Verified data isolation, workspace encryption, rate limiting, and operator dashboard (completed 2026-03-08)
 - [ ] **Phase 4: AI Governance** - Configurable approval policies, AI audit trail, rollback, strict BYOK enforcement, and cost visibility
 - [x] **Phase 5: Operational Readiness** - Docker Compose guide, Helm chart, health checks, structured logging, backup tooling, and migration path (completed 2026-03-08)
+- [ ] **Phase 6: Wire Rate Limiting + SCIM Token** - Register RateLimitMiddleware and add SCIM token generation endpoint to close AUTH-07 and TENANT-03 rate limiting gaps (Gap Closure)
+- [ ] **Phase 7: Wire Storage Quota Enforcement** - Call _check_storage_quota/_update_storage_usage on write paths to complete TENANT-03 storage quota gap (Gap Closure)
 
 ## Phase Details
 
@@ -132,11 +134,35 @@ Plans:
 - [ ] 05-05-PLAN.md — Backup CLI: pilot backup create/restore commands + pg_dump + Storage API + AES-256-GCM + docs (OPS-05)
 - [ ] 05-06-PLAN.md — Upgrade runbook + CI simulation: docs/operations/upgrade-guide.md + .github/workflows/upgrade-simulation.yml (OPS-06)
 
+### Phase 6: Wire Rate Limiting + SCIM Token
+**Goal:** Close the two runtime wiring gaps found by the milestone audit — RateLimitMiddleware never registered and SCIM token generation endpoint missing
+**Depends on**: Phase 1, Phase 3 (existing code already present)
+**Requirements**: AUTH-07 (gap closure), TENANT-03 (rate limiting gap closure)
+**Gap Closure:** Closes integration gaps from v1.0 audit
+
+Tasks:
+1. Import + register `RateLimitMiddleware` via `app.add_middleware()` in `main.py`
+2. Add `POST /workspaces/{slug}/settings/scim-token` endpoint wrapping `ScimService.generate_scim_token()`
+3. Unit tests: rate limit returns 429 when workspace RPM exceeded
+4. Unit tests: SCIM token generation endpoint returns token + 200
+
+### Phase 7: Wire Storage Quota Enforcement
+**Goal:** Complete TENANT-03 by calling quota helpers on all write paths so storage limits actually enforce
+**Depends on**: Phase 3 (quota helpers already implemented)
+**Requirements**: TENANT-03 (storage quota gap closure)
+**Gap Closure:** Closes storage quota integration gap from v1.0 audit
+
+Tasks:
+1. Call `_check_storage_quota()` before issue/note create/update in service layers
+2. Call `_update_storage_usage()` after successful write (media upload included)
+3. Unit tests: 507 response when quota exceeded
+4. Unit tests: `X-Storage-Warning` header at 80% usage
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
-(Note: Phase 4 depends on Phase 1 only, so it can begin once Phase 1 is complete. The sequence above assumes sequential execution for simplicity; Phase 4 may be parallelized with Phases 2-3 if needed.)
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
+(Note: Phase 4 depends on Phase 1 only, so it can begin once Phase 1 is complete. Phases 6–7 are gap closure phases and can run independently.)
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -145,6 +171,8 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 3. Multi-Tenant Isolation | 8/8 | Complete   | 2026-03-08 |
 | 4. AI Governance | 10/10 | Complete | 2026-03-08 |
 | 5. Operational Readiness | 7/7 | Complete   | 2026-03-09 |
+| 6. Wire Rate Limiting + SCIM Token | 0/1 | Pending | — |
+| 7. Wire Storage Quota Enforcement | 0/1 | Pending | — |
 
 ---
 *Roadmap created: 2026-03-07*
