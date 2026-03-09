@@ -162,7 +162,7 @@ Plans:
 **Depends on**: Phase 1 (SSO implementations already present)
 **Requirements**: AUTH-01, AUTH-02, AUTH-03, AUTH-04
 **Gap Closure:** Closes integration gaps from v1.0 audit — SSO frontend 422 + SAML no JWT
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
 - [ ] 08-01-PLAN.md — Normalize backend SSO endpoints to accept workspace_slug + complete SAML callback JWT issuance + frontend saml_provisioned handler + tests (AUTH-01/02/03/04)
@@ -172,7 +172,7 @@ Plans:
 **Depends on**: Phase 2 (AuditLog infrastructure), Phase 8 (SSO callbacks fixed)
 **Requirements**: AUDIT-01
 **Gap Closure:** Closes auth paths → audit log integration gap from v1.0 audit
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
 - [ ] 09-01-PLAN.md — Add write_audit_nonfatal(user.login) to SAML callback + base auth router successful login path + tests (AUDIT-01)
