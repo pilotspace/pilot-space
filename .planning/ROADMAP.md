@@ -216,8 +216,8 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 7. Wire Storage Quota Enforcement | 2/2 | Complete   | 2026-03-09 |
 | 8. Fix SSO Integration | 1/1 | Complete   | 2026-03-09 |
 | 9. Login Audit Events | 1/1 | Complete   | 2026-03-09 |
-| 10. Wire Audit Trail | 0/1 | Pending | — |
-| 11. Fix Rate Limiting Architecture | 1/1 | Complete   | 2026-03-09 |
+| 10. Wire Audit Trail | 0/1 | Complete    | 2026-03-09 |
+| 11. Fix Rate Limiting Architecture | 1/1 | Complete    | 2026-03-09 |
 
 ---
 *Roadmap created: 2026-03-07*
