@@ -743,3 +743,227 @@ async def test_get_role_claim_mapping_accepts_workspace_slug() -> None:
         )
 
     assert isinstance(result, RoleClaimMappingConfig)
+
+
+# ---------------------------------------------------------------------------
+# AUDIT-01: SAML callback writes user.login audit entry
+# ---------------------------------------------------------------------------
+
+_SAML_CALLBACK_PATCHES = {
+    "saml_config": {
+        "entity_id": "https://idp.example.com/saml",
+        "sso_url": "https://idp.example.com/saml/sso",
+        "certificate": "MIID...",
+    },
+    "saml_result": {
+        "name_id": "user@example.com",
+        "attributes": {"email": ["user@example.com"]},
+    },
+    "user_info": {
+        "user_id": "11111111-1111-1111-1111-111111111111",
+        "is_new": False,
+        "token_hash": "tok",
+    },
+    "frontend_url": "https://app.example.com",
+}
+
+
+def _build_saml_callback_mocks(audit_side_effect=None):
+    """Build standard mock set for AUDIT-01 saml_callback tests."""
+    mock_session = AsyncMock()
+    mock_session.commit = AsyncMock()
+    mock_request = MagicMock()
+    mock_request.headers = {}
+    mock_request.client = MagicMock()
+    mock_request.client.host = "127.0.0.1"
+
+    user_info = _SAML_CALLBACK_PATCHES["user_info"]
+    mock_service = MagicMock()
+    mock_service.get_saml_config = AsyncMock(return_value=_SAML_CALLBACK_PATCHES["saml_config"])
+    mock_service.provision_saml_user = AsyncMock(return_value=user_info)
+
+    mock_provider = MagicMock()
+    mock_provider.process_response.return_value = _SAML_CALLBACK_PATCHES["saml_result"]
+
+    mock_settings_obj = MagicMock()
+    mock_settings_obj.frontend_url = _SAML_CALLBACK_PATCHES["frontend_url"]
+
+    mock_audit = AsyncMock(side_effect=audit_side_effect)
+
+    return mock_session, mock_request, mock_service, mock_provider, mock_settings_obj, mock_audit
+
+
+@pytest.mark.asyncio
+async def test_saml_callback_writes_login_audit_entry() -> None:
+    """saml_callback calls write_audit_nonfatal with correct kwargs on successful login.
+
+    Scenario:
+        Given a valid SAML assertion and successful user provisioning
+        When saml_callback processes the assertion
+        Then write_audit_nonfatal is called with:
+            - action="user.login"
+            - resource_type="user"
+            - workspace_id matches the route param
+            - actor_id=UUID(user_info["user_id"])
+            - resource_id=UUID(user_info["user_id"])
+            - payload={"method": "saml", "is_new": False}
+    """
+    from fastapi.responses import RedirectResponse
+
+    from pilot_space.api.v1.routers.auth_sso import saml_callback
+
+    workspace_id = uuid.uuid4()
+    (
+        mock_session,
+        mock_request,
+        mock_service,
+        mock_provider,
+        mock_settings_obj,
+        mock_audit,
+    ) = _build_saml_callback_mocks()
+
+    with (
+        patch("pilot_space.api.v1.routers.auth_sso._get_sso_service", return_value=mock_service),
+        patch(
+            "pilot_space.api.v1.routers.auth_sso._get_saml_provider",
+            return_value=mock_provider,
+        ),
+        patch(
+            "pilot_space.api.v1.routers.auth_sso.get_settings",
+            return_value=mock_settings_obj,
+        ),
+        patch(
+            "pilot_space.api.v1.routers.auth_sso.write_audit_nonfatal",
+            mock_audit,
+        ),
+    ):
+        result = await saml_callback(
+            request=mock_request,
+            workspace_id=workspace_id,
+            session=mock_session,
+            SAMLResponse="valid-saml-response",
+            RelayState="",
+        )
+
+    assert isinstance(result, RedirectResponse)
+    mock_audit.assert_called_once()
+    _kw = mock_audit.call_args.kwargs
+    assert _kw["action"] == "user.login"
+    assert _kw["resource_type"] == "user"
+    assert _kw["workspace_id"] == workspace_id
+    expected_uid = uuid.UUID(_SAML_CALLBACK_PATCHES["user_info"]["user_id"])
+    assert _kw["actor_id"] == expected_uid
+    assert _kw["resource_id"] == expected_uid
+    assert _kw["payload"] == {"method": "saml", "is_new": False}
+
+
+@pytest.mark.asyncio
+async def test_saml_callback_audit_is_after_commit() -> None:
+    """write_audit_nonfatal is called only AFTER session.commit() on successful login.
+
+    Scenario:
+        Given a valid SAML assertion
+        When saml_callback processes the assertion
+        Then session.commit() call count is >= 1 before write_audit_nonfatal is awaited
+    """
+    from pilot_space.api.v1.routers.auth_sso import saml_callback
+
+    workspace_id = uuid.uuid4()
+    (
+        mock_session,
+        mock_request,
+        mock_service,
+        mock_provider,
+        mock_settings_obj,
+        _,
+    ) = _build_saml_callback_mocks()
+
+    call_order: list[str] = []
+
+    async def _track_commit(*_args: object, **_kwargs: object) -> None:
+        call_order.append("commit")
+
+    async def _track_audit(*_args: object, **_kwargs: object) -> None:
+        call_order.append("audit")
+
+    mock_session.commit = AsyncMock(side_effect=_track_commit)
+
+    with (
+        patch("pilot_space.api.v1.routers.auth_sso._get_sso_service", return_value=mock_service),
+        patch(
+            "pilot_space.api.v1.routers.auth_sso._get_saml_provider",
+            return_value=mock_provider,
+        ),
+        patch(
+            "pilot_space.api.v1.routers.auth_sso.get_settings",
+            return_value=mock_settings_obj,
+        ),
+        patch(
+            "pilot_space.api.v1.routers.auth_sso.write_audit_nonfatal",
+            side_effect=_track_audit,
+        ),
+    ):
+        await saml_callback(
+            request=mock_request,
+            workspace_id=workspace_id,
+            session=mock_session,
+            SAMLResponse="valid-saml-response",
+            RelayState="",
+        )
+
+    assert "commit" in call_order
+    assert "audit" in call_order
+    commit_idx = call_order.index("commit")
+    audit_idx = call_order.index("audit")
+    assert commit_idx < audit_idx, f"commit must precede audit; got order: {call_order}"
+
+
+@pytest.mark.asyncio
+async def test_saml_callback_succeeds_when_audit_raises() -> None:
+    """saml_callback returns RedirectResponse even when write_audit_nonfatal raises.
+
+    Scenario:
+        Given a valid SAML assertion and successful user provisioning
+        And write_audit_nonfatal raises an unexpected Exception
+        When saml_callback processes the assertion
+        Then the result is still a RedirectResponse (non-fatal guarantee)
+        And no exception propagates to the caller
+    """
+    from fastapi.responses import RedirectResponse
+
+    from pilot_space.api.v1.routers.auth_sso import saml_callback
+
+    workspace_id = uuid.uuid4()
+    (
+        mock_session,
+        mock_request,
+        mock_service,
+        mock_provider,
+        mock_settings_obj,
+        mock_audit,
+    ) = _build_saml_callback_mocks(audit_side_effect=Exception("audit DB failure"))
+
+    with (
+        patch("pilot_space.api.v1.routers.auth_sso._get_sso_service", return_value=mock_service),
+        patch(
+            "pilot_space.api.v1.routers.auth_sso._get_saml_provider",
+            return_value=mock_provider,
+        ),
+        patch(
+            "pilot_space.api.v1.routers.auth_sso.get_settings",
+            return_value=mock_settings_obj,
+        ),
+        patch(
+            "pilot_space.api.v1.routers.auth_sso.write_audit_nonfatal",
+            mock_audit,
+        ),
+    ):
+        result = await saml_callback(
+            request=mock_request,
+            workspace_id=workspace_id,
+            session=mock_session,
+            SAMLResponse="valid-saml-response",
+            RelayState="",
+        )
+
+    assert isinstance(result, RedirectResponse)
