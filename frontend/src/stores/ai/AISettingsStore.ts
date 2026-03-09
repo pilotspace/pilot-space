@@ -5,6 +5,7 @@
  * - API key management (encrypted server-side)
  * - Feature toggles (ghost text, annotations, etc.)
  * - Validation and error handling
+ * - Model listing (13-03: availableModels + loadModels)
  */
 import { makeAutoObservable, runInAction, computed } from 'mobx';
 import {
@@ -12,7 +13,21 @@ import {
   type WorkspaceAISettings,
   type WorkspaceAISettingsUpdateResponse,
 } from '@/services/api/ai';
+import { apiClient } from '@/services/api/client';
 import type { AIStore } from './AIStore';
+
+export interface ProviderModelItem {
+  provider_config_id: string;
+  provider: string;
+  model_id: string;
+  display_name: string;
+  is_selectable: boolean;
+}
+
+interface ModelsListResponse {
+  items: ProviderModelItem[];
+  total: number;
+}
 
 export class AISettingsStore {
   settings: WorkspaceAISettings | null = null;
@@ -21,6 +36,10 @@ export class AISettingsStore {
   error: string | null = null;
   validationErrors: Record<string, string> = {};
   currentWorkspaceId: string | null = null;
+
+  // Model listing (13-03)
+  availableModels: ProviderModelItem[] = [];
+  isLoadingModels = false;
 
   constructor(_rootStore: AIStore) {
     makeAutoObservable(this, {
@@ -130,6 +149,32 @@ export class AISettingsStore {
   }
 
   /**
+   * Load available models for all configured providers in this workspace.
+   * Fetches GET /ai/configurations/models?workspace_id={id}
+   */
+  async loadModels(workspaceId: string): Promise<void> {
+    runInAction(() => {
+      this.isLoadingModels = true;
+    });
+
+    try {
+      const response = await apiClient.get<ModelsListResponse>('/ai/configurations/models', {
+        params: { workspace_id: workspaceId },
+      });
+      runInAction(() => {
+        this.availableModels = response.items;
+        this.isLoadingModels = false;
+      });
+    } catch (err) {
+      console.error('Failed to load AI models:', err);
+      runInAction(() => {
+        this.availableModels = [];
+        this.isLoadingModels = false;
+      });
+    }
+  }
+
+  /**
    * Validate API key format (client-side basic check)
    */
   validateKey(provider: 'anthropic' | 'openai', key: string): boolean {
@@ -155,5 +200,7 @@ export class AISettingsStore {
     this.error = null;
     this.validationErrors = {};
     this.currentWorkspaceId = null;
+    this.availableModels = [];
+    this.isLoadingModels = false;
   }
 }
