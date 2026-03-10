@@ -10,7 +10,7 @@
 import * as React from 'react';
 import { observer } from 'mobx-react-lite';
 import { useParams } from 'next/navigation';
-import { AlertCircle, Lock, Plus, Wand2 } from 'lucide-react';
+import { AlertCircle, Lock, Package, Plus, Wand2 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { useStore } from '@/stores';
 import {
@@ -47,6 +48,7 @@ import { WorkspaceSkillCard } from '../components/workspace-skill-card';
 import { SkillCard } from '../components/skill-card';
 import { RegenerateSkillModal } from '../components/regenerate-skill-modal';
 import { ConfirmActionDialog } from '../components/confirm-action-dialog';
+import { PluginsTabContent } from '../components/plugins-tab-content';
 import type { RoleSkill } from '@/services/api/role-skills';
 import type { SDLCRoleType } from '@/services/api/role-skills';
 
@@ -332,258 +334,291 @@ export const SkillsSettingsPage = observer(function SkillsSettingsPage() {
 
   return (
     <div className="px-4 py-6 sm:px-6 lg:px-8">
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="space-y-1">
-            <h1 className="text-2xl font-semibold tracking-tight">Skills</h1>
-            <p className="text-sm text-muted-foreground">
-              Configure your SDLC roles to personalize AI assistance.
-            </p>
-          </div>
-          <div className="flex flex-col items-end gap-1 shrink-0">
-            <Button
-              onClick={handleSetupRole}
-              disabled={isMaxReached}
-              aria-describedby={isMaxReached ? 'max-roles-hint' : undefined}
-            >
-              <Plus className="mr-1.5 h-4 w-4" />
-              Add Role
-            </Button>
-            {!isMaxReached && slotsLeft > 0 && (
-              <p className="text-xs text-muted-foreground">
-                {slotsLeft} slot{slotsLeft > 1 ? 's' : ''} left
-              </p>
-            )}
-          </div>
-        </div>
-
-        {/* Max roles warning */}
-        {isMaxReached && (
-          <Alert id="max-roles-hint">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              Maximum {MAX_ROLES} roles per workspace reached. Remove an existing role to add a new
-              one.
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {/* Skills list or empty state */}
-        {skills && skills.length > 0 ? (
-          <div className="space-y-4">
-            {skills
-              .slice()
-              .sort((a, b) => {
-                if (a.isPrimary && !b.isPrimary) return -1;
-                if (!a.isPrimary && b.isPrimary) return 1;
-                return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-              })
-              .map((skill) => (
-                <SkillCard
-                  key={skill.id}
-                  skill={skill}
-                  onEdit={handleEdit}
-                  onRegenerate={handleRegenerate}
-                  onReset={handleReset}
-                  onRemove={handleRemove}
-                  isSaving={updateSkill.isPending}
-                />
-              ))}
-          </div>
-        ) : (
-          <EmptyState onSetup={handleSetupRole} />
-        )}
+      <div className="space-y-1 mb-6">
+        <h1 className="text-2xl font-semibold tracking-tight">Skills</h1>
+        <p className="text-sm text-muted-foreground">
+          Configure your SDLC roles and manage plugins.
+        </p>
       </div>
 
-      {/* Workspace Skills (admin only) */}
-      {workspaceStore.isAdmin && (
-        <div className="space-y-4 border-t pt-6">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="space-y-1">
-              <h2 className="text-lg font-semibold">Workspace Skills</h2>
-              <p className="text-sm text-muted-foreground">
-                Configure AI skills inherited by all members with a matching SDLC role. Skills
-                remain inactive until you explicitly activate them.
-              </p>
-            </div>
-            <Button onClick={() => setWsGenerateOpen(true)} size="sm">
-              <Plus className="mr-1.5 h-4 w-4" />
-              Generate Skill
-            </Button>
-          </div>
-          {wsSkillsData && wsSkillsData.skills.length > 0 ? (
-            <div className="space-y-4">
-              {wsSkillsData.skills.map((skill) => (
-                <WorkspaceSkillCard
-                  key={skill.id}
-                  skill={skill}
-                  onActivate={(id) => activateWsSkill.mutate(id)}
-                  onRemove={(id) =>
-                    setWsSkillToRemove(wsSkillsData.skills.find((s) => s.id === id) ?? null)
-                  }
-                  isActivating={activateWsSkill.isPending}
-                  isRemoving={deleteWsSkill.isPending}
-                />
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">No workspace skills configured yet.</p>
+      <Tabs defaultValue="roles">
+        <TabsList>
+          <TabsTrigger value="roles">
+            <Wand2 className="mr-1.5 h-4 w-4" />
+            Roles
+          </TabsTrigger>
+          {workspaceStore.isAdmin && (
+            <TabsTrigger value="plugins">
+              <Package className="mr-1.5 h-4 w-4" />
+              Plugins
+            </TabsTrigger>
           )}
-        </div>
-      )}
+        </TabsList>
 
-      {/* Regenerate Modal */}
-      {regenerateTarget && (
-        <RegenerateSkillModal
-          open={!!regenerateTarget}
-          onOpenChange={(open) => !open && setRegenerateTarget(null)}
-          skill={regenerateTarget}
-          onRegenerate={handleRegenerateSubmit}
-          onAccept={handleRegenerateAccept}
-          isRegenerating={regenerateSkill.isPending}
-        />
-      )}
-
-      {/* Remove Confirmation */}
-      {removeTarget && (
-        <ConfirmActionDialog
-          open={!!removeTarget}
-          onCancel={() => setRemoveTarget(null)}
-          onConfirm={handleRemoveConfirm}
-          title={`Remove ${removeTarget.roleName} Role?`}
-          description={`This will deactivate the ${removeTarget.roleName} skill for this workspace. The AI assistant will no longer use ${removeTarget.roleName}-specific behavior in your conversations. Your skill content will be permanently deleted.`}
-          confirmLabel="Remove Role"
-          variant="destructive"
-        />
-      )}
-
-      {/* Reset Confirmation */}
-      {resetTarget && (
-        <ConfirmActionDialog
-          open={!!resetTarget}
-          onCancel={() => setResetTarget(null)}
-          onConfirm={handleResetConfirm}
-          title="Reset to Default Template?"
-          description={`This will replace your custom ${resetTarget.roleName} skill with the default ${resetTarget.roleType.replace(/_/g, ' ')} template. All customizations will be lost.`}
-          confirmLabel="Reset Skill"
-          variant="destructive"
-        />
-      )}
-
-      {/* Workspace skill generate dialog */}
-      <Dialog open={wsGenerateOpen} onOpenChange={(open) => !open && setWsGenerateOpen(false)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Generate Workspace Skill</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleWsGenerateSubmit} className="space-y-4 pt-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="ws-role-type">Role Type</Label>
-              <Select value={wsRoleType} onValueChange={(v) => setWsRoleType(v as SDLCRoleType)}>
-                <SelectTrigger id="ws-role-type">
-                  <SelectValue placeholder="Select a role type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="developer">Developer</SelectItem>
-                  <SelectItem value="tester">Tester</SelectItem>
-                  <SelectItem value="architect">Architect</SelectItem>
-                  <SelectItem value="tech_lead">Tech Lead</SelectItem>
-                  <SelectItem value="product_owner">Product Owner</SelectItem>
-                  <SelectItem value="business_analyst">Business Analyst</SelectItem>
-                  <SelectItem value="project_manager">Project Manager</SelectItem>
-                  <SelectItem value="devops">DevOps</SelectItem>
-                  <SelectItem value="custom">Custom</SelectItem>
-                </SelectContent>
-              </Select>
+        <TabsContent value="roles">
+          <div className="space-y-6 pt-4">
+            {/* Header */}
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="space-y-1">
+                <h2 className="text-lg font-semibold">Role Skills</h2>
+                <p className="text-sm text-muted-foreground">
+                  Configure your SDLC roles to personalize AI assistance.
+                </p>
+              </div>
+              <div className="flex flex-col items-end gap-1 shrink-0">
+                <Button
+                  onClick={handleSetupRole}
+                  disabled={isMaxReached}
+                  aria-describedby={isMaxReached ? 'max-roles-hint' : undefined}
+                >
+                  <Plus className="mr-1.5 h-4 w-4" />
+                  Add Role
+                </Button>
+                {!isMaxReached && slotsLeft > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {slotsLeft} slot{slotsLeft > 1 ? 's' : ''} left
+                  </p>
+                )}
+              </div>
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="ws-role-name">Role Name</Label>
-              <Input
-                id="ws-role-name"
-                value={wsRoleName}
-                onChange={(e) => setWsRoleName(e.target.value)}
-                placeholder="e.g. Senior Developer"
-                required
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="ws-exp-description">Experience Description</Label>
-              <Textarea
-                id="ws-exp-description"
-                value={wsExpDescription}
-                onChange={(e) => setWsExpDescription(e.target.value)}
-                placeholder="Describe the experience level and context for this role"
-                rows={3}
-              />
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setWsGenerateOpen(false)}
-                disabled={generateWsSkill.isPending}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                disabled={!wsRoleType || !wsRoleName || generateWsSkill.isPending}
-              >
-                {generateWsSkill.isPending ? 'Generating…' : 'Generate'}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
 
-      {/* Workspace skill remove confirmation */}
-      {wsSkillToRemove && (
-        <ConfirmActionDialog
-          open={!!wsSkillToRemove}
-          onCancel={() => setWsSkillToRemove(null)}
-          onConfirm={handleWsRemoveConfirm}
-          title={`Remove ${wsSkillToRemove.role_name} Workspace Skill?`}
-          description={`This will permanently delete the ${wsSkillToRemove.role_name} workspace skill. Members will no longer inherit this skill. To revert, generate a new skill.`}
-          confirmLabel="Remove Skill"
-          variant="destructive"
-        />
-      )}
-
-      {/* Role setup dialog */}
-      <Dialog open={isSetupOpen} onOpenChange={(open) => !open && closeSetupDialog()}>
-        <DialogContent className={needsWideModal ? 'sm:max-w-4xl' : 'sm:max-w-xl'}>
-          <div className="py-2">
-            {roleSetupView === 'role_grid' && (
-              <RoleSelectorStep
-                existingSkillRoleTypes={existingSkillRoleTypes}
-                onContinue={handleRoleContinue}
-                onSkip={closeSetupDialog}
-                onBack={closeSetupDialog}
-                onCustomRole={handleCustomRole}
-              />
+            {/* Max roles warning */}
+            {isMaxReached && (
+              <Alert id="max-roles-hint">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  Maximum {MAX_ROLES} roles per workspace reached. Remove an existing role to add a
+                  new one.
+                </AlertDescription>
+              </Alert>
             )}
-            {roleSetupView === 'custom_role' && (
-              <CustomRoleInput
-                onBack={handleCustomRoleBack}
-                onGenerate={handleCustomRoleGenerate}
-                isGenerating={roleSkillStore.isGenerating}
-              />
-            )}
-            {roleSetupView === 'skill_wizard' && currentWizardRole && (
-              <SkillGenerationWizard
-                roleType={currentWizardRole}
-                template={currentTemplate}
-                workspaceId={workspaceId}
-                onBack={handleWizardBack}
-                onComplete={handleWizardComplete}
-                currentIndex={currentWizardIndex + 1}
-                totalRoles={roleSkillStore.selectedRoles.length}
-              />
+
+            {/* Skills list or empty state */}
+            {skills && skills.length > 0 ? (
+              <div className="space-y-4">
+                {skills
+                  .slice()
+                  .sort((a, b) => {
+                    if (a.isPrimary && !b.isPrimary) return -1;
+                    if (!a.isPrimary && b.isPrimary) return 1;
+                    return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+                  })
+                  .map((skill) => (
+                    <SkillCard
+                      key={skill.id}
+                      skill={skill}
+                      onEdit={handleEdit}
+                      onRegenerate={handleRegenerate}
+                      onReset={handleReset}
+                      onRemove={handleRemove}
+                      isSaving={updateSkill.isPending}
+                    />
+                  ))}
+              </div>
+            ) : (
+              <EmptyState onSetup={handleSetupRole} />
             )}
           </div>
-        </DialogContent>
-      </Dialog>
+
+          {/* Workspace Skills (admin only) */}
+          {workspaceStore.isAdmin && (
+            <div className="space-y-4 border-t pt-6">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <h2 className="text-lg font-semibold">Workspace Skills</h2>
+                  <p className="text-sm text-muted-foreground">
+                    Configure AI skills inherited by all members with a matching SDLC role. Skills
+                    remain inactive until you explicitly activate them.
+                  </p>
+                </div>
+                <Button onClick={() => setWsGenerateOpen(true)} size="sm">
+                  <Plus className="mr-1.5 h-4 w-4" />
+                  Generate Skill
+                </Button>
+              </div>
+              {wsSkillsData && wsSkillsData.skills.length > 0 ? (
+                <div className="space-y-4">
+                  {wsSkillsData.skills.map((skill) => (
+                    <WorkspaceSkillCard
+                      key={skill.id}
+                      skill={skill}
+                      onActivate={(id) => activateWsSkill.mutate(id)}
+                      onRemove={(id) =>
+                        setWsSkillToRemove(wsSkillsData.skills.find((s) => s.id === id) ?? null)
+                      }
+                      isActivating={activateWsSkill.isPending}
+                      isRemoving={deleteWsSkill.isPending}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No workspace skills configured yet.</p>
+              )}
+            </div>
+          )}
+
+          {/* Regenerate Modal */}
+          {regenerateTarget && (
+            <RegenerateSkillModal
+              open={!!regenerateTarget}
+              onOpenChange={(open) => !open && setRegenerateTarget(null)}
+              skill={regenerateTarget}
+              onRegenerate={handleRegenerateSubmit}
+              onAccept={handleRegenerateAccept}
+              isRegenerating={regenerateSkill.isPending}
+            />
+          )}
+
+          {/* Remove Confirmation */}
+          {removeTarget && (
+            <ConfirmActionDialog
+              open={!!removeTarget}
+              onCancel={() => setRemoveTarget(null)}
+              onConfirm={handleRemoveConfirm}
+              title={`Remove ${removeTarget.roleName} Role?`}
+              description={`This will deactivate the ${removeTarget.roleName} skill for this workspace. The AI assistant will no longer use ${removeTarget.roleName}-specific behavior in your conversations. Your skill content will be permanently deleted.`}
+              confirmLabel="Remove Role"
+              variant="destructive"
+            />
+          )}
+
+          {/* Reset Confirmation */}
+          {resetTarget && (
+            <ConfirmActionDialog
+              open={!!resetTarget}
+              onCancel={() => setResetTarget(null)}
+              onConfirm={handleResetConfirm}
+              title="Reset to Default Template?"
+              description={`This will replace your custom ${resetTarget.roleName} skill with the default ${resetTarget.roleType.replace(/_/g, ' ')} template. All customizations will be lost.`}
+              confirmLabel="Reset Skill"
+              variant="destructive"
+            />
+          )}
+
+          {/* Workspace skill generate dialog */}
+          <Dialog open={wsGenerateOpen} onOpenChange={(open) => !open && setWsGenerateOpen(false)}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Generate Workspace Skill</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleWsGenerateSubmit} className="space-y-4 pt-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="ws-role-type">Role Type</Label>
+                  <Select
+                    value={wsRoleType}
+                    onValueChange={(v) => setWsRoleType(v as SDLCRoleType)}
+                  >
+                    <SelectTrigger id="ws-role-type">
+                      <SelectValue placeholder="Select a role type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="developer">Developer</SelectItem>
+                      <SelectItem value="tester">Tester</SelectItem>
+                      <SelectItem value="architect">Architect</SelectItem>
+                      <SelectItem value="tech_lead">Tech Lead</SelectItem>
+                      <SelectItem value="product_owner">Product Owner</SelectItem>
+                      <SelectItem value="business_analyst">Business Analyst</SelectItem>
+                      <SelectItem value="project_manager">Project Manager</SelectItem>
+                      <SelectItem value="devops">DevOps</SelectItem>
+                      <SelectItem value="custom">Custom</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="ws-role-name">Role Name</Label>
+                  <Input
+                    id="ws-role-name"
+                    value={wsRoleName}
+                    onChange={(e) => setWsRoleName(e.target.value)}
+                    placeholder="e.g. Senior Developer"
+                    required
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="ws-exp-description">Experience Description</Label>
+                  <Textarea
+                    id="ws-exp-description"
+                    value={wsExpDescription}
+                    onChange={(e) => setWsExpDescription(e.target.value)}
+                    placeholder="Describe the experience level and context for this role"
+                    rows={3}
+                  />
+                </div>
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setWsGenerateOpen(false)}
+                    disabled={generateWsSkill.isPending}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={!wsRoleType || !wsRoleName || generateWsSkill.isPending}
+                  >
+                    {generateWsSkill.isPending ? 'Generating…' : 'Generate'}
+                  </Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
+
+          {/* Workspace skill remove confirmation */}
+          {wsSkillToRemove && (
+            <ConfirmActionDialog
+              open={!!wsSkillToRemove}
+              onCancel={() => setWsSkillToRemove(null)}
+              onConfirm={handleWsRemoveConfirm}
+              title={`Remove ${wsSkillToRemove.role_name} Workspace Skill?`}
+              description={`This will permanently delete the ${wsSkillToRemove.role_name} workspace skill. Members will no longer inherit this skill. To revert, generate a new skill.`}
+              confirmLabel="Remove Skill"
+              variant="destructive"
+            />
+          )}
+
+          {/* Role setup dialog */}
+          <Dialog open={isSetupOpen} onOpenChange={(open) => !open && closeSetupDialog()}>
+            <DialogContent className={needsWideModal ? 'sm:max-w-4xl' : 'sm:max-w-xl'}>
+              <div className="py-2">
+                {roleSetupView === 'role_grid' && (
+                  <RoleSelectorStep
+                    existingSkillRoleTypes={existingSkillRoleTypes}
+                    onContinue={handleRoleContinue}
+                    onSkip={closeSetupDialog}
+                    onBack={closeSetupDialog}
+                    onCustomRole={handleCustomRole}
+                  />
+                )}
+                {roleSetupView === 'custom_role' && (
+                  <CustomRoleInput
+                    onBack={handleCustomRoleBack}
+                    onGenerate={handleCustomRoleGenerate}
+                    isGenerating={roleSkillStore.isGenerating}
+                  />
+                )}
+                {roleSetupView === 'skill_wizard' && currentWizardRole && (
+                  <SkillGenerationWizard
+                    roleType={currentWizardRole}
+                    template={currentTemplate}
+                    workspaceId={workspaceId}
+                    onBack={handleWizardBack}
+                    onComplete={handleWizardComplete}
+                    currentIndex={currentWizardIndex + 1}
+                    totalRoles={roleSkillStore.selectedRoles.length}
+                  />
+                )}
+              </div>
+            </DialogContent>
+          </Dialog>
+        </TabsContent>
+
+        {workspaceStore.isAdmin && (
+          <TabsContent value="plugins">
+            <PluginsTabContent workspaceId={workspaceId} />
+          </TabsContent>
+        )}
+      </Tabs>
     </div>
   );
 });
