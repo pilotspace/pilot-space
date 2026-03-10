@@ -83,7 +83,13 @@ Plans:
   3. Each registered server shows a connection status badge (connected / failed / unknown) that reflects its actual reachability
   4. PilotSpaceAgent automatically loads the tools of all registered MCP servers when processing a workspace request (no restart required)
   5. Admin can remove a registered server and it immediately disappears from PilotSpaceAgent's available tool set
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+- [ ] 14-01-PLAN.md — Wave 0 test scaffolds: xfail stubs for all 6 MCP requirements + agent injection + frontend store (MCP-01..06)
+- [ ] 14-02-PLAN.md — Backend persistence: migration 071 + WorkspaceMcpServer model + repository + Pydantic schemas (MCP-01, MCP-02, MCP-06)
+- [ ] 14-03-PLAN.md — Backend API + agent wiring: CRUD router + OAuth flow + _load_remote_mcp_servers + stream() integration (MCP-01..06)
+- [ ] 14-04-PLAN.md — Frontend: MCPServersStore + API client + settings page + server cards + Next.js route (MCP-01..03, MCP-05, MCP-06)
 
 ### Phase 15: Related Issues
 **Goal**: Users can discover and link related issues through semantic suggestions and manual linking
@@ -145,8 +151,8 @@ Plans:
 | 10. Wire Audit Trail | v1.0 | 1/1 | Complete | 2026-03-09 |
 | 11. Fix Rate Limiting Architecture | v1.0 | 1/1 | Complete | 2026-03-09 |
 | 12. Onboarding & First-Run UX | v1.0-alpha | 3/3 | Complete | 2026-03-09 |
-| 13. AI Provider Registry + Model Selection | 4/4 | Complete    | 2026-03-10 | - |
-| 14. Remote MCP Server Management | v1.0-alpha | 0/TBD | Not started | - |
+| 13. AI Provider Registry + Model Selection | v1.0-alpha | 4/4 | Complete | 2026-03-10 |
+| 14. Remote MCP Server Management | v1.0-alpha | 0/4 | Not started | - |
 | 15. Related Issues | v1.0-alpha | 0/TBD | Not started | - |
 | 16. Workspace Role Skills | v1.0-alpha | 0/TBD | Not started | - |
 | 17. Skill Action Buttons | v1.0-alpha | 0/TBD | Not started | - |
