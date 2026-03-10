@@ -41,6 +41,7 @@ export type {
   IntegrationLink,
   IssueRelation,
   NoteIssueLink,
+  RelatedSuggestion,
 } from './issue';
 
 export type {

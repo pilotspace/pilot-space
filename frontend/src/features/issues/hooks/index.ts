@@ -57,3 +57,9 @@ export { useIssueRelations, issueRelationsKeys } from './use-issue-relations';
 
 // Knowledge graph data for an issue
 export { useIssueKnowledgeGraph, issueKnowledgeGraphKeys } from './use-issue-knowledge-graph';
+
+// Related Issues: suggestions, dismiss, create/delete relation (Phase 15)
+export { useRelatedSuggestions, relatedSuggestionsKeys } from './use-related-suggestions';
+export { useDismissSuggestion } from './use-dismiss-suggestion';
+export { useCreateRelation } from './use-create-relation';
+export { useDeleteRelation } from './use-delete-relation';
