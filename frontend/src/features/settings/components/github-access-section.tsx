@@ -66,8 +66,8 @@ export const GitHubAccessSection = observer(function GitHubAccessSection({
             onChange={(e) => setPat(e.target.value)}
           />
         </div>
-        <Button type="submit" size="sm" disabled={!pat.trim() || pluginsStore.isSaving}>
-          {pluginsStore.isSaving ? 'Saving...' : 'Save'}
+        <Button type="submit" size="sm" disabled={!pat.trim() || pluginsStore.isInstalling}>
+          {pluginsStore.isInstalling ? 'Saving...' : 'Save'}
         </Button>
       </form>
     </div>

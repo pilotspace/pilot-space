@@ -91,6 +91,37 @@ class WorkspacePluginRepository(BaseRepository[WorkspacePlugin]):
         result = await self.session.execute(query)
         return result.scalars().all()
 
+    async def get_by_workspace_and_repo(
+        self,
+        workspace_id: UUID,
+        repo_owner: str,
+        repo_name: str,
+    ) -> Sequence[WorkspacePlugin]:
+        """Get all non-deleted plugins from a specific repo in a workspace.
+
+        Args:
+            workspace_id: The workspace UUID.
+            repo_owner: GitHub owner/org.
+            repo_name: GitHub repository name.
+
+        Returns:
+            All non-deleted WorkspacePlugin rows from this repo.
+        """
+        query = (
+            select(WorkspacePlugin)
+            .where(
+                and_(
+                    WorkspacePlugin.workspace_id == workspace_id,
+                    WorkspacePlugin.repo_owner == repo_owner,
+                    WorkspacePlugin.repo_name == repo_name,
+                    WorkspacePlugin.is_deleted == False,  # noqa: E712
+                )
+            )
+            .order_by(WorkspacePlugin.display_name.asc())
+        )
+        result = await self.session.execute(query)
+        return result.scalars().all()
+
     async def get_by_workspace_and_name(
         self,
         workspace_id: UUID,

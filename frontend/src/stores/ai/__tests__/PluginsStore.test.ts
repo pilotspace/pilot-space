@@ -1,12 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// Mock the plugins API module
 vi.mock('@/services/api/plugins', () => ({
   pluginsApi: {
     getInstalled: vi.fn(),
     browse: vi.fn(),
     install: vi.fn(),
+    installAll: vi.fn(),
     uninstall: vi.fn(),
+    uninstallRepo: vi.fn(),
+    togglePlugin: vi.fn(),
+    toggleRepo: vi.fn(),
     checkUpdates: vi.fn(),
     saveGitHubPat: vi.fn(),
     getGitHubCredential: vi.fn(),
@@ -14,17 +17,18 @@ vi.mock('@/services/api/plugins', () => ({
 }));
 
 import { PluginsStore } from '../PluginsStore';
-import type { InstalledPlugin, AvailablePlugin } from '../PluginsStore';
+import type { InstalledPlugin } from '../PluginsStore';
 import { pluginsApi } from '@/services/api/plugins';
 
 const mockedApi = vi.mocked(pluginsApi);
 
 const WORKSPACE_ID = 'ws-1';
+const REPO_URL = 'https://github.com/org/skills';
 
 const mockInstalled: InstalledPlugin = {
   id: 'p-1',
   workspace_id: WORKSPACE_ID,
-  repo_url: 'https://github.com/org/skills',
+  repo_url: REPO_URL,
   skill_name: 'code-review',
   display_name: 'Code Review',
   description: 'Reviews pull requests',
@@ -33,11 +37,16 @@ const mockInstalled: InstalledPlugin = {
   has_update: false,
 };
 
-const mockAvailable: AvailablePlugin = {
+const mockInstalled2: InstalledPlugin = {
+  id: 'p-2',
+  workspace_id: WORKSPACE_ID,
+  repo_url: REPO_URL,
   skill_name: 'test-gen',
   display_name: 'Test Generator',
-  description: 'Generates unit tests',
-  repo_url: 'https://github.com/org/skills',
+  description: 'Generates tests',
+  installed_sha: 'abc12345',
+  is_active: false,
+  has_update: false,
 };
 
 describe('PluginsStore', () => {
@@ -69,72 +78,119 @@ describe('PluginsStore', () => {
     });
   });
 
-  describe('fetchRepo', () => {
-    it('SKRG-01: populates availablePlugins from GitHub API response', async () => {
-      mockedApi.browse.mockResolvedValue([mockAvailable]);
+  describe('groupedPlugins', () => {
+    it('groups plugins by repo_url', () => {
+      store.installedPlugins = [mockInstalled, mockInstalled2];
 
-      await store.fetchRepo(WORKSPACE_ID, 'https://github.com/org/skills');
-
-      expect(mockedApi.browse).toHaveBeenCalledWith(WORKSPACE_ID, 'https://github.com/org/skills');
-      expect(store.availablePlugins).toEqual([mockAvailable]);
-      expect(store.repoError).toBeNull();
+      expect(store.groupedPlugins).toHaveLength(1);
+      expect(store.groupedPlugins[0]?.skillCount).toBe(2);
+      expect(store.groupedPlugins[0]?.activeCount).toBe(1);
+      expect(store.groupedPlugins[0]?.repoName).toBe('skills');
+      expect(store.groupedPlugins[0]?.repoOwner).toBe('org');
     });
 
-    it('SKRG-01: sets repoError when GitHub is unreachable', async () => {
-      mockedApi.browse.mockRejectedValue(new Error('GitHub unreachable'));
+    it('separates plugins from different repos', () => {
+      const otherRepo: InstalledPlugin = {
+        ...mockInstalled,
+        id: 'p-3',
+        repo_url: 'https://github.com/other/repo',
+        skill_name: 'lint',
+      };
+      store.installedPlugins = [mockInstalled, otherRepo];
 
-      await store.fetchRepo(WORKSPACE_ID, 'https://github.com/org/skills');
-
-      expect(store.repoError).toBe('GitHub unreachable');
-      expect(store.availablePlugins).toEqual([]);
-    });
-
-    it('clears previous availablePlugins on error', async () => {
-      // First successful fetch
-      mockedApi.browse.mockResolvedValueOnce([mockAvailable]);
-      await store.fetchRepo(WORKSPACE_ID, 'https://github.com/org/skills');
-      expect(store.availablePlugins).toHaveLength(1);
-
-      // Second fetch fails
-      mockedApi.browse.mockRejectedValueOnce(new Error('fail'));
-      await store.fetchRepo(WORKSPACE_ID, 'https://github.com/bad/repo');
-
-      expect(store.availablePlugins).toEqual([]);
-      expect(store.repoError).toBe('fail');
+      expect(store.groupedPlugins).toHaveLength(2);
     });
   });
 
-  describe('installPlugin', () => {
-    it('SKRG-02: adds plugin to installedPlugins on success', async () => {
-      mockedApi.install.mockResolvedValue(mockInstalled);
+  describe('installAllFromRepo', () => {
+    it('SKRG-02: installs all skills from repo and adds to store', async () => {
+      mockedApi.installAll.mockResolvedValue([mockInstalled, mockInstalled2]);
 
-      await store.installPlugin(WORKSPACE_ID, 'https://github.com/org/skills', 'code-review');
+      const result = await store.installAllFromRepo(WORKSPACE_ID, REPO_URL);
 
-      expect(mockedApi.install).toHaveBeenCalledWith(WORKSPACE_ID, {
-        repo_url: 'https://github.com/org/skills',
-        skill_name: 'code-review',
+      expect(result).toBe(true);
+      expect(mockedApi.installAll).toHaveBeenCalledWith(WORKSPACE_ID, {
+        repo_url: REPO_URL,
+        pat: null,
       });
-      expect(store.installedPlugins).toContainEqual(mockInstalled);
+      expect(store.installedPlugins).toHaveLength(2);
+      expect(store.isInstalling).toBe(false);
     });
 
-    it('sets error on install failure', async () => {
-      mockedApi.install.mockRejectedValue(new Error('Install failed'));
+    it('passes PAT to API when provided', async () => {
+      mockedApi.installAll.mockResolvedValue([mockInstalled]);
 
-      await store.installPlugin(WORKSPACE_ID, 'https://github.com/org/skills', 'code-review');
+      await store.installAllFromRepo(WORKSPACE_ID, REPO_URL, 'ghp_test');
 
+      expect(mockedApi.installAll).toHaveBeenCalledWith(WORKSPACE_ID, {
+        repo_url: REPO_URL,
+        pat: 'ghp_test',
+      });
+    });
+
+    it('returns false and sets error on failure', async () => {
+      mockedApi.installAll.mockRejectedValue(new Error('Install failed'));
+
+      const result = await store.installAllFromRepo(WORKSPACE_ID, REPO_URL);
+
+      expect(result).toBe(false);
       expect(store.error).toBe('Install failed');
     });
   });
 
-  describe('uninstallPlugin', () => {
-    it('removes plugin from installedPlugins on success', async () => {
+  describe('toggleSkill', () => {
+    it('SKRG-03: optimistically toggles a single skill', async () => {
       store.installedPlugins = [mockInstalled];
-      mockedApi.uninstall.mockResolvedValue(undefined);
+      mockedApi.togglePlugin.mockResolvedValue({ ...mockInstalled, is_active: false });
 
-      await store.uninstallPlugin(WORKSPACE_ID, 'p-1');
+      await store.toggleSkill(WORKSPACE_ID, 'p-1', false);
 
-      expect(mockedApi.uninstall).toHaveBeenCalledWith(WORKSPACE_ID, 'p-1');
+      expect(store.installedPlugins[0]?.is_active).toBe(false);
+    });
+
+    it('reverts on API failure', async () => {
+      store.installedPlugins = [mockInstalled];
+      mockedApi.togglePlugin.mockRejectedValue(new Error('Server error'));
+
+      await store.toggleSkill(WORKSPACE_ID, 'p-1', false);
+
+      expect(store.installedPlugins[0]?.is_active).toBe(true); // reverted
+      expect(store.error).toBe('Server error');
+    });
+  });
+
+  describe('toggleRepo', () => {
+    it('optimistically toggles all skills from a repo', async () => {
+      store.installedPlugins = [mockInstalled, mockInstalled2];
+      mockedApi.toggleRepo.mockResolvedValue([
+        { ...mockInstalled, is_active: false },
+        { ...mockInstalled2, is_active: false },
+      ]);
+
+      await store.toggleRepo(WORKSPACE_ID, REPO_URL, false);
+
+      expect(store.installedPlugins.every((p) => !p.is_active)).toBe(true);
+    });
+  });
+
+  describe('uninstallRepo', () => {
+    it('removes all plugins from a repo', async () => {
+      store.installedPlugins = [mockInstalled, mockInstalled2];
+      mockedApi.uninstallRepo.mockResolvedValue(undefined);
+
+      await store.uninstallRepo(WORKSPACE_ID, REPO_URL);
+
       expect(store.installedPlugins).toEqual([]);
+    });
+
+    it('clears selectedRepoUrl if matching', async () => {
+      store.installedPlugins = [mockInstalled];
+      store.setSelectedRepoUrl(REPO_URL);
+      mockedApi.uninstallRepo.mockResolvedValue(undefined);
+
+      await store.uninstallRepo(WORKSPACE_ID, REPO_URL);
+
+      expect(store.selectedRepoUrl).toBeNull();
     });
   });
 
@@ -162,8 +218,9 @@ describe('PluginsStore', () => {
     it('saveGitHubPat calls API and updates hasGitHubPat', async () => {
       mockedApi.saveGitHubPat.mockResolvedValue(undefined);
 
-      await store.saveGitHubPat(WORKSPACE_ID, 'ghp_test123');
+      const result = await store.saveGitHubPat(WORKSPACE_ID, 'ghp_test123');
 
+      expect(result).toBe(true);
       expect(mockedApi.saveGitHubPat).toHaveBeenCalledWith(WORKSPACE_ID, 'ghp_test123');
       expect(store.hasGitHubPat).toBe(true);
     });
@@ -180,20 +237,18 @@ describe('PluginsStore', () => {
   describe('reset', () => {
     it('resets all state', () => {
       store.installedPlugins = [mockInstalled];
-      store.availablePlugins = [mockAvailable];
       store.isLoading = true;
       store.error = 'some error';
-      store.repoError = 'repo error';
       store.hasGitHubPat = true;
+      store.selectedRepoUrl = REPO_URL;
 
       store.reset();
 
       expect(store.installedPlugins).toEqual([]);
-      expect(store.availablePlugins).toEqual([]);
       expect(store.isLoading).toBe(false);
       expect(store.error).toBeNull();
-      expect(store.repoError).toBeNull();
       expect(store.hasGitHubPat).toBe(false);
+      expect(store.selectedRepoUrl).toBeNull();
     });
   });
 });

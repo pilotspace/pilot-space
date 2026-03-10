@@ -1,18 +1,11 @@
 /**
- * PluginsStore - MobX observable store for workspace plugin management.
+ * PluginsStore - MobX store for workspace plugin management.
  *
- * Phase 19 Plan 04: Manages installed and available plugins including
- * browsing GitHub repos, installing/uninstalling, checking for updates,
- * and GitHub PAT credential management.
- *
- * Pattern: mirrors MCPServersStore pattern exactly.
+ * Manages installed plugins grouped by repo, toggle operations,
+ * batch install, and GitHub PAT credential management.
  */
-import { makeAutoObservable, runInAction } from 'mobx';
+import { makeAutoObservable, runInAction, computed } from 'mobx';
 import { pluginsApi } from '@/services/api/plugins';
-
-// ============================================================
-// Domain types (exported — imported by plugins API client)
-// ============================================================
 
 export interface InstalledPlugin {
   id: string;
@@ -26,30 +19,61 @@ export interface InstalledPlugin {
   has_update: boolean;
 }
 
-export interface AvailablePlugin {
-  skill_name: string;
-  display_name: string;
-  description: string | null;
-  repo_url: string;
+/** A plugin group = all skills from the same repo. */
+export interface PluginGroup {
+  repoUrl: string;
+  repoName: string;
+  repoOwner: string;
+  skills: InstalledPlugin[];
+  skillCount: number;
+  activeCount: number;
+  hasUpdate: boolean;
 }
-
-// ============================================================
-// Store
-// ============================================================
 
 export class PluginsStore {
   installedPlugins: InstalledPlugin[] = [];
-  availablePlugins: AvailablePlugin[] = [];
   isLoading = false;
-  isSaving = false;
-  isCheckingUpdates = false;
+  isInstalling = false;
   error: string | null = null;
-  repoError: string | null = null;
   hasGitHubPat = false;
-  selectedPlugin: InstalledPlugin | null = null;
+  selectedRepoUrl: string | null = null;
 
   constructor() {
-    makeAutoObservable(this);
+    makeAutoObservable(this, {
+      groupedPlugins: computed,
+      selectedGroup: computed,
+    });
+  }
+
+  /** Group installed plugins by repo_url. */
+  get groupedPlugins(): PluginGroup[] {
+    const groups = new Map<string, InstalledPlugin[]>();
+    for (const plugin of this.installedPlugins) {
+      const existing = groups.get(plugin.repo_url) ?? [];
+      existing.push(plugin);
+      groups.set(plugin.repo_url, existing);
+    }
+
+    return Array.from(groups.entries()).map(([repoUrl, skills]) => {
+      const parts = repoUrl.replace(/\.git$/, '').split('/');
+      const repoName = parts[parts.length - 1] || repoUrl;
+      const repoOwner = parts[parts.length - 2] || '';
+      return {
+        repoUrl,
+        repoName,
+        repoOwner,
+        skills,
+        skillCount: skills.length,
+        activeCount: skills.filter((s) => s.is_active).length,
+        hasUpdate: skills.some((s) => s.has_update),
+      };
+    });
+  }
+
+  /** Get the selected plugin group for the detail dialog. */
+  get selectedGroup(): PluginGroup | null {
+    if (!this.selectedRepoUrl) return null;
+    return this.groupedPlugins.find((g) => g.repoUrl === this.selectedRepoUrl) ?? null;
   }
 
   async loadInstalledPlugins(workspaceId: string): Promise<void> {
@@ -57,7 +81,6 @@ export class PluginsStore {
       this.isLoading = true;
       this.error = null;
     });
-
     try {
       const data = await pluginsApi.getInstalled(workspaceId);
       runInAction(() => {
@@ -74,107 +97,106 @@ export class PluginsStore {
     }
   }
 
-  async fetchRepo(workspaceId: string, repoUrl: string): Promise<void> {
+  async installAllFromRepo(workspaceId: string, repoUrl: string, pat?: string): Promise<boolean> {
     runInAction(() => {
-      this.isLoading = true;
-      this.repoError = null;
-    });
-
-    try {
-      const data = await pluginsApi.browse(workspaceId, repoUrl);
-      runInAction(() => {
-        this.availablePlugins = data;
-      });
-    } catch (err) {
-      runInAction(() => {
-        this.availablePlugins = [];
-        this.repoError = err instanceof Error ? err.message : 'Failed to browse repository';
-      });
-    } finally {
-      runInAction(() => {
-        this.isLoading = false;
-      });
-    }
-  }
-
-  async installPlugin(workspaceId: string, repoUrl: string, skillName: string): Promise<void> {
-    runInAction(() => {
-      this.isSaving = true;
+      this.isInstalling = true;
       this.error = null;
     });
-
     try {
-      const plugin = await pluginsApi.install(workspaceId, {
+      const plugins = await pluginsApi.installAll(workspaceId, {
         repo_url: repoUrl,
-        skill_name: skillName,
+        pat: pat || null,
       });
       runInAction(() => {
-        this.installedPlugins = [...this.installedPlugins, plugin];
-        this.isSaving = false;
+        this.installedPlugins = [...this.installedPlugins, ...plugins];
+        this.isInstalling = false;
       });
+      return true;
     } catch (err) {
       runInAction(() => {
         this.error = err instanceof Error ? err.message : 'Failed to install plugin';
-        this.isSaving = false;
+        this.isInstalling = false;
+      });
+      return false;
+    }
+  }
+
+  async toggleSkill(workspaceId: string, pluginId: string, isActive: boolean): Promise<void> {
+    // Optimistic update
+    const prevPlugins = [...this.installedPlugins];
+    runInAction(() => {
+      this.installedPlugins = this.installedPlugins.map((p) =>
+        p.id === pluginId ? { ...p, is_active: isActive } : p
+      );
+    });
+    try {
+      await pluginsApi.togglePlugin(workspaceId, pluginId, isActive);
+    } catch (err) {
+      runInAction(() => {
+        this.installedPlugins = prevPlugins;
+        this.error = err instanceof Error ? err.message : 'Failed to toggle skill';
       });
     }
   }
 
-  async uninstallPlugin(workspaceId: string, pluginId: string): Promise<void> {
+  async toggleRepo(workspaceId: string, repoUrl: string, isActive: boolean): Promise<void> {
+    // Optimistic update
+    const prevPlugins = [...this.installedPlugins];
+    runInAction(() => {
+      this.installedPlugins = this.installedPlugins.map((p) =>
+        p.repo_url === repoUrl ? { ...p, is_active: isActive } : p
+      );
+    });
     try {
-      await pluginsApi.uninstall(workspaceId, pluginId);
+      await pluginsApi.toggleRepo(workspaceId, repoUrl, isActive);
+    } catch (err) {
       runInAction(() => {
-        this.installedPlugins = this.installedPlugins.filter((p) => p.id !== pluginId);
+        this.installedPlugins = prevPlugins;
+        this.error = err instanceof Error ? err.message : 'Failed to toggle plugin';
+      });
+    }
+  }
+
+  async uninstallRepo(workspaceId: string, repoUrl: string): Promise<void> {
+    try {
+      await pluginsApi.uninstallRepo(workspaceId, repoUrl);
+      runInAction(() => {
+        this.installedPlugins = this.installedPlugins.filter((p) => p.repo_url !== repoUrl);
+        if (this.selectedRepoUrl === repoUrl) this.selectedRepoUrl = null;
       });
     } catch (err) {
       runInAction(() => {
-        this.error = err instanceof Error ? err.message : 'Failed to uninstall plugin';
+        this.error = err instanceof Error ? err.message : 'Failed to remove plugin';
       });
     }
   }
 
   async checkUpdates(workspaceId: string): Promise<void> {
-    runInAction(() => {
-      this.isCheckingUpdates = true;
-    });
-
     try {
       const result = await pluginsApi.checkUpdates(workspaceId);
       runInAction(() => {
-        // Update has_update flag on matching installed plugins
         this.installedPlugins = this.installedPlugins.map((installed) => {
           const updated = result.plugins.find((p) => p.id === installed.id);
           return updated ? { ...installed, has_update: updated.has_update } : installed;
         });
       });
-    } catch (err) {
-      runInAction(() => {
-        this.error = err instanceof Error ? err.message : 'Failed to check for updates';
-      });
-    } finally {
-      runInAction(() => {
-        this.isCheckingUpdates = false;
-      });
+    } catch {
+      // Silent — update check is non-critical
     }
   }
 
-  async saveGitHubPat(workspaceId: string, pat: string): Promise<void> {
-    runInAction(() => {
-      this.isSaving = true;
-      this.error = null;
-    });
-
+  async saveGitHubPat(workspaceId: string, pat: string): Promise<boolean> {
     try {
       await pluginsApi.saveGitHubPat(workspaceId, pat);
       runInAction(() => {
         this.hasGitHubPat = true;
-        this.isSaving = false;
       });
+      return true;
     } catch (err) {
       runInAction(() => {
-        this.error = err instanceof Error ? err.message : 'Failed to save GitHub PAT';
-        this.isSaving = false;
+        this.error = err instanceof Error ? err.message : 'Failed to save PAT';
       });
+      return false;
     }
   }
 
@@ -185,23 +207,20 @@ export class PluginsStore {
         this.hasGitHubPat = result.has_pat;
       });
     } catch {
-      // Silent — hasGitHubPat stays false
+      // Silent
     }
   }
 
-  setSelectedPlugin(plugin: InstalledPlugin | null): void {
-    this.selectedPlugin = plugin;
+  setSelectedRepoUrl(repoUrl: string | null): void {
+    this.selectedRepoUrl = repoUrl;
   }
 
   reset(): void {
     this.installedPlugins = [];
-    this.availablePlugins = [];
     this.isLoading = false;
-    this.isSaving = false;
-    this.isCheckingUpdates = false;
+    this.isInstalling = false;
     this.error = null;
-    this.repoError = null;
     this.hasGitHubPat = false;
-    this.selectedPlugin = null;
+    this.selectedRepoUrl = null;
   }
 }

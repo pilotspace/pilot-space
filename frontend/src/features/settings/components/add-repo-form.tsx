@@ -1,93 +1,146 @@
 /**
- * AddRepoForm - GitHub repo URL input + browse button for discovering plugins.
+ * AddPluginDialog - Modal for installing a plugin from a GitHub repo.
  *
- * Phase 19 Plan 04: Submits URL to PluginsStore.fetchRepo, shows available plugins as cards.
+ * Contains: repo URL input, optional PAT input, Install button.
+ * Installs all skills from the repo at once.
  */
 
 'use client';
 
 import * as React from 'react';
-import { Search } from 'lucide-react';
+import { AlertCircle, Loader2 } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useStore } from '@/stores';
-import { PluginCard } from './plugin-card';
+import { toast } from 'sonner';
 
-interface AddRepoFormProps {
+interface AddPluginDialogProps {
   workspaceId: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }
 
-export const AddRepoForm = observer(function AddRepoForm({ workspaceId }: AddRepoFormProps) {
+export const AddPluginDialog = observer(function AddPluginDialog({
+  workspaceId,
+  open,
+  onOpenChange,
+}: AddPluginDialogProps) {
   const { ai } = useStore();
   const pluginsStore = ai.plugins;
   const [repoUrl, setRepoUrl] = React.useState('');
+  const [pat, setPat] = React.useState('');
+  const [localError, setLocalError] = React.useState<string | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleInstall = async () => {
     if (!repoUrl.trim()) return;
-    await pluginsStore.fetchRepo(workspaceId, repoUrl.trim());
-  };
+    setLocalError(null);
 
-  const handleInstall = async (skillName: string) => {
-    await pluginsStore.installPlugin(workspaceId, repoUrl.trim(), skillName);
-  };
-
-  const isAlreadyInstalled = (skillName: string) =>
-    pluginsStore.installedPlugins.some(
-      (p) => p.skill_name === skillName && p.repo_url === repoUrl.trim()
+    const success = await pluginsStore.installAllFromRepo(
+      workspaceId,
+      repoUrl.trim(),
+      pat.trim() || undefined
     );
 
+    if (success) {
+      const group = pluginsStore.groupedPlugins.find((g) => g.repoUrl === repoUrl.trim());
+      const count = group?.skillCount ?? 0;
+      toast.success(`Plugin installed — ${count} skill${count !== 1 ? 's' : ''} detected`);
+      setRepoUrl('');
+      setPat('');
+      onOpenChange(false);
+    } else {
+      setLocalError(pluginsStore.error ?? 'Installation failed');
+    }
+  };
+
+  const handleClose = (isOpen: boolean) => {
+    if (!isOpen) {
+      setRepoUrl('');
+      setPat('');
+      setLocalError(null);
+    }
+    onOpenChange(isOpen);
+  };
+
   return (
-    <div className="space-y-4">
-      <div className="space-y-1.5">
-        <Label htmlFor="repo-url">Add Plugin from GitHub</Label>
-        <p className="text-xs text-muted-foreground">
-          Paste a GitHub repository URL to browse available skills.
-        </p>
-      </div>
-      <form onSubmit={handleSubmit} className="flex gap-2">
-        <Input
-          id="repo-url"
-          type="url"
-          placeholder="https://github.com/org/skills"
-          value={repoUrl}
-          onChange={(e) => setRepoUrl(e.target.value)}
-          className="flex-1"
-        />
-        <Button type="submit" disabled={!repoUrl.trim() || pluginsStore.isLoading}>
-          <Search className="mr-1.5 h-4 w-4" />
-          {pluginsStore.isLoading ? 'Browsing...' : 'Browse'}
-        </Button>
-      </form>
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="sm:max-w-[480px]">
+        <DialogHeader>
+          <DialogTitle>Add Plugin</DialogTitle>
+          <DialogDescription>Install a plugin from a GitHub repository.</DialogDescription>
+        </DialogHeader>
 
-      {pluginsStore.repoError && (
-        <Alert variant="destructive">
-          <AlertDescription>{pluginsStore.repoError}</AlertDescription>
-        </Alert>
-      )}
-
-      {pluginsStore.availablePlugins.length > 0 && (
-        <div className="space-y-3">
-          <h3 className="text-sm font-medium">Available Skills</h3>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {pluginsStore.availablePlugins.map((plugin) => {
-              const installed = isAlreadyInstalled(plugin.skill_name);
-              return (
-                <PluginCard
-                  key={plugin.skill_name}
-                  plugin={plugin}
-                  isInstalled={installed}
-                  isInstalling={pluginsStore.isSaving}
-                  onInstall={installed ? undefined : () => handleInstall(plugin.skill_name)}
-                />
-              );
-            })}
+        <div className="space-y-4 py-2">
+          <div className="space-y-2">
+            <Label htmlFor="add-plugin-url">Repository URL</Label>
+            <Input
+              id="add-plugin-url"
+              type="url"
+              placeholder="https://github.com/org/repo"
+              value={repoUrl}
+              onChange={(e) => {
+                setRepoUrl(e.target.value);
+                setLocalError(null);
+              }}
+              disabled={pluginsStore.isInstalling}
+              className={localError ? 'border-red-500/50 focus-visible:ring-red-500' : ''}
+            />
+            {localError && (
+              <p className="flex items-center gap-1.5 text-xs text-red-400">
+                <AlertCircle className="h-3.5 w-3.5" />
+                {localError}
+              </p>
+            )}
           </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="add-plugin-pat">
+              Access Token
+              <span className="ml-1.5 font-normal text-muted-foreground">(optional)</span>
+            </Label>
+            <Input
+              id="add-plugin-pat"
+              type="password"
+              placeholder="ghp_..."
+              value={pat}
+              onChange={(e) => setPat(e.target.value)}
+              disabled={pluginsStore.isInstalling}
+            />
+            <p className="text-xs text-muted-foreground">Required for private repositories.</p>
+          </div>
+
+          {pluginsStore.isInstalling && (
+            <p className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Scanning repository for skills...
+            </p>
+          )}
         </div>
-      )}
-    </div>
+
+        <DialogFooter>
+          <Button
+            variant="ghost"
+            onClick={() => handleClose(false)}
+            disabled={pluginsStore.isInstalling}
+          >
+            Cancel
+          </Button>
+          <Button onClick={handleInstall} disabled={!repoUrl.trim() || pluginsStore.isInstalling}>
+            {pluginsStore.isInstalling && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+            {pluginsStore.isInstalling ? 'Scanning...' : 'Install'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 });

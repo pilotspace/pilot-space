@@ -2,83 +2,88 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PluginCard } from '../plugin-card';
-import type { InstalledPlugin, AvailablePlugin } from '@/stores/ai/PluginsStore';
+import type { PluginGroup } from '@/stores/ai/PluginsStore';
 
-const mockInstalled: InstalledPlugin = {
-  id: 'p-1',
-  workspace_id: 'ws-1',
-  repo_url: 'https://github.com/org/skills',
-  skill_name: 'code-review',
-  display_name: 'Code Review',
-  description: 'Reviews pull requests',
-  installed_sha: 'abc12345',
-  is_active: true,
-  has_update: false,
-};
-
-const mockAvailable: AvailablePlugin = {
-  skill_name: 'test-gen',
-  display_name: 'Test Generator',
-  description: 'Generates unit tests',
-  repo_url: 'https://github.com/org/skills',
-};
+const makeGroup = (overrides?: Partial<PluginGroup>): PluginGroup => ({
+  repoUrl: 'https://github.com/org/skills',
+  repoName: 'skills',
+  repoOwner: 'org',
+  skills: [
+    {
+      id: 'p-1',
+      workspace_id: 'ws-1',
+      repo_url: 'https://github.com/org/skills',
+      skill_name: 'code-review',
+      display_name: 'Code Review',
+      description: 'Reviews pull requests',
+      installed_sha: 'abc12345',
+      is_active: true,
+      has_update: false,
+    },
+  ],
+  skillCount: 1,
+  activeCount: 1,
+  hasUpdate: false,
+  ...overrides,
+});
 
 describe('PluginCard', () => {
-  it('SKRG-04: shows orange Update Available chip when has_update is true', () => {
-    const plugin = { ...mockInstalled, has_update: true };
-    render(<PluginCard plugin={plugin} isInstalled onUpdate={() => {}} />);
+  it('renders plugin name and skill count', () => {
+    const group = makeGroup({ skillCount: 3, activeCount: 3 });
+    render(<PluginCard group={group} onToggle={vi.fn()} onClick={vi.fn()} />);
 
-    const badge = screen.getByTestId('badge-update');
-    expect(badge).toHaveTextContent('Update Available');
-    expect(badge.className).toContain('bg-orange-100');
+    expect(screen.getByText('skills')).toBeInTheDocument();
+    expect(screen.getByText('3 skills')).toBeInTheDocument();
   });
 
-  it('SKRG-01: shows Installed badge when plugin is installed', () => {
-    render(<PluginCard plugin={mockInstalled} isInstalled />);
+  it('SKRG-04: shows Active badge when all skills are active', () => {
+    const group = makeGroup({ skillCount: 2, activeCount: 2 });
+    render(<PluginCard group={group} onToggle={vi.fn()} onClick={vi.fn()} />);
 
-    const badge = screen.getByTestId('badge-installed');
-    expect(badge).toHaveTextContent('Installed');
+    expect(screen.getByTestId('badge-active')).toBeInTheDocument();
   });
 
-  it('SKRG-02: calls onInstall when Install button clicked', async () => {
-    const user = userEvent.setup();
-    const onInstall = vi.fn();
-    render(<PluginCard plugin={mockAvailable} isInstalled={false} onInstall={onInstall} />);
+  it('shows Partial badge when some skills are active', () => {
+    const group = makeGroup({ skillCount: 3, activeCount: 1 });
+    render(<PluginCard group={group} onToggle={vi.fn()} onClick={vi.fn()} />);
 
-    const button = screen.getByRole('button', { name: 'Install' });
-    await user.click(button);
-
-    expect(onInstall).toHaveBeenCalledOnce();
+    expect(screen.getByTestId('badge-partial')).toBeInTheDocument();
   });
 
-  it('shows Update button when has_update and onUpdate provided', () => {
-    const plugin = { ...mockInstalled, has_update: true };
-    render(<PluginCard plugin={plugin} isInstalled onUpdate={() => {}} />);
+  it('SKRG-04: shows Update badge when update is available', () => {
+    const group = makeGroup({ hasUpdate: true });
+    render(<PluginCard group={group} onToggle={vi.fn()} onClick={vi.fn()} />);
 
-    expect(screen.getByRole('button', { name: 'Update' })).toBeInTheDocument();
-  });
-
-  it('does not show Install button for installed plugin without update', () => {
-    render(<PluginCard plugin={mockInstalled} isInstalled />);
-
-    expect(screen.queryByRole('button', { name: 'Install' })).not.toBeInTheDocument();
-  });
-
-  it('renders plugin display name and description', () => {
-    render(<PluginCard plugin={mockAvailable} isInstalled={false} />);
-
-    expect(screen.getByText('Test Generator')).toBeInTheDocument();
-    expect(screen.getByText('Generates unit tests')).toBeInTheDocument();
+    expect(screen.getByTestId('badge-update')).toBeInTheDocument();
   });
 
   it('calls onClick when card is clicked', async () => {
     const user = userEvent.setup();
     const onClick = vi.fn();
-    render(<PluginCard plugin={mockInstalled} isInstalled onClick={onClick} />);
+    render(<PluginCard group={makeGroup()} onToggle={vi.fn()} onClick={onClick} />);
 
-    const card = screen.getByTestId('plugin-card');
-    await user.click(card);
+    await user.click(screen.getByTestId('plugin-card'));
 
-    expect(onClick).toHaveBeenCalledOnce();
+    expect(onClick).toHaveBeenCalled();
+  });
+
+  it('calls onToggle when switch is toggled without triggering onClick', async () => {
+    const user = userEvent.setup();
+    const onToggle = vi.fn();
+    const onClick = vi.fn();
+    render(<PluginCard group={makeGroup()} onToggle={onToggle} onClick={onClick} />);
+
+    const toggle = screen.getByRole('switch');
+    await user.click(toggle);
+
+    expect(onToggle).toHaveBeenCalled();
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it('shows singular "skill" for single skill', () => {
+    const group = makeGroup({ skillCount: 1, activeCount: 1 });
+    render(<PluginCard group={group} onToggle={vi.fn()} onClick={vi.fn()} />);
+
+    expect(screen.getByText('1 skill')).toBeInTheDocument();
   });
 });

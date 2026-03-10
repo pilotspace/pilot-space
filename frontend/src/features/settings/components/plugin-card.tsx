@@ -1,89 +1,98 @@
 /**
- * PluginCard - Card component for displaying a plugin with status badge.
+ * PluginCard - Card for an installed plugin (grouped by repo).
  *
- * Phase 19 Plan 04: Shows plugin name, description, status badge (Installed/Update Available),
- * and Install/Update action button. Click opens detail sheet.
+ * Shows repo name, skill count, active/partial/inactive badge,
+ * update available badge, and toggle switch.
  */
 
 'use client';
 
 import { Package } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import type { InstalledPlugin, AvailablePlugin } from '@/stores/ai/PluginsStore';
+import { Switch } from '@/components/ui/switch';
+import type { PluginGroup } from '@/stores/ai/PluginsStore';
 
 interface PluginCardProps {
-  plugin: InstalledPlugin | AvailablePlugin;
-  isInstalled: boolean;
-  isInstalling?: boolean;
-  onInstall?: () => void;
-  onUpdate?: () => void;
-  onClick?: () => void;
+  group: PluginGroup;
+  onToggle: (isActive: boolean) => void;
+  onClick: () => void;
 }
 
-function isInstalledPlugin(plugin: InstalledPlugin | AvailablePlugin): plugin is InstalledPlugin {
-  return 'id' in plugin;
-}
-
-export function PluginCard({
-  plugin,
-  isInstalled,
-  isInstalling,
-  onInstall,
-  onUpdate,
-  onClick,
-}: PluginCardProps) {
-  const hasUpdate = isInstalledPlugin(plugin) && plugin.has_update;
+export function PluginCard({ group, onToggle, onClick }: PluginCardProps) {
+  const allActive = group.activeCount === group.skillCount;
+  const noneActive = group.activeCount === 0;
+  const isPartial = !allActive && !noneActive;
 
   return (
-    <Card
-      className="cursor-pointer transition-colors hover:bg-muted/50"
-      onClick={(e) => {
-        // Don't trigger card click when clicking a button inside
-        if ((e.target as HTMLElement).closest('button')) return;
-        onClick?.();
+    <div
+      role="button"
+      tabIndex={0}
+      className={`w-full cursor-pointer rounded-lg border border-border bg-card p-4 text-left transition-colors duration-150 hover:border-muted-foreground/30 hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${noneActive ? 'opacity-75' : ''}`}
+      onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick();
+        }
       }}
+      aria-label={`${group.repoName}, ${group.skillCount} skills, ${allActive ? 'active' : noneActive ? 'inactive' : 'partially active'}`}
       data-testid="plugin-card"
     >
-      <CardContent className="flex items-start gap-3 p-4">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
-          <Package className="h-5 w-5 text-muted-foreground" />
-        </div>
-        <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <div className="flex items-center gap-2">
-            <span className="truncate font-medium text-sm">{plugin.display_name}</span>
-            {isInstalled && !hasUpdate && (
-              <Badge variant="secondary" data-testid="badge-installed">
-                Installed
-              </Badge>
-            )}
-            {hasUpdate && (
-              <Badge
-                className="border-orange-200 bg-orange-100 text-orange-700 dark:border-orange-800 dark:bg-orange-950 dark:text-orange-400"
-                data-testid="badge-update"
-              >
-                Update Available
-              </Badge>
-            )}
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex min-w-0 flex-1 items-start gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted">
+            <Package className="h-4.5 w-4.5 text-muted-foreground" />
           </div>
-          {plugin.description && (
-            <p className="line-clamp-2 text-xs text-muted-foreground">{plugin.description}</p>
-          )}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="truncate text-sm font-medium text-foreground">{group.repoName}</span>
+              {allActive && (
+                <Badge
+                  variant="outline"
+                  className="border-emerald-500/20 bg-emerald-500/10 text-emerald-400 text-[10px] px-1.5 py-0 h-5"
+                  data-testid="badge-active"
+                >
+                  Active
+                </Badge>
+              )}
+              {isPartial && (
+                <Badge
+                  variant="outline"
+                  className="border-amber-500/20 bg-amber-500/10 text-amber-400 text-[10px] px-1.5 py-0 h-5"
+                  data-testid="badge-partial"
+                >
+                  Partial
+                </Badge>
+              )}
+              {group.hasUpdate && (
+                <Badge
+                  variant="outline"
+                  className="border-blue-500/20 bg-blue-500/10 text-blue-400 text-[10px] px-1.5 py-0 h-5"
+                  data-testid="badge-update"
+                >
+                  Update
+                </Badge>
+              )}
+            </div>
+            <p className="mt-0.5 truncate text-xs text-muted-foreground font-mono">
+              {group.repoOwner}/{group.repoName}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {group.skillCount} skill{group.skillCount !== 1 ? 's' : ''}
+            </p>
+          </div>
         </div>
-        <div className="shrink-0">
-          {hasUpdate && onUpdate && (
-            <Button size="sm" variant="outline" onClick={onUpdate} disabled={isInstalling}>
-              {isInstalling ? 'Updating...' : 'Update'}
-            </Button>
-          )}
-          {!isInstalled && onInstall && (
-            <Button size="sm" onClick={onInstall} disabled={isInstalling}>
-              {isInstalling ? 'Installing...' : 'Install'}
-            </Button>
-          )}
+        <div className="shrink-0 pt-1">
+          <Switch
+            checked={!noneActive}
+            onCheckedChange={(checked) => {
+              onToggle(checked);
+            }}
+            onClick={(e) => e.stopPropagation()}
+            aria-label={`Toggle ${group.repoName}`}
+          />
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

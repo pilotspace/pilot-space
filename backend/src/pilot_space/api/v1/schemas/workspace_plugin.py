@@ -91,6 +91,46 @@ class WorkspacePluginUpdateCheckResponse(BaseModel):
     plugins: list[WorkspacePluginResponse]
 
 
+class WorkspacePluginInstallAllRequest(BaseModel):
+    """Request to install all skills from a GitHub repository.
+
+    Attributes:
+        repo_url: Full GitHub repository URL.
+        pat: Optional GitHub PAT for private repos (used for this request only).
+    """
+
+    model_config = ConfigDict(strict=True)
+
+    repo_url: str
+    pat: str | None = None
+
+
+class WorkspacePluginToggleRequest(BaseModel):
+    """Request to toggle is_active on a plugin.
+
+    Attributes:
+        is_active: Whether the plugin should be active.
+    """
+
+    model_config = ConfigDict(strict=True)
+
+    is_active: bool
+
+
+class WorkspacePluginToggleRepoRequest(BaseModel):
+    """Request to toggle all plugins from a repo.
+
+    Attributes:
+        repo_url: GitHub repository URL.
+        is_active: Whether all plugins from this repo should be active.
+    """
+
+    model_config = ConfigDict(strict=True)
+
+    repo_url: str
+    is_active: bool
+
+
 class WorkspaceGithubCredentialRequest(BaseModel):
     """Request to save a workspace GitHub PAT.
 
@@ -118,7 +158,10 @@ __all__ = [
     "WorkspaceGithubCredentialRequest",
     "WorkspaceGithubCredentialResponse",
     "WorkspacePluginBrowseRequest",
+    "WorkspacePluginInstallAllRequest",
     "WorkspacePluginInstallRequest",
     "WorkspacePluginResponse",
+    "WorkspacePluginToggleRepoRequest",
+    "WorkspacePluginToggleRequest",
     "WorkspacePluginUpdateCheckResponse",
 ]
