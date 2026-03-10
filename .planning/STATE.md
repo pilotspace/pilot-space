@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Completed 015-01-PLAN.md - Related Issues Wave 0 scaffolding
-last_updated: "2026-03-10T05:17:22.522Z"
+stopped_at: Completed 015-02-PLAN.md - Related Issues backend API endpoints
+last_updated: "2026-03-10T05:54:30Z"
 last_activity: "2026-03-09 — 13-03 complete: generalized ProviderStatusCard, CustomProviderForm, AISettingsStore.loadModels (AIPR-01, AIPR-02, AIPR-05)"
 progress:
   total_phases: 7
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-03-09)
 
 ## Current Position
 
-Phase: Phase 13 — AI Provider Registry + Model Selection (in progress)
+Phase: Phase 15 — Related Issues (in progress)
 Plan: 3/?
-Status: 13-03 complete — generalized ProviderStatusCard, CustomProviderForm, AISettingsStore.loadModels
-Last activity: 2026-03-09 — 13-03 complete: generalized ProviderStatusCard, CustomProviderForm, AISettingsStore.loadModels (AIPR-01, AIPR-02, AIPR-05)
+Status: 15-02 complete — 4 REST endpoints (suggestions, dismiss, create/delete relations), 8 xfail tests → 9 passing
+Last activity: 2026-03-10 — 15-02 complete: related issues API (RELISS-01..04)
 
 Progress: [██░░░░░░░░] 23%
 
@@ -68,6 +68,7 @@ Progress: [██░░░░░░░░] 23%
 | 11 Fix Rate Limiting | 1/1 | 45 min | 45 min |
 
 *Updated after each plan completion*
+| Phase 015 P02 | 34 | 2 tasks | 5 files |
 | Phase 12-onboarding-first-run-ux P01 | 25 | 3 tasks | 4 files |
 | Phase 13-ai-provider-registry-model-selection P02 | 26 | 2 tasks | 5 files |
 | Phase 13-ai-provider-registry-model-selection P04 | 30 | 2 tasks | 6 files |
@@ -139,6 +140,11 @@ Recent decisions affecting current work:
 - [Phase 14-remote-mcp-server-management]: MCPServersStore added to AIStore.mcpServers — consistent with settings, cost, approval store singleton pattern
 - [Phase 14-remote-mcp-server-management]: MCPServerForm uses collapsible expand/collapse pattern — avoids permanently visible large form, matches CustomProviderForm UX intent
 - [Phase Phase 15-related-issues]: pytest.fail() instead of assert False for xfail stubs — satisfies PT015 and B011 ruff rules without changing xfail semantics
+- [Phase 015-related-issues 02]: All 4 RELISS endpoints in single related_issues.py (not workspace_issues.py) — test stubs import from related_issues; co-location avoids split
+- [Phase 015-related-issues 02]: Pre-generate link UUID before session.flush() — SQLAlchemy default=uuid.uuid4 is flush-time, not __init__-time; mock sessions leave id=None without pre-gen
+- [Phase 015-related-issues 02]: Test pattern: app.dependency_overrides + patch(_resolve_workspace) — follows test_workspace_tasks.py; isolates routes from live DB (DI container and db_session are separate connections)
+- [Phase 015-related-issues 02]: RelatedSuggestion uses issue_id field (not id) — test stubs checked item['issue_id']
+- [Phase 015-related-issues 02]: IssueLinkCreateResponse custom Pydantic schema (not IssueLinkSchema) — tests check source_issue_id/target_issue_id directly
 - [Phase Phase 15-related-issues]: IssueSuggestionDismissalRepository uses direct instantiation (not DI) — lightweight per-request helper, consistent with KnowledgeGraphRepository/SCIM pattern
 - [Phase Phase 15-related-issues]: UNIQUE constraint (user_id, source_issue_id, target_issue_id) as idempotency guard for dismissal upserts — callers catch IntegrityError and treat as no-op
 
@@ -154,7 +160,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-10T05:17:22.519Z
-Stopped at: Completed 015-01-PLAN.md - Related Issues Wave 0 scaffolding
+Last session: 2026-03-10T05:54:30Z
+Stopped at: Completed 015-02-PLAN.md - Related Issues backend API endpoints
 Resume file: None
-Next action: Phase 14 complete (all 4 plans verified). Continue with Phase 15 (Related Issues) or remaining Phase 13 plans.
+Next action: Phase 15 Plan 02 complete. Continue with Phase 15 Plan 03 (frontend UI for related issues).

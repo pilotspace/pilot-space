@@ -104,7 +104,7 @@ Plans:
 
 Plans:
 - [x] 015-01-PLAN.md — Wave 0: xfail test stubs + dismissal model + repository + migration 072 (RELISS-01..04)
-- [ ] 015-02-PLAN.md — Backend API: suggestion endpoint + reason enrichment + POST/DELETE relations + dismiss endpoint (RELISS-01..04)
+- [x] 015-02-PLAN.md — Backend API: suggestion endpoint + reason enrichment + POST/DELETE relations + dismiss endpoint (RELISS-01..04)
 - [ ] 015-03-PLAN.md — Frontend: RelatedSuggestion type + API client + hooks + RelatedIssuesPanel + IssuePropertiesPanel wire-up (RELISS-01..04)
 
 ### Phase 16: Workspace Role Skills
@@ -158,7 +158,7 @@ Plans:
 | 12. Onboarding & First-Run UX | v1.0-alpha | 3/3 | Complete | 2026-03-09 |
 | 13. AI Provider Registry + Model Selection | v1.0-alpha | 4/4 | Complete | 2026-03-10 |
 | 14. Remote MCP Server Management | v1.0-alpha | 4/4 | Complete | 2026-03-10 |
-| 15. Related Issues | v1.0-alpha | 0/3 | Not started | - |
+| 15. Related Issues | v1.0-alpha | 2/3 | In Progress | - |
 | 16. Workspace Role Skills | v1.0-alpha | 0/TBD | Not started | - |
 | 17. Skill Action Buttons | v1.0-alpha | 0/TBD | Not started | - |
 | 18. Tech Debt Closure | v1.0-alpha | 0/TBD | Not started | - |
