@@ -184,7 +184,7 @@ describe('Sidebar Navigation', () => {
       renderSidebar();
 
       const rolesLink = screen.getByTestId('nav-roles');
-      expect(rolesLink).toHaveAttribute('href', '/test-ws/roles');
+      expect(rolesLink).toHaveAttribute('href', '/test-ws/skills');
     });
 
     it('displays "Skill" label text', () => {
@@ -193,8 +193,8 @@ describe('Sidebar Navigation', () => {
       expect(screen.getByText('Skill')).toBeInTheDocument();
     });
 
-    it('highlights Skill when pathname matches /test-ws/roles', () => {
-      mockPathname.mockReturnValue('/test-ws/roles');
+    it('highlights Skill when pathname matches /test-ws/skills', () => {
+      mockPathname.mockReturnValue('/test-ws/skills');
       renderSidebar();
 
       const rolesLink = screen.getByTestId('nav-roles');

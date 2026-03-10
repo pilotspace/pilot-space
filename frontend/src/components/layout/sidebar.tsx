@@ -99,7 +99,7 @@ const navigationSections: NavSection[] = [
     icon: Sparkles,
     items: [
       { name: 'Chat', path: 'chat', icon: MessageSquare, testId: 'nav-chat' },
-      { name: 'Skill', path: 'roles', icon: UserCog, testId: 'nav-roles' },
+      { name: 'Skill', path: 'skills', icon: UserCog, testId: 'nav-roles' },
       { name: 'Costs', path: 'costs', icon: DollarSign, testId: 'nav-costs' },
       {
         name: 'Approvals',

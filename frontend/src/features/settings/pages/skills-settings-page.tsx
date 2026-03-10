@@ -300,7 +300,7 @@ export const SkillsSettingsPage = observer(function SkillsSettingsPage() {
 
   if (isGuest) {
     return (
-      <div className="max-w-3xl px-4 py-6 sm:px-8">
+      <div className="px-4 py-6 sm:px-6 lg:px-8">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Skills</h1>
         </div>
@@ -311,7 +311,7 @@ export const SkillsSettingsPage = observer(function SkillsSettingsPage() {
 
   if (isLoading) {
     return (
-      <div className="max-w-3xl px-4 py-6 sm:px-8">
+      <div className="px-4 py-6 sm:px-6 lg:px-8">
         <LoadingSkeleton />
       </div>
     );
@@ -319,7 +319,7 @@ export const SkillsSettingsPage = observer(function SkillsSettingsPage() {
 
   if (isError) {
     return (
-      <div className="max-w-3xl px-4 py-6 sm:px-8">
+      <div className="px-4 py-6 sm:px-6 lg:px-8">
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
@@ -331,7 +331,7 @@ export const SkillsSettingsPage = observer(function SkillsSettingsPage() {
   }
 
   return (
-    <div className="max-w-3xl px-4 py-6 sm:px-8">
+    <div className="px-4 py-6 sm:px-6 lg:px-8">
       <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-wrap items-start justify-between gap-3">
