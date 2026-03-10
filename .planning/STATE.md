@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Completed 14-01-PLAN.md - Wave 0 test stubs for remote MCP server management
-last_updated: "2026-03-10T02:26:51.162Z"
+stopped_at: Completed 14-02-PLAN.md - MCP server persistence layer (migration, model, repository, schemas)
+last_updated: "2026-03-10T02:38:41.370Z"
 last_activity: "2026-03-09 — 13-03 complete: generalized ProviderStatusCard, CustomProviderForm, AISettingsStore.loadModels (AIPR-01, AIPR-02, AIPR-05)"
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 11
-  completed_plans: 8
+  completed_plans: 9
   percent: 23
 ---
 
@@ -72,6 +72,7 @@ Progress: [██░░░░░░░░] 23%
 | Phase 13-ai-provider-registry-model-selection P02 | 26 | 2 tasks | 5 files |
 | Phase 13-ai-provider-registry-model-selection P04 | 30 | 2 tasks | 6 files |
 | Phase 14-remote-mcp-server-management P01 | 18 | 2 tasks | 6 files |
+| Phase 14-remote-mcp-server-management P02 | 18 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -127,6 +128,8 @@ Recent decisions affecting current work:
 - [Phase 13-ai-provider-registry-model-selection]: model_override is undefined (not null) when no model selected — field omitted from JSON body, no breaking change for workspaces without selection
 - [Phase 14-remote-mcp-server-management]: xfail stubs with function-local imports: prevents import failure from breaking whole test file when implementation modules are absent (14-01)
 - [Phase 14-remote-mcp-server-management]: it.todo() for frontend Wave 0 stubs: Vitest pending state communicates intent-to-implement better than it.skip() (14-01)
+- [Phase 14-remote-mcp-server-management]: WorkspaceMcpServerRepository uses get_by_workspace_and_id not get_by_id override — avoids pyright incompatible method override (entity_id vs server_id parameter name)
+- [Phase 14-remote-mcp-server-management]: WorkspaceMcpServerUpdate schema added in 14-02 — Plan 03 PATCH endpoint needs it; added proactively to avoid deviation in Plan 03
 
 ### Pending Todos
 
@@ -140,7 +143,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-10T02:26:51.160Z
-Stopped at: Completed 14-01-PLAN.md - Wave 0 test stubs for remote MCP server management
+Last session: 2026-03-10T02:38:41.368Z
+Stopped at: Completed 14-02-PLAN.md - MCP server persistence layer (migration, model, repository, schemas)
 Resume file: None
 Next action: Phase 13 in progress. Plans 13-01, 13-02, 13-03 complete. Continue with 13-04 (model picker chat UI).
