@@ -68,6 +68,7 @@ from pilot_space.api.v1.routers.pm_dependency_graph import router as pm_dependen
 from pilot_space.api.v1.routers.pm_release_notes import router as pm_release_notes_router
 from pilot_space.api.v1.routers.pm_sprint_board import router as pm_sprint_board_router
 from pilot_space.api.v1.routers.projects import router as projects_router
+from pilot_space.api.v1.routers.related_issues import router as related_issues_router
 from pilot_space.api.v1.routers.role_skills import (
     role_templates_router,
     router as role_skills_router,
@@ -193,6 +194,7 @@ __all__ = [
     "pm_release_notes_router",
     "pm_sprint_board_router",
     "projects_router",
+    "related_issues_router",
     "role_skills_router",
     "role_templates_router",
     "scim_router",

@@ -25,6 +25,9 @@ from pilot_space.infrastructure.database.repositories.issue_link_repository impo
 from pilot_space.infrastructure.database.repositories.issue_repository import (
     IssueRepository,
 )
+from pilot_space.infrastructure.database.repositories.knowledge_graph_repository import (
+    KnowledgeGraphRepository,
+)
 from pilot_space.infrastructure.database.repositories.note_issue_link_repository import (
     NoteIssueLinkRepository,
 )
@@ -186,12 +189,25 @@ def _get_workspace_repository(
 
 WorkspaceRepositoryDep = Annotated[WorkspaceRepository, Depends(_get_workspace_repository)]
 
+
+@inject
+def _get_knowledge_graph_repository(
+    repo: KnowledgeGraphRepository = Depends(Provide[Container.knowledge_graph_repository]),
+) -> KnowledgeGraphRepository:
+    return repo
+
+
+KnowledgeGraphRepositoryDep = Annotated[
+    KnowledgeGraphRepository, Depends(_get_knowledge_graph_repository)
+]
+
 __all__ = [
     "ActivityRepositoryDep",
     "CycleRepositoryDep",
     "InvitationRepositoryDep",
     "IssueLinkRepositoryDep",
     "IssueRepositoryDep",
+    "KnowledgeGraphRepositoryDep",
     "NoteIssueLinkRepositoryDep",
     "NoteNoteLinkRepositoryDep",
     "NoteRepositoryDep",
