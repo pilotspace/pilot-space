@@ -85,6 +85,10 @@ from pilot_space.api.v1.routers.workspace_issue_branches import (
     router as workspace_issue_branches_router,
 )
 from pilot_space.api.v1.routers.workspace_issues import router as workspace_issues_router
+from pilot_space.api.v1.routers.workspace_mcp_servers import (
+    mcp_oauth_callback_router,
+    router as workspace_mcp_servers_router,
+)
 from pilot_space.api.v1.routers.workspace_members import router as workspace_members_router
 from pilot_space.api.v1.routers.workspace_note_issue_links import (
     router as workspace_note_issue_links_router,
@@ -174,6 +178,7 @@ __all__ = [
     "issues_router",
     "knowledge_graph_issues_router",
     "knowledge_graph_router",
+    "mcp_oauth_callback_router",
     "mcp_tools_router",
     "memory_router",
     "note_templates_router",
@@ -200,6 +205,7 @@ __all__ = [
     "workspace_invitations_router",
     "workspace_issue_branches_router",
     "workspace_issues_router",
+    "workspace_mcp_servers_router",
     "workspace_members_router",
     "workspace_note_issue_links_router",
     "workspace_note_links_router",
