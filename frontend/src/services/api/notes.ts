@@ -32,9 +32,9 @@ export const notesApi = {
       pageSize: String(pageSize),
     };
 
-    if (filters?.projectId) params.projectId = filters.projectId;
-    if (filters?.isPinned !== undefined) params.isPinned = String(filters.isPinned);
-    if (filters?.authorId) params.authorId = filters.authorId;
+    if (filters?.projectId) params.project_id = filters.projectId;
+    if (filters?.isPinned !== undefined) params.is_pinned = String(filters.isPinned);
+    if (filters?.authorId) params.author_id = filters.authorId;
     if (filters?.search) params.search = filters.search;
 
     return apiClient.get<PaginatedResponse<Note>>(`/workspaces/${workspaceId}/notes`, { params });
@@ -58,6 +58,12 @@ export const notesApi = {
 
   delete(workspaceId: string, noteId: string): Promise<void> {
     return apiClient.delete<void>(`/workspaces/${workspaceId}/notes/${noteId}`);
+  },
+
+  moveNote(workspaceId: string, noteId: string, projectId: string | null): Promise<Note> {
+    return apiClient.post<Note>(`/workspaces/${workspaceId}/notes/${noteId}/move`, {
+      project_id: projectId,
+    });
   },
 
   pin(workspaceId: string, noteId: string): Promise<Note> {

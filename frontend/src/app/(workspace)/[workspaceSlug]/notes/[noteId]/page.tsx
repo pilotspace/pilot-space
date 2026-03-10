@@ -7,8 +7,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { observer } from 'mobx-react-lite';
 import { useRouter, useParams } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { motion } from 'motion/react';
 import { FileX, ArrowLeft } from 'lucide-react';
+import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -20,6 +22,8 @@ import { useTogglePin } from '@/hooks/useTogglePin';
 import { useNoteVersions, useRestoreNoteVersion } from '@/hooks/useNoteVersions';
 import { useNoteStore, useWorkspaceStore } from '@/stores/RootStore';
 import { useWorkspace } from '@/components/workspace-guard';
+import { notesApi } from '@/services/api';
+import { notesKeys } from '@/features/notes/hooks';
 import type { JSONContent } from '@/types';
 
 // Using useParams() hook instead of props for reliable client-side navigation
@@ -104,6 +108,7 @@ const NoteDetailPage = observer(function NoteDetailPage() {
   const workspaceSlug = params.workspaceSlug ?? '';
   const noteId = params.noteId ?? '';
   const router = useRouter();
+  const queryClient = useQueryClient();
   const noteStore = useNoteStore();
   const workspaceStore = useWorkspaceStore();
 
@@ -284,6 +289,20 @@ const NoteDetailPage = observer(function NoteDetailPage() {
     }
   }, [togglePin, note]);
 
+  // Handle move to project
+  const handleMove = useCallback(
+    async (newProjectId: string | null) => {
+      try {
+        await notesApi.moveNote(workspaceId, noteId, newProjectId);
+        queryClient.invalidateQueries({ queryKey: notesKeys.detail(workspaceId, noteId) });
+        toast.success(newProjectId ? 'Note moved to project' : 'Note moved to workspace root');
+      } catch {
+        toast.error('Failed to move note');
+      }
+    },
+    [workspaceId, noteId, queryClient]
+  );
+
   // Handle share
   const handleShare = useCallback(() => {
     // Open share dialog - to be implemented
@@ -346,6 +365,7 @@ const NoteDetailPage = observer(function NoteDetailPage() {
           onDelete={handleDelete}
           onTogglePin={handleTogglePin}
           onVersionHistory={handleVersionHistory}
+          onMove={handleMove}
           projectId={note.projectId}
           linkedIssues={note.linkedIssues}
         />

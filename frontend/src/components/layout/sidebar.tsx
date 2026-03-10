@@ -4,7 +4,7 @@ import { observer } from 'mobx-react-lite';
 import { motion } from 'motion/react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import {
   Home,
   FileText,
@@ -19,7 +19,6 @@ import {
   Plus,
   Compass,
   PinIcon,
-  Clock,
   Loader2,
   LogOut,
   User,
@@ -39,7 +38,10 @@ import {
   useAuthStore,
   useWorkspaceStore,
 } from '@/stores';
-import { useCreateNote, createNoteDefaults } from '@/features/notes/hooks';
+import { useCreateNote } from '@/features/notes/hooks';
+import { useProjects } from '@/features/projects/hooks/useProjects';
+import { TemplatePicker } from '@/features/notes/components/TemplatePicker';
+import { useNewNoteFlow } from './useNewNoteFlow';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -369,31 +371,32 @@ export const Sidebar = observer(function Sidebar() {
     }));
   }, [workspaceSlug]);
 
+  const { data: projectsData } = useProjects({ workspaceId, enabled: !!workspaceId });
+  const projectMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    (projectsData?.items ?? []).forEach((p) => {
+      map[p.id] = p.name;
+    });
+    return map;
+  }, [projectsData]);
+
   const pinnedNotes = useMemo(() => {
     return noteStore.pinnedNotes.slice(0, 5).map((note) => ({
       id: note.id,
       title: note.title,
+      projectId: note.projectId,
       href: `/${workspaceSlug}/notes/${note.id}`,
     }));
   }, [noteStore.pinnedNotes, workspaceSlug]);
 
-  const recentNotes = useMemo(() => {
-    return noteStore.recentNotes
-      .filter((note) => !noteStore.pinnedNotes.some((p) => p.id === note.id))
-      .slice(0, 5)
-      .map((note) => ({
-        id: note.id,
-        title: note.title,
-        href: `/${workspaceSlug}/notes/${note.id}`,
-      }));
-  }, [noteStore.recentNotes, noteStore.pinnedNotes, workspaceSlug]);
-
-  const handleNewNote = useCallback(() => {
-    createNote.mutate(createNoteDefaults());
-  }, [createNote]);
+  const newNoteFlow = useNewNoteFlow({
+    onCreateNote: (data) => createNote.mutate(data),
+  });
+  const handleNewNote = newNoteFlow.open;
 
   return (
-    <div className="flex h-full flex-col">
+    <>
+      <div className="flex h-full flex-col">
       {/* Logo & Workspace */}
       <div
         className={cn(
@@ -550,35 +553,11 @@ export const Sidebar = observer(function Sidebar() {
                     >
                       <FileText className="h-3 w-3 text-muted-foreground" />
                       <span className="truncate">{note.title}</span>
-                    </Link>
-                  </motion.div>
-                ))}
-              </div>
-            </div>
-
-            {/* Recent Notes */}
-            <div data-testid="note-list">
-              <div className="mb-1.5 flex items-center gap-1.5 px-1.5">
-                <Clock className="h-2.5 w-2.5 text-muted-foreground" />
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  Recent
-                </span>
-              </div>
-              <div className="space-y-px">
-                {recentNotes.map((note, index) => (
-                  <motion.div
-                    key={note.id}
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.05 + 0.1 }}
-                  >
-                    <Link
-                      href={note.href}
-                      data-testid="note-item"
-                      className="group flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-                    >
-                      <FileText className="h-3 w-3" />
-                      <span className="truncate">{note.title}</span>
+                      {note.projectId && projectMap[note.projectId] && (
+                        <span className="ml-auto shrink-0 text-[10px] text-muted-foreground/60 truncate max-w-[60px]">
+                          {projectMap[note.projectId]}
+                        </span>
+                      )}
                     </Link>
                   </motion.div>
                 ))}
@@ -667,5 +646,15 @@ export const Sidebar = observer(function Sidebar() {
         </Tooltip>
       </div>
     </div>
+
+    {newNoteFlow.showTemplatePicker && (
+      <TemplatePicker
+        workspaceId={workspaceId}
+        isAdmin={isAdminOrOwner}
+        onConfirm={newNoteFlow.handleTemplateConfirm}
+        onClose={newNoteFlow.handleTemplateClose}
+      />
+    )}
+    </>
   );
 });

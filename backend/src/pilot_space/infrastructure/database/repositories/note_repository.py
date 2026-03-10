@@ -69,6 +69,7 @@ class NoteRepository(BaseRepository[Note]):
         self,
         project_id: UUID,
         *,
+        is_pinned: bool | None = None,
         include_deleted: bool = False,
         limit: int | None = None,
     ) -> Sequence[Note]:
@@ -76,6 +77,7 @@ class NoteRepository(BaseRepository[Note]):
 
         Args:
             project_id: The project ID.
+            is_pinned: Optional filter by pinned status. None returns all.
             include_deleted: Whether to include soft-deleted notes.
             limit: Maximum number of notes to return.
 
@@ -85,7 +87,9 @@ class NoteRepository(BaseRepository[Note]):
         query = select(Note).where(Note.project_id == project_id)
         if not include_deleted:
             query = query.where(Note.is_deleted == False)  # noqa: E712
-        query = query.order_by(Note.created_at.desc())
+        if is_pinned is not None:
+            query = query.where(Note.is_pinned == is_pinned)
+        query = query.order_by(Note.updated_at.desc())
         if limit:
             query = query.limit(limit)
         result = await self.session.execute(query)

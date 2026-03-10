@@ -3,6 +3,7 @@
 /**
  * useNotes - TanStack Query hook for fetching notes list with pagination
  */
+import { useMemo } from 'react';
 import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
 import { notesApi } from '@/services/api';
 import type { Note } from '@/types';
@@ -15,6 +16,8 @@ export interface UseNotesOptions {
   workspaceId: string;
   /** Filter by project ID */
   projectId?: string;
+  /** Filter by multiple project IDs (client-side filter, fetches all notes then filters) */
+  projectIds?: string[];
   /** Filter by pinned status */
   isPinned?: boolean;
   /** Filter by author ID */
@@ -68,13 +71,19 @@ export function useNotes({
 export function useInfiniteNotes({
   workspaceId,
   projectId,
+  projectIds,
   isPinned,
   authorId,
   pageSize = 20,
   enabled = true,
 }: UseNotesOptions) {
-  return useInfiniteQuery({
-    queryKey: [...notesKeys.list(workspaceId, { projectId, isPinned }), 'infinite'],
+  // Stabilize the projectIds key: sort and join so array identity doesn't cause spurious refetches
+  const projectIdsKey = projectIds && projectIds.length > 0
+    ? [...projectIds].sort().join(',')
+    : undefined;
+
+  const query = useInfiniteQuery({
+    queryKey: [...notesKeys.list(workspaceId, { projectId, isPinned }), 'infinite', projectIdsKey],
     queryFn: ({ pageParam }) =>
       notesApi.list(workspaceId, { projectId, isPinned, authorId }, pageParam, pageSize),
     initialPageParam: 1,
@@ -84,6 +93,27 @@ export function useInfiniteNotes({
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 30,
   });
+
+  // Client-side multi-project filter when projectIds is provided.
+  // Memoized so the Set and filtered pages are only recomputed when query data or projectIds change.
+  const filteredData = useMemo(() => {
+    if (!projectIdsKey || !query.data) return query.data;
+    const projectIdSet = new Set(projectIds);
+    return {
+      ...query.data,
+      pages: query.data.pages.map((page) => ({
+        ...page,
+        items: page.items.filter((note) => note.projectId && projectIdSet.has(note.projectId)),
+      })),
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query.data, projectIdsKey]);
+
+  if (projectIdsKey) {
+    return { ...query, data: filteredData };
+  }
+
+  return query;
 }
 
 /**
