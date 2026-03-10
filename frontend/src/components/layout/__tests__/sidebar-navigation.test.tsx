@@ -138,7 +138,7 @@ describe('Sidebar Navigation', () => {
       expect(screen.getByTestId('nav-members')).toBeInTheDocument();
     });
 
-    it('renders AI section items (Chat, Roles, Costs)', () => {
+    it('renders AI section items (Chat, Skill, Costs)', () => {
       renderSidebar();
 
       expect(screen.getByTestId('nav-chat')).toBeInTheDocument();
@@ -179,7 +179,7 @@ describe('Sidebar Navigation', () => {
     });
   });
 
-  describe('Roles nav item', () => {
+  describe('Skill nav item', () => {
     it('links to /test-ws/roles', () => {
       renderSidebar();
 
@@ -187,13 +187,13 @@ describe('Sidebar Navigation', () => {
       expect(rolesLink).toHaveAttribute('href', '/test-ws/roles');
     });
 
-    it('displays "Roles" label text', () => {
+    it('displays "Skill" label text', () => {
       renderSidebar();
 
-      expect(screen.getByText('Roles')).toBeInTheDocument();
+      expect(screen.getByText('Skill')).toBeInTheDocument();
     });
 
-    it('highlights Roles when pathname matches /test-ws/roles', () => {
+    it('highlights Skill when pathname matches /test-ws/roles', () => {
       mockPathname.mockReturnValue('/test-ws/roles');
       renderSidebar();
 

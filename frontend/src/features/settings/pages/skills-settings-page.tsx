@@ -300,9 +300,9 @@ export const SkillsSettingsPage = observer(function SkillsSettingsPage() {
 
   if (isGuest) {
     return (
-      <div className="max-w-3xl px-8 py-6">
+      <div className="max-w-3xl px-4 py-6 sm:px-8">
         <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Roles</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Skills</h1>
         </div>
         <GuestView />
       </div>
@@ -311,7 +311,7 @@ export const SkillsSettingsPage = observer(function SkillsSettingsPage() {
 
   if (isLoading) {
     return (
-      <div className="max-w-3xl px-8 py-6">
+      <div className="max-w-3xl px-4 py-6 sm:px-8">
         <LoadingSkeleton />
       </div>
     );
@@ -319,7 +319,7 @@ export const SkillsSettingsPage = observer(function SkillsSettingsPage() {
 
   if (isError) {
     return (
-      <div className="max-w-3xl px-8 py-6">
+      <div className="max-w-3xl px-4 py-6 sm:px-8">
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
@@ -331,17 +331,17 @@ export const SkillsSettingsPage = observer(function SkillsSettingsPage() {
   }
 
   return (
-    <div className="max-w-3xl px-8 py-6">
+    <div className="max-w-3xl px-4 py-6 sm:px-8">
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex items-start justify-between">
+        <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-1">
-            <h1 className="text-2xl font-semibold tracking-tight">Roles</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">Skills</h1>
             <p className="text-sm text-muted-foreground">
               Configure your SDLC roles to personalize AI assistance.
             </p>
           </div>
-          <div className="text-right">
+          <div className="flex flex-col items-end gap-1 shrink-0">
             <Button
               onClick={handleSetupRole}
               disabled={isMaxReached}
@@ -351,7 +351,7 @@ export const SkillsSettingsPage = observer(function SkillsSettingsPage() {
               Add Role
             </Button>
             {!isMaxReached && slotsLeft > 0 && (
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 {slotsLeft} slot{slotsLeft > 1 ? 's' : ''} left
               </p>
             )}
@@ -399,9 +399,9 @@ export const SkillsSettingsPage = observer(function SkillsSettingsPage() {
       {/* Workspace Skills (admin only) */}
       {workspaceStore.isAdmin && (
         <div className="space-y-4 border-t pt-6">
-          <div className="flex items-start justify-between">
+          <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="space-y-1">
-              <h2 className="text-lg font-semibold">Skill</h2>
+              <h2 className="text-lg font-semibold">Workspace Skills</h2>
               <p className="text-sm text-muted-foreground">
                 Configure AI skills inherited by all members with a matching SDLC role. Skills
                 remain inactive until you explicitly activate them.
