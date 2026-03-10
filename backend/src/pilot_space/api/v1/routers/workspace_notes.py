@@ -15,6 +15,7 @@ from pilot_space.api.v1.dependencies import (
     ListAnnotationsServiceDep,
     ListNotesServiceDep,
     PinNoteServiceDep,
+    ProjectRepositoryDep,
     UpdateAnnotationServiceDep,
     UpdateNoteServiceDep,
     WorkspaceRepositoryDep,
@@ -432,6 +433,7 @@ async def move_workspace_note(
     session: SessionDep,
     update_service: UpdateNoteServiceDep,
     workspace_repo: WorkspaceRepositoryDep,
+    project_repo: ProjectRepositoryDep,
 ) -> NoteResponse:
     """Move a note to a different project or root workspace.
 
@@ -445,6 +447,7 @@ async def move_workspace_note(
         session: Database session.
         update_service: Update note service.
         workspace_repo: Workspace repository.
+        project_repo: Project repository (used to validate project workspace).
 
     Returns:
         Updated note with new project association.
@@ -452,7 +455,14 @@ async def move_workspace_note(
     from pilot_space.application.services.note.update_note_service import UpdateNotePayload
 
     workspace = await _resolve_workspace(workspace_id, workspace_repo)
-    _ = workspace  # workspace validated; note ownership enforced via RLS
+
+    if move_data.project_id is not None:
+        project = await project_repo.get_by_id(move_data.project_id)
+        if project is None or project.workspace_id != workspace.id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Project not found in this workspace",
+            )
 
     payload = UpdateNotePayload(
         note_id=note_id,
