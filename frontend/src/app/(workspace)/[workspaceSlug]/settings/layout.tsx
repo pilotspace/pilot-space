@@ -21,6 +21,7 @@ import {
   KeyRound,
   Menu,
   Plug,
+  ServerCog,
   Settings,
   Shield,
   ShieldCheck,
@@ -62,6 +63,12 @@ const settingsNavSections: NavSection[] = [
         label: 'AI Providers',
         icon: Sparkles,
         href: (slug: string) => `/${slug}/settings/ai-providers`,
+      },
+      {
+        id: 'mcp-servers',
+        label: 'MCP Servers',
+        icon: ServerCog,
+        href: (slug: string) => `/${slug}/settings/mcp-servers`,
       },
       {
         id: 'integrations',
