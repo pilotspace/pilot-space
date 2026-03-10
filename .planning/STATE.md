@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: verifying
-stopped_at: Completed 016-01-PLAN.md — Phase 16 Plan 01 Wave 0 stubs
-last_updated: "2026-03-10T08:08:00.000Z"
-last_activity: "2026-03-10 — 016-01 complete: 15 xfail/todo stubs for workspace role skills (WRSKL-01..04)"
+status: in_progress
+stopped_at: Completed 016-02-PLAN.md — WorkspaceRoleSkill model + repository + migration 073
+last_updated: "2026-03-10T08:28:00.000Z"
+last_activity: "2026-03-10 — 016-02 complete: WorkspaceRoleSkill model, repository, Alembic migration 073 with RLS"
 progress:
   total_phases: 7
   completed_phases: 4
   total_plans: 18
-  completed_plans: 15
-  percent: 25
+  completed_plans: 16
+  percent: 28
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-03-09)
 ## Current Position
 
 Phase: Phase 16 — Workspace Role Skills (in progress)
-Plan: 1/4
-Status: 016-01 complete — 15 xfail/todo stubs for WRSKL-01..04, pytest 9 passed 15 xfailed, vitest 9 todo
-Last activity: 2026-03-10 — 016-01 complete: Wave 0 TDD stubs for workspace role skills
+Plan: 2/4
+Status: 016-02 complete — WorkspaceRoleSkill model + repository + migration 073 with RLS
+Last activity: 2026-03-10 — 016-02 complete: persistence layer for WRSKL-01..04
 
-Progress: [███░░░░░░░] 25%
+Progress: [███░░░░░░░] 28%
 
 ## Milestone: v1.0-alpha
 
@@ -152,6 +152,9 @@ Recent decisions affecting current work:
 - [Phase 015-related-issues]: Test mocks use 'as unknown as ReturnType<typeof hook>' — TanStack UseQueryResult complex union needs unknown cast for partial mocks
 - [Phase 016-workspace-role-skills 01]: No imports from not-yet-existing modules in stubs — prevents entire test file collection failure when implementation is absent
 - [Phase 016-workspace-role-skills 01]: pytestmark = pytest.mark.asyncio at module level — matches existing test_role_skill_repository.py pattern in this codebase
+- [Phase 016-workspace-role-skills 02]: Partial unique index (WHERE is_deleted = false) instead of UniqueConstraint — allows re-create after soft-delete without uniqueness violation
+- [Phase 016-workspace-role-skills 02]: created_by nullable with SET NULL — workspace skill persists after creator leaves workspace
+- [Phase 016-workspace-role-skills 02]: soft_delete() sets is_active=False atomically — ensures immediate materializer exclusion without separate deactivate call
 
 ### Pending Todos
 

@@ -33,9 +33,9 @@
 
 ### Workspace Role Skills
 
-- [ ] **WRSKL-01**: Workspace admin writes a role description; AI generates a workspace-level skill for that role
-- [ ] **WRSKL-02**: Admin reviews and approves AI-generated skill before it becomes active for the workspace
-- [ ] **WRSKL-03**: Members with a matching role automatically inherit the workspace-level skill
+- [x] **WRSKL-01**: Workspace admin writes a role description; AI generates a workspace-level skill for that role
+- [x] **WRSKL-02**: Admin reviews and approves AI-generated skill before it becomes active for the workspace
+- [x] **WRSKL-03**: Members with a matching role automatically inherit the workspace-level skill
 - [ ] **WRSKL-04**: User's personal skill overrides workspace skill if both exist for the same role
 
 ### Skill Action Buttons
@@ -131,9 +131,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | RELISS-02 | Phase 15 | Complete |
 | RELISS-03 | Phase 15 | Complete |
 | RELISS-04 | Phase 15 | Complete |
-| WRSKL-01 | Phase 16 | Pending |
-| WRSKL-02 | Phase 16 | Pending |
-| WRSKL-03 | Phase 16 | Pending |
+| WRSKL-01 | Phase 16 | Complete |
+| WRSKL-02 | Phase 16 | Complete |
+| WRSKL-03 | Phase 16 | Complete |
 | WRSKL-04 | Phase 16 | Pending |
 | SKBTN-01 | Phase 17 | Pending |
 | SKBTN-02 | Phase 17 | Pending |

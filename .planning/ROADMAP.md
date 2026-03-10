@@ -120,7 +120,7 @@ Plans:
 
 Plans:
 - [x] 016-01-PLAN.md — Wave 0: xfail backend stubs (repository, service, router, materializer) + frontend it.todo() stubs (WRSKL-01..04)
-- [ ] 016-02-PLAN.md — Persistence: WorkspaceRoleSkill model + repository + migration 073 + RLS policies (WRSKL-01..03)
+- [x] 016-02-PLAN.md — Persistence: WorkspaceRoleSkill model + repository + migration 073 + RLS policies (WRSKL-01..03)
 - [ ] 016-03-PLAN.md — Backend services + admin router + materializer inheritance extension (WRSKL-01..04)
 - [ ] 016-04-PLAN.md — Frontend: workspace-role-skills API client + hooks + WorkspaceSkillCard + admin section in SkillsSettingsPage (WRSKL-01..04)
 
@@ -165,7 +165,7 @@ Plans:
 | 13. AI Provider Registry + Model Selection | v1.0-alpha | 4/4 | Complete | 2026-03-10 |
 | 14. Remote MCP Server Management | v1.0-alpha | 4/4 | Complete | 2026-03-10 |
 | 15. Related Issues | v1.0-alpha | 2/3 | In Progress | - |
-| 16. Workspace Role Skills | v1.0-alpha | 1/4 | In progress | 016-01 complete (Wave 0 stubs) |
+| 16. Workspace Role Skills | v1.0-alpha | 2/4 | In progress | 016-02 complete (model + repo + migration 073) |
 | 17. Skill Action Buttons | v1.0-alpha | 0/TBD | Not started | - |
 | 18. Tech Debt Closure | v1.0-alpha | 0/TBD | Not started | - |
 
