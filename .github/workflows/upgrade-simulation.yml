@@ -97,6 +97,25 @@ jobs:
           echo "PostgreSQL is ready"
 
       # -------------------------------------------------------------------------
+      # Supabase compatibility shim
+      # Migrations use auth.uid() and the auth schema (Supabase extensions).
+      # pgvector/pgvector:pg15 is a plain Postgres build without these.
+      # We create a minimal stub so migrations can run outside Supabase.
+      # -------------------------------------------------------------------------
+      - name: Set up Supabase auth schema stub
+        env:
+          PGPASSWORD: testpassword
+        run: |
+          psql -h localhost -U postgres -d pilot_space_test <<'SQL'
+            CREATE SCHEMA IF NOT EXISTS auth;
+            CREATE OR REPLACE FUNCTION auth.uid()
+              RETURNS uuid
+              LANGUAGE sql STABLE
+              AS $$ SELECT '00000000-0000-0000-0000-000000000000'::uuid $$;
+          SQL
+          echo "Auth schema stub created"
+
+      # -------------------------------------------------------------------------
       # UPGRADE STEP 1: Apply migrations
       # Simulates: running `alembic upgrade head` before rolling out new code
       # -------------------------------------------------------------------------
