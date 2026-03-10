@@ -1,9 +1,9 @@
 # Data Model: Project Notes Panel (022)
 
 **Date**: 2026-03-10
-**Updated**: 2026-03-10 — v2: Enhancement feature data flows added
+**Updated**: 2026-03-10 — v3: Bug fix data flows + new backend schema additions
 
-This feature is **frontend-only** — no new backend models, migrations, or API endpoints. All data already exists.
+This feature is **primarily frontend** but v3 adds **backend changes** for bug fixes.
 
 ---
 
@@ -176,10 +176,106 @@ All endpoints are authenticated (Supabase Auth header) and RLS-enforced.
 | `showProjectPicker` | `sidebar.tsx` local | `boolean` | Controls project selector modal after template |
 | `showMoveDialog` | `InlineNoteHeader` local | `boolean` | Controls Move... dialog |
 
+> **v3 UPDATE**: `pendingTemplate` and `showProjectPicker` will be removed when ENH-7 integrates the project selector into `TemplatePicker`.
 
 ---
 
-## Entities Used
+## v3 Backend Schema Additions
+
+### NoteMove (new)
+
+```python
+class NoteMove(BaseSchema):
+    project_id: UUID | None  # required field; null = remove project association
+```
+
+Source: `backend/src/pilot_space/api/v1/schemas/note.py`
+
+### UpdateNotePayload additions
+
+```python
+@dataclass(slots=True)
+class UpdateNotePayload:
+    ...
+    clear_project_id: bool = False  # NEW: when True, sets note.project_id = None
+```
+
+Source: `backend/src/pilot_space/application/services/note/update_note_service.py`
+
+---
+
+## v3 Data Flows
+
+### BUG-3: ProjectNotesPanel pinned/recent split (fixed)
+
+```
+ProjectNotesPanel
+  ├── useNotes({ workspaceId, projectId: project.id, isPinned: true, pageSize: 5 })
+  │     → GET /workspaces/{id}/notes?project_id=X&is_pinned=true&pageSize=5
+  │     → ListNotesService.execute() → get_by_project(project_id, is_pinned=True) ✅
+  └── useNotes({ workspaceId, projectId: project.id, isPinned: false, pageSize: 5 })
+        → GET /workspaces/{id}/notes?project_id=X&is_pinned=false&pageSize=5
+        → ListNotesService.execute() → get_by_project(project_id, is_pinned=False) ✅
+```
+
+### BUG-4: Create note with template (fixed)
+
+```
+useNewNoteFlow.handleTemplateConfirm(template, projectId)
+  → useCreateNote.mutate({ title, content: template.content, projectId })
+  → POST /workspaces/{id}/notes
+  → backend returns NoteDetailResponse (WITH content) ✅
+  → useCreateNote.onSuccess: setQueryData(detail key, note with content) ✅
+  → NoteDetailPage: note.content from cache is non-null ✅
+```
+
+### BUG-5: Move note to project/root (fixed)
+
+```
+InlineNoteHeader "Move..." → MoveNoteDialog → onSelect(newProjectId)
+  → NoteDetailPage.handleMove(newProjectId: string | null)
+  → notesApi.moveNote(workspaceId, noteId, newProjectId)
+  → POST /workspaces/{id}/notes/{noteId}/move
+    Body: { project_id: newProjectId }  // null = remove project
+  → UpdateNotePayload(note_id, clear_project_id=True)  // when newProjectId is null
+  → note.project_id = None ✅
+  → toast.success("Note moved...") ✅
+```
+
+### ENH-7: TemplatePicker project selector (integrated)
+
+```
+sidebar.tsx New Note button
+  → useNewNoteFlow.open()
+  → TemplatePicker opens
+        ├── user selects template
+        ├── user selects project (inline combobox in TemplatePicker)
+        └── onConfirm(template, projectId) called
+              → createNote.mutate({ title, content, projectId? })
+```
+
+### ENH-9: Notes page project filter
+
+```
+notes/page.tsx
+  ├── [selectedProjectIds] state
+  ├── useInfiniteNotes({ workspaceId, projectIds: selectedProjectIds, isPinned, pageSize })
+  │     → GET /workspaces/{id}/notes?project_id=X&project_id=Y&...
+  └── render chips: selectedProjectIds.map(id → Badge)
+```
+
+---
+
+## v3 State Additions
+
+| State | Location | Type | Purpose |
+|---|---|---|---|
+| `selectedProjectId` | `TemplatePicker` local | `string \| null` | Project selected in integrated picker |
+| `search` (project filter) | `TemplatePicker` local | `string` | Combobox search term |
+| `search` (move dialog) | `MoveNoteDialog` local | `string` | Project list search filter |
+| `selectedProjectIds` | `notes/page.tsx` local | `string[]` | Multi-select project filter chips |
+
+
 
 ### Note (existing)
 

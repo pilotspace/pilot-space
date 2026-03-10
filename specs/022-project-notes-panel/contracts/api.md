@@ -1,7 +1,8 @@
 # API Contracts: Project Notes Panel (022)
 
 **Date**: 2026-03-10
-**Note**: All contracts below use **existing** backend endpoints. No new API endpoints are required for this feature.
+**Updated**: 2026-03-10 — v3: new move endpoint + updated create response type
+**Note**: v3 adds 1 new endpoint and modifies 1 existing endpoint response type.
 
 ---
 
@@ -79,6 +80,8 @@
 
 ### Response `201 Created`
 
+> **v3 CHANGE**: Response type changed from `NoteResponse` to `NoteDetailResponse` — now includes `content` field.
+
 ```json
 {
   "id": "uuid",
@@ -87,6 +90,10 @@
   "projectId": "uuid",
   "workspaceId": "uuid",
   "wordCount": 0,
+  "content": {
+    "type": "doc",
+    "content": [{ "type": "paragraph" }]
+  },
   "createdAt": "2026-03-10T12:00:00Z",
   "updatedAt": "2026-03-10T12:00:00Z"
 }
@@ -102,29 +109,89 @@
 
 ---
 
-## Component Interface Contract
+## Contract 4 (NEW): Move Note to Project
 
-### `ProjectNotesPanel` Props
+**Endpoint**: `POST /api/v1/workspaces/{workspaceId}/notes/{noteId}/move`
+**Auth**: Required (Bearer token)
+**Permission**: Role must not be `guest`
 
-```typescript
-interface ProjectNotesPanelProps {
-  /** Project entity from useProject hook */
-  project: Project;
-  /** Workspace slug for building note URLs */
-  workspaceSlug: string;
-  /** Workspace UUID for API calls */
-  workspaceId: string;
+### Path Parameters
+
+| Param | Type | Description |
+|---|---|---|
+| `workspaceId` | UUID or slug | Workspace |
+| `noteId` | UUID | Note to move |
+
+### Request Body
+
+```json
+{
+  "project_id": "uuid-or-null"
 }
 ```
 
-### Behaviour Contract
+- `project_id: UUID` — moves note to the specified project
+- `project_id: null` — removes project association (moves to root workspace)
+
+### Response `200 OK`
+
+```json
+{
+  "id": "uuid",
+  "title": "string",
+  "isPinned": false,
+  "projectId": "uuid-or-null",
+  "workspaceId": "uuid",
+  "wordCount": 0,
+  "updatedAt": "2026-03-10T12:01:00Z",
+  "createdAt": "2026-03-10T12:00:00Z"
+}
+```
+
+### Error Responses
+
+| Status | Condition |
+|---|---|
+| `401` | Unauthenticated |
+| `403` | Guest role or not a workspace member |
+| `404` | Note or workspace not found |
+| `422` | Missing `project_id` field in body |
+
+---
+
+## Component Interface Contract (v3 updates)
+
+### `TemplatePicker` Props (updated)
+
+```typescript
+interface TemplatePickerProps {
+  workspaceId: string;
+  isAdmin: boolean;
+  onConfirm: (template: NoteTemplate | null, projectId: string | null) => void;  // CHANGED
+  onClose: () => void;
+}
+```
+
+### `MoveNoteDialog` Props (unchanged, search added internally)
+
+```typescript
+interface MoveNoteDialogProps {
+  workspaceId: string;
+  currentProjectId?: string | null;
+  confirmLabel?: string;
+  onSelect: (projectId: string | null) => void;
+  onClose: () => void;
+}
+```
+
+### `ProjectNotesPanel` Behaviour Contract (v3 update)
 
 | State | Panel renders |
 |---|---|
-| Loading (either query) | 3 skeleton rows per sub-section |
-| Error (either query) | Inline "Failed to load notes" text (non-crashing) |
-| Empty (no notes at all) | Empty state with "New Note" link |
-| Has pinned notes | "Pinned" section header + up to 5 rows |
-| Has recent notes (no pinned) | "Recent" section header + up to 5 rows |
-| Has > 5 notes in either section | Shows 5 rows + "View all" link |
-| Create note pending | "New Note" button shows loading state |
+| Loading (recent query) | 3 skeleton rows |
+| Error | Inline "Failed to load notes" text (non-crashing) |
+| Empty (no notes) | Empty state |
+| Has recent notes | "Recent" section header + up to 5 rows |
+| Has > 5 recent notes | Shows 5 rows + "View all" link |
+| **Pinned section** | **Removed (v3 BUG-2)** |
+

@@ -1,9 +1,10 @@
 'use client';
 
 /**
- * useNewNoteFlow - Encapsulates TemplatePicker + project-selector state for the "New Note" flow.
+ * useNewNoteFlow - Encapsulates TemplatePicker state for the "New Note" flow.
  *
- * Returns state, handlers, and props needed to render the two-step modal sequence.
+ * TemplatePicker now includes an integrated project selector, so the flow is a
+ * single step: open TemplatePicker → confirm with (template, projectId).
  */
 import { useState, useCallback } from 'react';
 import type { NoteTemplate } from '@/services/api/templates';
@@ -15,51 +16,31 @@ interface UseNewNoteFlowOptions {
 
 export function useNewNoteFlow({ onCreateNote }: UseNewNoteFlowOptions) {
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
-  const [pendingTemplate, setPendingTemplate] = useState<NoteTemplate | null | undefined>(
-    undefined
-  );
-  const [showProjectPicker, setShowProjectPicker] = useState(false);
 
   const open = useCallback(() => {
     setShowTemplatePicker(true);
   }, []);
 
-  const handleTemplateConfirm = useCallback((template: NoteTemplate | null) => {
-    setShowTemplatePicker(false);
-    setPendingTemplate(template);
-    setShowProjectPicker(true);
-  }, []);
-
-  const handleTemplateClose = useCallback(() => {
-    setShowTemplatePicker(false);
-  }, []);
-
-  const handleProjectSelect = useCallback(
-    (projectId: string | null) => {
-      setShowProjectPicker(false);
-      const template = pendingTemplate;
-      setPendingTemplate(undefined);
+  const handleTemplateConfirm = useCallback(
+    (template: NoteTemplate | null, projectId: string | null) => {
+      setShowTemplatePicker(false);
       onCreateNote({
         title: template ? `New ${template.name} Note` : 'Untitled',
         content: (template?.content ?? { type: 'doc', content: [{ type: 'paragraph' }] }) as JSONContent,
         ...(projectId ? { projectId } : {}),
       });
     },
-    [pendingTemplate, onCreateNote]
+    [onCreateNote]
   );
 
-  const handleProjectClose = useCallback(() => {
-    setShowProjectPicker(false);
-    setPendingTemplate(undefined);
+  const handleTemplateClose = useCallback(() => {
+    setShowTemplatePicker(false);
   }, []);
 
   return {
     showTemplatePicker,
-    showProjectPicker,
     handleTemplateConfirm,
     handleTemplateClose,
-    handleProjectSelect,
-    handleProjectClose,
     open,
   };
 }

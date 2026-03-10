@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Pin, Clock, FileText, ChevronRight } from 'lucide-react';
+import { Clock, FileText, ChevronRight } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useNotes } from '@/features/notes/hooks/useNotes';
 import type { Project } from '@/types';
@@ -14,21 +14,9 @@ interface ProjectNotesPanelProps {
 
 export function ProjectNotesPanel({ project, workspaceSlug, workspaceId }: ProjectNotesPanelProps) {
   const {
-    data: pinnedData,
-    isLoading: pinnedLoading,
-    isError: pinnedError,
-  } = useNotes({
-    workspaceId,
-    projectId: project.id,
-    isPinned: true,
-    pageSize: 5,
-    enabled: !!workspaceId,
-  });
-
-  const {
     data: recentData,
-    isLoading: recentLoading,
-    isError: recentError,
+    isLoading,
+    isError,
   } = useNotes({
     workspaceId,
     projectId: project.id,
@@ -37,23 +25,29 @@ export function ProjectNotesPanel({ project, workspaceSlug, workspaceId }: Proje
     enabled: !!workspaceId,
   });
 
-  const isLoading = pinnedLoading || recentLoading;
-  const isError = pinnedError || recentError;
-
-  const pinnedNotes = pinnedData?.items ?? [];
-  const pinnedTotal = pinnedData?.total ?? 0;
   const recentNotes = recentData?.items ?? [];
   const recentTotal = recentData?.total ?? 0;
-  const isEmpty = !isLoading && !isError && pinnedNotes.length === 0 && recentNotes.length === 0;
+  const isEmpty = !isLoading && !isError && recentNotes.length === 0;
 
   return (
     <div className="px-2 py-2">
-      {/* Section header */}
-      <div className="mb-1.5 flex items-center gap-1.5 px-1.5">
-        <FileText className="h-2.5 w-2.5 text-muted-foreground" />
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-          Notes
-        </span>
+      {/* Section header with inline "View all" when notes overflow */}
+      <div className="mb-1 flex items-center justify-between px-1.5">
+        <div className="flex items-center gap-1.5">
+          <Clock className="h-2.5 w-2.5 text-muted-foreground" />
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Recent
+          </span>
+        </div>
+        {recentTotal > 5 && (
+          <Link
+            href={`/${workspaceSlug}/notes`}
+            className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-sidebar-foreground transition-colors"
+            data-testid="project-notes-view-all-recent"
+          >
+            View all <ChevronRight className="h-3 w-3" />
+          </Link>
+        )}
       </div>
 
       {/* Loading state */}
@@ -71,53 +65,11 @@ export function ProjectNotesPanel({ project, workspaceSlug, workspaceId }: Proje
       )}
 
       {/* Empty state */}
-      {isEmpty && (
-        <p className="px-3 py-2 text-xs text-muted-foreground">No notes yet</p>
-      )}
-
-      {/* Pinned sub-section */}
-      {!isLoading && !isError && pinnedNotes.length > 0 && (
-        <div className="mb-2" data-testid="project-pinned-notes">
-          <div className="mb-1 flex items-center gap-1.5 px-1.5">
-            <Pin className="h-2.5 w-2.5 text-muted-foreground" />
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Pinned
-            </span>
-          </div>
-          <div className="space-y-px">
-            {pinnedNotes.map((note) => (
-              <Link
-                key={note.id}
-                href={`/${workspaceSlug}/notes/${note.id}`}
-                data-testid="project-note-item"
-                className="group flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs text-sidebar-foreground transition-colors hover:bg-sidebar-accent/50"
-              >
-                <FileText className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-                <span className="truncate">{note.title}</span>
-              </Link>
-            ))}
-          </div>
-          {pinnedTotal > 5 && (
-            <Link
-              href={`/${workspaceSlug}/notes`}
-              className="flex items-center gap-1 px-1.5 py-1 text-[10px] text-muted-foreground hover:text-sidebar-foreground transition-colors"
-              data-testid="project-notes-view-all-pinned"
-            >
-              View all <ChevronRight className="h-3 w-3" />
-            </Link>
-          )}
-        </div>
-      )}
+      {isEmpty && <p className="px-3 py-2 text-xs text-muted-foreground">No notes yet</p>}
 
       {/* Recent sub-section */}
       {!isLoading && !isError && recentNotes.length > 0 && (
         <div data-testid="project-recent-notes">
-          <div className="mb-1 flex items-center gap-1.5 px-1.5">
-            <Clock className="h-2.5 w-2.5 text-muted-foreground" />
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Recent
-            </span>
-          </div>
           <div className="space-y-px">
             {recentNotes.map((note) => (
               <Link
@@ -131,15 +83,6 @@ export function ProjectNotesPanel({ project, workspaceSlug, workspaceId }: Proje
               </Link>
             ))}
           </div>
-          {recentTotal > 5 && (
-            <Link
-              href={`/${workspaceSlug}/notes`}
-              className="flex items-center gap-1 px-1.5 py-1 text-[10px] text-muted-foreground hover:text-sidebar-foreground transition-colors"
-              data-testid="project-notes-view-all-recent"
-            >
-              View all <ChevronRight className="h-3 w-3" />
-            </Link>
-          )}
         </div>
       )}
     </div>

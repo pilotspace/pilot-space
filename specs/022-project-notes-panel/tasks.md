@@ -2,9 +2,283 @@
 
 **Source**: `/specs/022-project-notes-panel/`
 **Branch**: `022-project-notes-panel`
-**Updated**: 2026-03-10 — v2: Enhancement features T022–T044 added
+**Updated**: 2026-03-10 — v3: Bug fixes T045–T064 + Enhancements T065–T082 added
 **Required**: plan.md ✅, spec.md ✅
 **Optional**: research.md ✅, data-model.md ✅, contracts/ ✅, quickstart.md ✅
+
+---
+
+## Task Format
+
+```
+- [ ] [ID] [P?] [Story?] Description with exact file path
+```
+
+| Marker | Meaning |
+|--------|---------|
+| `[P]` | Parallelizable (different files, no dependencies) |
+| `[BUGn]` | Bug fix label |
+| `[ENHn]` | Enhancement label |
+
+---
+
+## Phases 1–12 (v1 + v2 — COMPLETE)
+
+All T001–T044 are complete. See above in original task list.
+
+---
+
+## Phase 13: BUG-1 — Remove Recent Section from Workspace Sidebar
+
+**Goal**: The workspace taskbar (sidebar.tsx) no longer shows a "Recent" notes section (FR-017).
+**Verify**: Open workspace sidebar → only "Pinned" section visible; no "Recent" header or list.
+
+- [X] T045 [BUG1] In `frontend/src/components/layout/sidebar.tsx`, remove the `recentNotes` useMemo block (~lines 394–403): delete `const recentNotes = useMemo(...)`. Remove all imports and variables only used by `recentNotes` if no longer needed.
+- [X] T046 [BUG1] In `frontend/src/components/layout/sidebar.tsx`, remove the entire `{/* Recent Notes */}` render block (~lines 580–607): the `<div data-testid="note-list">` section containing `recentNotes.map(...)`. Also remove `Clock` from lucide imports if no longer used.
+
+**Checkpoint**: Workspace sidebar shows only "Pinned" section. No "Recent" notes section.
+
+---
+
+## Phase 14: BUG-2 — Remove Pinned Section from Project Notes Panel
+
+**Goal**: `ProjectNotesPanel` shows only the "Recent" section — no "Pinned" section (FR-018).
+**Verify**: Navigate to any project sidebar → only "Recent" notes visible; no pin icon or "Pinned" header.
+
+- [X] T047 [BUG2] In `frontend/src/components/projects/ProjectNotesPanel.tsx`, remove the `useNotes` call for pinned notes (`isPinned: true`): delete the `pinnedData` query and associated `pinnedNotes` / `isPinnedLoading` / `isPinnedError` variables.
+- [X] T048 [BUG2] In `frontend/src/components/projects/ProjectNotesPanel.tsx`, remove the "Pinned" sub-section render block: the section header with `<Pin>` icon, the pinned note rows, and the "View all" link for pinned notes. Remove `Pin` from lucide imports if no longer used.
+
+**Checkpoint**: `ProjectNotesPanel` renders only the Recent section. The pinned API call is no longer made.
+
+---
+
+## Phase 15: BUG-3 — Fix Backend Project + isPinned Combined Filter
+
+**Goal**: `GET /notes?project_id=X&is_pinned=true/false` correctly filters by both params simultaneously (FR-019).
+**Verify**: Backend test: project with 1 pinned + 2 unpinned notes → `?project_id=X&is_pinned=true` returns 1 note; `?project_id=X&is_pinned=false` returns 2 notes.
+
+- [X] T049 [BUG3] In `backend/src/pilot_space/infrastructure/database/repositories/note_repository.py`, update `get_by_project` signature to accept `is_pinned: bool | None = None`. Add a WHERE clause: `if is_pinned is not None: query = query.where(Note.is_pinned == is_pinned)`. Also change the ORDER BY from `created_at.desc()` to `updated_at.desc()` to match recent-first semantics.
+- [X] T050 [BUG3] In `backend/src/pilot_space/application/services/note/list_notes_service.py`, in the `elif payload.project_id:` branch (line ~97), update the `get_by_project` call to pass `is_pinned=payload.is_pinned`.
+
+**Checkpoint**: `ListNotesService` correctly filters by both `project_id` AND `is_pinned` when both are provided.
+
+---
+
+## Phase 16: BUG-4 — Fix Create Note Returning Empty Content
+
+**Goal**: `POST /workspaces/{id}/notes` returns the full note including `content`, so `useCreateNote.onSuccess` can seed the TanStack Query detail cache with template content (FR-020).
+**Verify**: Create note with template → navigate to editor → template content visible immediately, no blank screen.
+
+- [X] T051 [BUG4] In `backend/src/pilot_space/api/v1/routers/workspace_notes.py`, change the `create_workspace_note` endpoint: update `response_model=NoteDetailResponse` (was `NoteResponse`) and change the return statement to `return _note_to_detail_response(result.note)` (was `_note_to_response`).
+
+**Checkpoint**: `POST /notes` response now includes `content` field. No frontend changes needed (TanStack Query cache is correctly populated).
+
+---
+
+## Phase 17: BUG-5 — Add Move Note Endpoint + Frontend Fix
+
+**Goal**: Moving a note to a different project OR to root workspace (clearing `project_id`) works correctly via a new dedicated endpoint. Toast notification shown on success (FR-021).
+**Verify**: Open note in "Frontend" project → "Move..." → "No project (root)" → note.projectId is null; breadcrumb reverts to "Notes > Title"; toast visible.
+
+### Backend
+
+- [X] T052 [BUG5] In `backend/src/pilot_space/api/v1/schemas/note.py`, add the `NoteMove` schema class: `class NoteMove(BaseSchema): project_id: UUID | None = Field(..., description="New project ID, or null to remove project association")`. Add `"NoteMove"` to `__all__`.
+- [X] T053 [BUG5] In `backend/src/pilot_space/application/services/note/update_note_service.py`, add `clear_project_id: bool = False` field to `UpdateNotePayload`. In `execute()`, add handling before the existing `if payload.project_id is not None` block: `if payload.clear_project_id: note.project_id = None; fields_updated.append("project_id")`. Keep the existing `elif payload.project_id is not None` branch unchanged.
+- [X] T054 [BUG5] In `backend/src/pilot_space/api/v1/routers/workspace_notes.py`, add the move endpoint:
+
+  ```python
+  @router.post(
+      "/{workspace_id}/notes/{note_id}/move",
+      response_model=NoteResponse,
+      tags=["workspace-notes"],
+      summary="Move a note to a different project or root workspace",
+  )
+  async def move_workspace_note(
+      workspace_id: WorkspaceIdOrSlug,
+      note_id: NoteIdPath,
+      move_data: NoteMove,
+      current_user_id: CurrentUserId,
+      session: SessionDep,
+      update_service: UpdateNoteServiceDep,
+      workspace_repo: WorkspaceRepositoryDep,
+  ) -> NoteResponse:
+  ```
+
+  Import `NoteMove` from schemas. Build `UpdateNotePayload` with `clear_project_id=True` when `move_data.project_id is None`, else `project_id=move_data.project_id`.
+
+### Frontend
+
+- [X] T055 [BUG5] In `frontend/src/services/api/notes.ts`, add `moveNote(workspaceId: string, noteId: string, projectId: string | null): Promise<Note>` method calling `apiClient.post<Note>(\`/workspaces/${workspaceId}/notes/${noteId}/move\`, { project_id: projectId })`.
+- [X] T056 [BUG5] In `frontend/src/app/(workspace)/[workspaceSlug]/notes/[noteId]/page.tsx`:
+  - Add `notesApi` import if not already imported.
+  - Add `queryClient` from `useQueryClient()` at the top of the component.
+  - Update `handleMove` to be an `async` callback that calls `notesApi.moveNote(workspaceId, noteId, newProjectId)` directly, then invalidates `notesKeys.detail(workspaceId, noteId)`, then calls `toast.success(newProjectId ? 'Note moved to project' : 'Note moved to workspace root')`.
+  - Add `toast` import from `sonner` if not present.
+
+**Checkpoint**: `POST /move` endpoint exists and works. Moving to "No project" clears `project_id`. Toast shown on success. Breadcrumb updates via cache invalidation.
+
+---
+
+## Phase 18: ENH-7 — TemplatePicker Integrated Project Selector
+
+**Goal**: Replace the separate `MoveNoteDialog` second step in `useNewNoteFlow` with an inline searchable project combobox at the bottom of `TemplatePicker`. `onConfirm` now passes `(template, projectId)` (FR-022).
+**Verify**: Click "New Note" → single `TemplatePicker` modal with project combobox at bottom → select template + project → note created; no second popup appears.
+
+- [X] T057 [ENH7] In `frontend/src/features/notes/components/TemplatePicker.tsx`:
+  - Update `TemplatePickerProps.onConfirm` signature from `(template: NoteTemplate | null) => void` to `(template: NoteTemplate | null, projectId: string | null) => void`.
+  - Add `useProjects({ workspaceId })` call inside the component to fetch projects.
+  - Add `selectedProjectId` state (`string | null`, default `null`) and `projectSearch` state (`string`, default `''`).
+  - Add a project selector section below the template grid and above the confirm button: show a `<Select>` or Popover+Command combobox with a search input, "No project (root)" as first option, then filtered projects.
+  - Update `handleConfirm` to call `onConfirm(selectedTemplate, selectedProjectId)`.
+- [X] T058 [ENH7] In `frontend/src/components/layout/useNewNoteFlow.ts`:
+  - Remove `showProjectPicker`, `pendingTemplate`, `handleProjectSelect`, `handleProjectClose` state/handlers.
+  - Update `handleTemplateConfirm` signature to `(template: NoteTemplate | null, projectId: string | null)`.
+  - In `handleTemplateConfirm`, directly call `onCreateNote({ title, content, ...(projectId ? { projectId } : {}) })` without an intermediate step.
+  - Remove `showProjectPicker` and `handleProjectClose` from the returned object.
+- [X] T059 [ENH7] In `frontend/src/components/layout/sidebar.tsx`:
+  - Remove the `{newNoteFlow.showProjectPicker && <MoveNoteDialog ... />}` render block.
+  - Remove `MoveNoteDialog` import from sidebar (it's still used in `InlineNoteHeader`; check that removing from sidebar doesn't break anything).
+  - Verify the `<TemplatePicker onConfirm={newNoteFlow.handleTemplateConfirm} />` prop type still matches.
+
+**Checkpoint**: New Note flow is single modal. `TemplatePicker` includes project combobox. No second popup.
+
+---
+
+## Phase 19: ENH-8 — MoveNoteDialog Search Input
+
+**Goal**: `MoveNoteDialog` has a search input that filters the project list in real time (FR-023).
+**Verify**: Open "Move..." → search "back" → only projects matching "back" in name shown; "No project (root)" always visible.
+
+- [X] T060 [ENH8] In `frontend/src/components/editor/MoveNoteDialog.tsx`:
+  - Add `search` state (`string`, default `''`).
+  - Add a `filteredProjects` useMemo that filters `projects` by `project.name.toLowerCase().includes(search.toLowerCase())`.
+  - Render a `<Input>` field (from `@/components/ui/input`) at the top of the project list section (below the header, above "No project (root)"), with `value={search}` and `onChange={(e) => setSearch(e.target.value)}`, `placeholder="Search projects..."`, `autoFocus`.
+  - Replace `projects.map(...)` with `filteredProjects.map(...)`.
+  - Add `Input` to imports.
+  - Add `Search` icon from lucide to the input prefix for visual consistency (optional but preferred).
+
+**Checkpoint**: MoveNoteDialog has a functional search input that filters projects.
+
+---
+
+## Phase 20: ENH-9 — Notes Page Project Filter with Chips
+
+**Goal**: The notes list page has a multi-select project filter. Selected projects appear as dismissible chips below the search bar (FR-024).
+**Verify**: Select 2 projects → notes reload filtered → 2 chips appear → remove one chip → notes reload with 1 project filter.
+
+- [X] T061 [ENH9] In `frontend/src/features/notes/hooks/useInfiniteNotes.ts`, add `projectIds?: string[]` to the options interface and query params. When provided, pass as `projectId` repeated query params (or comma-separated if backend supports it; check `notesApi.list` first). If backend only accepts single `project_id`, implement client-side multi-project filtering as a fallback.
+- [X] T062 [ENH9] In `frontend/src/app/(workspace)/[workspaceSlug]/notes/page.tsx`:
+  - Add `selectedProjectIds` state: `const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([])`.
+  - Add `pendingProjectIds` state for the dropdown before "Done" is pressed: `const [pendingProjectIds, setPendingProjectIds] = useState<string[]>([])`.
+  - Add a "Projects" `<Button variant="outline" size="sm">` in the filter toolbar (next to the existing "Filter" button).
+  - The button opens a `<DropdownMenu>` containing a `<Command>` with multi-select `<CommandItem>` for each project (checkboxes via `Check` icon). Include a search input at the top of the command list.
+  - Add a "Done" `<DropdownMenuItem>` or `<Button>` inside the dropdown that calls `setSelectedProjectIds(pendingProjectIds)` and closes the dropdown.
+  - Import `FolderKanban`, `X`, `Check` from lucide (if not already imported).
+- [X] T063 [ENH9] In `frontend/src/app/(workspace)/[workspaceSlug]/notes/page.tsx`:
+  - Pass `selectedProjectIds` to `useInfiniteNotes` as `projectIds`.
+  - Render project filter chips between the toolbar and the content area.
+    ```tsx
+    {selectedProjectIds.length > 0 && (
+      <div className="flex flex-wrap gap-2 px-4 py-2 sm:px-6 border-b border-border">
+        {selectedProjectIds.map((pid) => {
+          const project = projectMap.get(pid);
+          return (
+            <Badge key={pid} variant="secondary" className="gap-1 pr-1.5">
+              <FolderKanban className="h-3 w-3" />
+              <span className="text-xs">{project?.name ?? 'Project'}</span>
+              <button
+                type="button"
+                onClick={() => {
+                  const next = selectedProjectIds.filter((id) => id !== pid);
+                  setSelectedProjectIds(next);
+                  setPendingProjectIds(next);
+                }}
+                className="ml-0.5 rounded hover:bg-muted"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          );
+        })}
+        <button
+          type="button"
+          onClick={() => { setSelectedProjectIds([]); setPendingProjectIds([]); }}
+          className="text-xs text-muted-foreground hover:text-foreground"
+        >
+          Clear all
+        </button>
+      </div>
+    )}
+    ```
+
+**Checkpoint**: Notes page has project multi-select filter. Chips appear and are dismissible. Notes reload when filter changes.
+
+---
+
+## Phase 21: Polish & Validation (v3)
+
+- [X] T064 [P] Run `cd frontend && pnpm type-check` and fix all TypeScript errors across v3 modified files: `sidebar.tsx`, `useNewNoteFlow.ts`, `ProjectNotesPanel.tsx`, `TemplatePicker.tsx`, `MoveNoteDialog.tsx`, `notes/[noteId]/page.tsx`, `notes/page.tsx`, `services/api/notes.ts`, `features/notes/hooks/useInfiniteNotes.ts`
+- [X] T065 [P] Run `cd frontend && pnpm lint` and fix all ESLint errors across the v3 file set
+- [X] T066 [P] Run `cd backend && uv run ruff check` and fix all lint errors in `workspace_notes.py`, `note.py`, `update_note_service.py`, `list_notes_service.py`, `note_repository.py`
+- [X] T067 [P] Run `cd backend && uv run pyright` and fix all type errors in the same backend files
+
+---
+
+## Dependencies (v3)
+
+### Phase Order
+
+```
+Phase 13 (BUG-1: remove Recent from workspace sidebar)     — independent
+Phase 14 (BUG-2: remove Pinned from project panel)         — independent
+Phase 15 (BUG-3: backend project+isPinned fix)             — independent (backend only)
+Phase 16 (BUG-4: backend create returns NoteDetailResponse) — independent (backend only)
+Phase 17 (BUG-5: move endpoint)
+  └── T052 → T053 → T054 (backend, sequential)
+  └── T055 → T056 (frontend, sequential)
+
+Phase 18 (ENH-7: TemplatePicker project selector)
+  └── T057 → T058 → T059 (sequential — TemplatePicker → useNewNoteFlow → sidebar)
+
+Phase 19 (ENH-8: MoveNoteDialog search)                    — independent
+
+Phase 20 (ENH-9: notes page project filter)
+  └── T061 → T062 → T063 (sequential)
+
+Phase 21 (Polish) — depends on all phases above
+```
+
+### Cross-task Dependencies
+
+| Task | Depends On | Reason |
+|---|---|---|
+| T050 | T049 | Service uses updated `get_by_project` signature |
+| T054 | T052, T053 | Router imports `NoteMove` schema and uses `clear_project_id` |
+| T056 | T055 | `handleMove` uses `notesApi.moveNote` from T055 |
+| T058 | T057 | `useNewNoteFlow` handles new `onConfirm(template, projectId)` sig |
+| T059 | T058 | Sidebar removes project picker and passes updated props |
+| T063 | T061, T062 | Chips render uses `selectedProjectIds` state and `projectMap` from T062 |
+| T064–T067 | T045–T063 | Final quality gate |
+
+### Parallel Opportunities
+
+```
+Phase 13+14+15+16 — all independent, run in parallel
+BUG-5 backend (T052→T053→T054) || BUG-5 frontend (T055→T056) — parallel
+ENH-7 (T057→T058→T059) || ENH-8 (T060) — parallel
+ENH-9 (T061→T062→T063) — independent
+Phase 21 (T064-T067) — all 4 tasks parallel
+```
+
+---
+
+## Notes (v3)
+
+- **T049** changes `get_by_project` sort from `created_at.desc()` to `updated_at.desc()` — this is the correct "recent" semantics for the panel.
+- **T057** extends `TemplatePicker.onConfirm` — verify no other callers of `TemplatePicker` in the codebase before updating the signature.
+- **T061** — check if `useInfiniteNotes` + backend supports multiple `project_id` params. If not, implement single `project_id` with client-side union filtering as a pragmatic fallback.
+- **T056** — `handleMove` currently uses `useUpdateNote`. After this change, it calls `notesApi.moveNote` directly. Remove the `onMove` wiring from `useUpdateNote` if it's no longer needed.
+
 
 ---
 

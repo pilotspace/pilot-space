@@ -58,7 +58,7 @@ export function ProjectSidebar({ project, workspaceSlug }: ProjectSidebarProps) 
         </div>
 
         {/* Nav links */}
-        <nav className="flex-1 px-2 py-3" aria-label="Project navigation">
+        <nav className="flex-1 overflow-y-auto px-2 py-2" aria-label="Project navigation">
           <ul className="space-y-0.5">
             {NAV_ITEMS.map((item) => {
               const isActive = activeSegment === item.segment;
@@ -87,14 +87,14 @@ export function ProjectSidebar({ project, workspaceSlug }: ProjectSidebarProps) 
               );
             })}
           </ul>
-        </nav>
 
-        <Separator className="mx-2 my-1" />
-        <ProjectNotesPanel
-          project={project}
-          workspaceSlug={workspaceSlug}
-          workspaceId={project.workspaceId}
-        />
+          <Separator className="mx-0 my-2" />
+          <ProjectNotesPanel
+            project={project}
+            workspaceSlug={workspaceSlug}
+            workspaceId={project.workspaceId}
+          />
+        </nav>
       </aside>
 
       {/* Mobile tab bar */}

@@ -9,9 +9,10 @@
  *
  * @module components/editor/MoveNoteDialog
  */
-import { useState } from 'react';
-import { Folder, X, Check } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { Folder, X, Check, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { useProjects } from '@/features/projects/hooks/useProjects';
@@ -34,9 +35,16 @@ export function MoveNoteDialog({
   onClose,
 }: MoveNoteDialogProps) {
   const [selected, setSelected] = useState<string | null>(currentProjectId ?? null);
+  const [search, setSearch] = useState('');
 
   const { data: projectsData, isLoading } = useProjects({ workspaceId });
-  const projects = projectsData?.items ?? [];
+  const projects = useMemo(() => projectsData?.items ?? [], [projectsData]);
+
+  const filteredProjects = useMemo(() => {
+    if (!search.trim()) return projects;
+    const q = search.toLowerCase();
+    return projects.filter((p) => p.name.toLowerCase().includes(q));
+  }, [projects, search]);
 
   return (
     <div
@@ -60,6 +68,18 @@ export function MoveNoteDialog({
           >
             <X className="h-4 w-4" aria-hidden="true" />
           </button>
+        </div>
+
+        {/* Search input */}
+        <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+          <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <Input
+            autoFocus
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search projects…"
+            className="h-6 border-none bg-transparent p-0 text-sm shadow-none focus-visible:ring-0"
+          />
         </div>
 
         {/* Project list */}
@@ -93,7 +113,7 @@ export function MoveNoteDialog({
 
           {/* Project rows */}
           {!isLoading &&
-            projects.map((project) => (
+            filteredProjects.map((project) => (
               <button
                 key={project.id}
                 type="button"
@@ -118,6 +138,10 @@ export function MoveNoteDialog({
                 )}
               </button>
             ))}
+
+          {!isLoading && filteredProjects.length === 0 && search && (
+            <p className="px-3 py-2 text-xs text-muted-foreground">No projects found</p>
+          )}
         </div>
 
         {/* Footer */}

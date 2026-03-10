@@ -97,6 +97,7 @@ class ListNotesService:
         elif payload.project_id:
             notes = await self._note_repo.get_by_project(
                 payload.project_id,
+                is_pinned=payload.is_pinned,
                 limit=payload.limit,
             )
         elif payload.is_pinned:

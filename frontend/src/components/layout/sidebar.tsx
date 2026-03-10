@@ -19,7 +19,6 @@ import {
   Plus,
   Compass,
   PinIcon,
-  Clock,
   Loader2,
   LogOut,
   User,
@@ -42,7 +41,6 @@ import {
 import { useCreateNote } from '@/features/notes/hooks';
 import { useProjects } from '@/features/projects/hooks/useProjects';
 import { TemplatePicker } from '@/features/notes/components/TemplatePicker';
-import { MoveNoteDialog } from '@/components/editor/MoveNoteDialog';
 import { useNewNoteFlow } from './useNewNoteFlow';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -391,17 +389,6 @@ export const Sidebar = observer(function Sidebar() {
     }));
   }, [noteStore.pinnedNotes, workspaceSlug]);
 
-  const recentNotes = useMemo(() => {
-    return noteStore.recentNotes
-      .filter((note) => !noteStore.pinnedNotes.some((p) => p.id === note.id))
-      .slice(0, 5)
-      .map((note) => ({
-        id: note.id,
-        title: note.title,
-        href: `/${workspaceSlug}/notes/${note.id}`,
-      }));
-  }, [noteStore.recentNotes, noteStore.pinnedNotes, workspaceSlug]);
-
   const newNoteFlow = useNewNoteFlow({
     onCreateNote: (data) => createNote.mutate(data),
   });
@@ -576,35 +563,6 @@ export const Sidebar = observer(function Sidebar() {
                 ))}
               </div>
             </div>
-
-            {/* Recent Notes */}
-            <div data-testid="note-list">
-              <div className="mb-1.5 flex items-center gap-1.5 px-1.5">
-                <Clock className="h-2.5 w-2.5 text-muted-foreground" />
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  Recent
-                </span>
-              </div>
-              <div className="space-y-px">
-                {recentNotes.map((note, index) => (
-                  <motion.div
-                    key={note.id}
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.05 + 0.1 }}
-                  >
-                    <Link
-                      href={note.href}
-                      data-testid="note-item"
-                      className="group flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-                    >
-                      <FileText className="h-3 w-3" />
-                      <span className="truncate">{note.title}</span>
-                    </Link>
-                  </motion.div>
-                ))}
-              </div>
-            </div>
           </>
         )}
       </ScrollArea>
@@ -695,13 +653,6 @@ export const Sidebar = observer(function Sidebar() {
         isAdmin={isAdminOrOwner}
         onConfirm={newNoteFlow.handleTemplateConfirm}
         onClose={newNoteFlow.handleTemplateClose}
-      />
-    )}
-    {newNoteFlow.showProjectPicker && (
-      <MoveNoteDialog
-        workspaceId={workspaceId}
-        onSelect={newNoteFlow.handleProjectSelect}
-        onClose={newNoteFlow.handleProjectClose}
       />
     )}
     </>
