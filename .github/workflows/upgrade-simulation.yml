@@ -109,8 +109,8 @@ jobs:
           SUPABASE_URL: http://localhost:8001
           SUPABASE_ANON_KEY: test-anon-key
           SUPABASE_SERVICE_KEY: test-service-key
-          JWT_SECRET: test-jwt-secret-32-chars-minimum!!
-          APP_ENV: test
+          SUPABASE_JWT_SECRET: test-jwt-secret-32-chars-minimum!!
+          APP_ENV: development
         run: |
           uv run alembic upgrade head
           echo "Migration complete — verifying current revision:"
@@ -129,8 +129,8 @@ jobs:
           SUPABASE_URL: http://localhost:8001
           SUPABASE_ANON_KEY: test-anon-key
           SUPABASE_SERVICE_KEY: test-service-key
-          JWT_SECRET: test-jwt-secret-32-chars-minimum!!
-          APP_ENV: test
+          SUPABASE_JWT_SECRET: test-jwt-secret-32-chars-minimum!!
+          APP_ENV: development
         run: |
           uv run uvicorn pilot_space.main:app \
             --host 0.0.0.0 \
