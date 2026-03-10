@@ -315,10 +315,11 @@ async def provision_user(
     # Validate body as SCIM User
     try:
         scim_user = User.model_validate(body)
-    except Exception as exc:
+    except Exception:
+        logger.exception("scim_create_user_invalid_body")
         return _scim_error(
             status.HTTP_400_BAD_REQUEST,
-            f"Invalid SCIM User body: {exc}",
+            "Invalid SCIM User body",
         )
 
     email = scim_user.user_name or ""
@@ -400,8 +401,9 @@ async def replace_user(
     body = await request.json()
     try:
         scim_user = User.model_validate(body)
-    except Exception as exc:
-        return _scim_error(status.HTTP_400_BAD_REQUEST, f"Invalid SCIM User body: {exc}")
+    except Exception:
+        logger.exception("scim_replace_user_invalid_body")
+        return _scim_error(status.HTTP_400_BAD_REQUEST, "Invalid SCIM User body")
 
     email = scim_user.user_name or ""
     if not email:
@@ -450,8 +452,9 @@ async def patch_user(
     # Parse as PatchOp[User] to validate schemas/Operations keys
     try:
         patch_op = PatchOp[User].model_validate(body)  # type: ignore[index]  # pyright: ignore[reportMissingTypeArgument]
-    except Exception as exc:
-        return _scim_error(status.HTTP_400_BAD_REQUEST, f"Invalid PatchOp body: {exc}")
+    except Exception:
+        logger.exception("scim_patch_user_invalid_body")
+        return _scim_error(status.HTTP_400_BAD_REQUEST, "Invalid PatchOp body")
 
     ops = []
     for operation in patch_op.operations or []:

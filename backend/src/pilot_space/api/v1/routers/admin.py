@@ -266,7 +266,7 @@ async def get_workspace_detail(
     """
     logger.info(
         "super_admin_access",
-        extra={"action": "workspace_detail", "slug": workspace_slug, "token": "****"},
+        extra={"action": "workspace_detail", "slug": workspace_slug[:64], "token": "****"},
     )
 
     session_factory = _get_admin_session_factory()

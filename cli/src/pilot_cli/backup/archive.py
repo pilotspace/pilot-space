@@ -106,6 +106,10 @@ def extract_archive(
     if not dry_run:
         output_dir.mkdir(parents=True, exist_ok=True)
         with tarfile.open(archive_path, "r:gz") as tf:
+            for member in tf.getmembers():
+                member_path = (output_dir / member.name).resolve()
+                if not str(member_path).startswith(str(output_dir.resolve())):
+                    raise ValueError(f"Archive member would extract outside target directory: {member.name}")
             tf.extractall(output_dir)  # noqa: S202
 
     return manifest

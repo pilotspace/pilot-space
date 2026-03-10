@@ -19,11 +19,14 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
+import structlog
 from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient
 
 from pilot_space.ai.agents.agent_base import AgentContext, StreamingSDKBaseAgent
 from pilot_space.ai.context import clear_context, set_workspace_context
 from pilot_space.ai.sdk.config import MODEL_SONNET
+
+_logger = structlog.get_logger(__name__)
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -417,6 +420,11 @@ Be constructive and focus on production reliability, security, and maintainabili
                 await client.disconnect()
                 clear_context()
 
-        except Exception as e:
-            error_data = {"type": "error", "error_type": "pr_review_error", "message": str(e)}
+        except Exception:
+            _logger.exception("pr_review_subagent_error")
+            error_data = {
+                "type": "error",
+                "error_type": "pr_review_error",
+                "message": "PR review failed. Please try again.",
+            }
             yield f"event: error\ndata: {json.dumps(error_data)}\n\n"

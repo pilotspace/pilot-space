@@ -17,6 +17,7 @@ All HTTP errors use RFC 7807 problem+json format.
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
+from urllib.parse import quote, urlparse
 from uuid import UUID
 
 from fastapi import APIRouter, Form, HTTPException, Query, Request, status
@@ -328,11 +329,16 @@ async def saml_callback(
     # Redirect browser to frontend SAML callback page with token_hash for verifyOtp
     settings = get_settings()
     frontend_url = settings.frontend_url.rstrip("/")
-    token_hash = user_info.get("token_hash", "")
-    return RedirectResponse(
-        url=f"{frontend_url}/auth/saml-callback?token_hash={token_hash}&workspace_id={workspace_id}",
-        status_code=302,
+    allowed_origin = urlparse(frontend_url).netloc
+    token_hash = quote(str(user_info.get("token_hash", "")), safe="")
+    redirect_url = (
+        f"{frontend_url}/auth/saml-callback?token_hash={token_hash}&workspace_id={workspace_id}"
     )
+    if urlparse(redirect_url).netloc != allowed_origin:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid redirect target"
+        )
+    return RedirectResponse(url=redirect_url, status_code=302)
 
 
 @router.get(
