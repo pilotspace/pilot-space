@@ -42,7 +42,7 @@
 
 - [x] **SKBTN-01**: Workspace admin can define custom action buttons for the issue detail page
 - [x] **SKBTN-02**: Each button is named and bound to a skill or remote MCP tool (e.g. "Push to Figma", "Sync to Jira")
-- [ ] **SKBTN-03**: Clicking a button triggers ChatAI with the issue context pre-loaded and the bound skill/tool activated
+- [x] **SKBTN-03**: Clicking a button triggers ChatAI with the issue context pre-loaded and the bound skill/tool activated
 - [x] **SKBTN-04**: Button execution respects AI approval policy (destructive actions require human confirmation)
 
 ### Remote MCP
@@ -137,7 +137,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | WRSKL-04 | Phase 16 | Complete |
 | SKBTN-01 | Phase 17 | Complete |
 | SKBTN-02 | Phase 17 | Complete |
-| SKBTN-03 | Phase 17 | Pending |
+| SKBTN-03 | Phase 17 | Complete |
 | SKBTN-04 | Phase 17 | Complete |
 | DEBT-01 | Phase 18 | Pending |
 | DEBT-02 | Phase 18 | Pending |

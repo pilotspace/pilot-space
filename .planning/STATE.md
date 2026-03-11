@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in-progress
-stopped_at: Completed 17-01-PLAN.md
+stopped_at: Completed 17-02-PLAN.md
 last_updated: "2026-03-11T04:38:00.000Z"
-last_activity: "2026-03-11 — 017-01 complete: SkillActionButton model, migration 075, admin CRUD router, plugin lifecycle hooks"
+last_activity: "2026-03-11 — 017-02 complete: API client, ActionButtonsTabContent, ActionButtonBar, chat activation"
 progress:
   total_phases: 8
   completed_phases: 6
   total_plans: 24
-  completed_plans: 23
-  percent: 96
+  completed_plans: 24
+  percent: 100
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-03-09)
 ## Current Position
 
 Phase: Phase 17 — Skill Action Buttons
-Plan: 1/2
-Status: Plan 01 complete — backend persistence and API
-Last activity: 2026-03-11 — 017-01 complete: SkillActionButton model, migration 075, admin CRUD router, plugin lifecycle hooks
+Plan: 2/2
+Status: Phase 17 complete — all plans done
+Last activity: 2026-03-11 — 017-02 complete: API client, ActionButtonsTabContent admin UI, ActionButtonBar on issue page, chat activation wiring
 
-Progress: [█████████▌] 96%
+Progress: [██████████] 100%
 
 ## Milestone: v1.0-alpha
 
@@ -41,7 +41,7 @@ Progress: [█████████▌] 96%
 | 14. Remote MCP Server Management | Register/auth/status + PilotSpaceAgent hot-load | MCP-01..06 | Not started |
 | 15. Related Issues | Semantic suggestions + manual linking | RELISS-01..04 | Complete |
 | 16. Workspace Role Skills | Admin-generated role skills + inheritance | WRSKL-01..04 | Not started |
-| 17. Skill Action Buttons | Custom issue-page buttons bound to skills/MCP | SKBTN-01..04 | In progress (1/2) |
+| 17. Skill Action Buttons | Custom issue-page buttons bound to skills/MCP | SKBTN-01..04 | Complete |
 | 18. Tech Debt Closure | OIDC E2E, MCP approval, xfail tests, key rotation | DEBT-01..04 | Not started |
 
 ## Performance Metrics
@@ -84,6 +84,7 @@ Progress: [█████████▌] 96%
 | Phase 019 P03 | 15 | 3 tasks | 10 files |
 | Phase 019 P04 | 9 | 2 tasks | 12 files |
 | Phase 17-skill-action-buttons P01 | 7 | 2 tasks | 10 files |
+| Phase 17-skill-action-buttons P02 | 13 | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -185,6 +186,10 @@ Recent decisions affecting current work:
 - [Phase 17-skill-action-buttons 01]: Removed strict=True from Pydantic schemas -- JSON payloads send strings for BindingType enum, strict mode rejects string coercion
 - [Phase 17-skill-action-buttons 01]: Plugin action button auto-creation is non-fatal (try/except) -- plugin install/uninstall should not fail due to action button issues
 - [Phase 17-skill-action-buttons 01]: deactivate_by_plugin_id uses JSONB operator to match plugin_id in binding_metadata -- avoids separate FK column
+- [Phase 17-skill-action-buttons 02]: ActionButtonBar is NOT observer -- receives buttons as props, avoids MobX/TipTap flushSync issues
+- [Phase 17-skill-action-buttons 02]: Curated 15-icon ICON_MAP with Sparkles fallback -- avoids dynamic imports and bundle bloat from full lucide-react set
+- [Phase 17-skill-action-buttons 02]: Stale binding detection via binding_id + binding_metadata presence -- disables button with tooltip
+- [Phase 17-skill-action-buttons 02]: ActionButtonsTabContent is plain function component (not observer) -- uses TanStack Query only, no MobX needed
 
 ### Pending Todos
 
@@ -198,7 +203,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-11T04:38:00.000Z
-Stopped at: Completed 17-01-PLAN.md
-Resume file: .planning/phases/17-skill-action-buttons/17-02-PLAN.md
-Next action: Execute Phase 17 Plan 02 — frontend action buttons UI.
+Last session: 2026-03-11T04:55:30.000Z
+Stopped at: Completed 17-02-PLAN.md
+Resume file: Phase 17 complete — all plans done
+Next action: Execute Phase 18 (Tech Debt Closure) or finalize milestone.

@@ -33,7 +33,7 @@ Full archive: `.planning/milestones/v1.0-ROADMAP.md`
 - [x] **Phase 14: Remote MCP Server Management** — Register, auth (Bearer + OAuth), status, and PilotSpaceAgent dynamic wiring (completed 2026-03-10)
 - [ ] **Phase 15: Related Issues** — Semantic similarity suggestions, manual linking, dismissal
 - [x] **Phase 16: Workspace Role Skills** — Admin-configured AI skill generation and role inheritance (completed 2026-03-10)
-- [ ] **Phase 17: Skill Action Buttons** — Custom issue-page buttons bound to skills or MCP tools
+- [x] **Phase 17: Skill Action Buttons** — Custom issue-page buttons bound to skills or MCP tools (completed 2026-03-11)
 - [ ] **Phase 18: Tech Debt Closure** — OIDC E2E, MCP approval wiring, xfail tests, key rotation
 
 ## Phase Details
@@ -161,7 +161,7 @@ Plans:
   3. Plugins are versioned; when an official plugin gets a new version, installed workspaces see an "Update available" badge and apply updates explicitly (no silent auto-update)
   4. A plugin bundles skill content (SKILL.md + references/) + MCP tool bindings + action button definitions — installing wires all three automatically
   5. Workspace admins can publish private plugins to their own workspace registry for internal distribution
-**Plans:** 4/4 plans complete
+**Plans:** 2/2 plans complete
 
 Plans:
 - [x] 019-01-PLAN.md — Wave 0: xfail backend stubs + frontend it.todo() stubs (SKRG-01..05)
