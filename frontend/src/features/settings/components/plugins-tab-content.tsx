@@ -20,14 +20,17 @@ import { AddPluginDialog } from './add-repo-form';
 
 interface PluginsTabContentProps {
   workspaceId: string;
+  addDialogOpen: boolean;
+  onAddDialogOpenChange: (open: boolean) => void;
 }
 
 export const PluginsTabContent = observer(function PluginsTabContent({
   workspaceId,
+  addDialogOpen,
+  onAddDialogOpenChange,
 }: PluginsTabContentProps) {
   const { ai } = useStore();
   const pluginsStore = ai.plugins;
-  const [addDialogOpen, setAddDialogOpen] = React.useState(false);
 
   React.useEffect(() => {
     if (!workspaceId) return;
@@ -59,33 +62,18 @@ export const PluginsTabContent = observer(function PluginsTabContent({
 
   if (pluginsStore.isLoading && pluginsStore.installedPlugins.length === 0) {
     return (
-      <div className="space-y-4 pt-4">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-[80px] w-full" />
-        <Skeleton className="h-[80px] w-full" />
+      <div className="space-y-2 pt-3">
+        <Skeleton className="h-[64px] w-full rounded-lg" />
+        <Skeleton className="h-[64px] w-full rounded-lg" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 pt-4">
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-foreground">Plugins</h2>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Manage installed plugins and their skills
-          </p>
-        </div>
-        <Button size="sm" onClick={() => setAddDialogOpen(true)}>
-          <Plus className="mr-1.5 h-4 w-4" />
-          Add Plugin
-        </Button>
-      </div>
-
+    <div className="space-y-3 pt-3">
       {/* Plugin cards or empty state */}
       {pluginsStore.groupedPlugins.length > 0 ? (
-        <div className="space-y-3">
+        <div className="space-y-2">
           {pluginsStore.groupedPlugins.map((group) => (
             <PluginCard
               key={group.repoUrl}
@@ -96,15 +84,15 @@ export const PluginsTabContent = observer(function PluginsTabContent({
           ))}
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center py-16 px-4">
-          <div className="rounded-xl border border-border/50 bg-muted/30 p-4 mb-4">
-            <Puzzle className="h-8 w-8 text-muted-foreground/60" />
+        <div className="flex flex-col items-center justify-center py-10 px-4">
+          <div className="rounded-lg border border-border/50 bg-muted/30 p-3 mb-3">
+            <Puzzle className="h-6 w-6 text-muted-foreground/50" />
           </div>
           <h3 className="text-sm font-medium text-foreground">No plugins installed</h3>
-          <p className="mt-1 text-xs text-muted-foreground text-center max-w-[280px]">
-            Plugins add new skills to your workspace. Install one from a GitHub repository.
+          <p className="mt-0.5 text-xs text-muted-foreground text-center max-w-[260px]">
+            Install a plugin from a GitHub repository to add new skills.
           </p>
-          <Button size="sm" className="mt-4" onClick={() => setAddDialogOpen(true)}>
+          <Button size="sm" className="mt-3" onClick={() => onAddDialogOpenChange(true)}>
             <Plus className="mr-1.5 h-4 w-4" />
             Add Plugin
           </Button>
@@ -115,7 +103,7 @@ export const PluginsTabContent = observer(function PluginsTabContent({
       <AddPluginDialog
         workspaceId={workspaceId}
         open={addDialogOpen}
-        onOpenChange={setAddDialogOpen}
+        onOpenChange={onAddDialogOpenChange}
       />
 
       {/* Plugin Detail Dialog */}

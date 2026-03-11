@@ -27,7 +27,7 @@ export function PluginCard({ group, onToggle, onClick }: PluginCardProps) {
     <div
       role="button"
       tabIndex={0}
-      className={`w-full cursor-pointer rounded-lg border border-border bg-card p-4 text-left transition-colors duration-150 hover:border-muted-foreground/30 hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${noneActive ? 'opacity-75' : ''}`}
+      className={`w-full cursor-pointer rounded-lg border border-border bg-card px-4 py-3 text-left transition-colors duration-150 hover:border-muted-foreground/30 hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${noneActive ? 'opacity-75' : ''}`}
       onClick={onClick}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {

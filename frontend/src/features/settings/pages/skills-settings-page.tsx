@@ -58,26 +58,28 @@ const MAX_ROLES = 3;
 
 function LoadingSkeleton() {
   return (
-    <div className="space-y-6">
-      <div className="space-y-2">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-4 w-96" />
-      </div>
-      <Skeleton className="h-[200px] w-full" />
-      <Skeleton className="h-[200px] w-full" />
+    <div className="space-y-4">
+      <Skeleton className="h-8 w-40" />
+      <Skeleton className="h-9 w-56" />
+      <Skeleton className="h-[140px] w-full rounded-lg" />
+      <Skeleton className="h-[140px] w-full rounded-lg" />
     </div>
   );
 }
 
 function EmptyState({ onSetup }: { onSetup: () => void }) {
   return (
-    <div className="flex flex-col items-center justify-center py-12 space-y-4">
-      <Wand2 className="h-20 w-20 text-muted-foreground opacity-40" />
-      <h2 className="text-lg font-medium text-foreground">No roles configured</h2>
-      <p className="text-sm text-muted-foreground max-w-[280px] text-center">
-        Set up your SDLC role to personalize how the AI assistant helps you in this workspace.
-      </p>
-      <Button onClick={onSetup}>
+    <div className="flex flex-col items-center justify-center py-10 space-y-3">
+      <div className="rounded-lg border border-border/50 bg-muted/30 p-3">
+        <Wand2 className="h-6 w-6 text-muted-foreground/50" />
+      </div>
+      <div className="text-center">
+        <h3 className="text-sm font-medium text-foreground">No roles configured</h3>
+        <p className="mt-0.5 text-xs text-muted-foreground max-w-[260px]">
+          Set up your SDLC role to personalize AI assistance.
+        </p>
+      </div>
+      <Button size="sm" onClick={onSetup}>
         <Plus className="mr-1.5 h-4 w-4" />
         Set Up Your Role
       </Button>
@@ -155,6 +157,10 @@ export const SkillsSettingsPage = observer(function SkillsSettingsPage() {
   const [regenerateTarget, setRegenerateTarget] = React.useState<RoleSkill | null>(null);
   const [removeTarget, setRemoveTarget] = React.useState<RoleSkill | null>(null);
   const [resetTarget, setResetTarget] = React.useState<RoleSkill | null>(null);
+
+  // Tab state for switching action buttons
+  const [activeTab, setActiveTab] = React.useState('roles');
+  const [addPluginDialogOpen, setAddPluginDialogOpen] = React.useState(false);
 
   // Role setup dialog sub-flow state
   const [isSetupOpen, setIsSetupOpen] = React.useState(false);
@@ -302,10 +308,8 @@ export const SkillsSettingsPage = observer(function SkillsSettingsPage() {
 
   if (isGuest) {
     return (
-      <div className="px-4 py-6 sm:px-6 lg:px-8">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Skills</h1>
-        </div>
+      <div className="px-4 py-4 sm:px-6 lg:px-8">
+        <h1 className="text-2xl font-semibold tracking-tight mb-4">Skills</h1>
         <GuestView />
       </div>
     );
@@ -313,7 +317,7 @@ export const SkillsSettingsPage = observer(function SkillsSettingsPage() {
 
   if (isLoading) {
     return (
-      <div className="px-4 py-6 sm:px-6 lg:px-8">
+      <div className="px-4 py-4 sm:px-6 lg:px-8">
         <LoadingSkeleton />
       </div>
     );
@@ -321,7 +325,7 @@ export const SkillsSettingsPage = observer(function SkillsSettingsPage() {
 
   if (isError) {
     return (
-      <div className="px-4 py-6 sm:px-6 lg:px-8">
+      <div className="px-4 py-4 sm:px-6 lg:px-8">
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
@@ -333,55 +337,47 @@ export const SkillsSettingsPage = observer(function SkillsSettingsPage() {
   }
 
   return (
-    <div className="px-4 py-6 sm:px-6 lg:px-8">
-      <div className="space-y-1 mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight">Skills</h1>
-        <p className="text-sm text-muted-foreground">
-          Configure your SDLC roles and manage plugins.
-        </p>
-      </div>
+    <div className="px-4 py-4 sm:px-6 lg:px-8">
+      <h1 className="text-2xl font-semibold tracking-tight mb-4">Skills</h1>
 
-      <Tabs defaultValue="roles">
-        <TabsList>
-          <TabsTrigger value="roles">
-            <Wand2 className="mr-1.5 h-4 w-4" />
-            Roles
-          </TabsTrigger>
-          {workspaceStore.isAdmin && (
-            <TabsTrigger value="plugins">
-              <Package className="mr-1.5 h-4 w-4" />
-              Plugins
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <div className="flex items-center justify-between gap-3">
+          <TabsList>
+            <TabsTrigger value="roles">
+              <Wand2 className="mr-1.5 h-4 w-4" />
+              Roles
             </TabsTrigger>
+            {workspaceStore.isAdmin && (
+              <TabsTrigger value="plugins">
+                <Package className="mr-1.5 h-4 w-4" />
+                Plugins
+              </TabsTrigger>
+            )}
+          </TabsList>
+          {activeTab === 'roles' && (
+            <Button
+              size="sm"
+              onClick={handleSetupRole}
+              disabled={isMaxReached}
+              aria-describedby={isMaxReached ? 'max-roles-hint' : undefined}
+            >
+              <Plus className="mr-1.5 h-4 w-4" />
+              Add Role
+              {!isMaxReached && slotsLeft > 0 && (
+                <span className="ml-1 text-xs opacity-70">({slotsLeft})</span>
+              )}
+            </Button>
           )}
-        </TabsList>
+          {activeTab === 'plugins' && workspaceStore.isAdmin && (
+            <Button size="sm" onClick={() => setAddPluginDialogOpen(true)}>
+              <Plus className="mr-1.5 h-4 w-4" />
+              Add Plugin
+            </Button>
+          )}
+        </div>
 
         <TabsContent value="roles">
-          <div className="space-y-6 pt-4">
-            {/* Header */}
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="space-y-1">
-                <h2 className="text-lg font-semibold">Role Skills</h2>
-                <p className="text-sm text-muted-foreground">
-                  Configure your SDLC roles to personalize AI assistance.
-                </p>
-              </div>
-              <div className="flex flex-col items-end gap-1 shrink-0">
-                <Button
-                  onClick={handleSetupRole}
-                  disabled={isMaxReached}
-                  aria-describedby={isMaxReached ? 'max-roles-hint' : undefined}
-                >
-                  <Plus className="mr-1.5 h-4 w-4" />
-                  Add Role
-                </Button>
-                {!isMaxReached && slotsLeft > 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    {slotsLeft} slot{slotsLeft > 1 ? 's' : ''} left
-                  </p>
-                )}
-              </div>
-            </div>
-
+          <div className="space-y-4 pt-3">
             {/* Max roles warning */}
             {isMaxReached && (
               <Alert id="max-roles-hint">
@@ -422,16 +418,15 @@ export const SkillsSettingsPage = observer(function SkillsSettingsPage() {
 
           {/* Workspace Skills (admin only) */}
           {workspaceStore.isAdmin && (
-            <div className="space-y-4 border-t pt-6">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="space-y-1">
-                  <h2 className="text-lg font-semibold">Workspace Skills</h2>
-                  <p className="text-sm text-muted-foreground">
-                    Configure AI skills inherited by all members with a matching SDLC role. Skills
-                    remain inactive until you explicitly activate them.
+            <div className="space-y-3 border-t pt-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-sm font-semibold text-foreground">Workspace Skills</h2>
+                  <p className="text-xs text-muted-foreground">
+                    AI skills inherited by members with a matching role.
                   </p>
                 </div>
-                <Button onClick={() => setWsGenerateOpen(true)} size="sm">
+                <Button onClick={() => setWsGenerateOpen(true)} size="sm" variant="outline">
                   <Plus className="mr-1.5 h-4 w-4" />
                   Generate Skill
                 </Button>
@@ -615,7 +610,11 @@ export const SkillsSettingsPage = observer(function SkillsSettingsPage() {
 
         {workspaceStore.isAdmin && (
           <TabsContent value="plugins">
-            <PluginsTabContent workspaceId={workspaceId} />
+            <PluginsTabContent
+              workspaceId={workspaceId}
+              addDialogOpen={addPluginDialogOpen}
+              onAddDialogOpenChange={setAddPluginDialogOpen}
+            />
           </TabsContent>
         )}
       </Tabs>
