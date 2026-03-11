@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: in-progress
-stopped_at: Completed 17-02-PLAN.md
-last_updated: "2026-03-11T04:38:00.000Z"
-last_activity: "2026-03-11 — 017-02 complete: API client, ActionButtonsTabContent, ActionButtonBar, chat activation"
+status: completed
+stopped_at: Completed 018-01-PLAN.md
+last_updated: "2026-03-11T06:39:25.537Z"
+last_activity: "2026-03-11 — 018-02 complete: rotate_workspace_key with dual-key fallback, POST /encryption/rotate endpoint, 10 passing tests"
 progress:
   total_phases: 8
-  completed_phases: 6
-  total_plans: 24
-  completed_plans: 24
+  completed_phases: 8
+  total_plans: 27
+  completed_plans: 27
   percent: 100
 ---
 
@@ -86,6 +86,7 @@ Progress: [██████████] 100%
 | Phase 17-skill-action-buttons P01 | 7 | 2 tasks | 10 files |
 | Phase 17-skill-action-buttons P02 | 13 | 2 tasks | 9 files |
 | Phase 018-tech-debt-closure P02 | 10 | 2 tasks | 6 files |
+| Phase 018 P01 | 20min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -194,6 +195,8 @@ Recent decisions affecting current work:
 - [Phase 018-tech-debt-closure 02]: previous_encrypted_key stored as nullable Text column -- cleared after re-encryption completes
 - [Phase 018-tech-debt-closure 02]: _re_encrypt_string returns None for non-decryptable content -- plaintext rows skipped, not failed
 - [Phase 018-tech-debt-closure 02]: Rotation endpoint returns 400 (not 422) for invalid key format -- distinguishes from PUT /key
+- [Phase 018]: Used FastAPI dependency_overrides for audit test auth instead of middleware patching
+- [Phase 018]: Mocked AuditLogRepository at router level to avoid event loop issues with real DB sessions in tests
 
 ### Pending Todos
 
@@ -207,7 +210,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-11T06:26:43Z
-Stopped at: Completed 018-02-PLAN.md
-Resume file: .planning/phases/018-tech-debt-closure/18-02-SUMMARY.md
+Last session: 2026-03-11T06:39:25.534Z
+Stopped at: Completed 018-01-PLAN.md
+Resume file: None
 Next action: Continue Phase 18 remaining plans.
