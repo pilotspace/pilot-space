@@ -36,11 +36,21 @@ import { ConfirmActionDialog } from '../components/confirm-action-dialog';
 
 function LoadingSkeleton() {
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <Skeleton className="h-8 w-40" />
       <Skeleton className="h-9 w-56" />
-      <Skeleton className="h-[140px] w-full rounded-lg" />
-      <Skeleton className="h-[140px] w-full rounded-lg" />
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="rounded-xl border bg-card overflow-hidden">
+            <Skeleton className="h-[72px] w-full rounded-none" />
+            <div className="p-4 space-y-2">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-3 w-full" />
+              <Skeleton className="h-8 w-full mt-2" />
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -88,6 +98,7 @@ export const SkillsSettingsPage = observer(function SkillsSettingsPage() {
 
   // Skill generator modal state
   const [generatorOpen, setGeneratorOpen] = React.useState(false);
+  const [selectedTemplate, setSelectedTemplate] = React.useState<SkillTemplate | null>(null);
 
   // Create template modal state
   const [createTemplateOpen, setCreateTemplateOpen] = React.useState(false);
@@ -129,8 +140,8 @@ export const SkillsSettingsPage = observer(function SkillsSettingsPage() {
   // Handlers: Templates
   // ---------------------------------------------------------------------------
 
-  const handleUseThis = (_template: SkillTemplate) => {
-    // Open generator modal — template content will seed the AI personalization
+  const handleUseThis = (template: SkillTemplate) => {
+    setSelectedTemplate(template);
     setGeneratorOpen(true);
   };
 
@@ -247,12 +258,19 @@ export const SkillsSettingsPage = observer(function SkillsSettingsPage() {
         </div>
 
         <TabsContent value="skills">
-          <div className="space-y-6 pt-3">
+          <div className="space-y-8 pt-4">
             {/* My Skills Section */}
             <section>
-              <h2 className="text-sm font-semibold text-foreground mb-3">My Skills</h2>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-semibold text-foreground">My Skills</h2>
+                {skillCount > 0 && (
+                  <span className="text-xs text-muted-foreground">
+                    {skillCount} skill{skillCount !== 1 ? 's' : ''}
+                  </span>
+                )}
+              </div>
               {skillCount > 0 ? (
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                   {userSkills?.map((skill) => (
                     <MySkillCard
                       key={skill.id}
@@ -263,7 +281,7 @@ export const SkillsSettingsPage = observer(function SkillsSettingsPage() {
                   ))}
                 </div>
               ) : (
-                <div className="rounded-lg border border-dashed border-border/50 bg-muted/20 p-6 text-center">
+                <div className="rounded-xl border border-dashed border-border/50 bg-muted/20 p-8 text-center">
                   <p className="text-sm text-muted-foreground">
                     No skills yet. Browse templates below to get started.
                   </p>
@@ -273,7 +291,7 @@ export const SkillsSettingsPage = observer(function SkillsSettingsPage() {
 
             {/* Skill Templates Section */}
             <section>
-              <h2 className="text-sm font-semibold text-foreground mb-3">Skill Templates</h2>
+              <h2 className="text-sm font-semibold text-foreground mb-4">Skill Templates</h2>
               <TemplateCatalog
                 workspaceSlug={workspaceSlug}
                 isAdmin={isAdmin}
@@ -288,10 +306,14 @@ export const SkillsSettingsPage = observer(function SkillsSettingsPage() {
           {/* Skill Generator Modal */}
           <SkillGeneratorModal
             open={generatorOpen}
-            onOpenChange={setGeneratorOpen}
+            onOpenChange={(v) => {
+              setGeneratorOpen(v);
+              if (!v) setTimeout(() => setSelectedTemplate(null), 200);
+            }}
             defaultMode="personal"
             showModeToggle={isAdmin}
             workspaceId={workspaceId}
+            template={selectedTemplate}
           />
 
           {/* Create Template Modal (admin only) */}

@@ -1,6 +1,7 @@
 /**
- * TemplateCard — Displays a skill template with source badge and actions.
+ * TemplateCard — Displays a skill template with prominent icon, source badge, and actions.
  *
+ * Inspired by Anthropic Artifacts gallery cards: large icon hero, clean hierarchy.
  * Plain component (NOT observer) — receives all data via props.
  * Source: Phase 20, P20-09
  */
@@ -29,9 +30,9 @@ interface TemplateCardProps {
 }
 
 const SOURCE_BADGE_STYLES: Record<string, string> = {
-  built_in: 'border-blue-500/20 bg-blue-500/10 text-blue-500 dark:text-blue-400',
-  workspace: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-500 dark:text-emerald-400',
-  custom: 'border-purple-500/20 bg-purple-500/10 text-purple-500 dark:text-purple-400',
+  built_in: 'border-blue-500/20 bg-blue-500/10 text-blue-600 dark:text-blue-400',
+  workspace: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+  custom: 'border-purple-500/20 bg-purple-500/10 text-purple-600 dark:text-purple-400',
 };
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -54,84 +55,104 @@ export function TemplateCard({
 
   return (
     <article
-      className={`rounded-lg border bg-card p-4 transition-shadow hover:shadow-sm ${
-        !template.is_active ? 'opacity-60' : ''
+      className={`group relative flex flex-col rounded-xl border bg-card transition-all duration-200 hover:shadow-md hover:border-border/80 ${
+        !template.is_active ? 'opacity-50' : ''
       }`}
       data-testid="template-card"
     >
-      {/* Header */}
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="text-lg" role="img" aria-label={template.name}>
-            {template.icon || '🎯'}
-          </span>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-semibold truncate">{template.name}</h3>
-              {isBuiltIn && (
-                <Lock
-                  className="h-3 w-3 text-muted-foreground shrink-0"
-                  aria-label="Built-in (read-only)"
-                />
-              )}
-            </div>
-            <Badge variant="outline" className={`text-[10px] px-1.5 py-0 h-4 mt-0.5 ${badgeStyle}`}>
-              {sourceLabel}
-            </Badge>
+      {/* Icon hero area */}
+      <div className="flex items-center justify-center py-6 px-4 bg-muted/30 rounded-t-xl border-b border-border/40">
+        <span className="text-4xl select-none" role="img" aria-label={template.name}>
+          {template.icon || '🎯'}
+        </span>
+      </div>
+
+      {/* Content */}
+      <div className="flex flex-col flex-1 p-4">
+        {/* Title row */}
+        <div className="flex items-start justify-between gap-2 mb-1">
+          <div className="min-w-0 flex-1">
+            <h3 className="text-sm font-semibold leading-tight truncate" title={template.name}>
+              {template.name}
+            </h3>
+          </div>
+
+          <div className="flex items-center gap-1 shrink-0">
+            {isBuiltIn && (
+              <Lock
+                className="h-3.5 w-3.5 text-muted-foreground/60"
+                aria-label="Built-in (read-only)"
+              />
+            )}
+            {/* Admin actions dropdown */}
+            {isAdmin && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <MoreVertical className="h-3.5 w-3.5" />
+                    <span className="sr-only">Template actions</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {!isBuiltIn && onEdit && (
+                    <DropdownMenuItem onClick={() => onEdit(template)}>
+                      <Pencil className="mr-2 h-3.5 w-3.5" />
+                      Edit
+                    </DropdownMenuItem>
+                  )}
+                  {onToggleActive && (
+                    <DropdownMenuItem onClick={() => onToggleActive(template)}>
+                      <Power className="mr-2 h-3.5 w-3.5" />
+                      {template.is_active ? 'Deactivate' : 'Activate'}
+                    </DropdownMenuItem>
+                  )}
+                  {!isBuiltIn && onDelete && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={() => onDelete(template)}
+                        className="text-destructive focus:text-destructive"
+                      >
+                        <Trash2 className="mr-2 h-3.5 w-3.5" />
+                        Delete
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
         </div>
 
-        {/* Admin actions dropdown */}
-        {isAdmin && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0">
-                <MoreVertical className="h-4 w-4" />
-                <span className="sr-only">Template actions</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {!isBuiltIn && onEdit && (
-                <DropdownMenuItem onClick={() => onEdit(template)}>
-                  <Pencil className="mr-2 h-3.5 w-3.5" />
-                  Edit
-                </DropdownMenuItem>
-              )}
-              {onToggleActive && (
-                <DropdownMenuItem onClick={() => onToggleActive(template)}>
-                  <Power className="mr-2 h-3.5 w-3.5" />
-                  {template.is_active ? 'Deactivate' : 'Activate'}
-                </DropdownMenuItem>
-              )}
-              {!isBuiltIn && onDelete && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={() => onDelete(template)}
-                    className="text-destructive focus:text-destructive"
-                  >
-                    <Trash2 className="mr-2 h-3.5 w-3.5" />
-                    Delete
-                  </DropdownMenuItem>
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+        {/* Source badge */}
+        <div className="mb-2">
+          <Badge variant="outline" className={`text-[10px] px-1.5 py-0 h-4 ${badgeStyle}`}>
+            {sourceLabel}
+          </Badge>
+        </div>
+
+        {/* Description */}
+        <p className="text-xs text-muted-foreground line-clamp-2 flex-1 mb-3">
+          {template.description}
+        </p>
+
+        {/* Use This button */}
+        {template.is_active && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="w-full mt-auto hover:bg-primary hover:text-primary-foreground transition-colors"
+            onClick={() => onUseThis(template)}
+          >
+            <Wand2 className="mr-1.5 h-3.5 w-3.5" />
+            Use This
+          </Button>
         )}
       </div>
-
-      {/* Description */}
-      <p className="text-xs text-muted-foreground line-clamp-2 mb-3 min-h-[2rem]">
-        {template.description}
-      </p>
-
-      {/* Use This button */}
-      {template.is_active && (
-        <Button size="sm" variant="outline" className="w-full" onClick={() => onUseThis(template)}>
-          <Wand2 className="mr-1.5 h-3.5 w-3.5" />
-          Use This
-        </Button>
-      )}
     </article>
   );
 }

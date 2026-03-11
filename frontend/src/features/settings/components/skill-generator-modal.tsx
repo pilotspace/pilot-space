@@ -53,6 +53,8 @@ export interface SkillGeneratorModalProps {
   /** Hide mode toggle (e.g. non-admin users can only create personal). */
   showModeToggle?: boolean;
   workspaceId: string;
+  /** Pre-seed from a template — shows template name in header and pre-fills description. */
+  template?: { name: string; description: string; skill_content: string } | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -76,6 +78,7 @@ export function SkillGeneratorModal({
   defaultMode = 'personal',
   showModeToggle = true,
   workspaceId,
+  template = null,
 }: SkillGeneratorModalProps) {
   const [mode, setMode] = React.useState<SkillGeneratorMode>(defaultMode);
   const [step, setStep] = React.useState<Step>('form');
@@ -88,6 +91,13 @@ export function SkillGeneratorModal({
   React.useEffect(() => {
     if (open) setMode(defaultMode);
   }, [open, defaultMode]);
+
+  // Pre-fill description from template when opened with a template
+  React.useEffect(() => {
+    if (open && template) {
+      setDescription(template.description);
+    }
+  }, [open, template]);
 
   // Personal skill mutations
   const generatePersonal = useGenerateSkill({ workspaceId });
@@ -192,6 +202,7 @@ export function SkillGeneratorModal({
                 onCancel={handleClose}
                 isPending={isPending}
                 showError={showError}
+                templateName={template?.name}
               />
             )}
             {step === 'generating' && <GeneratingStep />}
@@ -312,6 +323,7 @@ interface FormStepProps {
   onCancel: () => void;
   isPending: boolean;
   showError: boolean;
+  templateName?: string;
 }
 
 function FormStep({
@@ -324,6 +336,7 @@ function FormStep({
   onCancel,
   isPending,
   showError,
+  templateName,
 }: FormStepProps) {
   const canGenerate = description.length >= MIN_CHARS;
   const wordCount = description.trim().split(/\s+/).filter(Boolean).length;
@@ -344,9 +357,9 @@ function FormStep({
         <div className="flex items-center justify-between gap-3">
           <DialogTitle className="flex items-center gap-2">
             <Wand2 className="h-5 w-5 text-primary" />
-            Generate Skill
+            {templateName ? `Generate from "${templateName}"` : 'Generate Skill'}
           </DialogTitle>
-          {showModeToggle && <ModeToggle mode={mode} onChange={onModeChange} />}
+          {showModeToggle && !templateName && <ModeToggle mode={mode} onChange={onModeChange} />}
         </div>
         <p className="text-sm text-muted-foreground mt-1.5">{subtitle}</p>
       </DialogHeader>
