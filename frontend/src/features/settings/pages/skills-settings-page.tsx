@@ -10,7 +10,7 @@
 import * as React from 'react';
 import { observer } from 'mobx-react-lite';
 import { useParams } from 'next/navigation';
-import { AlertCircle, Lock, Package, Plus, Wand2 } from 'lucide-react';
+import { AlertCircle, Lock, MousePointerClick, Package, Plus, Wand2 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -49,6 +49,7 @@ import { SkillCard } from '../components/skill-card';
 import { RegenerateSkillModal } from '../components/regenerate-skill-modal';
 import { ConfirmActionDialog } from '../components/confirm-action-dialog';
 import { PluginsTabContent } from '../components/plugins-tab-content';
+import { ActionButtonsTabContent } from '../components/action-buttons-tab-content';
 import type { RoleSkill } from '@/services/api/role-skills';
 import type { SDLCRoleType } from '@/services/api/role-skills';
 
@@ -353,6 +354,12 @@ export const SkillsSettingsPage = observer(function SkillsSettingsPage() {
                 Plugins
               </TabsTrigger>
             )}
+            {workspaceStore.isAdmin && (
+              <TabsTrigger value="action-buttons">
+                <MousePointerClick className="mr-1.5 h-4 w-4" />
+                Action Buttons
+              </TabsTrigger>
+            )}
           </TabsList>
           {activeTab === 'roles' && (
             <Button
@@ -615,6 +622,12 @@ export const SkillsSettingsPage = observer(function SkillsSettingsPage() {
               addDialogOpen={addPluginDialogOpen}
               onAddDialogOpenChange={setAddPluginDialogOpen}
             />
+          </TabsContent>
+        )}
+
+        {workspaceStore.isAdmin && (
+          <TabsContent value="action-buttons">
+            <ActionButtonsTabContent workspaceId={workspaceId} />
           </TabsContent>
         )}
       </Tabs>
