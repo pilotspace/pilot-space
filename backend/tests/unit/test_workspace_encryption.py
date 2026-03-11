@@ -278,7 +278,7 @@ async def test_rotate_workspace_key_service() -> None:
             return_value=key_v1,
         ),
         patch(
-            "pilot_space.infrastructure.workspace_encryption.WorkspaceEncryptionRepository",
+            "pilot_space.infrastructure.database.repositories.workspace_encryption_repository.WorkspaceEncryptionRepository",
             return_value=mock_repo,
         ),
         patch(
