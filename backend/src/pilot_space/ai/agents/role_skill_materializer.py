@@ -1,14 +1,19 @@
 """Role skill materializer for PilotSpaceAgent.
 
-Writes user's role skills as SKILL.md files to the sandbox's `.claude/skills/`
+Writes user's skills as SKILL.md files to the sandbox's `.claude/skills/`
 directory so the Claude Agent SDK auto-discovers them.
 
-Source: 011-role-based-skills, FR-006, FR-007, FR-008, FR-014
+Primary path: reads from user_skills + skill_templates tables (Phase 20).
+Fallback path: reads from user_role_skills + workspace_role_skills (legacy).
+OperationalError on new tables triggers fallback automatically.
+
+Source: 011-role-based-skills, FR-006, FR-007, FR-008, FR-014, Phase 20
 """
 
 from __future__ import annotations
 
 import asyncio
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -23,8 +28,28 @@ logger = get_logger(__name__)
 
 # Prefix used for skill directories to distinguish from system skills
 _SKILL_PREFIX = "skill-"
-# Legacy prefix for transition cleanup (Phase 20: role- → skill-)
+# Legacy prefix for transition cleanup (Phase 20: role- -> skill-)
 _LEGACY_ROLE_PREFIX = "role-"
+
+
+def _sanitize_skill_dir_name(name: str, fallback_id: str) -> str:
+    """Sanitize a skill name for use as a directory name.
+
+    Lowercases, replaces non-alphanumeric runs with hyphens,
+    strips leading/trailing hyphens. Falls back to truncated ID
+    if result is empty.
+
+    Args:
+        name: Display name to sanitize.
+        fallback_id: UUID string to use if name sanitizes to empty.
+
+    Returns:
+        Sanitized directory-safe name.
+    """
+    sanitized = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+    if not sanitized:
+        return fallback_id[:8]
+    return sanitized
 
 
 async def materialize_role_skills(
@@ -33,14 +58,11 @@ async def materialize_role_skills(
     workspace_id: UUID,
     skills_dir: Path,
 ) -> int:
-    """Write user's role skills to the skills directory as SKILL.md files.
+    """Write user's skills to the skills directory as SKILL.md files.
 
-    Each role skill is written as ``role-{role_type}/SKILL.md`` with YAML
-    frontmatter.  Primary role gets ``priority: primary`` in frontmatter.
-    Stale role-skill directories (from deleted/changed roles) are cleaned up.
-
-    File I/O is offloaded to a thread pool via ``asyncio.to_thread`` to avoid
-    blocking the event loop (H-28-1 fix).
+    Tries new tables (user_skills + skill_templates) first.
+    Falls back to legacy tables on OperationalError.
+    Always calls materialize_plugin_skills at the end.
 
     Args:
         db_session: Active database session.
@@ -49,7 +71,155 @@ async def materialize_role_skills(
         skills_dir: Path to ``.claude/skills/`` in the sandbox.
 
     Returns:
-        Number of role skills materialized (0 if user has none - FR-008).
+        Number of skills materialized (0 if user has none).
+    """
+    from sqlalchemy.exc import OperationalError
+
+    try:
+        count = await _materialize_from_new_tables(db_session, user_id, workspace_id, skills_dir)
+    except OperationalError:
+        logger.debug(
+            "New skill tables not accessible for user %s workspace %s, falling back to legacy",
+            user_id,
+            workspace_id,
+        )
+        count = await _materialize_from_legacy_tables(db_session, user_id, workspace_id, skills_dir)
+
+    # SKRG-03: materialize plugin skills (workspace-scoped, all members)
+    plugin_count = await materialize_plugin_skills(
+        db_session=db_session,
+        workspace_id=workspace_id,
+        skills_dir=skills_dir,
+    )
+    count += plugin_count
+
+    return count
+
+
+async def _materialize_from_new_tables(
+    db_session: AsyncSession,
+    user_id: UUID,
+    workspace_id: UUID,
+    skills_dir: Path,
+) -> int:
+    """Materialize skills from user_skills and skill_templates tables.
+
+    1. Load user's active user_skills, write each as SKILL.md.
+    2. Load active skill_templates for workspace.
+    3. For templates not covered by user skills, write as workspace fallback.
+    4. Clean up stale skill-* dirs.
+
+    Args:
+        db_session: Active database session.
+        user_id: Current user UUID.
+        workspace_id: Current workspace UUID.
+        skills_dir: Path to ``.claude/skills/`` in the sandbox.
+
+    Returns:
+        Number of skills materialized.
+    """
+    from pilot_space.infrastructure.database.repositories.skill_template_repository import (
+        SkillTemplateRepository,
+    )
+    from pilot_space.infrastructure.database.repositories.user_skill_repository import (
+        UserSkillRepository,
+    )
+
+    user_repo = UserSkillRepository(db_session)
+    template_repo = SkillTemplateRepository(db_session)
+
+    # Load user's active skills
+    user_skills = await user_repo.get_by_user_workspace(user_id, workspace_id)
+
+    expected_dirs: set[str] = set()
+    covered_template_ids: set[UUID] = set()
+
+    for skill in user_skills:
+        # Determine name from template or fallback
+        skill_id_str = str(skill.id)
+        if skill.template is not None:
+            name = _sanitize_skill_dir_name(skill.template.name, skill_id_str)
+        else:
+            name = _sanitize_skill_dir_name("", skill_id_str)
+
+        dir_name = f"{_SKILL_PREFIX}{name}-{skill_id_str[:6]}"
+        expected_dirs.add(dir_name)
+        skill_dir = skills_dir / dir_name
+
+        frontmatter = _build_frontmatter(
+            name=skill.template.name if skill.template else skill_id_str[:8],
+            skill_id=skill_id_str,
+        )
+        content = f"{frontmatter}\n{skill.skill_content}"
+        await asyncio.to_thread(_write_skill_file, skill_dir, content)
+
+        if skill.template_id is not None:
+            covered_template_ids.add(skill.template_id)
+
+    # Workspace template fallback: active templates without user skill
+    templates = await template_repo.get_active_by_workspace(workspace_id)
+    workspace_fallback_count = 0
+
+    for template in templates:
+        if template.id in covered_template_ids:
+            continue
+        template_id_str = str(template.id)
+        name = _sanitize_skill_dir_name(template.name, template_id_str)
+        dir_name = f"{_SKILL_PREFIX}{name}-{template_id_str[:6]}"
+        expected_dirs.add(dir_name)
+        skill_dir = skills_dir / dir_name
+
+        frontmatter = _build_workspace_frontmatter(
+            name=template.name,
+            template_id=template_id_str,
+        )
+        content = f"{frontmatter}\n{template.skill_content}"
+        await asyncio.to_thread(_write_skill_file, skill_dir, content)
+        workspace_fallback_count += 1
+
+    # Clean up stale skill dirs
+    await asyncio.to_thread(_cleanup_stale_role_skills, skills_dir, expected_dirs)
+
+    total = len(user_skills) + workspace_fallback_count
+
+    if total == 0:
+        logger.debug(
+            "No skills to materialize for user %s in workspace %s",
+            user_id,
+            workspace_id,
+        )
+    else:
+        logger.info(
+            "Materialized %d skills (%d personal, %d workspace-fallback) for user %s in workspace %s",
+            total,
+            len(user_skills),
+            workspace_fallback_count,
+            user_id,
+            workspace_id,
+        )
+
+    return total
+
+
+async def _materialize_from_legacy_tables(
+    db_session: AsyncSession,
+    user_id: UUID,
+    workspace_id: UUID,
+    skills_dir: Path,
+) -> int:
+    """Materialize skills from legacy user_role_skills + workspace_role_skills.
+
+    This is the pre-Phase-20 path, kept for backward compatibility until
+    migration 077 is applied everywhere.
+
+    Args:
+        db_session: Active database session.
+        user_id: Current user UUID.
+        workspace_id: Current workspace UUID.
+        skills_dir: Path to ``.claude/skills/`` in the sandbox.
+
+    Returns:
+        Number of role skills materialized.
     """
     from pilot_space.infrastructure.database.repositories.role_skill_repository import (
         RoleSkillRepository,
@@ -58,7 +228,6 @@ async def materialize_role_skills(
     repo = RoleSkillRepository(db_session)
     skills = await repo.get_by_user_workspace(user_id, workspace_id)
 
-    # Build set of expected role-skill directory names
     expected_dirs: set[str] = set()
 
     for skill in skills:
@@ -66,13 +235,11 @@ async def materialize_role_skills(
         expected_dirs.add(dir_name)
         skill_dir = skills_dir / dir_name
 
-        frontmatter = _build_frontmatter(skill.role_name, skill.role_type, skill.is_primary)
+        frontmatter = _build_legacy_frontmatter(skill.role_name, skill.role_type, skill.is_primary)
         content = f"{frontmatter}\n{skill.skill_content}"
-
         await asyncio.to_thread(_write_skill_file, skill_dir, content)
 
-    # WRSKL-03: Load active workspace skills as fallback (only for roles not covered by personal skills)
-    # user_role_types is empty set when skills=[] — workspace skills are always considered for new members
+    # WRSKL-03: workspace skills fallback
     from sqlalchemy.exc import OperationalError
 
     from pilot_space.infrastructure.database.repositories.workspace_role_skill_repository import (
@@ -84,31 +251,29 @@ async def materialize_role_skills(
     try:
         workspace_skills = await ws_repo.get_active_by_workspace(workspace_id)
     except OperationalError:
-        # Table may not exist yet (pre-migration 073 environment or SQLite test DB).
-        # Treat as empty — personal skills still materialized correctly.
         logger.debug(
-            "workspace_role_skills table not accessible for workspace %s, skipping workspace skill injection",
+            "workspace_role_skills table not accessible for workspace %s, skipping",
             workspace_id,
         )
         workspace_skills = []
+
     for ws_skill in workspace_skills:
         if ws_skill.role_type in user_role_types:
-            continue  # WRSKL-04: personal skill takes precedence
+            continue
         dir_name = f"{_SKILL_PREFIX}{ws_skill.role_type}"
         expected_dirs.add(dir_name)
         skill_dir = skills_dir / dir_name
-        frontmatter = _build_workspace_frontmatter(ws_skill.role_name, ws_skill.role_type)
+        frontmatter = _build_legacy_workspace_frontmatter(ws_skill.role_name, ws_skill.role_type)
         content = f"{frontmatter}\n{ws_skill.skill_content}"
         await asyncio.to_thread(_write_skill_file, skill_dir, content)
 
-    # FR-014: Clean up stale skill files from deleted/changed roles
     await asyncio.to_thread(_cleanup_stale_role_skills, skills_dir, expected_dirs)
 
-    total_materialized = len(skills) + sum(
+    total = len(skills) + sum(
         1 for ws_skill in workspace_skills if ws_skill.role_type not in user_role_types
     )
 
-    if total_materialized == 0:
+    if total == 0:
         logger.debug(
             "No role skills to materialize for user %s in workspace %s",
             user_id,
@@ -116,23 +281,13 @@ async def materialize_role_skills(
         )
     else:
         logger.info(
-            "Materialized %d role skills (%d personal, %d workspace-inherited) for user %s in workspace %s",
-            total_materialized,
-            len(skills),
-            total_materialized - len(skills),
+            "Materialized %d legacy role skills for user %s in workspace %s",
+            total,
             user_id,
             workspace_id,
         )
 
-    # SKRG-03: materialize plugin skills (workspace-scoped, all members)
-    plugin_count = await materialize_plugin_skills(
-        db_session=db_session,
-        workspace_id=workspace_id,
-        skills_dir=skills_dir,
-    )
-    total_materialized += plugin_count
-
-    return total_materialized
+    return total
 
 
 def _write_skill_file(skill_dir: Path, content: str) -> None:
@@ -142,8 +297,50 @@ def _write_skill_file(skill_dir: Path, content: str) -> None:
     skill_file.write_text(content, encoding="utf-8")
 
 
-def _build_frontmatter(role_name: str, role_type: str, is_primary: bool) -> str:
-    """Build YAML frontmatter for a role skill SKILL.md file.
+def _build_frontmatter(name: str, skill_id: str) -> str:
+    """Build YAML frontmatter for a personal skill SKILL.md file.
+
+    Args:
+        name: Display name for the skill.
+        skill_id: Skill UUID string.
+
+    Returns:
+        YAML frontmatter string including delimiters.
+    """
+    sanitized = _sanitize_skill_dir_name(name, skill_id)
+    lines = [
+        "---",
+        f"name: skill-{sanitized}",
+        f'description: "{name}" skill for AI context personalization',
+        "origin: personal",
+        "---",
+    ]
+    return "\n".join(lines)
+
+
+def _build_workspace_frontmatter(name: str, template_id: str) -> str:
+    """Build YAML frontmatter for workspace template fallback skill files.
+
+    Args:
+        name: Template display name.
+        template_id: Template UUID string.
+
+    Returns:
+        YAML frontmatter string including delimiters and origin: workspace.
+    """
+    sanitized = _sanitize_skill_dir_name(name, template_id)
+    lines = [
+        "---",
+        f"name: skill-{sanitized}",
+        f'description: "{name}" workspace skill (inherited)',
+        "origin: workspace",
+        "---",
+    ]
+    return "\n".join(lines)
+
+
+def _build_legacy_frontmatter(role_name: str, role_type: str, is_primary: bool) -> str:
+    """Build YAML frontmatter for legacy role skill SKILL.md file.
 
     Args:
         role_name: Display name (e.g., "Senior Developer").
@@ -164,15 +361,15 @@ def _build_frontmatter(role_name: str, role_type: str, is_primary: bool) -> str:
     return "\n".join(lines)
 
 
-def _build_workspace_frontmatter(role_name: str, role_type: str) -> str:
-    """Build YAML frontmatter for workspace-inherited skill files.
+def _build_legacy_workspace_frontmatter(role_name: str, role_type: str) -> str:
+    """Build YAML frontmatter for legacy workspace-inherited skill files.
 
     Args:
-        role_name: Display name (e.g., "Senior Developer").
-        role_type: Role type key (e.g., "developer").
+        role_name: Display name.
+        role_type: Role type key.
 
     Returns:
-        YAML frontmatter string including delimiters and origin: workspace marker.
+        YAML frontmatter string including delimiters and origin: workspace.
     """
     lines = [
         "---",
@@ -324,7 +521,10 @@ def _cleanup_stale_plugin_skills(skills_dir: Path, expected_dirs: set[str]) -> N
 __all__ = [
     "_LEGACY_ROLE_PREFIX",
     "_SKILL_PREFIX",
+    "_build_frontmatter",
     "_build_workspace_frontmatter",
+    "_cleanup_stale_role_skills",
+    "_sanitize_skill_dir_name",
     "materialize_plugin_skills",
     "materialize_role_skills",
 ]
