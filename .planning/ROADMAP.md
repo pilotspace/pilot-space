@@ -3,7 +3,7 @@
 ## Milestones
 
 - ✅ **v1.0 Enterprise** — Phases 1–11 (shipped 2026-03-09)
-- 🔄 **v1.0-alpha Pre-Production Launch** — Phases 12–18 (in progress)
+- 🔄 **v1.0-alpha Pre-Production Launch** — Phases 12–19 (in progress)
 
 ## Phases
 
@@ -32,7 +32,7 @@ Full archive: `.planning/milestones/v1.0-ROADMAP.md`
 - [x] **Phase 13: AI Provider Registry + Model Selection** — Multi-provider BYOK registry (built-in + custom) and per-session model selector (completed 2026-03-10)
 - [x] **Phase 14: Remote MCP Server Management** — Register, auth (Bearer + OAuth), status, and PilotSpaceAgent dynamic wiring (completed 2026-03-10)
 - [ ] **Phase 15: Related Issues** — Semantic similarity suggestions, manual linking, dismissal
-- [ ] **Phase 16: Workspace Role Skills** — Admin-configured AI skill generation and role inheritance
+- [x] **Phase 16: Workspace Role Skills** — Admin-configured AI skill generation and role inheritance (completed 2026-03-10)
 - [ ] **Phase 17: Skill Action Buttons** — Custom issue-page buttons bound to skills or MCP tools
 - [ ] **Phase 18: Tech Debt Closure** — OIDC E2E, MCP approval wiring, xfail tests, key rotation
 
@@ -121,8 +121,8 @@ Plans:
 Plans:
 - [x] 016-01-PLAN.md — Wave 0: xfail backend stubs (repository, service, router, materializer) + frontend it.todo() stubs (WRSKL-01..04)
 - [x] 016-02-PLAN.md — Persistence: WorkspaceRoleSkill model + repository + migration 073 + RLS policies (WRSKL-01..03)
-- [ ] 016-03-PLAN.md — Backend services + admin router + materializer inheritance extension (WRSKL-01..04)
-- [ ] 016-04-PLAN.md — Frontend: workspace-role-skills API client + hooks + WorkspaceSkillCard + admin section in SkillsSettingsPage (WRSKL-01..04)
+- [x] 016-03-PLAN.md — Backend services + admin router + materializer inheritance extension (WRSKL-01..04)
+- [x] 016-04-PLAN.md — Frontend: workspace-role-skills API client + hooks + WorkspaceSkillCard + admin section in SkillsSettingsPage (WRSKL-01..04)
 
 ### Phase 17: Skill Action Buttons
 **Goal**: Workspace admins can add custom action buttons to the issue detail page that invoke skills or MCP tools
@@ -133,7 +133,11 @@ Plans:
   2. The button appears on the issue detail page for all workspace members
   3. Clicking the button opens the chat panel with the issue context pre-loaded and the bound skill/tool activated — no manual setup by the user
   4. If the bound skill or tool triggers a destructive action, the AI approval gate fires (requiring human confirmation) before execution proceeds
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 17-01-PLAN.md — Backend: SkillActionButton model + migration 075 + repository + schemas + admin CRUD router + plugin service extension (SKBTN-01, SKBTN-02, SKBTN-04)
+- [ ] 17-02-PLAN.md — Frontend: API client + hooks + ActionButtonsTabContent admin UI + ActionButtonBar on issue page + chat activation (SKBTN-01..04)
 
 ### Phase 18: Tech Debt Closure
 **Goal**: Known v1.0 gaps are resolved — OIDC E2E verified, MCP approval wiring correct, xfail tests passing, key rotation implemented
@@ -160,10 +164,10 @@ Plans:
 **Plans:** 4/4 plans complete
 
 Plans:
-- [ ] 019-01-PLAN.md — Wave 0: xfail backend stubs + frontend it.todo() stubs (SKRG-01..05)
-- [ ] 019-02-PLAN.md — Persistence: WorkspacePlugin + WorkspaceGithubCredential models + migration 074 + repositories (SKRG-01..05)
-- [ ] 019-03-PLAN.md — Backend: GitHubPluginService + InstallPluginService + SeedPluginsService + REST router + agent materializer extension (SKRG-01..05)
-- [ ] 019-04-PLAN.md — Frontend: PluginsStore + API client + plugin cards + detail sheet + Skills settings page Plugins tab (SKRG-01..05)
+- [x] 019-01-PLAN.md — Wave 0: xfail backend stubs + frontend it.todo() stubs (SKRG-01..05)
+- [x] 019-02-PLAN.md — Persistence: WorkspacePlugin + WorkspaceGithubCredential models + migration 074 + repositories (SKRG-01..05)
+- [x] 019-03-PLAN.md — Backend: GitHubPluginService + InstallPluginService + SeedPluginsService + REST router + agent materializer extension (SKRG-01..05)
+- [x] 019-04-PLAN.md — Frontend: PluginsStore + API client + plugin cards + detail sheet + Skills settings page Plugins tab (SKRG-01..05)
 
 ---
 *v1.0 shipped: 2026-03-09 — 11 phases, 46 plans, 30/30 requirements satisfied*
