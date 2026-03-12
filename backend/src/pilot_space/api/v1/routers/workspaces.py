@@ -35,6 +35,7 @@ from pilot_space.dependencies import (
     CurrentUserId,
 )
 from pilot_space.dependencies.auth import SessionDep
+from pilot_space.infrastructure.database import get_db_session
 from pilot_space.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
@@ -145,15 +146,7 @@ async def create_workspace(
     # SKRG-05: Seed default plugins into the new workspace (non-blocking fire-and-forget)
     import asyncio
 
-    from pilot_space.application.services.workspace_plugin.seed_plugins_service import (
-        SeedPluginsService,
-    )
-
-    asyncio.create_task(  # noqa: RUF006
-        SeedPluginsService(db_session=session).seed_workspace(
-            workspace_id=workspace.id,
-        )
-    )
+    asyncio.create_task(_seed_workspace_background(workspace.id))  # noqa: RUF006
 
     return WorkspaceDetailResponse(
         id=workspace.id,
@@ -401,6 +394,32 @@ async def list_workspace_labels(
         ) from e
 
     return [LabelBriefSchema.model_validate(label) for label in result.labels]
+
+
+async def _seed_workspace_background(workspace_id: UUID) -> None:
+    """Seed default plugins in a background task with its own DB session.
+
+    Uses get_db_session() for an independent session lifecycle so the
+    request-scoped session is not shared across tasks (SKRG-05).
+    All exceptions are caught and logged -- seeding failures are non-fatal.
+
+    Args:
+        workspace_id: Workspace to seed plugins into.
+    """
+    try:
+        async with get_db_session() as bg_session:
+            from pilot_space.application.services.workspace_plugin.seed_plugins_service import (
+                SeedPluginsService,
+            )
+
+            await SeedPluginsService(db_session=bg_session).seed_workspace(
+                workspace_id=workspace_id,
+            )
+    except Exception:
+        logger.exception(
+            "seed_workspace_background_failed",
+            workspace_id=str(workspace_id),
+        )
 
 
 __all__ = ["router"]
