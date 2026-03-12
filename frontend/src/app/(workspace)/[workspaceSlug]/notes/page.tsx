@@ -6,7 +6,7 @@
  */
 import { useCallback, useMemo, useRef, useState, use } from 'react';
 import { observer } from 'mobx-react-lite';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatDistanceToNow } from 'date-fns';
@@ -302,9 +302,13 @@ function EmptyState({ onCreate }: { onCreate?: () => void }) {
 const NotesPage = observer(function NotesPage({ params }: NotesPageProps) {
   const { workspaceSlug } = use(params);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const workspaceStore = useWorkspaceStore();
   const canCreateContent = workspaceStore.currentUserRole !== 'guest';
+
+  // Seed project filter from ?projectId=<id> (e.g. from ProjectNotesPanel "View all" link)
+  const initialProjectId = searchParams.get('projectId');
 
   // View state
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
@@ -312,8 +316,12 @@ const NotesPage = observer(function NotesPage({ params }: NotesPageProps) {
   const [sortBy, setSortBy] = useState<SortBy>('updated');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [filterPinned, setFilterPinned] = useState<boolean | undefined>(undefined);
-  const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([]);
-  const [pendingProjectIds, setPendingProjectIds] = useState<string[]>([]);
+  const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>(
+    initialProjectId ? [initialProjectId] : []
+  );
+  const [pendingProjectIds, setPendingProjectIds] = useState<string[]>(
+    initialProjectId ? [initialProjectId] : []
+  );
   const [projectFilterOpen, setProjectFilterOpen] = useState(false);
 
   // Get workspace ID from store or slug

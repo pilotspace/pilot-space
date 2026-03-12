@@ -19,7 +19,7 @@ export function ProjectNotesPanel({ project, workspaceSlug, workspaceId }: Proje
     isError,
   } = useNotes({
     workspaceId,
-    projectId: project.id,
+    projectIds: [project.id],
     isPinned: false,
     pageSize: 5,
     enabled: !!workspaceId,
@@ -41,7 +41,7 @@ export function ProjectNotesPanel({ project, workspaceSlug, workspaceId }: Proje
         </div>
         {recentTotal > 5 && (
           <Link
-            href={`/${workspaceSlug}/notes`}
+            href={`/${workspaceSlug}/notes?projectId=${project.id}`}
             className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-sidebar-foreground transition-colors"
             data-testid="project-notes-view-all-recent"
           >

@@ -1,12 +1,11 @@
 /**
  * ProjectNotesPanel component tests.
  *
- * Covers: loading skeleton, error state, pinned notes list, recent notes list,
- * empty state, guest permission (no "New Note" button), "View all" when total > 5,
- * and create mutation called with correct projectId.
+ * Covers: loading skeleton, error state, empty state, recent notes list,
+ * note link URLs, and "View all" link when total > 5.
  */
 
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ProjectNotesPanel } from '../ProjectNotesPanel';
 import type { Project } from '@/types';
@@ -15,36 +14,15 @@ import type { Project } from '@/types';
 // Mocks
 // ---------------------------------------------------------------------------
 
-const mockPush = vi.fn();
-
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: mockPush }),
-}));
-
 vi.mock('next/link', () => ({
   default: ({ href, children, ...props }: { href: string; children: React.ReactNode; [k: string]: unknown }) => (
     <a href={href} {...props}>{children}</a>
   ),
 }));
 
-vi.mock('sonner', () => ({
-  toast: { success: vi.fn(), error: vi.fn() },
-}));
-
 const mockUseNotes = vi.fn();
 vi.mock('@/features/notes/hooks/useNotes', () => ({
   useNotes: (opts: unknown) => mockUseNotes(opts),
-}));
-
-const mockMutate = vi.fn();
-const mockUseCreateNote = vi.fn();
-vi.mock('@/features/notes/hooks/useCreateNote', () => ({
-  useCreateNote: (opts: unknown) => mockUseCreateNote(opts),
-}));
-
-const mockUseWorkspaceStore = vi.fn();
-vi.mock('@/stores/RootStore', () => ({
-  useWorkspaceStore: () => mockUseWorkspaceStore(),
 }));
 
 // ---------------------------------------------------------------------------
@@ -62,12 +40,23 @@ const mockProject: Project = {
   updatedAt: '2026-01-01T00:00:00Z',
 };
 
-const pinnedNote = { id: 'note-1', title: 'Pinned Note', isPinned: true, projectId: 'proj-1', updatedAt: '2026-01-01T00:00:00Z', wordCount: 100, topics: [] };
-const recentNote = { id: 'note-2', title: 'Recent Note', isPinned: false, projectId: 'proj-1', updatedAt: '2026-01-01T00:00:00Z', wordCount: 50, topics: [] };
+const recentNote = {
+  id: 'note-2',
+  title: 'Recent Note',
+  isPinned: false,
+  projectId: 'proj-1',
+  updatedAt: '2026-01-01T00:00:00Z',
+  wordCount: 50,
+  topics: [],
+};
 
 const loadingState = { data: undefined, isLoading: true, isError: false };
-const emptyState = { data: { items: [], total: 0, hasNext: false, hasPrev: false, pageSize: 5 }, isLoading: false, isError: false };
-const errorState = { data: undefined, isLoading: false, isError: true };
+const errorState   = { data: undefined, isLoading: false, isError: true };
+const emptyState   = {
+  data: { items: [], total: 0, hasNext: false, hasPrev: false, pageSize: 5 },
+  isLoading: false,
+  isError: false,
+};
 
 function makeDataState(items: unknown[], total?: number) {
   return {
@@ -76,8 +65,6 @@ function makeDataState(items: unknown[], total?: number) {
     isError: false,
   };
 }
-
-const defaultCreateNote = { mutate: mockMutate, isPending: false };
 
 function renderPanel() {
   return render(
@@ -96,9 +83,20 @@ function renderPanel() {
 describe('ProjectNotesPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockUseWorkspaceStore.mockReturnValue({ currentUserRole: 'member' });
-    mockUseCreateNote.mockReturnValue(defaultCreateNote);
   });
+
+  // ── Single hook call contract ────────────────────────────────────────────
+
+  it('calls useNotes once with projectIds array and isPinned: false', () => {
+    mockUseNotes.mockReturnValue(emptyState);
+    renderPanel();
+    expect(mockUseNotes).toHaveBeenCalledTimes(1);
+    expect(mockUseNotes).toHaveBeenCalledWith(
+      expect.objectContaining({ projectIds: ['proj-1'], isPinned: false })
+    );
+  });
+
+  // ── Loading state ────────────────────────────────────────────────────────
 
   it('renders skeleton rows when loading', () => {
     mockUseNotes.mockReturnValue(loadingState);
@@ -107,11 +105,15 @@ describe('ProjectNotesPanel', () => {
     expect(skeletons.length).toBeGreaterThanOrEqual(3);
   });
 
+  // ── Error state ──────────────────────────────────────────────────────────
+
   it('renders error message when query fails', () => {
     mockUseNotes.mockReturnValue(errorState);
     renderPanel();
     expect(screen.getByText('Failed to load notes')).toBeTruthy();
   });
+
+  // ── Empty state ──────────────────────────────────────────────────────────
 
   it('renders empty state when no notes exist', () => {
     mockUseNotes.mockReturnValue(emptyState);
@@ -119,76 +121,51 @@ describe('ProjectNotesPanel', () => {
     expect(screen.getByText('No notes yet')).toBeTruthy();
   });
 
-  it('renders pinned notes list with correct titles', () => {
-    mockUseNotes
-      .mockReturnValueOnce(makeDataState([pinnedNote])) // pinned call
-      .mockReturnValueOnce(emptyState);                  // recent call
+  // ── Recent notes list ────────────────────────────────────────────────────
+
+  it('renders recent note titles', () => {
+    mockUseNotes.mockReturnValue(makeDataState([recentNote]));
     renderPanel();
-    expect(screen.getByText('Pinned Note')).toBeTruthy();
+    expect(screen.getByText('Recent Note')).toBeTruthy();
     expect(screen.queryByText('No notes yet')).toBeNull();
   });
 
-  it('renders recent notes list', () => {
-    mockUseNotes
-      .mockReturnValueOnce(emptyState)                     // pinned call
-      .mockReturnValueOnce(makeDataState([recentNote]));   // recent call
+  it('renders one list item per note', () => {
+    const notes = [
+      { ...recentNote, id: 'note-a', title: 'Alpha' },
+      { ...recentNote, id: 'note-b', title: 'Beta' },
+    ];
+    mockUseNotes.mockReturnValue(makeDataState(notes));
     renderPanel();
-    expect(screen.getByText('Recent Note')).toBeTruthy();
+    expect(screen.getAllByTestId('project-note-item')).toHaveLength(2);
   });
+
+  // ── Note link URLs ───────────────────────────────────────────────────────
 
   it('note links point to the correct URL', () => {
-    mockUseNotes
-      .mockReturnValueOnce(makeDataState([pinnedNote]))
-      .mockReturnValueOnce(emptyState);
+    mockUseNotes.mockReturnValue(makeDataState([recentNote]));
     renderPanel();
-    const link = screen.getByText('Pinned Note').closest('a');
-    expect(link?.getAttribute('href')).toBe('/my-workspace/notes/note-1');
+    const link = screen.getByText('Recent Note').closest('a');
+    expect(link?.getAttribute('href')).toBe('/my-workspace/notes/note-2');
   });
 
-  it('hides "New Note" button for guest role', () => {
-    mockUseWorkspaceStore.mockReturnValue({ currentUserRole: 'guest' });
-    mockUseNotes.mockReturnValue(emptyState);
-    renderPanel();
-    expect(screen.queryByTestId('project-new-note-button')).toBeNull();
-  });
+  // ── "View all" behaviour ─────────────────────────────────────────────────
 
-  it('shows "New Note" button for non-guest role', () => {
-    mockUseNotes.mockReturnValue(emptyState);
-    renderPanel();
-    expect(screen.getByTestId('project-new-note-button')).toBeTruthy();
-  });
-
-  it('calls create mutation with correct projectId on "New Note" click', async () => {
-    mockUseNotes.mockReturnValue(emptyState);
-    renderPanel();
-    fireEvent.click(screen.getByTestId('project-new-note-button'));
-    await waitFor(() => {
-      expect(mockMutate).toHaveBeenCalledWith({ title: 'Untitled', projectId: 'proj-1' });
-    });
-  });
-
-  it('shows "View all" link for pinned section when total > 5', () => {
-    mockUseNotes
-      .mockReturnValueOnce(makeDataState([pinnedNote], 8)) // total 8 > 5
-      .mockReturnValueOnce(emptyState);
-    renderPanel();
-    expect(screen.getByTestId('project-notes-view-all-pinned')).toBeTruthy();
-  });
-
-  it('shows "View all" link for recent section when total > 5', () => {
-    mockUseNotes
-      .mockReturnValueOnce(emptyState)
-      .mockReturnValueOnce(makeDataState([recentNote], 7)); // total 7 > 5
+  it('shows "View all" link when total > 5', () => {
+    mockUseNotes.mockReturnValue(makeDataState([recentNote], 7));
     renderPanel();
     expect(screen.getByTestId('project-notes-view-all-recent')).toBeTruthy();
   });
 
   it('does not show "View all" link when total <= 5', () => {
-    mockUseNotes
-      .mockReturnValueOnce(makeDataState([pinnedNote], 3))
-      .mockReturnValueOnce(makeDataState([recentNote], 2));
+    mockUseNotes.mockReturnValue(makeDataState([recentNote], 3));
     renderPanel();
-    expect(screen.queryByTestId('project-notes-view-all-pinned')).toBeNull();
+    expect(screen.queryByTestId('project-notes-view-all-recent')).toBeNull();
+  });
+
+  it('does not show "View all" link when total is exactly 5', () => {
+    mockUseNotes.mockReturnValue(makeDataState([recentNote], 5));
+    renderPanel();
     expect(screen.queryByTestId('project-notes-view-all-recent')).toBeNull();
   });
 });
