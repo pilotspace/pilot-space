@@ -1,11 +1,11 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
+milestone: v1.0.0-alpha2
+milestone_name: Notion-Style Restructure
 status: completed
-stopped_at: Completed 29-03-PLAN.md
-last_updated: "2026-03-12T20:33:11.939Z"
-last_activity: "2026-03-12 — Completed 26-03: PageBreadcrumb integration, flattenTree, and content sanitization"
+stopped_at: Milestone archived
+last_updated: "2026-03-13"
+last_activity: "2026-03-13 — Archived v1.0.0-alpha2 milestone"
 progress:
   total_phases: 6
   completed_phases: 6
@@ -20,16 +20,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-12)
 
 **Core value:** Enterprise teams can adopt AI-augmented SDLC workflows without sacrificing data sovereignty, compliance, or human control.
-**Current focus:** Phase 24 — Page Tree Data Model
+**Current focus:** Planning next milestone
 
 ## Current Position
 
-Phase: 26 of 29 (Sidebar Tree Navigation)
-Plan: 3 of 3 in current phase
-Status: Phase complete
-Last activity: 2026-03-12 — Completed 26-03: PageBreadcrumb integration, flattenTree, and content sanitization
-
-Milestone progress: [░░░░░░░░░░] 0% (0/~12 plans in v1.0.0-alpha2)
+Milestone: v1.0.0-alpha2 — SHIPPED 2026-03-12
+Next: `/gsd:new-milestone` to define next milestone
 
 ## Milestone History
 
@@ -37,47 +33,13 @@ Milestone progress: [░░░░░░░░░░] 0% (0/~12 plans in v1.0.0-a
 |-----------|--------|-------|-------------|---------|
 | v1.0 Enterprise | 1–11 | 46 | 30/30 | 2026-03-09 |
 | v1.0-alpha Pre-Production Launch | 12–23 | 37 | 39/39 + 7 gap items | 2026-03-12 |
+| v1.0.0-alpha2 Notion-Style Restructure | 24–29 | 14 | 17/17 | 2026-03-12 |
 
 ## Accumulated Context
 
 ### Decisions
 
 Decisions are logged in PROJECT.md Key Decisions table.
-Recent decisions affecting current work:
-
-- Notion-style page tree over flat notes — 3-level max depth
-- Two ownership models: project pages + user pages — replaces workspace-level notes
-- Adjacency list (parent_id + depth + position) on existing notes table — no new table
-- [Phase 24-page-tree-data-model]: Position gap of 1000 (ROW_NUMBER * 1000) between notes enables future reordering without renumbering
-- [Phase 24-page-tree-data-model]: Personal page RLS uses owner_id equality (not workspace membership) for strict owner-only visibility
-- [Phase 24-page-tree-data-model]: notes_service_role bypass created fresh in migration 079 — did not exist before, removed entirely in downgrade
-- [Phase 24-page-tree-data-model]: No ORM parent/children relationship on Note — Phase 25 uses repository queries to avoid lazy-load N+1
-- [Phase 24-page-tree-data-model]: ondelete=SET NULL on parent_id — orphaned children become roots on parent deletion
-- [Phase 25-tree-api-page-service]: MagicMock strategy for Note service tests: avoids ORM eager-load join table explosion in SQLite
-- [Phase 25-tree-api-page-service]: get_descendants mocked in unit tests — SQLite cannot run WITH RECURSIVE CTE
-- [Phase 25-tree-api-page-service]: ReorderPageService stub DI slot registered in Plan 01 to avoid re-touching container.py in Plan 02
-- [Phase 25-tree-api-page-service]: Gap-exhaustion sentinel (-1) from _compute_insert_position delegates cleanly to _resequence_siblings, single check in execute()
-- [Phase 25-tree-api-page-service]: Annotation endpoints extracted to workspace_note_annotations.py — workspace_notes.py hit 775 lines after tree endpoint additions, exceeding 700-line pre-commit limit
-- [Phase 26-sidebar-tree-navigation]: Used get_children instead of get_siblings in CreateNoteService for position computation — no exclude_note_id needed during creation
-- [Phase 26-sidebar-tree-navigation]: MobX expandedNodes annotated as observable in makeAutoObservable overrides — standard Set mutations not reactive without explicit annotation
-- [Phase 26-sidebar-tree-navigation]: notesApi.update() uses Partial<UpdateNoteData> not Partial<CreateNoteData> — null parentId in Note interface is incompatible with string|undefined
-- [Phase 26-sidebar-tree-navigation]: PageBreadcrumb is plain component (not observer) — receives computed ancestors as props from parent observer, matching TipTap context bridge pattern
-- [Phase 26-sidebar-tree-navigation]: Sidebar Pinned/Recent fully removed — reduces complexity, removes stale noteStore.loadNotes() dependency
-- [Phase 26-sidebar-tree-navigation]: useProjectPageTree + flattenTree for ancestor derivation — avoids queryClient.getQueryData silent failure (select transforms cached data so .items would be undefined)
-- [Phase 26-sidebar-tree-navigation]: useProjects hook for project name in breadcrumb — WorkspaceStore.currentWorkspace has no projects array
-- [Phase 27-project-hub-issue-views]: ViewMode type exported from IssueViewStore, projectViewModes Map for per-project scoping with global fallback, project overview page replaced with thin IssueViewsRoot wrapper
-- [Phase 27]: Empty string iconEmoji maps to NULL (remove emoji) — service layer converts empty string to None so clients can pass empty string to clear icon
-- [Phase 27]: Partial PostgreSQL index on icon_emoji WHERE NOT NULL — minimizes index size since most pages will have no emoji
-- [Phase 28-visual-design-refresh]: System-ui stack replaces DM Sans as primary body font — zero web font overhead for body text
-- [Phase 28-visual-design-refresh]: shadow-warm-* class names preserved (no rename) — only HSL hue values neutralized from warm (30/40) to neutral (0)
-- [Phase 28]: py-3 (12px) in page headers replaced with py-4 (16px) — consistent header height across all pages
-- [Phase 28]: py-3 (12px) in compact toolbars replaced with py-2 (8px) — toolbars are dense contexts, py-2 preserves density
-- [Phase 29]: DraggableTreeNode is a plain function component (not observer) — no MobX reads in node renderer, avoids re-renders during drag
-- [Phase 29]: nodeMap from flattenTreeWithDepth provides O(1) parentId lookup in handleDragEnd — avoids traversing tree per drag event
-- [Phase 29]: isMobile+isTablet replaces isSmallScreen in AppShell — tablet gets inline icon-rail instead of overlay drawer
-- [Phase 29]: Settings layout breakpoint md → lg so 224px nav + 60px icon-rail + content fits at 1024px+
-- [Phase 29]: fullNodeMap recursive walk of treeNodes (not flatItems) needed for subtree height — collapsed children excluded from nodeMap but required for depth computation
-- [Phase 29]: newDeepestDepth = overMeta.depth + getSubtreeHeight(activeFullNode) for cross-parent drag depth validation
 
 ### Pending Todos
 
@@ -85,11 +47,11 @@ None.
 
 ### Blockers/Concerns
 
-None — Phase 26 complete. All NAV-01 through NAV-04 requirements satisfied.
+None.
 
 ## Session Continuity
 
-Last session: 2026-03-12T20:26:47.206Z
-Stopped at: Completed 29-03-PLAN.md
+Last session: 2026-03-13
+Stopped at: Milestone archived
 Resume file: None
-Next action: `/gsd:plan-phase 27`
+Next action: `/gsd:new-milestone`
