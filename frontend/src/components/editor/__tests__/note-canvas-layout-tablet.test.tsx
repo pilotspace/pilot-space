@@ -17,11 +17,23 @@ vi.mock('mobx-react-lite', () => ({
 // Mock motion/react
 vi.mock('motion/react', () => ({
   motion: {
-    div: ({ children, className, ...rest }: React.HTMLAttributes<HTMLDivElement> & { children?: React.ReactNode }) => (
-      <div className={className} {...rest}>{children}</div>
+    div: ({
+      children,
+      className,
+      ...rest
+    }: React.HTMLAttributes<HTMLDivElement> & { children?: React.ReactNode }) => (
+      <div className={className} {...rest}>
+        {children}
+      </div>
     ),
-    aside: ({ children, className, ...rest }: React.HTMLAttributes<HTMLElement> & { children?: React.ReactNode }) => (
-      <aside className={className} {...rest}>{children}</aside>
+    aside: ({
+      children,
+      className,
+      ...rest
+    }: React.HTMLAttributes<HTMLElement> & { children?: React.ReactNode }) => (
+      <aside className={className} {...rest}>
+        {children}
+      </aside>
     ),
   },
   AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -135,12 +147,26 @@ vi.mock('@/features/notes/components/ExtractionReviewPanel', () => ({
 
 // Mock ResizablePanelGroup
 vi.mock('@/components/ui/resizable', () => ({
-  ResizablePanelGroup: ({ children, className }: React.HTMLAttributes<HTMLDivElement> & { children?: React.ReactNode; orientation?: string; id?: string }) => (
-    <div className={className}>{children}</div>
-  ),
-  ResizablePanel: ({ children, className }: React.HTMLAttributes<HTMLDivElement> & { children?: React.ReactNode; id?: string; defaultSize?: string; minSize?: string; maxSize?: string; panelRef?: unknown; onResize?: unknown }) => (
-    <div className={className}>{children}</div>
-  ),
+  ResizablePanelGroup: ({
+    children,
+    className,
+  }: React.HTMLAttributes<HTMLDivElement> & {
+    children?: React.ReactNode;
+    orientation?: string;
+    id?: string;
+  }) => <div className={className}>{children}</div>,
+  ResizablePanel: ({
+    children,
+    className,
+  }: React.HTMLAttributes<HTMLDivElement> & {
+    children?: React.ReactNode;
+    id?: string;
+    defaultSize?: string;
+    minSize?: string;
+    maxSize?: string;
+    panelRef?: unknown;
+    onResize?: unknown;
+  }) => <div className={className}>{children}</div>,
   ResizableHandle: () => null,
 }));
 
