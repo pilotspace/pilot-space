@@ -45,7 +45,7 @@ Full archive: `.planning/milestones/v1.0-alpha-ROADMAP.md`
 
 ### v1.0-alpha Gap Closure (Phases 21–23)
 
-- [ ] Phase 21: Documentation & Verification Closure
+- [x] Phase 21: Documentation & Verification Closure (completed 2026-03-12)
 - [ ] Phase 22: Integration Safety — Session & OAuth2 UI
 - [ ] Phase 23: Tech Debt Sweep
 
@@ -53,7 +53,7 @@ Full archive: `.planning/milestones/v1.0-alpha-ROADMAP.md`
 **Goal:** Close all documentation and verification process gaps from v1.0-alpha audit
 **Requirements:** WRSKL-01, WRSKL-02, WRSKL-03, WRSKL-04 (verification gap -> satisfied)
 **Gap Closure:** Closes 4 requirement gaps (partial -> satisfied) + 4 documentation gaps from audit
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 
 Plans:
 - [ ] 21-01-PLAN.md — Generate Phase 16 VERIFICATION.md and update REQUIREMENTS.md traceability
