@@ -115,11 +115,11 @@ Plans:
   2. User can switch between issue views (Board/List/Table) via a toolbar and the selected view persists per project
   3. User can view issues grouped by priority swimlanes in a dedicated Priority view
   4. User can set an emoji icon on any page and sees it displayed in the sidebar tree and page header
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 27-01: TBD
-- [ ] 27-02: TBD
+- [ ] 27-01-PLAN.md — Project hub page, per-project view persistence, Priority view
+- [ ] 27-02-PLAN.md — Emoji icon migration, backend schema, frontend render and picker
 
 ### Phase 28: Visual Design Refresh
 **Goal**: The application looks and feels Notion-like with refined typography, spacing, and colors
@@ -130,7 +130,7 @@ Plans:
   2. Spacing follows an 8px grid system with consistent padding and margins across all pages
   3. Color palette is muted and professional with proper dark mode parity
   4. Existing pages (issues, settings, AI chat) retain correct layout and readability after token changes
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
 - [ ] 28-01: TBD
@@ -144,7 +144,7 @@ Plans:
   2. Content area adjusts layout (reduced margins, stacked elements) for tablet viewport
   3. User can drag a page in the sidebar tree to reorder among siblings
   4. User can drag a page in the sidebar tree to re-parent it under a different node, with depth limit enforced visually
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
 - [ ] 29-01: TBD
