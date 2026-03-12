@@ -149,6 +149,18 @@ export const notesApi = {
   getNoteBacklinks(workspaceId: string, noteId: string): Promise<NoteBacklink[]> {
     return apiClient.get<NoteBacklink[]>(`/workspaces/${workspaceId}/notes/${noteId}/backlinks`);
   },
+
+  movePage(workspaceId: string, noteId: string, newParentId: string | null): Promise<Note> {
+    return apiClient.post<Note>(`/workspaces/${workspaceId}/notes/${noteId}/move`, {
+      new_parent_id: newParentId,
+    });
+  },
+
+  reorderPage(workspaceId: string, noteId: string, insertAfterId: string | null): Promise<Note> {
+    return apiClient.post<Note>(`/workspaces/${workspaceId}/notes/${noteId}/reorder`, {
+      insert_after_id: insertAfterId,
+    });
+  },
 };
 
 /**

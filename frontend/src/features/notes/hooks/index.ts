@@ -14,6 +14,8 @@ export { useNote, useNoteAnnotations } from './useNote';
 export type { UseNoteOptions } from './useNote';
 
 // Mutation hooks
+export { useMovePage } from './useMovePage';
+export { useReorderPage } from './useReorderPage';
 export { useCreateNote, createNoteDefaults } from './useCreateNote';
 export type { UseCreateNoteOptions } from './useCreateNote';
 
