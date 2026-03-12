@@ -51,7 +51,7 @@ Full archive: `.planning/milestones/v1.0-alpha-ROADMAP.md`
 
 **Milestone Goal:** Restructure Pilot Space from flat notes to a Notion-style project-centric model with nested page trees, embedded issue views, visual design refresh, and responsive layout for desktop and tablet.
 
-- [ ] **Phase 24: Page Tree Data Model** - Schema migration adding tree columns to notes table, ownership classification, and existing notes migration
+- [x] **Phase 24: Page Tree Data Model** - Schema migration adding tree columns to notes table, ownership classification, and existing notes migration (completed 2026-03-12)
 - [ ] **Phase 25: Tree API & Page Service** - Backend endpoints for tree CRUD, move/re-parent, and sibling reordering with depth enforcement
 - [ ] **Phase 26: Sidebar Tree & Navigation** - Project page tree in sidebar with expand/collapse, inline creation, personal pages section, breadcrumbs, and editor decoupling for non-issue pages
 - [ ] **Phase 27: Project Hub & Issue Views** - Embedded Board/List/Table/Priority issue views in project page with view switcher and page emoji icons
@@ -159,7 +159,7 @@ Phases execute in numeric order: 24 → 25 → 26 → 27 → 28 → 29
 |-------|-----------|-------|--------|-----------|
 | 1–11 | v1.0 | 46/46 | Complete | 2026-03-09 |
 | 12–23 | v1.0-alpha | 37/37 | Complete | 2026-03-12 |
-| 24. Page Tree Data Model | 1/2 | In Progress|  | - |
+| 24. Page Tree Data Model | 2/2 | Complete   | 2026-03-12 | - |
 | 25. Tree API & Page Service | v1.0.0-alpha2 | 0/2 | Not started | - |
 | 26. Sidebar Tree & Navigation | v1.0.0-alpha2 | 0/3 | Not started | - |
 | 27. Project Hub & Issue Views | v1.0.0-alpha2 | 0/2 | Not started | - |
