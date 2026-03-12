@@ -21,7 +21,7 @@ from typing import Annotated, TypeVar
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 from fastapi import APIRouter, HTTPException, Path, Query, status
-from sqlalchemy import select
+from sqlalchemy import ColumnElement, select
 
 from pilot_space.ai.agents.pilotspace_stream_utils import get_workspace_openai_key
 from pilot_space.api.v1.schemas.knowledge_graph import (
@@ -359,6 +359,119 @@ _GITHUB_NODE_TYPE_MAP: dict[IntegrationLinkType, str] = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Shared helper for entity-scoped knowledge graph endpoints
+# ---------------------------------------------------------------------------
+
+
+async def _build_entity_subgraph(
+    *,
+    session: SessionDep,
+    entity_id: UUID,
+    workspace_id: UUID,
+    depth: int,
+    node_types: str | None,
+    max_nodes: int,
+    include_github: bool,
+    github_link_filter: ColumnElement[bool],
+    fetch_max_override: int = 100,
+    log_event: str = "knowledge_graph_entity_no_node",
+) -> GraphResponse:
+    """Shared pipeline: graph node lookup → subgraph → GitHub synthesis → sort.
+
+    Both issue-scoped and project-scoped endpoints delegate to this after
+    validating entity existence and setting RLS context.
+    """
+    # Step 1: Find the graph node linked to this entity
+    stmt = (
+        select(GraphNodeModel)
+        .where(
+            GraphNodeModel.external_id == entity_id,
+            GraphNodeModel.workspace_id == workspace_id,
+            GraphNodeModel.is_deleted == False,  # noqa: E712
+        )
+        .limit(1)
+    )
+    result = await session.execute(stmt)
+    graph_node_model = result.scalar_one_or_none()
+
+    # Step 2: No graph node → empty response
+    if graph_node_model is None:
+        logger.info(log_event, entity_id=str(entity_id), workspace_id=str(workspace_id))
+        return GraphResponse(nodes=[], edges=[], center_node_id=entity_id)
+
+    center_node_id = graph_node_model.id
+
+    # Step 3: Extract subgraph. Pre-fetch more when filtering to avoid silent pruning.
+    repo = KnowledgeGraphRepository(session)
+    _fetch_max = fetch_max_override if node_types else max_nodes
+    nodes, edges = await repo.get_subgraph(
+        root_id=center_node_id,
+        max_depth=depth,
+        max_nodes=_fetch_max,
+        workspace_id=workspace_id,
+    )
+
+    if node_types:
+        allowed = {t.strip() for t in node_types.split(",") if t.strip()}
+        nodes = [n for n in nodes if n.node_type.value in allowed][:max_nodes]
+        # Filter edges to only include those connecting remaining nodes
+        node_ids = {n.id for n in nodes}
+        edges = [e for e in edges if e.source_id in node_ids and e.target_id in node_ids]
+
+    node_dtos = [_node_to_dto(n) for n in nodes]
+    edge_dtos = _edges_to_dtos(edges)
+
+    # Step 4: Synthesize ephemeral GitHub nodes
+    if include_github:
+        gh_stmt = select(IntegrationLink).where(
+            github_link_filter,
+            IntegrationLink.workspace_id == workspace_id,
+            IntegrationLink.is_deleted == False,  # noqa: E712
+        )
+        gh_result = await session.execute(gh_stmt)
+        integration_links = gh_result.scalars().all()
+
+        existing_external_ids = {
+            str(n.properties["external_id"])
+            for n in node_dtos
+            if n.properties and n.properties.get("external_id") is not None
+        }
+        now = datetime.now(tz=UTC)
+
+        for link in integration_links:
+            if str(link.external_id) in existing_external_ids:
+                continue
+            mapped_type = _GITHUB_NODE_TYPE_MAP.get(link.link_type, NodeType.NOTE.value)
+            node_dtos.append(
+                GraphNodeDTO(
+                    id=str(uuid5(NAMESPACE_URL, f"ephemeral:{link.external_id}")),
+                    node_type=mapped_type,
+                    label=link.title or link.external_id,
+                    summary=f"GitHub {link.link_type.value}: {link.title or link.external_id}",
+                    properties={
+                        "external_id": link.external_id,
+                        "external_url": link.external_url,
+                        "author_name": link.author_name,
+                        "ephemeral": True,
+                    },
+                    created_at=now,
+                    updated_at=now,
+                    score=None,
+                )
+            )
+
+    # Step 5: Sort by importance tier
+    node_dtos.sort(key=lambda n: _node_tier(n.node_type))
+
+    return GraphResponse(nodes=node_dtos, edges=edge_dtos, center_node_id=center_node_id)
+
+
+# ---------------------------------------------------------------------------
+# Issue-scoped endpoint
+# ---------------------------------------------------------------------------
+
+
 @issues_kg_router.get(
     "/issues/{issue_id}/knowledge-graph",
     response_model=GraphResponse,
@@ -389,7 +502,6 @@ async def get_issue_knowledge_graph(
     """Return knowledge graph subgraph for an issue, optionally enriched with GitHub links."""
     await set_rls_context(session, current_user_id, workspace_id)
 
-    # H-4: Verify the issue exists in this workspace before querying the graph.
     issue_exists = (
         await session.execute(
             select(IssueModel.id).where(
@@ -402,101 +514,17 @@ async def get_issue_knowledge_graph(
     if issue_exists is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
 
-    # Step 1: Find the graph node linked to this issue
-    stmt = (
-        select(GraphNodeModel)
-        .where(
-            GraphNodeModel.external_id == issue_id,
-            GraphNodeModel.workspace_id == workspace_id,
-            GraphNodeModel.is_deleted == False,  # noqa: E712
-        )
-        .limit(1)
-    )
-    result = await session.execute(stmt)
-    graph_node_model = result.scalar_one_or_none()
-
-    # Step 2: No graph node found — return empty response
-    if graph_node_model is None:
-        logger.info(
-            "knowledge_graph_issue_no_node",
-            issue_id=str(issue_id),
-            workspace_id=str(workspace_id),
-        )
-        return GraphResponse(nodes=[], edges=[], center_node_id=issue_id)
-
-    center_node_id = graph_node_model.id
-
-    # Step 3: Extract subgraph from the graph node.
-    # When node_types filter is active, fetch the maximum pool (100) before filtering
-    # to avoid silently dropping valid nodes that were pruned by max_nodes before the
-    # filter was applied (devil's advocate W-2).
-    repo = KnowledgeGraphRepository(session)
-    _fetch_max = 100 if node_types else max_nodes
-    nodes, edges = await repo.get_subgraph(
-        root_id=center_node_id,
-        max_depth=depth,
-        max_nodes=_fetch_max,
+    return await _build_entity_subgraph(
+        session=session,
+        entity_id=issue_id,
         workspace_id=workspace_id,
-    )
-
-    # Apply node type filter, then trim to requested max_nodes
-    if node_types:
-        allowed = {t.strip() for t in node_types.split(",") if t.strip()}
-        nodes = [n for n in nodes if n.node_type.value in allowed][:max_nodes]
-
-    node_dtos = [_node_to_dto(n) for n in nodes]
-    edge_dtos = _edges_to_dtos(edges)
-
-    # Step 4: Synthesize ephemeral GitHub nodes if requested
-    if include_github:
-        gh_stmt = select(IntegrationLink).where(
-            IntegrationLink.issue_id == issue_id,
-            IntegrationLink.workspace_id == workspace_id,
-            IntegrationLink.is_deleted == False,  # noqa: E712
-        )
-        gh_result = await session.execute(gh_stmt)
-        integration_links = gh_result.scalars().all()
-
-        existing_external_ids = {
-            str(n.properties["external_id"])
-            for n in node_dtos
-            if n.properties and n.properties.get("external_id") is not None
-        }
-        now = datetime.now(tz=UTC)
-
-        for link in integration_links:
-            # Avoid duplicates if a real graph node already represents this link
-            if str(link.external_id) in existing_external_ids:
-                continue
-
-            mapped_type = _GITHUB_NODE_TYPE_MAP.get(link.link_type, NodeType.NOTE.value)
-            node_dtos.append(
-                GraphNodeDTO(
-                    # Deterministic ID from external_id so repeated fetches
-                    # produce stable node IDs for frontend graph reconciliation.
-                    id=str(uuid5(NAMESPACE_URL, f"ephemeral:{link.external_id}")),
-                    node_type=mapped_type,
-                    label=link.title or link.external_id,
-                    summary=f"GitHub {link.link_type.value}: {link.title or link.external_id}",
-                    properties={
-                        "external_id": link.external_id,
-                        "external_url": link.external_url,
-                        "author_name": link.author_name,
-                        "ephemeral": True,
-                    },
-                    created_at=now,
-                    updated_at=now,
-                    score=None,
-                )
-            )
-
-    # Step 5: Sort by importance tier
-    node_dtos.sort(key=lambda n: _node_tier(n.node_type))
-
-    return GraphResponse(
-        nodes=node_dtos,
-        edges=edge_dtos,
-        center_node_id=center_node_id,
+        depth=depth,
+        node_types=node_types,
+        max_nodes=max_nodes,
+        include_github=include_github,
+        github_link_filter=IntegrationLink.issue_id == issue_id,
+        fetch_max_override=100,
+        log_event="knowledge_graph_issue_no_node",
     )
 
 
@@ -535,7 +563,6 @@ async def get_project_knowledge_graph(
     """Return knowledge graph subgraph for a project, optionally enriched with GitHub links."""
     await set_rls_context(session, current_user_id, workspace_id)
 
-    # Verify the project exists in this workspace before querying the graph.
     project_exists = (
         await session.execute(
             select(ProjectModel.id).where(
@@ -548,107 +575,23 @@ async def get_project_knowledge_graph(
     if project_exists is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
 
-    # Step 1: Find the graph node linked to this project
-    stmt = (
-        select(GraphNodeModel)
-        .where(
-            GraphNodeModel.external_id == project_id,
-            GraphNodeModel.workspace_id == workspace_id,
-            GraphNodeModel.is_deleted == False,  # noqa: E712
-        )
-        .limit(1)
-    )
-    result = await session.execute(stmt)
-    graph_node_model = result.scalar_one_or_none()
-
-    # Step 2: No graph node found — return empty response
-    if graph_node_model is None:
-        logger.info(
-            "knowledge_graph_project_no_node",
-            project_id=str(project_id),
-            workspace_id=str(workspace_id),
-        )
-        return GraphResponse(nodes=[], edges=[], center_node_id=project_id)
-
-    center_node_id = graph_node_model.id
-
-    # Step 3: Extract subgraph from the graph node.
-    # When node_types filter is active, fetch the maximum pool before filtering
-    # to avoid silently dropping valid nodes that were pruned by max_nodes before
-    # the filter was applied.
-    repo = KnowledgeGraphRepository(session)
-    _fetch_max = 200 if node_types else max_nodes
-    nodes, edges = await repo.get_subgraph(
-        root_id=center_node_id,
-        max_depth=depth,
-        max_nodes=_fetch_max,
+    return await _build_entity_subgraph(
+        session=session,
+        entity_id=project_id,
         workspace_id=workspace_id,
-    )
-
-    # Apply node type filter, then trim to requested max_nodes
-    if node_types:
-        allowed = {t.strip() for t in node_types.split(",") if t.strip()}
-        nodes = [n for n in nodes if n.node_type.value in allowed][:max_nodes]
-
-    node_dtos = [_node_to_dto(n) for n in nodes]
-    edge_dtos = _edges_to_dtos(edges)
-
-    # Step 4: Synthesize ephemeral GitHub nodes if requested
-    if include_github:
-        gh_stmt = select(IntegrationLink).where(
-            IntegrationLink.issue_id.in_(
-                select(IssueModel.id).where(
-                    IssueModel.project_id == project_id,
-                    IssueModel.workspace_id == workspace_id,
-                    IssueModel.is_deleted == False,  # noqa: E712
-                )
-            ),
-            IntegrationLink.workspace_id == workspace_id,
-            IntegrationLink.is_deleted == False,  # noqa: E712
-        )
-        gh_result = await session.execute(gh_stmt)
-        integration_links = gh_result.scalars().all()
-
-        existing_external_ids = {
-            str(n.properties["external_id"])
-            for n in node_dtos
-            if n.properties and n.properties.get("external_id") is not None
-        }
-        now = datetime.now(tz=UTC)
-
-        for link in integration_links:
-            # Avoid duplicates if a real graph node already represents this link
-            if str(link.external_id) in existing_external_ids:
-                continue
-
-            mapped_type = _GITHUB_NODE_TYPE_MAP.get(link.link_type, NodeType.NOTE.value)
-            node_dtos.append(
-                GraphNodeDTO(
-                    # Deterministic ID from external_id so repeated fetches
-                    # produce stable node IDs for frontend graph reconciliation.
-                    id=str(uuid5(NAMESPACE_URL, f"ephemeral:{link.external_id}")),
-                    node_type=mapped_type,
-                    label=link.title or link.external_id,
-                    summary=f"GitHub {link.link_type.value}: {link.title or link.external_id}",
-                    properties={
-                        "external_id": link.external_id,
-                        "external_url": link.external_url,
-                        "author_name": link.author_name,
-                        "ephemeral": True,
-                    },
-                    created_at=now,
-                    updated_at=now,
-                    score=None,
-                )
+        depth=depth,
+        node_types=node_types,
+        max_nodes=max_nodes,
+        include_github=include_github,
+        github_link_filter=IntegrationLink.issue_id.in_(
+            select(IssueModel.id).where(
+                IssueModel.project_id == project_id,
+                IssueModel.workspace_id == workspace_id,
+                IssueModel.is_deleted == False,  # noqa: E712
             )
-
-    # Step 5: Sort by importance tier
-    node_dtos.sort(key=lambda n: _node_tier(n.node_type))
-
-    return GraphResponse(
-        nodes=node_dtos,
-        edges=edge_dtos,
-        center_node_id=center_node_id,
+        ),
+        fetch_max_override=200,
+        log_event="knowledge_graph_project_no_node",
     )
 
 

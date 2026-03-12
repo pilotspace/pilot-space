@@ -11,7 +11,6 @@
  * State: local useState only (no MobX, NOT observer).
  */
 
-import * as React from 'react';
 import { useCallback, useEffect, startTransition, useState, useMemo } from 'react';
 import { X } from 'lucide-react';
 import {
@@ -59,6 +58,12 @@ const FILTER_CHIPS: FilterChip[] = [
   { label: 'All', nodeType: 'all' },
 ];
 
+const minimapNodeColor = (n: Node) => {
+  const d = n.data as GraphNodeData | undefined;
+  if (d?.isCurrent) return '#2563eb';
+  return '#94a3b8';
+};
+
 // ── Inner component (needs ReactFlowProvider context) ─────────────────────
 
 interface ProjectGraphCanvasProps {
@@ -66,6 +71,7 @@ interface ProjectGraphCanvasProps {
   projectId: string;
   depth: number;
   activeFilter: GraphNodeType | 'all';
+  onNodeCountChange: (count: number) => void;
 }
 
 function ProjectGraphCanvas({
@@ -73,16 +79,23 @@ function ProjectGraphCanvas({
   projectId,
   depth,
   activeFilter,
+  onNodeCountChange,
 }: ProjectGraphCanvasProps) {
   const { fitView } = useReactFlow();
 
-  const [selectedNode, setSelectedNode] = React.useState<GraphNodeDTO | null>(null);
-  const [extraNodes, setExtraNodes] = React.useState<GraphNodeDTO[]>([]);
-  const [extraEdges, setExtraEdges] = React.useState<GraphEdgeDTO[]>([]);
+  const [selectedNode, setSelectedNode] = useState<GraphNodeDTO | null>(null);
+  const [extraNodes, setExtraNodes] = useState<GraphNodeDTO[]>([]);
+  const [extraEdges, setExtraEdges] = useState<GraphEdgeDTO[]>([]);
   const [flowNodes, setFlowNodes] = useState<Node[]>([]);
   const [flowEdges, setFlowEdges] = useState<Edge[]>([]);
 
-  // Memoize to prevent TanStack Query key churn from new array refs on each render
+  // Reset expanded nodes when filter or depth changes
+  useEffect(() => {
+    setExtraNodes([]);
+    setExtraEdges([]);
+    setSelectedNode(null);
+  }, [activeFilter, depth]);
+
   const nodeTypes_ = useMemo<GraphNodeType[] | undefined>(
     () => (activeFilter === 'all' ? undefined : [activeFilter]),
     [activeFilter]
@@ -91,8 +104,12 @@ function ProjectGraphCanvas({
   const { data, isLoading, isError, refetch } = useProjectKnowledgeGraph(workspaceId, projectId, {
     depth,
     nodeTypes: nodeTypes_,
-    enabled: true,
   });
+
+  // Report node count to parent for toolbar display
+  useEffect(() => {
+    onNodeCountChange(data?.nodes.length ?? 0);
+  }, [data?.nodes.length, onNodeCountChange]);
 
   // Merge base + expanded neighbor nodes
   const mergedNodes = useMemo(() => {
@@ -107,19 +124,15 @@ function ProjectGraphCanvas({
     return [...data.edges, ...extraEdges.filter((e) => !baseIds.has(e.id))];
   }, [data, extraEdges]);
 
-  // Validate centerNodeId exists in the node set
   const effectiveCenterNodeId = useMemo(() => {
     if (!data) return '';
     const center = data.centerNodeId;
     if (!center) return data.nodes[0]?.id ?? '';
     const exists = data.nodes.some((n) => n.id === center);
-    if (!exists) {
-      console.warn('[ProjectKnowledgeGraph] centerNodeId not found in nodes:', center);
-    }
     return exists ? center : (data.nodes[0]?.id ?? '');
   }, [data]);
 
-  // Move layout computation to useEffect with startTransition to yield to browser
+  // Layout computation via useEffect + startTransition
   useEffect(() => {
     startTransition(() => {
       if (mergedNodes.length === 0) {
@@ -153,7 +166,7 @@ function ProjectGraphCanvas({
 
   const handleNodeDoubleClick = useCallback(
     async (nodeId: string) => {
-      const totalNodes = (data?.nodes.length ?? 0) + extraNodes.length;
+      const totalNodes = mergedNodes.length;
       if (totalNodes >= 200) {
         toast.warning('Graph limit reached (200 nodes). Clear filters to reset the view.');
         return;
@@ -178,12 +191,16 @@ function ProjectGraphCanvas({
         toast.error(`Failed to expand node: ${message}`);
       }
     },
-    [data, depth, extraNodes, workspaceId]
+    [mergedNodes.length, depth, workspaceId]
   );
 
-  function handleNodeClick(node: GraphNodeDTO) {
+  const handleNodeClick = useCallback((node: GraphNodeDTO) => {
     setSelectedNode(node);
-  }
+  }, []);
+
+  const handleCloseDetail = useCallback(() => {
+    setSelectedNode(null);
+  }, []);
 
   const isLayoutComputing =
     !isLoading && !isError && !!data && data.nodes.length > 0 && flowNodes.length === 0;
@@ -247,11 +264,7 @@ function ProjectGraphCanvas({
             <MiniMap
               position="bottom-right"
               className="!bottom-4 !right-4"
-              nodeColor={(n) => {
-                const d = n.data as GraphNodeData | undefined;
-                if (d?.isCurrent) return '#2563eb';
-                return '#94a3b8';
-              }}
+              nodeColor={minimapNodeColor}
             />
             <Controls position="bottom-left" className="!bottom-4 !left-4" />
           </ReactFlow>
@@ -275,13 +288,15 @@ function ProjectGraphCanvas({
               {selectedNode.summary && (
                 <p className="text-xs text-muted-foreground line-clamp-2">{selectedNode.summary}</p>
               )}
-              <p className="text-xs text-muted-foreground">
-                {formatDistanceToNow(new Date(selectedNode.createdAt), { addSuffix: true })}
-              </p>
+              {selectedNode.createdAt && (
+                <p className="text-xs text-muted-foreground">
+                  {formatDistanceToNow(new Date(selectedNode.createdAt), { addSuffix: true })}
+                </p>
+              )}
             </div>
             <button
               type="button"
-              onClick={() => setSelectedNode(null)}
+              onClick={handleCloseDetail}
               className="shrink-0 rounded p-0.5 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label="Close node details"
             >
@@ -297,14 +312,13 @@ function ProjectGraphCanvas({
 // ── Public component ────────────────────────────────────────────────────────
 
 export function ProjectKnowledgeGraph({ workspaceId, projectId }: ProjectKnowledgeGraphProps) {
-  const [depth, setDepth] = React.useState(2);
-  const [activeFilter, setActiveFilter] = React.useState<GraphNodeType | 'all'>('all');
+  const [depth, setDepth] = useState(2);
+  const [activeFilter, setActiveFilter] = useState<GraphNodeType | 'all'>('all');
+  const [nodeCount, setNodeCount] = useState(0);
 
-  const { data } = useProjectKnowledgeGraph(workspaceId, projectId, {
-    depth,
-    nodeTypes: activeFilter === 'all' ? undefined : [activeFilter],
-    enabled: true,
-  });
+  const handleNodeCountChange = useCallback((count: number) => {
+    setNodeCount(count);
+  }, []);
 
   return (
     <div className="flex flex-col h-full bg-background" data-testid="project-knowledge-graph">
@@ -361,9 +375,9 @@ export function ProjectKnowledgeGraph({ workspaceId, projectId }: ProjectKnowled
           />
         </div>
 
-        {data && (
+        {nodeCount > 0 && (
           <span className="ml-auto text-xs text-muted-foreground shrink-0 whitespace-nowrap">
-            {data.nodes.length} nodes
+            {nodeCount} nodes
           </span>
         )}
       </div>
@@ -376,6 +390,7 @@ export function ProjectKnowledgeGraph({ workspaceId, projectId }: ProjectKnowled
             projectId={projectId}
             depth={depth}
             activeFilter={activeFilter}
+            onNodeCountChange={handleNodeCountChange}
           />
         </div>
       </ReactFlowProvider>

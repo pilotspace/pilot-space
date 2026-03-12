@@ -12,10 +12,11 @@ Feature 016: Knowledge Graph — Project-scoped endpoint
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID, uuid4
 
 import pytest
+from fastapi import HTTPException
 
 from pilot_space.api.v1.routers.knowledge_graph import (
     get_project_knowledge_graph,
@@ -34,7 +35,7 @@ TEST_NODE_ID = UUID("cccccccc-0000-0000-0000-000000000003")
 TEST_PROJECT_ID = UUID("eeeeeeee-0000-0000-0000-000000000005")
 
 # ---------------------------------------------------------------------------
-# Helper factories (mirror test_knowledge_graph.py patterns)
+# Helper factories
 # ---------------------------------------------------------------------------
 
 
@@ -103,7 +104,7 @@ def _make_repo(**kwargs: object) -> AsyncMock:
     return repo
 
 
-def _make_sequential_session(*responses: object) -> AsyncMock:
+def _make_sequential_session(*responses: dict[str, object]) -> AsyncMock:
     """Build a mock AsyncSession returning different results on successive execute calls."""
     call_index = 0
 
@@ -113,9 +114,9 @@ def _make_sequential_session(*responses: object) -> AsyncMock:
         call_index += 1
         spec = responses[idx]
         result = MagicMock()
-        result.scalar_one_or_none = MagicMock(return_value=spec.get("scalar"))  # type: ignore[union-attr]
+        result.scalar_one_or_none = MagicMock(return_value=spec.get("scalar"))
         scalars_mock = MagicMock()
-        scalars_mock.all = MagicMock(return_value=spec.get("scalars_all") or [])  # type: ignore[union-attr]
+        scalars_mock.all = MagicMock(return_value=spec.get("scalars_all") or [])
         result.scalars = MagicMock(return_value=scalars_mock)
         return result
 
@@ -124,97 +125,61 @@ def _make_sequential_session(*responses: object) -> AsyncMock:
     return session
 
 
+# Shared patch targets
+_RLS_PATCH = "pilot_space.api.v1.routers.knowledge_graph.set_rls_context"
+_REPO_PATCH = "pilot_space.api.v1.routers.knowledge_graph.KnowledgeGraphRepository"
+
+
+def _default_kwargs(**overrides: object) -> dict[str, object]:
+    """Build default kwargs for get_project_knowledge_graph."""
+    defaults: dict[str, object] = {
+        "workspace_id": TEST_WORKSPACE_ID,
+        "project_id": TEST_PROJECT_ID,
+        "current_user_id": TEST_USER_ID,
+        "depth": 2,
+        "node_types": None,
+        "max_nodes": 50,
+        "include_github": False,
+    }
+    defaults.update(overrides)
+    return defaults
+
+
 # ---------------------------------------------------------------------------
-# Test: get_project_knowledge_graph — 404 path
+# Test: 404 path
 # ---------------------------------------------------------------------------
 
 
 class TestProjectKnowledgeGraph404:
-    """GET /workspaces/{workspace_id}/projects/{project_id}/knowledge-graph — not found."""
+    """GET /workspaces/{wid}/projects/{pid}/knowledge-graph — not found."""
 
-    async def test_returns_404_when_project_not_found(self) -> None:
-        """Non-existent project raises 404 before querying the graph."""
-        from unittest.mock import patch
-
-        from fastapi import HTTPException
-
-        # Session returns None → project existence check fails → 404
+    async def test_returns_404_with_correct_detail(self) -> None:
+        """Non-existent project raises 404 with 'Project not found' detail."""
         session = _make_sequential_session({"scalar": None})
         repo = _make_repo()
 
         with (
-            patch(
-                "pilot_space.api.v1.routers.knowledge_graph.set_rls_context",
-                new_callable=AsyncMock,
-            ),
-            patch(
-                "pilot_space.api.v1.routers.knowledge_graph.KnowledgeGraphRepository",
-                return_value=repo,
-            ),
+            patch(_RLS_PATCH, new_callable=AsyncMock),
+            patch(_REPO_PATCH, return_value=repo),
             pytest.raises(HTTPException) as exc_info,
         ):
-            await get_project_knowledge_graph(
-                workspace_id=TEST_WORKSPACE_ID,
-                project_id=TEST_PROJECT_ID,
-                session=session,
-                current_user_id=TEST_USER_ID,
-                depth=2,
-                node_types=None,
-                max_nodes=50,
-                include_github=False,
-            )
+            await get_project_knowledge_graph(session=session, **_default_kwargs())  # type: ignore[arg-type]
 
         assert exc_info.value.status_code == 404
         assert exc_info.value.detail == "Project not found"
         repo.get_subgraph.assert_not_awaited()
 
-    async def test_returns_404_detail_message(self) -> None:
-        """404 response contains 'Project not found' detail string."""
-        from unittest.mock import patch
-
-        from fastapi import HTTPException
-
-        session = _make_sequential_session({"scalar": None})
-        repo = _make_repo()
-
-        with (
-            patch(
-                "pilot_space.api.v1.routers.knowledge_graph.set_rls_context",
-                new_callable=AsyncMock,
-            ),
-            patch(
-                "pilot_space.api.v1.routers.knowledge_graph.KnowledgeGraphRepository",
-                return_value=repo,
-            ),
-            pytest.raises(HTTPException) as exc_info,
-        ):
-            await get_project_knowledge_graph(
-                workspace_id=TEST_WORKSPACE_ID,
-                project_id=TEST_PROJECT_ID,
-                session=session,
-                current_user_id=TEST_USER_ID,
-                depth=2,
-                node_types=None,
-                max_nodes=50,
-                include_github=False,
-            )
-
-        assert "Project not found" in exc_info.value.detail
-
 
 # ---------------------------------------------------------------------------
-# Test: get_project_knowledge_graph — empty graph path
+# Test: empty graph path
 # ---------------------------------------------------------------------------
 
 
 class TestProjectKnowledgeGraphEmpty:
     """Returns empty GraphResponse when project has no graph node."""
 
-    async def test_returns_empty_response_when_no_graph_node(self) -> None:
-        """Project exists but has no graph node → empty GraphResponse with center_node_id=project_id."""
-        from unittest.mock import patch
-
-        # Call 0: project existence check → found. Call 1: graph node lookup → not found.
+    async def test_returns_empty_without_calling_subgraph(self) -> None:
+        """Project exists but has no graph node → empty GraphResponse, no subgraph call."""
         session = _make_sequential_session(
             {"scalar": TEST_PROJECT_ID},
             {"scalar": None},
@@ -222,25 +187,10 @@ class TestProjectKnowledgeGraphEmpty:
         repo = _make_repo()
 
         with (
-            patch(
-                "pilot_space.api.v1.routers.knowledge_graph.set_rls_context",
-                new_callable=AsyncMock,
-            ),
-            patch(
-                "pilot_space.api.v1.routers.knowledge_graph.KnowledgeGraphRepository",
-                return_value=repo,
-            ),
+            patch(_RLS_PATCH, new_callable=AsyncMock),
+            patch(_REPO_PATCH, return_value=repo),
         ):
-            result = await get_project_knowledge_graph(
-                workspace_id=TEST_WORKSPACE_ID,
-                project_id=TEST_PROJECT_ID,
-                session=session,
-                current_user_id=TEST_USER_ID,
-                depth=2,
-                node_types=None,
-                max_nodes=50,
-                include_github=False,
-            )
+            result = await get_project_knowledge_graph(session=session, **_default_kwargs())  # type: ignore[arg-type]
 
         assert isinstance(result, GraphResponse)
         assert result.nodes == []
@@ -248,43 +198,19 @@ class TestProjectKnowledgeGraphEmpty:
         assert result.center_node_id == TEST_PROJECT_ID
         repo.get_subgraph.assert_not_awaited()
 
-    async def test_empty_response_does_not_call_subgraph(self) -> None:
-        """get_subgraph is NOT called when no graph node found for project."""
-        from unittest.mock import patch
-
-        session = _make_sequential_session(
-            {"scalar": TEST_PROJECT_ID},
-            {"scalar": None},
-        )
-        repo = _make_repo()
-
-        with (
-            patch(
-                "pilot_space.api.v1.routers.knowledge_graph.set_rls_context",
-                new_callable=AsyncMock,
-            ),
-            patch(
-                "pilot_space.api.v1.routers.knowledge_graph.KnowledgeGraphRepository",
-                return_value=repo,
-            ),
-        ):
-            await get_project_knowledge_graph(
-                workspace_id=TEST_WORKSPACE_ID,
-                project_id=TEST_PROJECT_ID,
-                session=session,
-                current_user_id=TEST_USER_ID,
-                depth=2,
-                node_types=None,
-                max_nodes=50,
-                include_github=False,
-            )
-
-        repo.get_subgraph.assert_not_awaited()
-
 
 # ---------------------------------------------------------------------------
-# Test: get_project_knowledge_graph — success path
+# Test: success path
 # ---------------------------------------------------------------------------
+
+
+def _make_gn_model() -> MagicMock:
+    """Build a mock graph node model for the project."""
+    gn = MagicMock()
+    gn.id = TEST_NODE_ID
+    gn.workspace_id = TEST_WORKSPACE_ID
+    gn.is_deleted = False
+    return gn
 
 
 class TestProjectKnowledgeGraphSuccess:
@@ -292,43 +218,21 @@ class TestProjectKnowledgeGraphSuccess:
 
     async def test_returns_subgraph_when_graph_node_exists(self) -> None:
         """Project with graph node returns populated GraphResponse."""
-        from unittest.mock import patch
-
-        gn_model = MagicMock()
-        gn_model.id = TEST_NODE_ID
-        gn_model.workspace_id = TEST_WORKSPACE_ID
-        gn_model.is_deleted = False
-
         project_node = _make_graph_node(node_id=TEST_NODE_ID, node_type="project", label="MyApp")
         issue_node = _make_graph_node(node_type="issue", label="PS-1")
         edge = _make_graph_edge(source_id=TEST_NODE_ID, target_id=issue_node.id)
 
         session = _make_sequential_session(
             {"scalar": TEST_PROJECT_ID},
-            {"scalar": gn_model},
+            {"scalar": _make_gn_model()},
         )
         repo = _make_repo(get_subgraph=AsyncMock(return_value=([project_node, issue_node], [edge])))
 
         with (
-            patch(
-                "pilot_space.api.v1.routers.knowledge_graph.set_rls_context",
-                new_callable=AsyncMock,
-            ),
-            patch(
-                "pilot_space.api.v1.routers.knowledge_graph.KnowledgeGraphRepository",
-                return_value=repo,
-            ),
+            patch(_RLS_PATCH, new_callable=AsyncMock),
+            patch(_REPO_PATCH, return_value=repo),
         ):
-            result = await get_project_knowledge_graph(
-                workspace_id=TEST_WORKSPACE_ID,
-                project_id=TEST_PROJECT_ID,
-                session=session,
-                current_user_id=TEST_USER_ID,
-                depth=2,
-                node_types=None,
-                max_nodes=50,
-                include_github=False,
-            )
+            result = await get_project_knowledge_graph(session=session, **_default_kwargs())  # type: ignore[arg-type]
 
         assert isinstance(result, GraphResponse)
         assert len(result.nodes) == 2
@@ -337,38 +241,18 @@ class TestProjectKnowledgeGraphSuccess:
 
     async def test_depth_and_max_nodes_forwarded_to_subgraph(self) -> None:
         """depth and max_nodes query params are forwarded to get_subgraph."""
-        from unittest.mock import patch
-
-        gn_model = MagicMock()
-        gn_model.id = TEST_NODE_ID
-        gn_model.workspace_id = TEST_WORKSPACE_ID
-        gn_model.is_deleted = False
-
         session = _make_sequential_session(
             {"scalar": TEST_PROJECT_ID},
-            {"scalar": gn_model},
+            {"scalar": _make_gn_model()},
         )
         repo = _make_repo()
 
         with (
-            patch(
-                "pilot_space.api.v1.routers.knowledge_graph.set_rls_context",
-                new_callable=AsyncMock,
-            ),
-            patch(
-                "pilot_space.api.v1.routers.knowledge_graph.KnowledgeGraphRepository",
-                return_value=repo,
-            ),
+            patch(_RLS_PATCH, new_callable=AsyncMock),
+            patch(_REPO_PATCH, return_value=repo),
         ):
-            await get_project_knowledge_graph(
-                workspace_id=TEST_WORKSPACE_ID,
-                project_id=TEST_PROJECT_ID,
-                session=session,
-                current_user_id=TEST_USER_ID,
-                depth=3,
-                node_types=None,
-                max_nodes=75,
-                include_github=False,
+            await get_project_knowledge_graph(  # type: ignore[arg-type]
+                session=session, **_default_kwargs(depth=3, max_nodes=75)
             )
 
         call_kwargs = repo.get_subgraph.call_args.kwargs
@@ -377,213 +261,104 @@ class TestProjectKnowledgeGraphSuccess:
 
     async def test_node_type_filter_applied(self) -> None:
         """node_types param filters out non-matching nodes from subgraph."""
-        from unittest.mock import patch
-
-        gn_model = MagicMock()
-        gn_model.id = TEST_NODE_ID
-        gn_model.workspace_id = TEST_WORKSPACE_ID
-        gn_model.is_deleted = False
-
-        session = _make_sequential_session(
-            {"scalar": TEST_PROJECT_ID},
-            {"scalar": gn_model},
-        )
-
         project_node = _make_graph_node(node_id=TEST_NODE_ID, node_type="project", label="MyApp")
         issue_node = _make_graph_node(node_type="issue", label="PS-1")
         note_node = _make_graph_node(node_type="note", label="Note")
+
+        session = _make_sequential_session(
+            {"scalar": TEST_PROJECT_ID},
+            {"scalar": _make_gn_model()},
+        )
         repo = _make_repo(
             get_subgraph=AsyncMock(return_value=([project_node, issue_node, note_node], []))
         )
 
         with (
-            patch(
-                "pilot_space.api.v1.routers.knowledge_graph.set_rls_context",
-                new_callable=AsyncMock,
-            ),
-            patch(
-                "pilot_space.api.v1.routers.knowledge_graph.KnowledgeGraphRepository",
-                return_value=repo,
-            ),
+            patch(_RLS_PATCH, new_callable=AsyncMock),
+            patch(_REPO_PATCH, return_value=repo),
         ):
-            result = await get_project_knowledge_graph(
-                workspace_id=TEST_WORKSPACE_ID,
-                project_id=TEST_PROJECT_ID,
-                session=session,
-                current_user_id=TEST_USER_ID,
-                depth=2,
-                node_types="issue",
-                max_nodes=50,
-                include_github=False,
+            result = await get_project_knowledge_graph(  # type: ignore[arg-type]
+                session=session, **_default_kwargs(node_types="issue")
             )
 
         assert all(n.node_type == "issue" for n in result.nodes)
 
     async def test_sorts_nodes_by_importance_tier(self) -> None:
         """Nodes are sorted with issues/notes first, then PR/branch, then others."""
-        from unittest.mock import patch
-
-        gn_model = MagicMock()
-        gn_model.id = TEST_NODE_ID
-        gn_model.workspace_id = TEST_WORKSPACE_ID
-        gn_model.is_deleted = False
-
-        session = _make_sequential_session(
-            {"scalar": TEST_PROJECT_ID},
-            {"scalar": gn_model},
-        )
-
         skill_node = _make_graph_node(node_type="skill_outcome", label="Skill")
         issue_node = _make_graph_node(node_type="issue", label="Issue")
         pr_node = _make_graph_node(node_type="pull_request", label="PR")
+
+        session = _make_sequential_session(
+            {"scalar": TEST_PROJECT_ID},
+            {"scalar": _make_gn_model()},
+        )
         repo = _make_repo(
             get_subgraph=AsyncMock(return_value=([skill_node, pr_node, issue_node], []))
         )
 
         with (
-            patch(
-                "pilot_space.api.v1.routers.knowledge_graph.set_rls_context",
-                new_callable=AsyncMock,
-            ),
-            patch(
-                "pilot_space.api.v1.routers.knowledge_graph.KnowledgeGraphRepository",
-                return_value=repo,
-            ),
+            patch(_RLS_PATCH, new_callable=AsyncMock),
+            patch(_REPO_PATCH, return_value=repo),
         ):
-            result = await get_project_knowledge_graph(
-                workspace_id=TEST_WORKSPACE_ID,
-                project_id=TEST_PROJECT_ID,
-                session=session,
-                current_user_id=TEST_USER_ID,
-                depth=2,
-                node_types=None,
-                max_nodes=50,
-                include_github=False,
-            )
+            result = await get_project_knowledge_graph(session=session, **_default_kwargs())  # type: ignore[arg-type]
 
         assert result.nodes[0].node_type == "issue"
         assert result.nodes[-1].node_type == "skill_outcome"
 
     async def test_synthesizes_github_nodes_from_project_issues(self) -> None:
         """include_github=true with integration links appends ephemeral PR nodes."""
-        from unittest.mock import patch
-
-        gn_model = MagicMock()
-        gn_model.id = TEST_NODE_ID
-        gn_model.workspace_id = TEST_WORKSPACE_ID
-        gn_model.is_deleted = False
-
         pr_link = _make_integration_link_mock(link_type="pull_request", title="feat: new feature")
+        project_node = _make_graph_node(node_id=TEST_NODE_ID, node_type="project", label="MyApp")
 
-        # Call 0: project existence. Call 1: graph node lookup. Call 2: integration links.
         session = _make_sequential_session(
             {"scalar": TEST_PROJECT_ID},
-            {"scalar": gn_model},
+            {"scalar": _make_gn_model()},
             {"scalars_all": [pr_link]},
         )
-
-        project_node = _make_graph_node(node_id=TEST_NODE_ID, node_type="project", label="MyApp")
         repo = _make_repo(get_subgraph=AsyncMock(return_value=([project_node], [])))
 
         with (
-            patch(
-                "pilot_space.api.v1.routers.knowledge_graph.set_rls_context",
-                new_callable=AsyncMock,
-            ),
-            patch(
-                "pilot_space.api.v1.routers.knowledge_graph.KnowledgeGraphRepository",
-                return_value=repo,
-            ),
+            patch(_RLS_PATCH, new_callable=AsyncMock),
+            patch(_REPO_PATCH, return_value=repo),
         ):
-            result = await get_project_knowledge_graph(
-                workspace_id=TEST_WORKSPACE_ID,
-                project_id=TEST_PROJECT_ID,
-                session=session,
-                current_user_id=TEST_USER_ID,
-                depth=2,
-                node_types=None,
-                max_nodes=50,
-                include_github=True,
+            result = await get_project_knowledge_graph(  # type: ignore[arg-type]
+                session=session, **_default_kwargs(include_github=True)
             )
 
         assert len(result.nodes) >= 2
-        node_types_in_result = [n.node_type for n in result.nodes]
-        assert "pull_request" in node_types_in_result
-
         gh_nodes = [n for n in result.nodes if n.node_type == "pull_request"]
+        assert len(gh_nodes) == 1
         assert gh_nodes[0].properties.get("ephemeral") is True
 
     async def test_include_github_false_skips_link_query(self) -> None:
         """include_github=False does not query integration_links."""
-        from unittest.mock import patch
+        project_node = _make_graph_node(node_id=TEST_NODE_ID, node_type="project", label="MyApp")
 
-        gn_model = MagicMock()
-        gn_model.id = TEST_NODE_ID
-        gn_model.workspace_id = TEST_WORKSPACE_ID
-        gn_model.is_deleted = False
-
-        # Only 2 DB calls expected: project existence + graph node lookup
         session = _make_sequential_session(
             {"scalar": TEST_PROJECT_ID},
-            {"scalar": gn_model},
+            {"scalar": _make_gn_model()},
         )
-
-        project_node = _make_graph_node(node_id=TEST_NODE_ID, node_type="project", label="MyApp")
         repo = _make_repo(get_subgraph=AsyncMock(return_value=([project_node], [])))
 
         with (
-            patch(
-                "pilot_space.api.v1.routers.knowledge_graph.set_rls_context",
-                new_callable=AsyncMock,
-            ),
-            patch(
-                "pilot_space.api.v1.routers.knowledge_graph.KnowledgeGraphRepository",
-                return_value=repo,
-            ),
+            patch(_RLS_PATCH, new_callable=AsyncMock),
+            patch(_REPO_PATCH, return_value=repo),
         ):
-            result = await get_project_knowledge_graph(
-                workspace_id=TEST_WORKSPACE_ID,
-                project_id=TEST_PROJECT_ID,
-                session=session,
-                current_user_id=TEST_USER_ID,
-                depth=2,
-                node_types=None,
-                max_nodes=50,
-                include_github=False,
-            )
+            result = await get_project_knowledge_graph(session=session, **_default_kwargs())  # type: ignore[arg-type]
 
-        # Only the graph node — no ephemeral nodes added
         assert len(result.nodes) == 1
-        # Session was called exactly twice (project check + node lookup)
         assert session.execute.await_count == 2
 
     async def test_rls_context_called_with_correct_args(self) -> None:
         """set_rls_context is called with session, user_id, and workspace_id."""
-        from unittest.mock import patch
-
-        from fastapi import HTTPException
-
         session = _make_sequential_session({"scalar": None})
 
         with (
-            patch(
-                "pilot_space.api.v1.routers.knowledge_graph.set_rls_context",
-                new_callable=AsyncMock,
-            ) as mock_rls,
-            patch(
-                "pilot_space.api.v1.routers.knowledge_graph.KnowledgeGraphRepository",
-            ),
+            patch(_RLS_PATCH, new_callable=AsyncMock) as mock_rls,
+            patch(_REPO_PATCH),
             pytest.raises(HTTPException, match="Project not found"),
         ):
-            await get_project_knowledge_graph(
-                workspace_id=TEST_WORKSPACE_ID,
-                project_id=TEST_PROJECT_ID,
-                session=session,
-                current_user_id=TEST_USER_ID,
-                depth=2,
-                node_types=None,
-                max_nodes=50,
-                include_github=False,
-            )
+            await get_project_knowledge_graph(session=session, **_default_kwargs())  # type: ignore[arg-type]
 
         mock_rls.assert_awaited_once_with(session, TEST_USER_ID, TEST_WORKSPACE_ID)
