@@ -514,7 +514,7 @@ async def test_ai_configuration(
 
     # Test the API key with the provider
     start_time = time.perf_counter()
-    success, message = await _test_provider_api_key(config.provider, api_key)
+    success, message = await _test_provider_api_key(config.provider, api_key, config.base_url)
     latency_ms = int((time.perf_counter() - start_time) * 1000)
 
     logger.info(
@@ -536,14 +536,21 @@ async def test_ai_configuration(
     )
 
 
-async def _test_provider_api_key(provider: LLMProvider, api_key: str) -> tuple[bool, str]:
-    """Test an API key with the specified provider.
+_OPENAI_COMPATIBLE_DEFAULTS: dict[LLMProvider, str] = {
+    LLMProvider.KIMI: "https://api.moonshot.cn/v1",
+    LLMProvider.GLM: "https://open.bigmodel.cn/api/paas/v4",
+}
 
-    Makes a minimal API call to verify the key is valid.
+
+async def _test_provider_api_key(  # noqa: PLR0911
+    provider: LLMProvider, api_key: str, base_url: str | None = None
+) -> tuple[bool, str]:
+    """Test an API key with the specified provider.
 
     Args:
         provider: The LLM provider.
         api_key: The decrypted API key.
+        base_url: Optional base URL for OpenAI-compatible providers.
 
     Returns:
         Tuple of (success, message).
@@ -554,6 +561,13 @@ async def _test_provider_api_key(provider: LLMProvider, api_key: str) -> tuple[b
         return await _test_openai_key(api_key)
     if provider == LLMProvider.GOOGLE:
         return await _test_google_key(api_key)
+    if provider in _OPENAI_COMPATIBLE_DEFAULTS:
+        resolved_url = base_url or _OPENAI_COMPATIBLE_DEFAULTS[provider]
+        return await _test_openai_compatible_key(api_key, resolved_url)
+    if provider == LLMProvider.CUSTOM:
+        if not base_url:
+            return False, "Custom provider requires a base_url"
+        return await _test_openai_compatible_key(api_key, base_url)
     return False, f"Unknown provider: {provider}"
 
 
@@ -630,6 +644,25 @@ async def _test_google_key(api_key: str) -> tuple[bool, str]:
         if "permission" in error_str:
             return False, "API key lacks required permissions"
         return False, f"API error: {e!s}"
+    else:
+        return True, "API key is valid"
+
+
+async def _test_openai_compatible_key(api_key: str, base_url: str) -> tuple[bool, str]:
+    """Test an OpenAI-compatible API key by listing models at the given base_url."""
+    import openai
+
+    try:
+        client = openai.AsyncOpenAI(api_key=api_key, base_url=base_url)
+        await client.models.list()
+    except openai.AuthenticationError:
+        return False, "Invalid API key"
+    except openai.PermissionDeniedError:
+        return False, "API key lacks required permissions"
+    except openai.RateLimitError:
+        return True, "API key is valid (rate limited)"
+    except openai.APIError as e:
+        return False, f"API error: {e.message}"
     else:
         return True, "API key is valid"
 
