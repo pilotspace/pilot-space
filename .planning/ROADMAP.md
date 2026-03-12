@@ -133,7 +133,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 28-01: TBD
+- [ ] 28-01-PLAN.md — Design token update: system font stack, neutral Notion-like color palette, dark mode parity, neutral shadows
+- [ ] 28-02-PLAN.md — Page-level 8px grid spacing audit and visual verification checkpoint
 
 ### Phase 29: Responsive Layout & Drag-and-Drop
 **Goal**: The application adapts gracefully to tablet viewports and users can reorganize the page tree via drag-and-drop
@@ -163,10 +164,10 @@ Phases execute in numeric order: 24 → 25 → 26 → 27 → 28 → 29
 | 25. Tree API & Page Service | 2/2 | Complete    | 2026-03-12 | - |
 | 26. Sidebar Tree & Navigation | 3/3 | Complete    | 2026-03-12 | - |
 | 27. Project Hub & Issue Views | 2/2 | Complete    | 2026-03-12 | - |
-| 28. Visual Design Refresh | v1.0.0-alpha2 | 0/1 | Not started | - |
+| 28. Visual Design Refresh | v1.0.0-alpha2 | 0/2 | Not started | - |
 | 29. Responsive & Drag-and-Drop | v1.0.0-alpha2 | 0/2 | Not started | - |
 
-**Total: 29 phases, 88 plans (+ ~5 TBD), 86 requirements**
+**Total: 29 phases, 89 plans (+ ~3 TBD), 86 requirements**
 
 ---
 *v1.0 shipped: 2026-03-09 — 11 phases, 46 plans, 30/30 requirements*
