@@ -188,6 +188,38 @@ CREATE TABLE IF NOT EXISTS user_role_skills (
     deleted_at DATETIME,
     UNIQUE(user_id, workspace_id, role_type)
 );
+
+CREATE TABLE IF NOT EXISTS skill_templates (
+    id TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL,
+    skill_content TEXT NOT NULL,
+    icon TEXT NOT NULL DEFAULT 'Wand2',
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    source TEXT NOT NULL,
+    role_type TEXT,
+    is_active BOOLEAN DEFAULT 1 NOT NULL,
+    created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    is_deleted BOOLEAN DEFAULT 0 NOT NULL,
+    deleted_at DATETIME
+);
+
+CREATE TABLE IF NOT EXISTS user_skills (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    template_id TEXT REFERENCES skill_templates(id) ON DELETE SET NULL,
+    skill_content TEXT NOT NULL,
+    experience_description TEXT,
+    is_active BOOLEAN DEFAULT 1 NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    is_deleted BOOLEAN DEFAULT 0 NOT NULL,
+    deleted_at DATETIME
+);
 """
 
 

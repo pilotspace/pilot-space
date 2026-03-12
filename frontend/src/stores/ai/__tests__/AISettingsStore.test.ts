@@ -42,6 +42,54 @@ import type { AIStore } from '../AIStore';
 
 const mockRootStore = {} as AIStore;
 
+describe('AISettingsStore - validateKey', () => {
+  let store: AISettingsStore;
+
+  beforeEach(() => {
+    store = new AISettingsStore(mockRootStore);
+  });
+
+  it('rejects keys shorter than 10 characters for any provider', () => {
+    expect(store.validateKey('anthropic', 'short')).toBe(false);
+    expect(store.validateKey('openai', 'sk-12345')).toBe(false);
+    expect(store.validateKey('google', 'AIza1234')).toBe(false);
+    expect(store.validateKey('kimi', '123456789')).toBe(false);
+    expect(store.validateKey('glm', 'abcdefghi')).toBe(false);
+    expect(store.validateKey('custom', 'x')).toBe(false);
+  });
+
+  it('validates anthropic keys must start with sk-ant-', () => {
+    expect(store.validateKey('anthropic', 'sk-ant-api3xxxxxxxx')).toBe(true);
+    expect(store.validateKey('anthropic', 'sk-wrongprefix12')).toBe(false);
+  });
+
+  it('validates openai keys must start with sk-', () => {
+    expect(store.validateKey('openai', 'sk-proj-xxxxxxxx')).toBe(true);
+    expect(store.validateKey('openai', 'wrong-prefix-key')).toBe(false);
+  });
+
+  it('validates google keys must start with AIza', () => {
+    expect(store.validateKey('google', 'AIzaSyBxxxxxxxxxxxxxxx')).toBe(true);
+    expect(store.validateKey('google', 'wrong-prefix-key')).toBe(false);
+  });
+
+  it('validates kimi keys with length check only', () => {
+    expect(store.validateKey('kimi', 'any-valid-key-longer-than-10')).toBe(true);
+  });
+
+  it('validates glm keys with length check only', () => {
+    expect(store.validateKey('glm', 'any-valid-key-longer-than-10')).toBe(true);
+  });
+
+  it('validates custom keys with length check only', () => {
+    expect(store.validateKey('custom', 'any-valid-key-longer-than-10')).toBe(true);
+  });
+
+  it('accepts unknown provider types with length check only', () => {
+    expect(store.validateKey('some-future-provider', 'any-valid-key-longer-than-10')).toBe(true);
+  });
+});
+
 describe('AISettingsStore - model listing', () => {
   let store: AISettingsStore;
 

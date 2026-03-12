@@ -33,6 +33,7 @@ from pilot_space.infrastructure.database.models.workspace_member import Workspac
 from pilot_space.infrastructure.database.repositories.ai_configuration_repository import (
     AIConfigurationRepository,
 )
+from pilot_space.infrastructure.database.rls import set_rls_context
 from pilot_space.infrastructure.encryption import (
     EncryptionError,
     decrypt_api_key,
@@ -87,7 +88,7 @@ async def _verify_workspace_membership(
         )
 
     member = next(
-        (m for m in (workspace.members or []) if m.user_id == user_id),
+        (m for m in (workspace.members or []) if m.user_id == user_id and not m.is_deleted),
         None,
     )
     if not member:
@@ -136,6 +137,7 @@ async def list_ai_configurations(
     current_user: CurrentUser,
     ai_config_repo: AIConfigRepo,
     workspace_repo: WorkspaceRepositoryDep,
+    session: DbSession,
 ) -> AIConfigurationListResponse:
     """List AI configurations for a workspace.
 
@@ -144,10 +146,12 @@ async def list_ai_configurations(
         current_user: Authenticated user.
         ai_config_repo: AI configuration repository.
         workspace_repo: Workspace repository.
+        session: Database session for RLS context.
 
     Returns:
         List of AI configurations (without API keys).
     """
+    await set_rls_context(session, current_user.user_id, workspace_id)
     await _verify_workspace_membership(workspace_id, current_user.user_id, workspace_repo)
 
     configs = await ai_config_repo.get_by_workspace(workspace_id, include_inactive=True)
@@ -187,6 +191,7 @@ async def create_ai_configuration(
     Raises:
         HTTPException: If not admin or provider already configured.
     """
+    await set_rls_context(session, current_user.user_id, workspace_id)
     await _verify_workspace_membership(
         workspace_id, current_user.user_id, workspace_repo, require_admin=True
     )
@@ -266,6 +271,7 @@ async def list_available_models(
     Returns:
         ModelListResponse with items from all active, configured providers.
     """
+    await set_rls_context(session, current_user.user_id, workspace_id)
     await _verify_workspace_membership(workspace_id, current_user.user_id, workspace_repo)
 
     from pilot_space.ai.providers.model_listing import ModelListingService
@@ -300,6 +306,7 @@ async def get_ai_configuration(
     current_user: CurrentUser,
     ai_config_repo: AIConfigRepo,
     workspace_repo: WorkspaceRepositoryDep,
+    session: DbSession,
 ) -> AIConfigurationResponse:
     """Get a specific AI configuration.
 
@@ -309,6 +316,7 @@ async def get_ai_configuration(
         current_user: Authenticated user.
         ai_config_repo: AI configuration repository.
         workspace_repo: Workspace repository.
+        session: Database session for RLS context.
 
     Returns:
         AI configuration (without API key).
@@ -316,6 +324,7 @@ async def get_ai_configuration(
     Raises:
         HTTPException: If not found or not a member.
     """
+    await set_rls_context(session, current_user.user_id, workspace_id)
     await _verify_workspace_membership(workspace_id, current_user.user_id, workspace_repo)
 
     config = await ai_config_repo.get_by_workspace_and_id(workspace_id, config_id)
@@ -360,6 +369,7 @@ async def update_ai_configuration(
     Raises:
         HTTPException: If not found or not admin.
     """
+    await set_rls_context(session, current_user.user_id, workspace_id)
     await _verify_workspace_membership(
         workspace_id, current_user.user_id, workspace_repo, require_admin=True
     )
@@ -435,6 +445,7 @@ async def delete_ai_configuration(
     Raises:
         HTTPException: If not found or not admin.
     """
+    await set_rls_context(session, current_user.user_id, workspace_id)
     await _verify_workspace_membership(
         workspace_id, current_user.user_id, workspace_repo, require_admin=True
     )
@@ -473,6 +484,7 @@ async def test_ai_configuration(
     current_user: CurrentUser,
     ai_config_repo: AIConfigRepo,
     workspace_repo: WorkspaceRepositoryDep,
+    session: DbSession,
 ) -> AIConfigurationTestResponse:
     """Test an AI configuration by validating the API key.
 
@@ -484,6 +496,7 @@ async def test_ai_configuration(
         current_user: Authenticated user.
         ai_config_repo: AI configuration repository.
         workspace_repo: Workspace repository.
+        session: Database session for RLS context.
 
     Returns:
         Test result with success status and latency.
@@ -491,6 +504,7 @@ async def test_ai_configuration(
     Raises:
         HTTPException: If configuration not found.
     """
+    await set_rls_context(session, current_user.user_id, workspace_id)
     await _verify_workspace_membership(workspace_id, current_user.user_id, workspace_repo)
 
     config = await ai_config_repo.get_by_workspace_and_id(workspace_id, config_id)
@@ -514,7 +528,7 @@ async def test_ai_configuration(
 
     # Test the API key with the provider
     start_time = time.perf_counter()
-    success, message = await _test_provider_api_key(config.provider, api_key)
+    success, message = await _test_provider_api_key(config.provider, api_key, config.base_url)
     latency_ms = int((time.perf_counter() - start_time) * 1000)
 
     logger.info(
@@ -536,14 +550,21 @@ async def test_ai_configuration(
     )
 
 
-async def _test_provider_api_key(provider: LLMProvider, api_key: str) -> tuple[bool, str]:
-    """Test an API key with the specified provider.
+_OPENAI_COMPATIBLE_DEFAULTS: dict[LLMProvider, str] = {
+    LLMProvider.KIMI: "https://api.moonshot.cn/v1",
+    LLMProvider.GLM: "https://open.bigmodel.cn/api/paas/v4",
+}
 
-    Makes a minimal API call to verify the key is valid.
+
+async def _test_provider_api_key(  # noqa: PLR0911
+    provider: LLMProvider, api_key: str, base_url: str | None = None
+) -> tuple[bool, str]:
+    """Test an API key with the specified provider.
 
     Args:
         provider: The LLM provider.
         api_key: The decrypted API key.
+        base_url: Optional base URL for OpenAI-compatible providers.
 
     Returns:
         Tuple of (success, message).
@@ -554,6 +575,13 @@ async def _test_provider_api_key(provider: LLMProvider, api_key: str) -> tuple[b
         return await _test_openai_key(api_key)
     if provider == LLMProvider.GOOGLE:
         return await _test_google_key(api_key)
+    if provider in _OPENAI_COMPATIBLE_DEFAULTS:
+        resolved_url = base_url or _OPENAI_COMPATIBLE_DEFAULTS[provider]
+        return await _test_openai_compatible_key(api_key, resolved_url)
+    if provider == LLMProvider.CUSTOM:
+        if not base_url:
+            return False, "Custom provider requires a base_url"
+        return await _test_openai_compatible_key(api_key, base_url)
     return False, f"Unknown provider: {provider}"
 
 
@@ -630,6 +658,25 @@ async def _test_google_key(api_key: str) -> tuple[bool, str]:
         if "permission" in error_str:
             return False, "API key lacks required permissions"
         return False, f"API error: {e!s}"
+    else:
+        return True, "API key is valid"
+
+
+async def _test_openai_compatible_key(api_key: str, base_url: str) -> tuple[bool, str]:
+    """Test an OpenAI-compatible API key by listing models at the given base_url."""
+    import openai
+
+    try:
+        client = openai.AsyncOpenAI(api_key=api_key, base_url=base_url)
+        await client.models.list()
+    except openai.AuthenticationError:
+        return False, "Invalid API key"
+    except openai.PermissionDeniedError:
+        return False, "API key lacks required permissions"
+    except openai.RateLimitError:
+        return True, "API key is valid (rate limited)"
+    except openai.APIError as e:
+        return False, f"API error: {e.message}"
     else:
         return True, "API key is valid"
 

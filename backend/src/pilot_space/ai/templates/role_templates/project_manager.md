@@ -1,5 +1,5 @@
 ---
-name: role-project-manager
+name: skill-project-manager
 description: Project Manager role — delivery tracking, risk management, stakeholder coordination
 ---
 

@@ -184,4 +184,13 @@ export interface IssueRelation {
   relatedIssue: RelatedIssueBrief;
 }
 
+// AI-generated related issue suggestion (from GET /workspaces/{id}/issues/{id}/related-suggestions)
+export interface RelatedSuggestion {
+  id: string;
+  title: string;
+  identifier: string;
+  similarityScore: number;
+  reason: string;
+}
+
 export type { UserBrief, StateBrief, ProjectBrief, LabelBrief, User, IssuePriority };

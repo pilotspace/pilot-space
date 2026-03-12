@@ -1,5 +1,5 @@
 ---
-name: role-business-analyst
+name: skill-business-analyst
 description: Business Analyst role — requirements elicitation, stakeholder needs, process analysis
 ---
 

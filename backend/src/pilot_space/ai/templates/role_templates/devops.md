@@ -1,5 +1,5 @@
 ---
-name: role-devops
+name: skill-devops
 description: DevOps Engineer role — CI/CD, infrastructure, reliability, deployment automation
 ---
 

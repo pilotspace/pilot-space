@@ -1,5 +1,5 @@
 ---
-name: role-tech-lead
+name: skill-tech-lead
 description: Tech Lead role — technical direction, team productivity, code quality standards
 ---
 

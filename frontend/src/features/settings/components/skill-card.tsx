@@ -16,6 +16,7 @@ import { getRoleIcon } from '@/components/role-skill/role-icons';
 import { useRoleSkillStore } from '@/stores/RootStore';
 import { SkillEditor } from './skill-editor';
 import { WordCountBar } from './word-count-bar';
+import { ConfirmActionDialog } from './confirm-action-dialog';
 import type { RoleSkill } from '@/services/api/role-skills';
 
 interface SkillCardProps {
@@ -42,6 +43,7 @@ export const SkillCard = observer(function SkillCard({
   const [isExpanded, setIsExpanded] = React.useState(false);
   const contentRef = React.useRef<HTMLDivElement>(null);
   const [needsExpand, setNeedsExpand] = React.useState(false);
+  const [confirmAction, setConfirmAction] = React.useState<'remove' | 'reset' | null>(null);
 
   const IconComponent = getRoleIcon(skill.roleType);
 
@@ -69,7 +71,7 @@ export const SkillCard = observer(function SkillCard({
         'rounded-lg border transition-shadow',
         skill.isPrimary ? 'border-2 border-primary bg-primary/5' : 'border-border bg-card'
       )}
-      aria-label={`${skill.roleName} role skill`}
+      aria-label={`${skill.roleName} skill`}
     >
       {/* Header */}
       <div className="flex items-center justify-between p-4 pb-3">
@@ -177,14 +179,14 @@ export const SkillCard = observer(function SkillCard({
                 <Sparkles className="mr-1.5 h-3.5 w-3.5" />
                 Regenerate AI
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => onReset(skill.id)}>
+              <Button variant="ghost" size="sm" onClick={() => setConfirmAction('reset')}>
                 <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
                 Reset
               </Button>
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => onRemove(skill.id)}
+                onClick={() => setConfirmAction('remove')}
                 className="text-destructive hover:text-destructive hover:bg-destructive/10"
               >
                 <Trash2 className="mr-1.5 h-3.5 w-3.5" />
@@ -194,6 +196,29 @@ export const SkillCard = observer(function SkillCard({
           </>
         )}
       </div>
+      {confirmAction && (
+        <ConfirmActionDialog
+          open={!!confirmAction}
+          onCancel={() => setConfirmAction(null)}
+          onConfirm={() => {
+            if (confirmAction === 'remove') onRemove(skill.id);
+            if (confirmAction === 'reset') onReset(skill.id);
+            setConfirmAction(null);
+          }}
+          title={
+            confirmAction === 'remove'
+              ? `Remove "${skill.roleName}" skill?`
+              : `Reset "${skill.roleName}" skill?`
+          }
+          description={
+            confirmAction === 'remove'
+              ? 'This will permanently remove this skill. This action cannot be undone.'
+              : 'This will reset the skill content to its original template. Any custom edits will be lost.'
+          }
+          confirmLabel={confirmAction === 'remove' ? 'Remove' : 'Reset'}
+          variant="destructive"
+        />
+      )}
     </article>
   );
 });

@@ -7,6 +7,7 @@ import type {
   IssueRelation,
   Activity,
   ActivityTimelineResponse,
+  RelatedSuggestion,
 } from '@/types';
 
 interface IssueFilters {
@@ -142,6 +143,35 @@ export const issuesApi = {
 
   getRelations(workspaceId: string, issueId: string): Promise<IssueRelation[]> {
     return apiClient.get<IssueRelation[]>(`/workspaces/${workspaceId}/issues/${issueId}/relations`);
+  },
+
+  createRelation(
+    workspaceId: string,
+    issueId: string,
+    targetIssueId: string
+  ): Promise<IssueRelation> {
+    return apiClient.post<IssueRelation>(`/workspaces/${workspaceId}/issues/${issueId}/relations`, {
+      target_issue_id: targetIssueId,
+      link_type: 'related',
+    });
+  },
+
+  deleteRelation(workspaceId: string, issueId: string, linkId: string): Promise<void> {
+    return apiClient.delete<void>(
+      `/workspaces/${workspaceId}/issues/${issueId}/relations/${linkId}`
+    );
+  },
+
+  getRelatedSuggestions(workspaceId: string, issueId: string): Promise<RelatedSuggestion[]> {
+    return apiClient.get<RelatedSuggestion[]>(
+      `/workspaces/${workspaceId}/issues/${issueId}/related-suggestions`
+    );
+  },
+
+  dismissSuggestion(workspaceId: string, issueId: string, targetIssueId: string): Promise<void> {
+    return apiClient.post<void>(
+      `/workspaces/${workspaceId}/issues/${issueId}/related-suggestions/${targetIssueId}/dismiss`
+    );
   },
 
   assignTo(workspaceId: string, issueId: string, assigneeId: string | null): Promise<Issue> {

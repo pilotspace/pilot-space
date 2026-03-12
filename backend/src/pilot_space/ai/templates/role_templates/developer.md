@@ -1,5 +1,5 @@
 ---
-name: role-developer
+name: skill-developer
 description: Software Developer role — code quality, implementation patterns, debugging
 ---
 

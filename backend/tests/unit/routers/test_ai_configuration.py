@@ -1,13 +1,11 @@
-"""Tests for AI Configuration router — provider registry extensions (Phase 13-01).
+"""Tests for AI Configuration router — provider registry extensions.
 
 Covers:
-- Custom/Kimi/GLM provider creation
+- Custom/Kimi/GLM provider creation (Phase 13-01)
 - base_url + display_name in responses
 - GET /ai/configurations/models endpoint
 - Partial provider failure isolation
-
-All tests use xfail(strict=False) per project TDD convention (STATE.md).
-Imports from not-yet-implemented modules use lazy import inside test bodies.
+- Provider key testing: _test_openai_compatible_key, _test_provider_api_key dispatcher (Phase 23-01)
 """
 
 from __future__ import annotations
@@ -73,7 +71,6 @@ def _make_workspace() -> MagicMock:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(strict=False, reason="TDD: implementation pending (13-01 Task 2)")
 async def test_create_custom_provider() -> None:
     """POST with provider=custom, base_url, display_name returns 201 with those fields."""
     from pilot_space.api.v1.schemas.ai_configuration import (
@@ -113,7 +110,6 @@ async def test_create_custom_provider() -> None:
     assert response.display_name == "My Custom LLM"
 
 
-@pytest.mark.xfail(strict=False, reason="TDD: implementation pending (13-01 Task 2)")
 async def test_create_kimi_provider() -> None:
     """POST with provider=kimi stores successfully — no 422 on unknown enum."""
     from pilot_space.api.v1.schemas.ai_configuration import (
@@ -130,7 +126,6 @@ async def test_create_kimi_provider() -> None:
     assert payload.provider == LLMProvider.KIMI
 
 
-@pytest.mark.xfail(strict=False, reason="TDD: implementation pending (13-01 Task 2)")
 async def test_create_glm_provider() -> None:
     """POST with provider=glm stores successfully."""
     from pilot_space.api.v1.schemas.ai_configuration import (
@@ -147,7 +142,6 @@ async def test_create_glm_provider() -> None:
     assert payload.provider == LLMProvider.GLM
 
 
-@pytest.mark.xfail(strict=False, reason="TDD: implementation pending (13-01 Task 2)")
 async def test_custom_provider_requires_base_url() -> None:
     """Custom provider without base_url raises ValidationError."""
     from pydantic import ValidationError
@@ -165,7 +159,6 @@ async def test_custom_provider_requires_base_url() -> None:
         )
 
 
-@pytest.mark.xfail(strict=False, reason="TDD: implementation pending (13-01 Task 2)")
 async def test_provider_status_has_api_key_in_response() -> None:
     """GET list returns has_api_key=True when key exists."""
     from pilot_space.api.v1.schemas.ai_configuration import (
@@ -194,7 +187,6 @@ async def test_provider_status_has_api_key_in_response() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(strict=False, reason="TDD: implementation pending (13-01 Task 3)")
 async def test_models_endpoint_returns_list() -> None:
     """GET /models returns 200 with items list (may be empty if no active configs)."""
     from pilot_space.api.v1.schemas.ai_configuration import ModelListResponse
@@ -205,7 +197,6 @@ async def test_models_endpoint_returns_list() -> None:
     assert response.items == []
 
 
-@pytest.mark.xfail(strict=False, reason="TDD: implementation pending (13-01 Task 3)")
 async def test_models_endpoint_partial_failure() -> None:
     """If one provider raises, others still appear in result (failure isolation)."""
     from pilot_space.ai.providers.model_listing import ModelListingService
@@ -250,3 +241,208 @@ async def test_models_endpoint_partial_failure() -> None:
     openai_models = [r for r in results if r.provider == "openai"]
     # fallback models should be present and marked is_selectable=False
     assert all(not m.is_selectable for m in openai_models)
+
+
+# ---------------------------------------------------------------------------
+# Test: _test_openai_compatible_key (Phase 23-01)
+# ---------------------------------------------------------------------------
+
+
+async def test_openai_compatible_key_success() -> None:
+    """Valid OpenAI-compatible key returns (True, 'API key is valid')."""
+    import openai
+
+    from pilot_space.api.v1.routers.ai_configuration import _test_openai_compatible_key
+
+    mock_client = AsyncMock()
+    mock_client.models.list = AsyncMock(return_value=[])
+
+    with patch.object(openai, "AsyncOpenAI", return_value=mock_client) as mock_ctor:
+        success, message = await _test_openai_compatible_key(
+            "valid-key",
+            "https://api.moonshot.cn/v1",  # pragma: allowlist secret
+        )
+
+    mock_ctor.assert_called_once_with(
+        api_key="valid-key",  # pragma: allowlist secret
+        base_url="https://api.moonshot.cn/v1",
+    )
+    assert success is True
+    assert message == "API key is valid"
+
+
+async def test_openai_compatible_key_auth_error() -> None:
+    """Invalid key returns (False, 'Invalid API key')."""
+    import openai
+
+    from pilot_space.api.v1.routers.ai_configuration import _test_openai_compatible_key
+
+    mock_client = AsyncMock()
+    mock_client.models.list = AsyncMock(
+        side_effect=openai.AuthenticationError(
+            message="Invalid API key",
+            response=MagicMock(status_code=401),
+            body=None,
+        )
+    )
+
+    with patch.object(openai, "AsyncOpenAI", return_value=mock_client):
+        success, message = await _test_openai_compatible_key(
+            "bad-key",
+            "https://api.example.com/v1",  # pragma: allowlist secret
+        )
+
+    assert success is False
+    assert message == "Invalid API key"
+
+
+async def test_openai_compatible_key_rate_limit() -> None:
+    """Rate-limited key returns (True, 'API key is valid (rate limited)')."""
+    import openai
+
+    from pilot_space.api.v1.routers.ai_configuration import _test_openai_compatible_key
+
+    mock_client = AsyncMock()
+    mock_client.models.list = AsyncMock(
+        side_effect=openai.RateLimitError(
+            message="Rate limited",
+            response=MagicMock(status_code=429),
+            body=None,
+        )
+    )
+
+    with patch.object(openai, "AsyncOpenAI", return_value=mock_client):
+        success, message = await _test_openai_compatible_key(
+            "valid-key",
+            "https://api.example.com/v1",  # pragma: allowlist secret
+        )
+
+    assert success is True
+    assert "rate limited" in message.lower()
+
+
+# ---------------------------------------------------------------------------
+# Test: _test_provider_api_key dispatcher for kimi/glm/custom (Phase 23-01)
+# ---------------------------------------------------------------------------
+
+
+async def test_provider_api_key_kimi_dispatches_to_compatible() -> None:
+    """KIMI provider calls _test_openai_compatible_key with default base_url."""
+    from pilot_space.api.v1.routers.ai_configuration import _test_provider_api_key
+    from pilot_space.infrastructure.database.models.ai_configuration import LLMProvider
+
+    with patch(
+        "pilot_space.api.v1.routers.ai_configuration._test_openai_compatible_key",
+        new_callable=AsyncMock,
+        return_value=(True, "API key is valid"),
+    ) as mock_compat:
+        success, message = await _test_provider_api_key(
+            LLMProvider.KIMI,
+            "kimi-key",  # pragma: allowlist secret
+        )
+
+    mock_compat.assert_awaited_once_with("kimi-key", "https://api.moonshot.cn/v1")
+    assert success is True
+
+
+async def test_provider_api_key_kimi_custom_base_url() -> None:
+    """KIMI provider uses explicit base_url when provided."""
+    from pilot_space.api.v1.routers.ai_configuration import _test_provider_api_key
+    from pilot_space.infrastructure.database.models.ai_configuration import LLMProvider
+
+    with patch(
+        "pilot_space.api.v1.routers.ai_configuration._test_openai_compatible_key",
+        new_callable=AsyncMock,
+        return_value=(True, "API key is valid"),
+    ) as mock_compat:
+        success, _ = await _test_provider_api_key(
+            LLMProvider.KIMI,
+            "kimi-key",  # pragma: allowlist secret
+            base_url="https://custom.kimi.api/v1",
+        )
+
+    mock_compat.assert_awaited_once_with("kimi-key", "https://custom.kimi.api/v1")
+    assert success is True
+
+
+async def test_provider_api_key_glm_dispatches_to_compatible() -> None:
+    """GLM provider calls _test_openai_compatible_key with default base_url."""
+    from pilot_space.api.v1.routers.ai_configuration import _test_provider_api_key
+    from pilot_space.infrastructure.database.models.ai_configuration import LLMProvider
+
+    with patch(
+        "pilot_space.api.v1.routers.ai_configuration._test_openai_compatible_key",
+        new_callable=AsyncMock,
+        return_value=(True, "API key is valid"),
+    ) as mock_compat:
+        success, _ = await _test_provider_api_key(
+            LLMProvider.GLM,
+            "glm-key",  # pragma: allowlist secret
+        )
+
+    mock_compat.assert_awaited_once_with("glm-key", "https://open.bigmodel.cn/api/paas/v4")
+    assert success is True
+
+
+async def test_provider_api_key_custom_dispatches_to_compatible() -> None:
+    """CUSTOM provider calls _test_openai_compatible_key with provided base_url."""
+    from pilot_space.api.v1.routers.ai_configuration import _test_provider_api_key
+    from pilot_space.infrastructure.database.models.ai_configuration import LLMProvider
+
+    with patch(
+        "pilot_space.api.v1.routers.ai_configuration._test_openai_compatible_key",
+        new_callable=AsyncMock,
+        return_value=(True, "API key is valid"),
+    ) as mock_compat:
+        success, _ = await _test_provider_api_key(
+            LLMProvider.CUSTOM,
+            "custom-key",  # pragma: allowlist secret
+            base_url="https://my-llm.example.com/v1",
+        )
+
+    mock_compat.assert_awaited_once_with("custom-key", "https://my-llm.example.com/v1")
+    assert success is True
+
+
+async def test_provider_api_key_custom_requires_base_url() -> None:
+    """CUSTOM provider without base_url returns error."""
+    from pilot_space.api.v1.routers.ai_configuration import _test_provider_api_key
+    from pilot_space.infrastructure.database.models.ai_configuration import LLMProvider
+
+    success, message = await _test_provider_api_key(
+        LLMProvider.CUSTOM,
+        "custom-key",  # pragma: allowlist secret
+    )
+
+    assert success is False
+    assert "base_url" in message.lower()
+
+
+async def test_provider_api_key_existing_providers_unchanged() -> None:
+    """Existing providers (anthropic, openai, google) still dispatch correctly."""
+    from pilot_space.api.v1.routers.ai_configuration import _test_provider_api_key
+    from pilot_space.infrastructure.database.models.ai_configuration import LLMProvider
+
+    with patch(
+        "pilot_space.api.v1.routers.ai_configuration._test_anthropic_key",
+        new_callable=AsyncMock,
+        return_value=(True, "API key is valid"),
+    ) as mock_anthropic:
+        await _test_provider_api_key(LLMProvider.ANTHROPIC, "key")  # pragma: allowlist secret
+    mock_anthropic.assert_awaited_once_with("key")
+
+    with patch(
+        "pilot_space.api.v1.routers.ai_configuration._test_openai_key",
+        new_callable=AsyncMock,
+        return_value=(True, "API key is valid"),
+    ) as mock_openai:
+        await _test_provider_api_key(LLMProvider.OPENAI, "key")  # pragma: allowlist secret
+    mock_openai.assert_awaited_once_with("key")
+
+    with patch(
+        "pilot_space.api.v1.routers.ai_configuration._test_google_key",
+        new_callable=AsyncMock,
+        return_value=(True, "API key is valid"),
+    ) as mock_google:
+        await _test_provider_api_key(LLMProvider.GOOGLE, "key")  # pragma: allowlist secret
+    mock_google.assert_awaited_once_with("key")

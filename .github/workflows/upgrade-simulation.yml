@@ -102,7 +102,7 @@ jobs:
       # pgvector/pgvector:pg15 is a plain Postgres build without these.
       # We create a minimal stub so migrations can run outside Supabase.
       # -------------------------------------------------------------------------
-      - name: Set up Supabase auth schema stub and alembic_version table
+      - name: Set up Supabase stubs (auth, roles, pgmq, pg_cron) and alembic_version
         env:
           PGPASSWORD: testpassword
         run: |
@@ -114,6 +114,72 @@ jobs:
               RETURNS uuid
               LANGUAGE sql STABLE
               AS $$ SELECT '00000000-0000-0000-0000-000000000000'::uuid $$;
+
+            -- Supabase roles stub: RLS policies reference these Supabase-specific
+            -- roles which do not exist in pgvector/pgvector:pg15.
+            DO $$ BEGIN
+              CREATE ROLE service_role NOLOGIN;
+            EXCEPTION WHEN duplicate_object THEN NULL;
+            END $$;
+            DO $$ BEGIN
+              CREATE ROLE authenticated NOLOGIN;
+            EXCEPTION WHEN duplicate_object THEN NULL;
+            END $$;
+            DO $$ BEGIN
+              CREATE ROLE anon NOLOGIN;
+            EXCEPTION WHEN duplicate_object THEN NULL;
+            END $$;
+
+            -- pgmq stub: migration 061 creates wrapper functions referencing
+            -- pgmq schema types (message_record, metrics_result) and functions.
+            CREATE SCHEMA IF NOT EXISTS pgmq;
+            CREATE TYPE pgmq.message_record AS (
+              msg_id bigint,
+              read_ct int,
+              enqueued_at timestamptz,
+              vt timestamptz,
+              message jsonb
+            );
+            CREATE TYPE pgmq.metrics_result AS (
+              queue_name text,
+              queue_length bigint,
+              newest_msg_age_sec int,
+              oldest_msg_age_sec int,
+              total_messages bigint,
+              scrape_time timestamptz
+            );
+            CREATE OR REPLACE FUNCTION pgmq.create(queue_name text)
+              RETURNS void LANGUAGE plpgsql AS $$ BEGIN END $$;
+            CREATE OR REPLACE FUNCTION pgmq.send(queue_name text, msg jsonb, delay int DEFAULT 0)
+              RETURNS bigint LANGUAGE sql AS $$ SELECT 0::bigint $$;
+            CREATE OR REPLACE FUNCTION pgmq.read(queue_name text, vt int, qty int)
+              RETURNS SETOF pgmq.message_record LANGUAGE sql AS $$ SELECT NULL::pgmq.message_record LIMIT 0 $$;
+            CREATE OR REPLACE FUNCTION pgmq.delete(queue_name text, msg_id bigint)
+              RETURNS boolean LANGUAGE sql AS $$ SELECT true $$;
+            CREATE OR REPLACE FUNCTION pgmq.archive(queue_name text, msg_id bigint)
+              RETURNS boolean LANGUAGE sql AS $$ SELECT true $$;
+            CREATE OR REPLACE FUNCTION pgmq.drop_queue(queue_name text)
+              RETURNS boolean LANGUAGE sql AS $$ SELECT true $$;
+            CREATE OR REPLACE FUNCTION pgmq.purge_queue(queue_name text)
+              RETURNS bigint LANGUAGE sql AS $$ SELECT 0::bigint $$;
+            CREATE OR REPLACE FUNCTION pgmq.metrics(queue_name text)
+              RETURNS SETOF pgmq.metrics_result LANGUAGE sql AS $$ SELECT NULL::pgmq.metrics_result LIMIT 0 $$;
+
+            -- pg_cron stub: migration 050 calls cron.schedule() / cron.unschedule()
+            -- which requires the pg_cron extension (not present in pgvector/pgvector:pg15).
+            CREATE SCHEMA IF NOT EXISTS cron;
+            CREATE TABLE IF NOT EXISTS cron.job (
+              jobid bigint PRIMARY KEY,
+              jobname text
+            );
+            CREATE OR REPLACE FUNCTION cron.schedule(job_name text, schedule text, command text)
+              RETURNS bigint
+              LANGUAGE sql
+              AS $$ SELECT 0::bigint $$;
+            CREATE OR REPLACE FUNCTION cron.unschedule(job_name text)
+              RETURNS boolean
+              LANGUAGE sql
+              AS $$ SELECT true $$;
 
             -- Pre-create alembic_version with VARCHAR(128) so that the project's
             -- descriptive revision IDs (e.g. "036_fix_ai_sessions_rls_enum_case",
@@ -164,7 +230,7 @@ jobs:
           uv run uvicorn pilot_space.main:app \
             --host 0.0.0.0 \
             --port 8000 \
-            --log-level warning &
+            --log-level info > /tmp/backend.log 2>&1 &
           echo $! > /tmp/backend.pid
           echo "Backend PID: $(cat /tmp/backend.pid)"
 
@@ -175,13 +241,22 @@ jobs:
       - name: Assert /health/live (liveness probe)
         run: |
           echo "Waiting for backend to start…"
-          for i in $(seq 1 30); do
+          BACKEND_PID=$(cat /tmp/backend.pid)
+          for i in $(seq 1 60); do
+            if ! kill -0 "$BACKEND_PID" 2>/dev/null; then
+              echo "FAIL: Backend process (PID $BACKEND_PID) exited prematurely"
+              echo "--- Backend log ---"
+              cat /tmp/backend.log || true
+              exit 1
+            fi
             if curl -sf http://localhost:8000/health/live > /dev/null 2>&1; then
               echo "Backend is live after ${i}s"
               break
             fi
-            if [ "$i" -eq 30 ]; then
-              echo "FAIL: Backend did not start within 30 seconds"
+            if [ "$i" -eq 60 ]; then
+              echo "FAIL: Backend did not start within 60 seconds"
+              echo "--- Backend log ---"
+              cat /tmp/backend.log || true
               exit 1
             fi
             sleep 1

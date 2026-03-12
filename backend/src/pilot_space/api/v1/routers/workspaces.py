@@ -8,6 +8,7 @@ AI settings: see workspace_ai_settings.py
 
 from __future__ import annotations
 
+import asyncio
 from typing import Annotated
 from uuid import UUID
 
@@ -35,9 +36,14 @@ from pilot_space.dependencies import (
     CurrentUserId,
 )
 from pilot_space.dependencies.auth import SessionDep
+from pilot_space.infrastructure.database import get_db_session
+from pilot_space.infrastructure.database.rls import set_rls_context
 from pilot_space.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
+
+# Strong references to fire-and-forget tasks to prevent GC from collecting them
+_background_tasks: set[asyncio.Task[None]] = set()
 
 router = APIRouter(prefix="/workspaces", tags=["workspaces"])
 
@@ -65,6 +71,7 @@ async def list_workspaces(
     Returns:
         Paginated list of workspaces.
     """
+    await set_rls_context(session, current_user.user_id)
     result = await service.list_workspaces(
         ListWorkspacesPayload(
             user_id=current_user.user_id,
@@ -125,6 +132,7 @@ async def create_workspace(
     Raises:
         HTTPException: If slug already exists.
     """
+    await set_rls_context(session, current_user_id)
     try:
         result = await service.create_workspace(
             CreateWorkspacePayload(
@@ -141,6 +149,12 @@ async def create_workspace(
         ) from e
 
     workspace = result.workspace
+
+    # SKRG-05: Seed default plugins into the new workspace (non-blocking fire-and-forget)
+    task = asyncio.create_task(_seed_workspace_background(workspace.id))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+
     return WorkspaceDetailResponse(
         id=workspace.id,
         created_at=workspace.created_at,
@@ -177,6 +191,7 @@ async def get_workspace(
     Raises:
         HTTPException: If workspace not found or user not a member.
     """
+    await set_rls_context(session, current_user.user_id)
     try:
         result = await service.get_workspace(
             GetWorkspacePayload(
@@ -237,6 +252,7 @@ async def update_workspace(
     Raises:
         HTTPException: If workspace not found or user not admin.
     """
+    await set_rls_context(session, current_user.user_id)
     update_data = request.model_dump(exclude_unset=True)
 
     try:
@@ -306,6 +322,7 @@ async def delete_workspace(
     Raises:
         HTTPException: If workspace not found or user not owner.
     """
+    await set_rls_context(session, current_user.user_id)
     try:
         result = await service.delete_workspace(
             DeleteWorkspacePayload(
@@ -366,6 +383,7 @@ async def list_workspace_labels(
     Raises:
         HTTPException: If workspace not found or user not a member.
     """
+    await set_rls_context(session, current_user_id)
     try:
         result = await service.list_labels(
             ListLabelsPayload(
@@ -387,6 +405,32 @@ async def list_workspace_labels(
         ) from e
 
     return [LabelBriefSchema.model_validate(label) for label in result.labels]
+
+
+async def _seed_workspace_background(workspace_id: UUID) -> None:
+    """Seed default plugins in a background task with its own DB session.
+
+    Uses get_db_session() for an independent session lifecycle so the
+    request-scoped session is not shared across tasks (SKRG-05).
+    All exceptions are caught and logged -- seeding failures are non-fatal.
+
+    Args:
+        workspace_id: Workspace to seed plugins into.
+    """
+    try:
+        async with get_db_session() as bg_session:
+            from pilot_space.application.services.workspace_plugin.seed_plugins_service import (
+                SeedPluginsService,
+            )
+
+            await SeedPluginsService(db_session=bg_session).seed_workspace(
+                workspace_id=workspace_id,
+            )
+    except Exception:
+        logger.exception(
+            "seed_workspace_background_failed",
+            workspace_id=str(workspace_id),
+        )
 
 
 __all__ = ["router"]

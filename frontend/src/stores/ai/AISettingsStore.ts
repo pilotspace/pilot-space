@@ -177,7 +177,7 @@ export class AISettingsStore {
   /**
    * Validate API key format (client-side basic check)
    */
-  validateKey(provider: 'anthropic' | 'openai', key: string): boolean {
+  validateKey(provider: string, key: string): boolean {
     if (key.length < 10) return false;
 
     switch (provider) {
@@ -185,8 +185,13 @@ export class AISettingsStore {
         return key.startsWith('sk-ant-');
       case 'openai':
         return key.startsWith('sk-');
+      case 'google':
+        return key.startsWith('AIza');
+      case 'kimi':
+      case 'glm':
+      case 'custom':
       default:
-        return false;
+        return true; // Length check sufficient for providers without known prefix
     }
   }
 

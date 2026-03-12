@@ -68,6 +68,7 @@ from pilot_space.api.v1.routers.pm_dependency_graph import router as pm_dependen
 from pilot_space.api.v1.routers.pm_release_notes import router as pm_release_notes_router
 from pilot_space.api.v1.routers.pm_sprint_board import router as pm_sprint_board_router
 from pilot_space.api.v1.routers.projects import router as projects_router
+from pilot_space.api.v1.routers.related_issues import router as related_issues_router
 from pilot_space.api.v1.routers.role_skills import (
     role_templates_router,
     router as role_skills_router,
@@ -75,7 +76,9 @@ from pilot_space.api.v1.routers.role_skills import (
 from pilot_space.api.v1.routers.scim import router as scim_router
 from pilot_space.api.v1.routers.sessions import router as workspace_sessions_router
 from pilot_space.api.v1.routers.skill_approvals import router as skill_approvals_router
+from pilot_space.api.v1.routers.skill_templates import router as skill_templates_router
 from pilot_space.api.v1.routers.skills import router as skills_router
+from pilot_space.api.v1.routers.user_skills import router as user_skills_router
 from pilot_space.api.v1.routers.webhooks import router as webhooks_router
 from pilot_space.api.v1.routers.workspace_ai_settings import router as workspace_ai_settings_router
 from pilot_space.api.v1.routers.workspace_cycles import router as workspace_cycles_router
@@ -193,11 +196,14 @@ __all__ = [
     "pm_release_notes_router",
     "pm_sprint_board_router",
     "projects_router",
+    "related_issues_router",
     "role_skills_router",
     "role_templates_router",
     "scim_router",
     "skill_approvals_router",
+    "skill_templates_router",
     "skills_router",
+    "user_skills_router",
     "webhooks_router",
     "workspace_ai_settings_router",
     "workspace_cycles_router",

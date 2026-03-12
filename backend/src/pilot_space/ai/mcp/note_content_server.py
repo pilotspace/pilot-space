@@ -23,8 +23,16 @@ from typing import TYPE_CHECKING, Any
 
 from claude_agent_sdk import McpSdkServerConfig, create_sdk_mcp_server, tool
 
+from pilot_space.ai.infrastructure.approval import ActionType as AT
 from pilot_space.ai.mcp.event_publisher import EventPublisher
-from pilot_space.ai.tools.mcp_server import ToolContext, get_tool_approval_level
+from pilot_space.ai.mcp.note_content_handlers import (
+    JSON_FENCE_RE as _JSON_FENCE_RE,
+    VALID_PM_BLOCK_TYPES as _VALID_PM_BLOCK_TYPES,
+    compile_search_regex as _compile_search_regex,
+    extract_block_text as _extract_block_text,
+    text_result as _text_result,
+)
+from pilot_space.ai.tools.mcp_server import ToolContext, check_approval_from_db
 from pilot_space.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
@@ -45,57 +53,6 @@ TOOL_NAMES = [
     f"mcp__{SERVER_NAME}__create_pm_block",
     f"mcp__{SERVER_NAME}__update_pm_block",
 ]
-
-_VALID_PM_BLOCK_TYPES = frozenset(
-    {
-        "decision",
-        "form",
-        "raci",
-        "risk",
-        "timeline",
-        "dashboard",
-        "sprint-board",
-        "dependency-map",
-        "capacity-plan",
-        "release-notes",
-    }
-)
-
-# Regex to detect a JSON code fence wrapping TipTap JSON (e.g. taskList)
-_JSON_FENCE_RE = re.compile(
-    r"^```(?:json)?\s*\n(.*?)\n```\s*$",
-    re.DOTALL,
-)
-
-
-def _text_result(text: str) -> dict[str, Any]:
-    """Create a standard MCP tool text result."""
-    return {"content": [{"type": "text", "text": text}]}
-
-
-_NESTED_QUANTIFIER_RE = re.compile(r"([+*]|\{\d+,?\d*\})\)?[+*]|\(\?[^)]*\)\+")
-
-
-def _compile_search_regex(pattern: str, *, case_sensitive: bool) -> re.Pattern[str]:
-    """Compile regex with ReDoS prevention. Raises re.error on invalid patterns."""
-    if len(pattern) > 500:
-        raise re.error("pattern exceeds maximum length of 500 characters")
-    if _NESTED_QUANTIFIER_RE.search(pattern):
-        raise re.error("pattern contains nested quantifiers (potential ReDoS)")
-    flags = 0 if case_sensitive else re.IGNORECASE
-    return re.compile(pattern, flags)
-
-
-def _extract_block_text(block: dict[str, Any]) -> str:
-    """Extract plain text from a TipTap block node."""
-    text_parts: list[str] = []
-    content = block.get("content", [])
-    for node in content:
-        if node.get("type") == "text":
-            text_parts.append(node.get("text", ""))
-        elif "content" in node:
-            text_parts.append(_extract_block_text(node))
-    return "".join(text_parts)
 
 
 def create_note_content_server(
@@ -118,6 +75,8 @@ def create_note_content_server(
     Returns:
         McpSdkServerConfig ready for ClaudeAgentOptions.mcp_servers.
     """
+
+    _chk = check_approval_from_db
 
     def _resolve_block_ref(ref_or_id: str) -> str:
         """Resolve ¶N reference to UUID if block_ref_map is available."""
@@ -313,7 +272,7 @@ def create_note_content_server(
             note_id,
             position,
         )
-        approval_level = get_tool_approval_level("insert_block")
+        approval_level = await _chk("insert_block", AT.INSERT_BLOCK, tool_context)
         status = "approval_required" if approval_level.value != "auto_execute" else "pending_apply"
         focus_id = before_block_id or after_block_id
 
@@ -376,7 +335,7 @@ def create_note_content_server(
         if ws_error:
             return _text_result(f"Error: {ws_error}")
         logger.info("[NoteContentTools] remove_block: note=%s, block=%s", note_id, block_id)
-        approval_level = get_tool_approval_level("remove_block")
+        approval_level = await _chk("remove_block", AT.REMOVE_BLOCK, tool_context)
         status = "approval_required" if approval_level.value != "auto_execute" else "pending_apply"
         await publisher.publish_focus_and_content(
             note_id or "",
@@ -432,7 +391,7 @@ def create_note_content_server(
             pattern,
             block_ids,
         )
-        approval_level = get_tool_approval_level("remove_content")
+        approval_level = await _chk("remove_content", AT.REMOVE_CONTENT, tool_context)
         status = "approval_required" if approval_level.value != "auto_execute" else "pending_apply"
         await publisher.publish_focus_and_content(
             note_id or "",
@@ -507,7 +466,7 @@ def create_note_content_server(
             new_content,
             block_ids,
         )
-        approval_level = get_tool_approval_level("replace_content")
+        approval_level = await _chk("replace_content", AT.REPLACE_CONTENT, tool_context)
         status = "approval_required" if approval_level.value != "auto_execute" else "pending_apply"
         focus_id = block_ids[0] if block_ids else None
         await publisher.publish_focus_and_content(
@@ -577,7 +536,7 @@ def create_note_content_server(
             note_id,
             block_type,
         )
-        approval_level = get_tool_approval_level("insert_block")
+        approval_level = await _chk("create_pm_block", AT.INSERT_BLOCK, tool_context)
         status = "approval_required" if approval_level.value != "auto_execute" else "pending_apply"
         await publisher.publish_focus_and_content(
             note_id or "",
@@ -648,7 +607,7 @@ def create_note_content_server(
             note_id,
             block_id,
         )
-        approval_level = get_tool_approval_level("update_pm_block")
+        approval_level = await _chk("update_pm_block", AT.REPLACE_CONTENT, tool_context)
         status = "approval_required" if approval_level.value != "auto_execute" else "pending_apply"
 
         pm_block_data: dict[str, Any] = {

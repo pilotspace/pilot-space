@@ -1,5 +1,5 @@
 ---
-name: role-product-owner
+name: skill-product-owner
 description: Product Owner role — backlog prioritization, roadmap decisions, value delivery
 ---
 

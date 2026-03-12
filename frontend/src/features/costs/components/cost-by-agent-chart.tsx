@@ -183,7 +183,9 @@ export function CostByAgentChart({ data, className, onAgentClick }: CostByAgentC
                 paddingAngle={2}
                 dataKey="total_cost_usd"
                 nameKey="agent_name"
-                onClick={(entry) => onAgentClick?.(entry.agent_name)}
+                onClick={(entry) =>
+                  onAgentClick?.((entry as unknown as CostByAgentData).agent_name)
+                }
                 className="cursor-pointer focus:outline-none"
               >
                 {data.map((_entry, index) => (

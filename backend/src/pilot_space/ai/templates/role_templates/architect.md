@@ -1,5 +1,5 @@
 ---
-name: role-architect
+name: skill-architect
 description: Software Architect role — system design, technical decisions, scalability, trade-offs
 ---
 

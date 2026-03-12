@@ -77,7 +77,7 @@ export const RoleSelectorStep = observer(function RoleSelectorStep({
     return (
       <div className="flex flex-col items-center justify-center py-12">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-        <p className="mt-3 text-sm text-muted-foreground">Loading roles...</p>
+        <p className="mt-3 text-sm text-muted-foreground">Loading skills...</p>
       </div>
     );
   }
@@ -104,17 +104,17 @@ export const RoleSelectorStep = observer(function RoleSelectorStep({
 
       {/* Title */}
       <div>
-        <h3 className="text-lg font-semibold">Set Up Your Role</h3>
+        <h3 className="text-lg font-semibold">Set Up Your Skill</h3>
         <p className="mt-1 text-sm text-muted-foreground">
-          Select your SDLC role to personalize your AI assistant. Choose up to {MAX_ROLES} roles.
-          The first selected becomes primary.
+          Select a skill to personalize your AI assistant. Choose up to {MAX_ROLES} skills. The
+          first selected becomes primary.
         </p>
       </div>
 
       {/* Role grid */}
       <div
         role="group"
-        aria-label="Select your SDLC roles"
+        aria-label="Select your skills"
         className="grid grid-cols-3 gap-3 justify-items-center"
       >
         {sortedTemplates.map((template: RoleTemplate) => {
@@ -142,11 +142,11 @@ export const RoleSelectorStep = observer(function RoleSelectorStep({
           );
         })}
 
-        {/* Custom Role card */}
+        {/* Custom Skill card */}
         <RoleCard
           roleType="custom"
-          displayName="Custom Role"
-          description="Define your own role"
+          displayName="Custom Skill"
+          description="Define your own skill"
           icon="Pencil"
           selected={selectedRoles.includes('custom')}
           selectionOrder={
@@ -173,7 +173,7 @@ export const RoleSelectorStep = observer(function RoleSelectorStep({
           </span>
           {remainingSlots > 0 && (
             <span className="ml-2 text-muted-foreground">
-              {remainingSlots} more role{remainingSlots > 1 ? 's' : ''} available
+              {remainingSlots} more skill{remainingSlots > 1 ? 's' : ''} available
             </span>
           )}
         </div>
@@ -181,7 +181,7 @@ export const RoleSelectorStep = observer(function RoleSelectorStep({
 
       {/* Live announcement for screen readers */}
       <div className="sr-only" aria-live="polite" role="status">
-        {selectedCount} of {MAX_ROLES} roles selected.
+        {selectedCount} of {MAX_ROLES} skills selected.
         {primaryRole && ` ${primaryRole.replace(/_/g, ' ')} is primary.`}
       </div>
 

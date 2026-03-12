@@ -22,11 +22,12 @@ from uuid import UUID
 
 from claude_agent_sdk import McpSdkServerConfig, create_sdk_mcp_server, tool
 
+from pilot_space.ai.infrastructure.approval import ActionType as AT
 from pilot_space.ai.tools.entity_resolver import (
     EntityResolutionError,
     resolve_entity_id_strict,
 )
-from pilot_space.ai.tools.mcp_server import ToolContext, get_tool_approval_level
+from pilot_space.ai.tools.mcp_server import ToolContext, check_approval_from_db
 
 if TYPE_CHECKING:
     from pilot_space.ai.mcp.event_publisher import EventPublisher
@@ -120,8 +121,10 @@ async def _check_circular_parent(
 ) -> tuple[bool, str | None]:
     """Check if setting parent_id would create a circular dependency.
 
-    Fetches all workspace issues with their parent_id in a single query,
-    then traverses the parent chain in-memory to detect cycles.
+    Uses a recursive CTE to traverse only the ancestor chain of parent_id,
+    avoiding a full workspace table scan. The CTE starts at parent_id and
+    walks up through parent_id links until it either finds child_id (cycle)
+    or reaches the root (no cycle).
 
     Args:
         repo: IssueRepository instance.
@@ -136,35 +139,47 @@ async def _check_circular_parent(
     if child_id == parent_id:
         return True, "Cannot set an issue as its own parent"
 
-    # Single query: fetch parent_id mapping for all workspace issues
-    from sqlalchemy import select
+    from sqlalchemy import text
 
-    from pilot_space.infrastructure.database.models import Issue
-
-    stmt = select(Issue.id, Issue.parent_id).where(
-        Issue.workspace_id == workspace_id,
-        Issue.is_deleted == False,  # noqa: E712
+    # Recursive CTE: traverse ancestor chain of parent_id.
+    # Returns the ancestor IDs from parent_id up to the root.
+    # If child_id appears in that chain, the relationship is circular.
+    cte_sql = text(
+        """
+        WITH RECURSIVE ancestor_chain(id, depth) AS (
+            -- Base: start at the proposed parent
+            SELECT i.id, 0
+            FROM issues i
+            WHERE i.id = :parent_id
+              AND i.workspace_id = :workspace_id
+              AND i.is_deleted = false
+            UNION ALL
+            -- Recursive: walk up through parent_id links
+            SELECT i.id, ac.depth + 1
+            FROM issues i
+            JOIN ancestor_chain ac ON i.id = (
+                SELECT parent_id FROM issues WHERE id = ac.id AND is_deleted = false
+            )
+            WHERE ac.depth < :max_depth
+              AND i.workspace_id = :workspace_id
+              AND i.is_deleted = false
+        )
+        SELECT id FROM ancestor_chain WHERE id = :child_id LIMIT 1
+        """
     )
-    result = await repo.session.execute(stmt)
-    parent_map: dict[UUID, UUID | None] = {row.id: row.parent_id for row in result}
 
-    # Traverse parent chain in-memory
-    current_id: UUID | None = parent_id
-    depth = 0
-
-    while current_id is not None and depth < max_depth:
-        if current_id not in parent_map:
-            break
-
-        next_parent = parent_map[current_id]
-        if next_parent == child_id:
-            return True, "Circular parent relationship detected"
-
-        current_id = next_parent
-        depth += 1
-
-    if depth >= max_depth:
-        return True, f"Parent chain exceeds maximum depth of {max_depth}"
+    result = await repo.session.execute(
+        cte_sql,
+        {
+            "parent_id": parent_id,
+            "workspace_id": workspace_id,
+            "child_id": child_id,
+            "max_depth": max_depth,
+        },
+    )
+    row = result.fetchone()
+    if row is not None:
+        return True, "Circular parent relationship detected"
 
     return False, None
 
@@ -195,6 +210,8 @@ def create_issue_relation_tools_server(
     Returns:
         McpSdkServerConfig ready for ClaudeAgentOptions.mcp_servers.
     """
+
+    _chk = check_approval_from_db
 
     @tool(
         "link_issue_to_note",
@@ -255,7 +272,7 @@ def create_issue_relation_tools_server(
         if args.get("block_id"):
             payload["block_id"] = args["block_id"]
 
-        approval_level = get_tool_approval_level("link_issue_to_note")
+        approval_level = await _chk("link_issue_to_note", AT.LINK_ISSUE_TO_NOTE, tool_context)
         status = "approval_required" if approval_level.value != "auto_execute" else "pending_apply"
 
         logger.info(
@@ -404,7 +421,7 @@ def create_issue_relation_tools_server(
         if link_type in (IssueLinkType.BLOCKS, IssueLinkType.BLOCKED_BY):
             preview["note"] = "Inverse link will be created automatically"
 
-        approval_level = get_tool_approval_level("link_issues")
+        approval_level = await _chk("link_issues", AT.LINK_ISSUES, tool_context)
         status = "approval_required" if approval_level.value != "auto_execute" else "pending_apply"
 
         logger.info(
@@ -538,7 +555,7 @@ def create_issue_relation_tools_server(
             "workspace_id": tool_context.workspace_id,
         }
 
-        approval_level = get_tool_approval_level("add_sub_issue")
+        approval_level = await _chk("add_sub_issue", AT.ADD_SUB_ISSUE, tool_context)
         status = "approval_required" if approval_level.value != "auto_execute" else "pending_apply"
 
         logger.info(
@@ -605,7 +622,9 @@ def create_issue_relation_tools_server(
         if args.get("comment"):
             payload["comment"] = args["comment"]
 
-        approval_level = get_tool_approval_level("transition_issue_state")
+        approval_level = await _chk(
+            "transition_issue_state", AT.TRANSITION_ISSUE_STATE, tool_context
+        )
         status = "approval_required" if approval_level.value != "auto_execute" else "pending_apply"
 
         logger.info(

@@ -1,5 +1,5 @@
 ---
-name: role-tester
+name: skill-tester
 description: QA/Tester role — test strategy, edge cases, acceptance criteria, quality assurance
 ---
 

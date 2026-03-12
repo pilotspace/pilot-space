@@ -405,3 +405,242 @@ async def test_admin_only(
     data = response.json()
     # RFC 7807 error response
     assert "detail" in data or "title" in data
+
+
+# ---------------------------------------------------------------------------
+# MCP-03: OAuth callback redirect includes workspace slug (Phase 22)
+# ---------------------------------------------------------------------------
+
+
+async def test_oauth_callback_redirect_includes_workspace_slug() -> None:
+    """MCP-03: OAuth callback redirect URL includes /{workspace_slug}/settings/mcp-servers.
+
+    When state_data contains workspace_slug, the redirect URL must be
+    /{slug}/settings/mcp-servers?status=connected (not /settings/mcp-servers).
+    """
+    import json
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from pilot_space.api.v1.routers.workspace_mcp_servers import mcp_oauth_callback
+
+    workspace_slug = "my-workspace"
+    server_id = uuid4()
+    workspace_id = uuid4()
+    state = f"mcp_oauth_{server_id}_test-nonce"
+
+    state_data = json.dumps(
+        {
+            "server_id": str(server_id),
+            "workspace_id": str(workspace_id),
+            "workspace_slug": workspace_slug,
+            "nonce": "test-nonce",
+        }
+    )
+
+    # Mock Redis client
+    mock_redis = MagicMock()
+    mock_redis.client = AsyncMock()
+    mock_redis.client.get = AsyncMock(return_value=state_data)
+    mock_redis.client.delete = AsyncMock()
+
+    # Mock request
+    mock_request = MagicMock()
+    mock_request.base_url = "http://localhost:8000/"
+    mock_request.app.state.container.redis_client.return_value = mock_redis
+
+    # Mock DB session and server
+    mock_server = MagicMock()
+    mock_server.oauth_token_url = "https://auth.example.com/token"
+    mock_server.oauth_client_id = "client-abc"
+    mock_server.auth_token_encrypted = None
+
+    mock_repo = AsyncMock()
+    mock_repo.get_by_workspace_and_id = AsyncMock(return_value=mock_server)
+    mock_repo.update = AsyncMock()
+
+    mock_session_ctx = AsyncMock()
+    mock_session_ctx.__aenter__ = AsyncMock(return_value=AsyncMock())
+    mock_session_ctx.__aexit__ = AsyncMock(return_value=False)
+
+    with (
+        patch(
+            "pilot_space.infrastructure.database.get_db_session",
+            return_value=mock_session_ctx,
+        ),
+        patch(
+            "pilot_space.infrastructure.database.repositories"
+            ".workspace_mcp_server_repository.WorkspaceMcpServerRepository",
+            return_value=mock_repo,
+        ),
+        patch(
+            "pilot_space.api.v1.routers.workspace_mcp_servers._exchange_oauth_code",
+            return_value="test-access-token",
+        ),
+        patch(
+            "pilot_space.infrastructure.encryption.encrypt_api_key",
+            return_value="encrypted-token",
+        ),
+    ):
+        response = await mcp_oauth_callback(
+            request=mock_request,
+            code="test-code",
+            state=state,
+        )
+
+    assert response.status_code == 307
+    location = response.headers["location"]
+    assert location.startswith(f"/{workspace_slug}/settings/mcp-servers")
+    assert "status=connected" in location
+
+
+async def test_oauth_callback_redirect_fallback_without_slug() -> None:
+    """MCP-03: OAuth callback falls back to /settings/mcp-servers without workspace_slug.
+
+    Legacy state_data without workspace_slug key must still produce a valid
+    redirect to /settings/mcp-servers (backward compatibility).
+    """
+    import json
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from pilot_space.api.v1.routers.workspace_mcp_servers import mcp_oauth_callback
+
+    server_id = uuid4()
+    workspace_id = uuid4()
+    state = f"mcp_oauth_{server_id}_test-nonce"
+
+    # Legacy state_data: no workspace_slug key
+    state_data = json.dumps(
+        {
+            "server_id": str(server_id),
+            "workspace_id": str(workspace_id),
+            "nonce": "test-nonce",
+        }
+    )
+
+    mock_redis = MagicMock()
+    mock_redis.client = AsyncMock()
+    mock_redis.client.get = AsyncMock(return_value=state_data)
+    mock_redis.client.delete = AsyncMock()
+
+    mock_request = MagicMock()
+    mock_request.base_url = "http://localhost:8000/"
+    mock_request.app.state.container.redis_client.return_value = mock_redis
+
+    mock_server = MagicMock()
+    mock_server.oauth_token_url = "https://auth.example.com/token"
+    mock_server.oauth_client_id = "client-abc"
+    mock_server.auth_token_encrypted = None
+
+    mock_repo = AsyncMock()
+    mock_repo.get_by_workspace_and_id = AsyncMock(return_value=mock_server)
+    mock_repo.update = AsyncMock()
+
+    mock_session_ctx = AsyncMock()
+    mock_session_ctx.__aenter__ = AsyncMock(return_value=AsyncMock())
+    mock_session_ctx.__aexit__ = AsyncMock(return_value=False)
+
+    with (
+        patch(
+            "pilot_space.infrastructure.database.get_db_session",
+            return_value=mock_session_ctx,
+        ),
+        patch(
+            "pilot_space.infrastructure.database.repositories"
+            ".workspace_mcp_server_repository.WorkspaceMcpServerRepository",
+            return_value=mock_repo,
+        ),
+        patch(
+            "pilot_space.api.v1.routers.workspace_mcp_servers._exchange_oauth_code",
+            return_value="test-access-token",
+        ),
+        patch(
+            "pilot_space.infrastructure.encryption.encrypt_api_key",
+            return_value="encrypted-token",
+        ),
+    ):
+        response = await mcp_oauth_callback(
+            request=mock_request,
+            code="test-code",
+            state=state,
+        )
+
+    assert response.status_code == 307
+    location = response.headers["location"]
+    assert location.startswith("/settings/mcp-servers")
+    assert "status=connected" in location
+
+
+async def test_oauth_url_stores_workspace_slug_in_state() -> None:
+    """MCP-03: get_mcp_oauth_url stores workspace_slug in Redis state_data.
+
+    The OAuth URL generation must include workspace_slug in the state_data
+    so the callback can reconstruct the correct redirect URL.
+    """
+    import json
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from pilot_space.api.v1.routers.workspace_mcp_servers import get_mcp_oauth_url
+    from pilot_space.infrastructure.database.models.workspace_mcp_server import (
+        McpAuthType,
+    )
+
+    workspace_id = uuid4()
+    server_id = uuid4()
+
+    # Mock workspace with slug
+    mock_workspace = MagicMock()
+    mock_workspace.slug = "test-workspace"
+    mock_workspace.members = [MagicMock(user_id=uuid4(), is_admin=True)]
+
+    # Mock server
+    mock_server = MagicMock()
+    mock_server.id = server_id
+    mock_server.auth_type = McpAuthType.OAUTH2
+    mock_server.oauth_auth_url = "https://auth.example.com/authorize"
+    mock_server.oauth_client_id = "client-123"
+    mock_server.oauth_scopes = "read"
+
+    mock_repo = AsyncMock()
+    mock_repo.get_by_workspace_and_id = AsyncMock(return_value=mock_server)
+
+    # Capture what gets stored in Redis
+    stored_data: dict[str, object] = {}
+
+    async def capture_set(key: str, value: str, ex: int = 0) -> None:
+        stored_data["key"] = key
+        stored_data["value"] = json.loads(value)
+
+    mock_redis = MagicMock()
+    mock_redis.client = AsyncMock()
+    mock_redis.client.set = AsyncMock(side_effect=capture_set)
+
+    mock_request = MagicMock()
+    mock_request.base_url = "http://localhost:8000/"
+    mock_request.app.state.container.redis_client.return_value = mock_redis
+
+    mock_current_user = MagicMock()
+    mock_current_user.user_id = mock_workspace.members[0].user_id
+
+    mock_session = AsyncMock()
+
+    with (
+        patch(
+            "pilot_space.api.v1.routers.workspace_mcp_servers._get_admin_workspace",
+            return_value=mock_workspace,
+        ),
+        patch(
+            "pilot_space.infrastructure.database.repositories"
+            ".workspace_mcp_server_repository.WorkspaceMcpServerRepository",
+            return_value=mock_repo,
+        ),
+    ):
+        await get_mcp_oauth_url(
+            workspace_id=workspace_id,
+            server_id=server_id,
+            current_user=mock_current_user,
+            session=mock_session,
+            request=mock_request,
+        )
+
+    assert "value" in stored_data
+    assert stored_data["value"]["workspace_slug"] == "test-workspace"

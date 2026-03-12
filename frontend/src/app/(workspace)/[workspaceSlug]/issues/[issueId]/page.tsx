@@ -22,12 +22,12 @@ import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DestructiveApprovalModal } from '@/features/ai/ChatView/ApprovalOverlay/DestructiveApprovalModal';
-import { isDestructiveAction } from '@/features/ai/ChatView/ChatView';
 
 import {
   IssueNoteHeader,
   IssueNoteLayout,
   IssuePropertiesPanel,
+  ActionButtonBar,
 } from '@/features/issues/components';
 import { ProjectContextHeader } from '@/components/editor/ProjectContextHeader';
 import { IssueEditorContent } from '@/features/issues/components/issue-editor-content';
@@ -42,10 +42,13 @@ import {
   useIssueKeyboardShortcuts,
 } from '@/features/issues/hooks';
 import { implementationPlanKeys } from '@/features/issues/hooks/use-implementation-plan';
+import { useIssueApprovals } from '@/features/issues/hooks/use-issue-approvals';
+import { useIssueAiActions } from '@/features/issues/hooks/use-issue-ai-actions';
 import { IssueNoteContext } from '@/features/issues/contexts/issue-note-context';
 import { useStore } from '@/stores';
 import { copyToClipboard } from '@/lib/copy-context';
 import { issuesApi, tasksApi } from '@/services/api';
+import { useActionButtons } from '@/services/api/skill-action-buttons';
 import type { ExportFormat } from '@/features/issues/components';
 import type { UpdateIssueData, IssueState, UserBrief } from '@/types';
 import { IssueChatEmptyState } from '@/features/issues/components/issue-chat-empty-state';
@@ -53,6 +56,30 @@ import type { AIContextResult } from '@/stores/ai/AIContextStore';
 import type { RightPanelTab } from '@/features/issues/components/issue-note-layout';
 
 import '@/features/notes/editor/extensions/note-link.css';
+
+// ---------------------------------------------------------------------------
+// Typed accessor for aiStore.pilotSpace (replaces unsafe `as` casts)
+// ---------------------------------------------------------------------------
+interface IssuePagePilotSpaceAPI {
+  sendMessage: (content: string) => Promise<void>;
+  isStreaming: boolean;
+  clearConversation: () => void;
+  setIssueContext: (ctx: { issueId: string } | null) => void;
+  setWorkspaceId: (id: string | null) => void;
+  setActiveSkill: (skill: string) => void;
+  approveRequest: (id: string) => Promise<void>;
+  rejectRequest: (id: string, reason: string) => Promise<void>;
+  pendingApprovals?: Array<{
+    requestId: string;
+    actionType: string;
+    description: string;
+    consequences?: string;
+    proposedContent?: unknown;
+    createdAt: Date;
+    expiresAt: Date;
+    affectedEntities: Array<{ type: string; id: string }>;
+  }>;
+}
 
 // ---------------------------------------------------------------------------
 // Lazy-loaded heavy components
@@ -114,6 +141,7 @@ const IssueDetailPage = observer(function IssueDetailPage() {
   const issueId = params.issueId as string;
 
   const { workspaceStore, issueStore, aiStore } = useStore();
+  const pilotSpace = aiStore.pilotSpace as unknown as IssuePagePilotSpaceAPI;
   const workspaceId = workspaceStore.currentWorkspace?.id ?? workspaceSlug;
   const queryClient = useQueryClient();
 
@@ -124,6 +152,7 @@ const IssueDetailPage = observer(function IssueDetailPage() {
   const { data: members = [] } = useWorkspaceMembers(workspaceId);
   const { data: labels = [] } = useWorkspaceLabels(workspaceId);
   const { data: cyclesData } = useProjectCycles(workspaceId, issue?.project?.id ?? '');
+  const { data: actionButtons } = useActionButtons(workspaceId);
 
   // -- UI state --
   const [isChatOpen, setIsChatOpen] = useState(true);
@@ -236,30 +265,15 @@ const IssueDetailPage = observer(function IssueDetailPage() {
     }
   }, [workspaceId, issueId, queryClient]);
 
-  const handleChatSend = useCallback(
-    (prompt: string) => {
-      void (aiStore.pilotSpace as { sendMessage: (c: string) => Promise<void> }).sendMessage(
-        prompt
-      );
-    },
-    [aiStore.pilotSpace]
+  // -- AI action handlers (extracted to hook) --
+  const { handleChatSend, handleAiGenerateFromEditor, handleActionButtonClick } = useIssueAiActions(
+    {
+      pilotSpace,
+      issueId,
+      setIsChatOpen,
+      setRightPanelTab,
+    }
   );
-
-  // Opens chat AND immediately sends the generate-description prompt.
-  // Used by the editor empty state CTA so the button has a visible effect
-  // even when the chat panel is already open (isChatOpen defaults to true).
-  // Guard: no-op if the store is already streaming (prevents duplicate sends).
-  const handleAiGenerateFromEditor = useCallback(() => {
-    const store = aiStore.pilotSpace as {
-      sendMessage: (c: string) => Promise<void>;
-      isStreaming: boolean;
-    };
-    if (store.isStreaming) return;
-    setIsChatOpen(true);
-    handleChatSend(
-      `Generate a detailed description for this issue. Structure it with: Problem statement, Acceptance criteria, and Technical approach.`
-    );
-  }, [handleChatSend, aiStore.pilotSpace]);
 
   // -- Knowledge graph handlers --
 
@@ -290,16 +304,12 @@ const IssueDetailPage = observer(function IssueDetailPage() {
   // Both conversationContext (chat body) and X-Workspace-Id (sessions header)
   // depend on these being set.
   useEffect(() => {
-    const store = aiStore.pilotSpace as {
-      setWorkspaceId: (id: string | null) => void;
-      setIssueContext: (ctx: { issueId: string } | null) => void;
-    };
-    store.setWorkspaceId(workspaceId);
-    store.setIssueContext({ issueId });
+    pilotSpace.setWorkspaceId(workspaceId);
+    pilotSpace.setIssueContext({ issueId });
     return () => {
-      store.setIssueContext(null);
+      pilotSpace.setIssueContext(null);
     };
-  }, [workspaceId, issueId, aiStore.pilotSpace]);
+  }, [workspaceId, issueId, pilotSpace]);
 
   // -- Refetch issue when AI agent applies an update, then remount editor --
   useEffect(() => {
@@ -339,80 +349,14 @@ const IssueDetailPage = observer(function IssueDetailPage() {
     return () => document.removeEventListener('keydown', handler);
   }, [handleExportContext]);
 
-  // -- DD-003: Approval flow --
-  // Map store approval shape to ChatView ApprovalRequest shape.
-  const issueApprovals = useMemo(() => {
-    return (
-      (aiStore.pilotSpace as { pendingApprovals?: unknown[] }).pendingApprovals
-        ?.filter(
-          (r): r is NonNullable<typeof r> =>
-            r !== null &&
-            typeof r === 'object' &&
-            'affectedEntities' in r &&
-            Array.isArray((r as { affectedEntities: unknown[] }).affectedEntities) &&
-            (r as { affectedEntities: Array<{ type: string; id: string }> }).affectedEntities.some(
-              (e) => e.type === 'issue' && e.id === issueId
-            )
-        )
-        .map((r) => {
-          const req = r as {
-            requestId: string;
-            actionType: string;
-            description: string;
-            consequences?: string;
-            proposedContent?: unknown;
-            createdAt: Date;
-            expiresAt: Date;
-          };
-          return {
-            id: req.requestId,
-            agentName: 'PilotSpace Agent',
-            actionType: req.actionType,
-            status: 'pending' as const,
-            contextPreview: req.description,
-            payload: req.proposedContent as Record<string, unknown> | undefined,
-            createdAt: req.createdAt,
-            expiresAt: req.expiresAt,
-            reasoning: req.consequences,
-          };
-        }) ?? []
-    );
-  }, [(aiStore.pilotSpace as { pendingApprovals?: unknown[] }).pendingApprovals, issueId]);
-
-  const destructiveApproval = useMemo(
-    () => issueApprovals.find((a) => isDestructiveAction(a.actionType)) ?? null,
-    [issueApprovals]
-  );
-
-  const [destructiveModalOpen, setDestructiveModalOpen] = useState(false);
-
-  // Auto-open chat for non-destructive approvals; open modal for destructive ones.
-  useEffect(() => {
-    if (issueApprovals.length === 0) return;
-    if (destructiveApproval) {
-      setDestructiveModalOpen(true);
-    } else {
-      setIsChatOpen(true);
-    }
-  }, [issueApprovals.length, destructiveApproval]);
-
-  const handleApproveAction = useCallback(
-    async (id: string) => {
-      await (
-        aiStore.pilotSpace as { approveRequest: (id: string) => Promise<void> }
-      ).approveRequest(id);
-    },
-    [aiStore.pilotSpace]
-  );
-
-  const handleRejectAction = useCallback(
-    async (id: string, reason: string) => {
-      await (
-        aiStore.pilotSpace as { rejectRequest: (id: string, reason: string) => Promise<void> }
-      ).rejectRequest(id, reason);
-    },
-    [aiStore.pilotSpace]
-  );
+  // -- DD-003: Approval flow (extracted to hook) --
+  const {
+    destructiveApproval,
+    destructiveModalOpen,
+    setDestructiveModalOpen,
+    handleApproveAction,
+    handleRejectAction,
+  } = useIssueApprovals(pilotSpace, issueId, setIsChatOpen);
 
   // -- Render states --
   if (isLoading) return <IssueDetailSkeleton />;
@@ -420,7 +364,8 @@ const IssueDetailPage = observer(function IssueDetailPage() {
 
   // -- AI context result + chat empty state --
   const aiContextResult =
-    (aiStore.aiContext as { result: AIContextResult | null } | undefined)?.result ?? null;
+    (aiStore.aiContext as unknown as { result: AIContextResult | null } | undefined)?.result ??
+    null;
 
   const chatEmptyState = issue ? (
     <IssueChatEmptyState
@@ -504,6 +449,7 @@ const IssueDetailPage = observer(function IssueDetailPage() {
         onGeneratePlan={handleGeneratePlan}
         isGeneratingPlan={isGeneratingPlan}
       />
+      <ActionButtonBar buttons={actionButtons ?? []} onButtonClick={handleActionButtonClick} />
     </>
   );
 

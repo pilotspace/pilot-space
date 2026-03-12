@@ -17,6 +17,8 @@ export type {
   MCPServerListResponse,
   MCPServerRegisterRequest,
 } from './MCPServersStore';
+export { PluginsStore } from './PluginsStore';
+export type { InstalledPlugin, PluginGroup } from './PluginsStore';
 export { PRReviewStore } from './PRReviewStore';
 export { MarginAnnotationStore } from './MarginAnnotationStore';
 export { CostStore } from './CostStore';

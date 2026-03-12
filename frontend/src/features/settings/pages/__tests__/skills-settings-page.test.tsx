@@ -1,20 +1,22 @@
 /**
- * Tests for SkillsSettingsPage.
+ * Tests for SkillsSettingsPage (Phase 20 restructured).
  *
- * T040: Skills settings page rendering, CRUD operations, states.
- * Source: FR-009, FR-010, FR-015, FR-018, US6
+ * Covers: My Skills section, Template Catalog, admin actions.
+ * Source: P20-09, P20-10
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import * as React from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 vi.mock('mobx-react-lite', () => ({
   observer: <T,>(component: T) => component,
 }));
 
 vi.mock('sonner', () => ({
-  toast: { success: vi.fn(), error: vi.fn() },
+  toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
 }));
 
 vi.mock('next/navigation', () => ({
@@ -23,21 +25,9 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/',
 }));
 
-const mockRoleSkillStore = {
-  editingSkillId: null as string | null,
-  selectedRoles: [] as string[],
-  isGenerating: false,
-  customRoleDescription: '',
-  setEditingSkillId: vi.fn(),
-  clearEditingSkillId: vi.fn(),
-  setGenerationStep: vi.fn(),
-  clearSelectedRoles: vi.fn(),
-  toggleRole: vi.fn(),
-  setExperienceDescription: vi.fn(),
-};
-
 const mockWorkspaceStore = {
   currentUserRole: 'member' as string | null,
+  isAdmin: false,
   getWorkspaceBySlug: vi.fn().mockReturnValue({
     id: 'ws-123',
     slug: 'test-workspace',
@@ -47,28 +37,59 @@ const mockWorkspaceStore = {
 vi.mock('@/stores', () => ({
   useStore: () => ({
     workspaceStore: mockWorkspaceStore,
-    roleSkillStore: mockRoleSkillStore,
+    roleSkillStore: {
+      editingSkillId: null,
+      setEditingSkillId: vi.fn(),
+      clearEditingSkillId: vi.fn(),
+    },
   }),
 }));
 
 vi.mock('@/stores/RootStore', () => ({
-  useRoleSkillStore: () => mockRoleSkillStore,
+  useRoleSkillStore: () => ({
+    editingSkillId: null,
+    setEditingSkillId: vi.fn(),
+    clearEditingSkillId: vi.fn(),
+  }),
 }));
 
-const mockUseRoleSkills = vi.fn();
-const mockUseRoleTemplates = vi.fn();
-const mockUpdateMutate = vi.fn();
-const mockDeleteMutate = vi.fn();
-const mockCreateMutate = vi.fn();
-const mockRegenerateMutateAsync = vi.fn();
+// Mock user-skills hooks
+const mockUserSkills = vi.fn();
+const mockUpdateUserSkill = vi.fn();
+const mockDeleteUserSkill = vi.fn();
 
+vi.mock('@/services/api/user-skills', () => ({
+  useUserSkills: (...args: unknown[]) => mockUserSkills(...args),
+  useCreateUserSkill: () => ({ mutate: vi.fn(), isPending: false }),
+  useUpdateUserSkill: () => ({ mutate: mockUpdateUserSkill, isPending: false }),
+  useDeleteUserSkill: () => ({ mutate: mockDeleteUserSkill, isPending: false }),
+}));
+
+// Mock skill-templates hooks
+vi.mock('@/services/api/skill-templates', () => ({
+  useSkillTemplates: () => ({ data: [], isLoading: false, isError: false, error: null }),
+  useCreateSkillTemplate: () => ({ mutate: vi.fn(), isPending: false }),
+  useUpdateSkillTemplate: () => ({ mutate: vi.fn(), isPending: false }),
+  useDeleteSkillTemplate: () => ({ mutate: vi.fn(), isPending: false }),
+}));
+
+// Mock workspace-role-skills (legacy, may still be imported transitively)
+vi.mock('@/services/api/workspace-role-skills', () => ({
+  useWorkspaceRoleSkills: () => ({ data: { skills: [] } }),
+  useActivateWorkspaceSkill: () => ({ mutate: vi.fn(), isPending: false }),
+  useDeleteWorkspaceSkill: () => ({ mutate: vi.fn(), isPending: false }),
+  useGenerateWorkspaceSkill: () => ({ mutateAsync: vi.fn(), isPending: false }),
+}));
+
+// Mock onboarding hooks (for SkillGeneratorModal)
 vi.mock('@/features/onboarding/hooks', () => ({
-  useRoleSkills: (...args: unknown[]) => mockUseRoleSkills(...args),
-  useRoleTemplates: () => mockUseRoleTemplates(),
-  useUpdateRoleSkill: () => ({ mutate: mockUpdateMutate, isPending: false }),
-  useRegenerateSkill: () => ({ mutateAsync: mockRegenerateMutateAsync, isPending: false }),
-  useDeleteRoleSkill: () => ({ mutate: mockDeleteMutate }),
-  useCreateRoleSkill: () => ({ mutate: mockCreateMutate }),
+  useRoleSkills: () => ({ data: [], isLoading: false, isError: false, error: null }),
+  useRoleTemplates: () => ({ data: [] }),
+  useUpdateRoleSkill: () => ({ mutate: vi.fn(), isPending: false }),
+  useRegenerateSkill: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useDeleteRoleSkill: () => ({ mutate: vi.fn() }),
+  useCreateRoleSkill: () => ({ mutate: vi.fn(), mutateAsync: vi.fn() }),
+  useGenerateSkill: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 
 vi.mock('@/lib/supabase', () => ({
@@ -84,256 +105,206 @@ vi.mock('@/services/api', () => ({
 vi.mock('@/components/role-skill/role-icons', () => ({
   getRoleIcon: () => {
     return function MockIcon(props: Record<string, unknown>) {
-      return <span data-testid="role-icon" {...props} />;
+      return React.createElement('span', { 'data-testid': 'role-icon', ...props });
     };
   },
 }));
 
 import { SkillsSettingsPage } from '../skills-settings-page';
 
-const mockSkills = [
-  {
-    id: 'skill-1',
-    roleType: 'developer' as const,
-    roleName: 'Developer',
-    skillContent: '# Developer\n\n## Focus Areas\n- Code quality',
-    experienceDescription: 'Full-stack TypeScript dev',
-    isPrimary: true,
-    templateVersion: 1,
-    templateUpdateAvailable: false,
-    wordCount: 10,
-    createdAt: '2026-02-06T00:00:00Z',
-    updatedAt: '2026-02-06T00:00:00Z',
-  },
-  {
-    id: 'skill-2',
-    roleType: 'tester' as const,
-    roleName: 'Tester',
-    skillContent: '# Tester\n\n## Focus Areas\n- Test coverage',
-    experienceDescription: null,
-    isPrimary: false,
-    templateVersion: 1,
-    templateUpdateAvailable: false,
-    wordCount: 8,
-    createdAt: '2026-02-06T01:00:00Z',
-    updatedAt: '2026-02-06T01:00:00Z',
-  },
-];
+function createWrapper() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  return function Wrapper({ children }: { children: React.ReactNode }) {
+    return React.createElement(QueryClientProvider, { client: queryClient }, children);
+  };
+}
 
-const mockTemplates = [
+function renderPage() {
+  return render(React.createElement(SkillsSettingsPage), { wrapper: createWrapper() });
+}
+
+const mockUserSkillsList = [
   {
-    id: 'tmpl-1',
-    roleType: 'developer' as const,
-    displayName: 'Developer',
-    description: 'Code & architecture',
-    icon: 'Code',
-    sortOrder: 3,
-    version: 1,
-    defaultSkillContent: '# Developer Default',
+    id: 'us-1',
+    user_id: 'u-1',
+    workspace_id: 'ws-123',
+    template_id: 'tpl-1',
+    skill_content: 'You are an expert developer.',
+    experience_description: '10 years React',
+    is_active: true,
+    created_at: '2024-01-01T00:00:00Z',
+    updated_at: '2024-01-01T00:00:00Z',
+    template_name: 'Senior Developer',
+  },
+  {
+    id: 'us-2',
+    user_id: 'u-1',
+    workspace_id: 'ws-123',
+    template_id: null,
+    skill_content: 'Custom skill content here.',
+    experience_description: null,
+    is_active: false,
+    created_at: '2024-01-02T00:00:00Z',
+    updated_at: '2024-01-02T00:00:00Z',
+    template_name: null,
   },
 ];
 
 describe('SkillsSettingsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockRoleSkillStore.editingSkillId = null;
     mockWorkspaceStore.currentUserRole = 'member';
+    mockWorkspaceStore.isAdmin = false;
     mockWorkspaceStore.getWorkspaceBySlug.mockReturnValue({
       id: 'ws-123',
       slug: 'test-workspace',
     });
-    mockUseRoleTemplates.mockReturnValue({ data: mockTemplates });
   });
 
   describe('loading state', () => {
     it('should show loading skeleton when loading', () => {
-      mockUseRoleSkills.mockReturnValue({
+      mockUserSkills.mockReturnValue({
         data: undefined,
         isLoading: true,
         isError: false,
         error: null,
       });
 
-      const { container } = render(<SkillsSettingsPage />);
+      const { container } = renderPage();
       expect(container.querySelector('.animate-pulse')).toBeInTheDocument();
     });
   });
 
   describe('error state', () => {
     it('should show error alert when loading fails', () => {
-      mockUseRoleSkills.mockReturnValue({
+      mockUserSkills.mockReturnValue({
         data: undefined,
         isLoading: false,
         isError: true,
         error: new Error('Network error'),
       });
 
-      render(<SkillsSettingsPage />);
+      renderPage();
       expect(screen.getByText(/Failed to load skills.*Network error/)).toBeInTheDocument();
     });
   });
 
   describe('empty state', () => {
-    it('should show empty state when no skills configured', () => {
-      mockUseRoleSkills.mockReturnValue({
+    it('should show empty message when no user skills', () => {
+      mockUserSkills.mockReturnValue({
         data: [],
         isLoading: false,
         isError: false,
         error: null,
       });
 
-      render(<SkillsSettingsPage />);
-      expect(screen.getByText('No roles configured')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /Set Up Your Role/ })).toBeInTheDocument();
+      renderPage();
+      expect(
+        screen.getByText('No skills yet. Browse templates below to get started.')
+      ).toBeInTheDocument();
     });
   });
 
   describe('skills list', () => {
-    it('should render skills with header and actions', () => {
-      mockUseRoleSkills.mockReturnValue({
-        data: mockSkills,
+    it('should render user skills with My Skills section', () => {
+      mockUserSkills.mockReturnValue({
+        data: mockUserSkillsList,
         isLoading: false,
         isError: false,
         error: null,
       });
 
-      render(<SkillsSettingsPage />);
-      expect(screen.getByText('Roles')).toBeInTheDocument();
-      expect(screen.getByText('Developer')).toBeInTheDocument();
-      expect(screen.getByText('Tester')).toBeInTheDocument();
-      expect(screen.getByText('PRIMARY')).toBeInTheDocument();
+      renderPage();
+      expect(screen.getByText('My Skills')).toBeInTheDocument();
+      expect(screen.getByText('Senior Developer')).toBeInTheDocument();
+      expect(screen.getByText('Custom Skill')).toBeInTheDocument();
     });
 
-    it('should show slots remaining', () => {
-      mockUseRoleSkills.mockReturnValue({
-        data: mockSkills,
+    it('should render Add Skill button', () => {
+      mockUserSkills.mockReturnValue({
+        data: mockUserSkillsList,
         isLoading: false,
         isError: false,
         error: null,
       });
 
-      render(<SkillsSettingsPage />);
-      expect(screen.getByText('1 slot left')).toBeInTheDocument();
+      renderPage();
+      expect(screen.getByRole('button', { name: /Add Skill/ })).toBeEnabled();
     });
 
-    it('should render Add Role button', () => {
-      mockUseRoleSkills.mockReturnValue({
-        data: mockSkills,
+    it('should show Skill Templates section heading', () => {
+      mockUserSkills.mockReturnValue({
+        data: [],
         isLoading: false,
         isError: false,
         error: null,
       });
 
-      render(<SkillsSettingsPage />);
-      expect(screen.getByRole('button', { name: /Add Role/ })).toBeEnabled();
-    });
-
-    it('should show primary skill first', () => {
-      mockUseRoleSkills.mockReturnValue({
-        data: [mockSkills[1]!, mockSkills[0]!],
-        isLoading: false,
-        isError: false,
-        error: null,
-      });
-
-      render(<SkillsSettingsPage />);
-      const articles = screen.getAllByRole('article');
-      expect(articles[0]).toHaveAttribute('aria-label', 'Developer role skill');
-    });
-  });
-
-  describe('max roles', () => {
-    it('should show warning and disable Add when 3 roles configured', () => {
-      const threeSkills = [
-        ...mockSkills,
-        {
-          ...mockSkills[0]!,
-          id: 'skill-3',
-          roleType: 'architect' as const,
-          roleName: 'Architect',
-          isPrimary: false,
-        },
-      ];
-
-      mockUseRoleSkills.mockReturnValue({
-        data: threeSkills,
-        isLoading: false,
-        isError: false,
-        error: null,
-      });
-
-      render(<SkillsSettingsPage />);
-      expect(screen.getByText(/Maximum 3 roles per workspace reached/)).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /Add Role/ })).toBeDisabled();
+      renderPage();
+      expect(screen.getByText('Skill Templates')).toBeInTheDocument();
     });
   });
 
   describe('guest view', () => {
     it('should show guest message for guest users', () => {
       mockWorkspaceStore.currentUserRole = 'guest';
-      mockUseRoleSkills.mockReturnValue({
+      mockUserSkills.mockReturnValue({
         data: [],
         isLoading: false,
         isError: false,
         error: null,
       });
 
-      render(<SkillsSettingsPage />);
+      renderPage();
       expect(screen.getByText(/Member or higher access/)).toBeInTheDocument();
     });
   });
 
-  describe('skill actions', () => {
-    it('should open remove confirmation dialog on Remove click', async () => {
-      const user = userEvent.setup();
-      mockUseRoleSkills.mockReturnValue({
-        data: mockSkills,
+  describe('admin features', () => {
+    it('should show Create Template button for admins', () => {
+      mockWorkspaceStore.currentUserRole = 'admin';
+      mockWorkspaceStore.isAdmin = true;
+      mockUserSkills.mockReturnValue({
+        data: [],
         isLoading: false,
         isError: false,
         error: null,
       });
 
-      render(<SkillsSettingsPage />);
-      const removeButtons = screen.getAllByRole('button', { name: /Remove/ });
-      await user.click(removeButtons[0]!);
-
-      expect(screen.getByText(/Remove Developer Role\?/)).toBeInTheDocument();
-      expect(screen.getByText(/permanently deleted/)).toBeInTheDocument();
+      renderPage();
+      expect(screen.getByRole('button', { name: /Create Template/ })).toBeInTheDocument();
     });
 
-    it('should call deleteSkill when remove is confirmed', async () => {
-      const user = userEvent.setup();
-      mockUseRoleSkills.mockReturnValue({
-        data: mockSkills,
+    it('should NOT show Create Template button for members', () => {
+      mockUserSkills.mockReturnValue({
+        data: [],
         isLoading: false,
         isError: false,
         error: null,
       });
 
-      render(<SkillsSettingsPage />);
-      const removeButtons = screen.getAllByRole('button', { name: /Remove/ });
-      await user.click(removeButtons[0]!);
-
-      const confirmButton = screen.getByRole('button', { name: /Remove Role/ });
-      await user.click(confirmButton);
-
-      expect(mockDeleteMutate).toHaveBeenCalledWith('skill-1', expect.any(Object));
+      renderPage();
+      expect(screen.queryByRole('button', { name: /Create Template/ })).not.toBeInTheDocument();
     });
+  });
 
-    it('should open reset confirmation dialog on Reset click', async () => {
+  describe('skill deletion', () => {
+    it('should show delete confirmation on Delete click', async () => {
       const user = userEvent.setup();
-      mockUseRoleSkills.mockReturnValue({
-        data: mockSkills,
+      mockUserSkills.mockReturnValue({
+        data: mockUserSkillsList,
         isLoading: false,
         isError: false,
         error: null,
       });
 
-      render(<SkillsSettingsPage />);
-      const resetButtons = screen.getAllByRole('button', { name: /Reset/ });
-      await user.click(resetButtons[0]!);
+      renderPage();
+      const deleteButtons = screen.getAllByLabelText('Delete skill');
+      await user.click(deleteButtons[0]!);
 
-      expect(screen.getByText(/Reset to Default Template\?/)).toBeInTheDocument();
+      expect(screen.getByText(/Remove Senior Developer Skill\?/)).toBeInTheDocument();
     });
   });
 });

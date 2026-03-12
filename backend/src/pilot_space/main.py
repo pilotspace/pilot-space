@@ -62,6 +62,7 @@ from pilot_space.api.v1.routers import (
     onboarding_router,
     pm_blocks_router,
     projects_router,
+    related_issues_router,
     role_skills_router,
     role_templates_router,
     scim_router,
@@ -85,6 +86,15 @@ from pilot_space.api.v1.routers import (
     workspace_tasks_router,
     workspaces_router,
 )
+from pilot_space.api.v1.routers.skill_templates import (
+    router as skill_templates_router,
+)
+from pilot_space.api.v1.routers.user_skills import router as user_skills_router
+from pilot_space.api.v1.routers.workspace_action_buttons import (
+    router as workspace_action_buttons_router,
+)
+from pilot_space.api.v1.routers.workspace_plugins import router as workspace_plugins_router
+from pilot_space.api.v1.routers.workspace_role_skills import router as workspace_role_skills_router
 from pilot_space.api.v1.routers.workspace_scim_settings import workspace_scim_settings_router
 
 dotenv.load_dotenv()
@@ -143,10 +153,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     queue_client = app.state.container.queue_client()
     if queue_client and redis_client:
         from pilot_space.infrastructure.queue.models import QueueName
+        from pilot_space.infrastructure.queue.supabase_queue import QueueConnectionError
 
-        await queue_client.create_queue(QueueName.AI_LOW)
-        await queue_client.create_queue(QueueName.AI_NORMAL)
+        try:
+            await queue_client.create_queue(QueueName.AI_LOW)
+            await queue_client.create_queue(QueueName.AI_NORMAL)
+            await queue_client.create_queue(QueueName.NOTIFICATIONS)
+        except QueueConnectionError:
+            logger.warning("Queue unavailable — workers will not start (degraded mode)")
+            queue_client = None
 
+    if queue_client and redis_client:
         session_factory = app.state.container.session_factory()
 
         from pilot_space.ai.workers.digest_worker import DigestWorker
@@ -164,8 +181,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             google_api_key=_google_api_key,
         )
         memory_worker_task = asyncio.create_task(memory_worker.start())
-
-        await queue_client.create_queue(QueueName.NOTIFICATIONS)
 
         from pilot_space.ai.workers.notification_worker import NotificationWorker
 
@@ -293,6 +308,12 @@ app.include_router(workspace_encryption_router, prefix=f"{API_V1_PREFIX}/workspa
 app.include_router(workspace_quota_router, prefix=f"{API_V1_PREFIX}/workspaces")
 app.include_router(workspace_cycles_router, prefix=f"{API_V1_PREFIX}/workspaces")
 app.include_router(workspace_issues_router, prefix=f"{API_V1_PREFIX}/workspaces")
+app.include_router(related_issues_router, prefix=f"{API_V1_PREFIX}/workspaces")
+app.include_router(workspace_role_skills_router, prefix=f"{API_V1_PREFIX}/workspaces")
+app.include_router(skill_templates_router, prefix=f"{API_V1_PREFIX}/workspaces")
+app.include_router(user_skills_router, prefix=f"{API_V1_PREFIX}/workspaces")
+app.include_router(workspace_plugins_router, prefix=f"{API_V1_PREFIX}/workspaces")
+app.include_router(workspace_action_buttons_router, prefix=f"{API_V1_PREFIX}/workspaces")
 app.include_router(workspace_issue_branches_router, prefix=f"{API_V1_PREFIX}/workspaces")
 app.include_router(workspace_invitations_router, prefix=API_V1_PREFIX)
 app.include_router(workspace_members_router, prefix=f"{API_V1_PREFIX}/workspaces")
