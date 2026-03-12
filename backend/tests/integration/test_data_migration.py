@@ -1,6 +1,6 @@
 """Integration tests for memory_entries → graph_nodes data migration.
 
-Verifies that migration 056_migrate_memory_entries_to_graph correctly copies
+Verifies that migration 056_migrate_memory_to_graph correctly copies
 rows from memory_entries to graph_nodes with the right node_type mapping and
 that expired/deleted rows are excluded.
 
@@ -46,7 +46,8 @@ async def _insert_memory_entry(
     entry_id = uuid.uuid4()
     now = datetime.now(UTC)
     await session.execute(
-        text("""
+        text(
+            """
         INSERT INTO memory_entries (
             id, workspace_id, content, source_type, source_id,
             pinned, is_deleted, expires_at, created_at, updated_at
@@ -54,7 +55,8 @@ async def _insert_memory_entry(
             :id, :workspace_id, :content, :source_type::memory_source_type_enum,
             :source_id, :pinned, :is_deleted, :expires_at, :created_at, :updated_at
         )
-        """),
+        """
+        ),
         {
             "id": str(entry_id),
             "workspace_id": str(workspace_id),
@@ -74,7 +76,8 @@ async def _insert_memory_entry(
 async def _run_migration_sql(session: AsyncSession) -> None:
     """Execute the upgrade SQL from migration 056 against the current session."""
     await session.execute(
-        text("""
+        text(
+            """
         INSERT INTO graph_nodes (
             id, workspace_id, user_id, node_type, external_id, label,
             content, properties, embedding, created_at, updated_at
@@ -105,17 +108,20 @@ async def _run_migration_sql(session: AsyncSession) -> None:
         WHERE
             me.is_deleted = FALSE
             AND (me.expires_at IS NULL OR me.expires_at > NOW())
-        """)
+        """
+        )
     )
 
 
 async def _run_downgrade_sql(session: AsyncSession) -> None:
     """Execute the downgrade SQL from migration 056 against the current session."""
     await session.execute(
-        text("""
+        text(
+            """
         DELETE FROM graph_nodes
         WHERE properties->>'migrated_from' = 'memory_entries'
-        """)
+        """
+        )
     )
 
 
@@ -125,12 +131,14 @@ async def _count_graph_nodes(
     node_type: str,
 ) -> int:
     result = await session.execute(
-        text("""
+        text(
+            """
         SELECT COUNT(*) FROM graph_nodes
         WHERE workspace_id = :workspace_id
           AND node_type    = :node_type
           AND properties->>'migrated_from' = 'memory_entries'
-        """),
+        """
+        ),
         {"workspace_id": str(workspace_id), "node_type": node_type},
     )
     return int(result.scalar_one())
@@ -146,10 +154,12 @@ async def migration_workspace(db_session_committed: AsyncSession) -> uuid.UUID:
     """Insert a minimal workspace row for migration tests and return its id."""
     wid = uuid.uuid4()
     await db_session_committed.execute(
-        text("""
+        text(
+            """
         INSERT INTO workspaces (id, name, slug, owner_id, created_at, updated_at)
         VALUES (:id, :name, :slug, :owner_id, NOW(), NOW())
-        """),
+        """
+        ),
         {
             "id": str(wid),
             "name": "Migration Test Workspace",
@@ -192,14 +202,16 @@ async def test_skill_outcome_migrates_to_graph_node(
     assert count == 1
 
     result = await db_session_committed.execute(
-        text("""
+        text(
+            """
         SELECT label, content, external_id, properties
         FROM graph_nodes
         WHERE workspace_id = :wid
           AND node_type = 'skill_outcome'
           AND properties->>'migrated_from' = 'memory_entries'
         LIMIT 1
-        """),
+        """
+        ),
         {"wid": str(migration_workspace)},
     )
     row = result.mappings().one()
@@ -350,13 +362,15 @@ async def test_label_truncated_to_100_chars(
     await db_session_committed.commit()
 
     result = await db_session_committed.execute(
-        text("""
+        text(
+            """
         SELECT label FROM graph_nodes
         WHERE workspace_id = :wid
           AND node_type = 'skill_outcome'
           AND properties->>'migrated_from' = 'memory_entries'
         LIMIT 1
-        """),
+        """
+        ),
         {"wid": str(migration_workspace)},
     )
     label = result.scalar_one()
@@ -381,13 +395,15 @@ async def test_embedding_not_migrated(
     await db_session_committed.commit()
 
     result = await db_session_committed.execute(
-        text("""
+        text(
+            """
         SELECT embedding FROM graph_nodes
         WHERE workspace_id = :wid
           AND node_type = 'skill_outcome'
           AND properties->>'migrated_from' = 'memory_entries'
         LIMIT 1
-        """),
+        """
+        ),
         {"wid": str(migration_workspace)},
     )
     embedding = result.scalar_one()
