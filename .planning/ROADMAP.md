@@ -99,12 +99,12 @@ Plans:
   3. User sees their personal pages listed under the "Notes" nav item in the sidebar
   4. User sees breadcrumb navigation (project > parent > child > current) in the page header and can click any breadcrumb to navigate
   5. Non-issue pages open in the editor without crashes (editor decoupled from issue-specific property block)
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 26-01: TBD
-- [ ] 26-02: TBD
-- [ ] 26-03: TBD
+- [ ] 26-01-PLAN.md — Backend parent_id support, frontend types, tree utilities, TanStack Query hooks, UIStore expand state
+- [ ] 26-02-PLAN.md — ProjectPageTree and PersonalPagesList components, PageBreadcrumb component, sidebar wiring
+- [ ] 26-03-PLAN.md — Wire PageBreadcrumb into note detail page, content sanitization for non-issue pages
 
 ### Phase 27: Project Hub & Issue Views
 **Goal**: Projects serve as hubs with embedded issue database views and visual page identity via emoji icons
@@ -161,12 +161,12 @@ Phases execute in numeric order: 24 → 25 → 26 → 27 → 28 → 29
 | 12–23 | v1.0-alpha | 37/37 | Complete | 2026-03-12 |
 | 24. Page Tree Data Model | 2/2 | Complete    | 2026-03-12 | - |
 | 25. Tree API & Page Service | 2/2 | Complete    | 2026-03-12 | - |
-| 26. Sidebar Tree & Navigation | v1.0.0-alpha2 | 0/3 | Not started | - |
+| 26. Sidebar Tree & Navigation | 1/3 | In Progress|  | - |
 | 27. Project Hub & Issue Views | v1.0.0-alpha2 | 0/2 | Not started | - |
 | 28. Visual Design Refresh | v1.0.0-alpha2 | 0/1 | Not started | - |
 | 29. Responsive & Drag-and-Drop | v1.0.0-alpha2 | 0/2 | Not started | - |
 
-**Total: 29 phases, 85 plans (+ ~10 TBD), 86 requirements**
+**Total: 29 phases, 88 plans (+ ~5 TBD), 86 requirements**
 
 ---
 *v1.0 shipped: 2026-03-09 — 11 phases, 46 plans, 30/30 requirements*

@@ -17,9 +17,9 @@ Requirements for the Notion-Style Restructure milestone. Each maps to roadmap ph
 
 ### Sidebar & Navigation
 
-- [ ] **NAV-01**: User can expand a project in the sidebar to see its nested page tree (3 levels, expand/collapse toggles)
-- [ ] **NAV-02**: User can create a new child page inline from the sidebar by clicking "+" on a tree node
-- [ ] **NAV-03**: User sees personal pages listed under "Notes" nav item in the sidebar
+- [x] **NAV-01**: User can expand a project in the sidebar to see its nested page tree (3 levels, expand/collapse toggles)
+- [x] **NAV-02**: User can create a new child page inline from the sidebar by clicking "+" on a tree node
+- [x] **NAV-03**: User sees personal pages listed under "Notes" nav item in the sidebar
 - [ ] **NAV-04**: User sees breadcrumb navigation (parent > child > current) in the page header
 
 ### Project Hub & Issue Views
@@ -75,9 +75,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TREE-03 | Phase 25: Tree API & Page Service | Complete |
 | TREE-04 | Phase 24: Page Tree Data Model | Complete |
 | TREE-05 | Phase 24: Page Tree Data Model | Complete |
-| NAV-01 | Phase 26: Sidebar Tree & Navigation | Pending |
-| NAV-02 | Phase 26: Sidebar Tree & Navigation | Pending |
-| NAV-03 | Phase 26: Sidebar Tree & Navigation | Pending |
+| NAV-01 | Phase 26: Sidebar Tree & Navigation | Complete |
+| NAV-02 | Phase 26: Sidebar Tree & Navigation | Complete |
+| NAV-03 | Phase 26: Sidebar Tree & Navigation | Complete |
 | NAV-04 | Phase 26: Sidebar Tree & Navigation | Pending |
 | HUB-01 | Phase 27: Project Hub & Issue Views | Pending |
 | HUB-02 | Phase 27: Project Hub & Issue Views | Pending |
