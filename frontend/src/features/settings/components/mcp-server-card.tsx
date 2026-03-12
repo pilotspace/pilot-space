@@ -30,6 +30,7 @@ interface MCPServerCardProps {
   server: MCPServer;
   onDelete: (serverId: string) => void;
   onRefreshStatus: (serverId: string) => void;
+  onAuthorize?: (serverId: string) => void;
   isDeleting: boolean;
 }
 
@@ -78,6 +79,7 @@ export function MCPServerCard({
   server,
   onDelete,
   onRefreshStatus,
+  onAuthorize,
   isDeleting,
 }: MCPServerCardProps) {
   return (
@@ -101,6 +103,18 @@ export function MCPServerCard({
 
           {/* Actions */}
           <div className="flex shrink-0 items-center gap-1">
+            {server.auth_type === 'oauth2' && onAuthorize && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs"
+                onClick={() => onAuthorize(server.id)}
+                title="Authorize OAuth2 connection"
+              >
+                Authorize
+              </Button>
+            )}
+
             <Button
               variant="ghost"
               size="icon"
