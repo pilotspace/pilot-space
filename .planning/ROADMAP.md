@@ -63,7 +63,7 @@ Plans:
 **Goal:** Fix session sharing race condition and add OAuth2 MCP authorization UI
 **Requirements:** SKRG-05 (session safety), MCP-03 (OAuth2 flow completion)
 **Gap Closure:** Closes 2 integration gaps + 1 flow gap from audit
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 
 Plans:
 - [ ] 22-01-PLAN.md — Fix SeedPluginsService session race condition + OAuth callback redirect slug
