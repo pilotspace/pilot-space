@@ -43,15 +43,58 @@ Full archive: `.planning/milestones/v1.0-alpha-ROADMAP.md`
 
 </details>
 
+### v1.0-alpha Gap Closure (Phases 21–23)
+
+- [ ] Phase 21: Documentation & Verification Closure
+- [ ] Phase 22: Integration Safety — Session & OAuth2 UI
+- [ ] Phase 23: Tech Debt Sweep
+
+### Phase 21: Documentation & Verification Closure
+**Goal:** Close all documentation and verification process gaps from v1.0-alpha audit
+**Requirements:** WRSKL-01, WRSKL-02, WRSKL-03, WRSKL-04 (verification gap → satisfied)
+**Gap Closure:** Closes 4 requirement gaps (partial → satisfied) + 4 documentation gaps from audit
+
+Tasks:
+1. Generate Phase 16 VERIFICATION.md (closes WRSKL-01..04 partial status)
+2. Add SKRG-01..05 to REQUIREMENTS.md traceability table (5 missing rows)
+3. Add P20-01..10 to REQUIREMENTS.md traceability table (10 missing rows)
+4. Fix ONBD-03..05 in 12-02-SUMMARY.md and CHAT-01..03 in 13-04-SUMMARY.md frontmatter
+
+### Phase 22: Integration Safety — Session & OAuth2 UI
+**Goal:** Fix session sharing race condition and add OAuth2 MCP authorization UI
+**Requirements:** SKRG-05 (session safety), MCP-03 (OAuth2 flow completion)
+**Gap Closure:** Closes 2 integration gaps + 1 flow gap from audit
+
+Tasks:
+1. Fix SeedPluginsService fire-and-forget session sharing (workspaces.py:152) — use independent session
+2. Add OAuth2 "Authorize" button in MCP server management UI (mcp-server-form.tsx or server list)
+3. Wire OAuth2 authorization flow end-to-end (store → API → redirect → callback)
+
+### Phase 23: Tech Debt Sweep
+**Goal:** Close remaining tech debt items identified in v1.0-alpha audit
+**Requirements:** AIPR-05 (cosmetic), code quality
+**Gap Closure:** Closes 8 tech debt items across 5 phases
+
+Tasks:
+1. Fix `_test_provider_api_key` for kimi/glm/custom providers
+2. Remove dead `schemas/mcp_server.py` file (3825 bytes, superseded)
+3. Fix stale `item["issue_id"]` in test_related_issues.py (lines 165, 427)
+4. Verify DELETE relation endpoint soft-delete vs hard-delete behavior
+5. Fix Update Available badge color (blue → orange per spec)
+6. Refactor `ai_chat.py` below 700-line limit
+7. Extend `AISettingsStore.validateKey` to handle all provider types
+
 ## Progress
 
 | Phase | Milestone | Plans | Status | Completed |
 |-------|-----------|-------|--------|-----------|
 | 1–11 | v1.0 | 46/46 | Complete | 2026-03-09 |
 | 12–20 | v1.0-alpha | 31/31 | Complete | 2026-03-12 |
+| 21–23 | v1.0-alpha (gap closure) | 0/? | Pending | — |
 
-**Total: 20 phases, 77 plans, 69 requirements — all complete**
+**Total: 23 phases, 77 plans, 69 requirements**
 
 ---
 *v1.0 shipped: 2026-03-09 — 11 phases, 46 plans, 30/30 requirements*
 *v1.0-alpha shipped: 2026-03-12 — 9 phases, 31 plans, 39/39 requirements*
+*v1.0-alpha gap closure: Phases 21–23 — 4 requirement gaps, 2 integration gaps, 8 tech debt items*
