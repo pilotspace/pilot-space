@@ -33,6 +33,7 @@ decisions:
   - "ApiKeySetupStep renders inline (no navigation) — removes context switch from onboarding flow"
   - "STEP_SETTINGS_PATH map in OnboardingChecklist — avoids prop-drilling the workspaceSlug to OnboardingStepItem just for href construction"
   - "vitest.config.ts env stubs for NEXT_PUBLIC_SUPABASE_URL/ANON_KEY — all tests were blocked by missing env; stubs allow unit tests to import without a live Supabase instance"
+requirements_completed: [ONBD-03, ONBD-04, ONBD-05]
 metrics:
   duration_minutes: 8
   completed_date: "2026-03-09"

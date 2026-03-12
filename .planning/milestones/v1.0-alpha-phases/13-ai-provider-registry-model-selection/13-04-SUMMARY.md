@@ -34,6 +34,7 @@ requirements:
   - CHAT-01
   - CHAT-02
   - CHAT-03
+requirements_completed: [CHAT-01, CHAT-02, CHAT-03]
 ---
 
 # Phase 13 Plan 04: Chat Model Selector Summary
