@@ -59,6 +59,7 @@ class NoteCreate(BaseSchema):
         title: Note title.
         content: TipTap JSON content.
         is_pinned: Whether note is pinned.
+        parent_id: Optional parent note ID for tree nesting.
     """
 
     project_id: UUID | None = Field(default=None, description="Project ID for the note (optional)")
@@ -74,6 +75,10 @@ class NoteCreate(BaseSchema):
     is_pinned: bool = Field(
         default=False,
         description="Whether the note is pinned",
+    )
+    parent_id: UUID | None = Field(
+        default=None,
+        description="Parent note ID for tree nesting",
     )
 
 
