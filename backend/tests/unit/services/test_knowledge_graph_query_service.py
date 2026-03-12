@@ -12,10 +12,9 @@ Feature 016: Knowledge Graph — Service layer
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import pytest
 
@@ -23,6 +22,14 @@ from pilot_space.application.services.memory.knowledge_graph_query_service impor
     EntityNotFoundError,
     KnowledgeGraphQueryService,
     RootNodeNotFoundError,
+)
+from tests.fixtures.knowledge_graph import (
+    make_graph_edge as _make_graph_edge,
+    make_graph_node as _make_graph_node,
+    make_il_repo as _make_il_repo,
+    make_integration_link as _make_integration_link,
+    make_kg_repo as _make_kg_repo,
+    make_session as _make_session,
 )
 
 pytestmark = pytest.mark.asyncio
@@ -38,88 +45,8 @@ TEST_ISSUE_ID = UUID("dddddddd-0000-0000-0000-000000000004")
 TEST_PROJECT_ID = UUID("eeeeeeee-0000-0000-0000-000000000005")
 
 # ---------------------------------------------------------------------------
-# Helpers
+# Helpers (test-specific)
 # ---------------------------------------------------------------------------
-
-
-def _make_graph_node(
-    node_id: UUID | None = None,
-    node_type: str = "issue",
-    label: str = "Test Issue",
-    properties: dict[str, Any] | None = None,
-) -> MagicMock:
-    from pilot_space.domain.graph_node import NodeType
-
-    node = MagicMock()
-    node.id = node_id or uuid4()
-    node.node_type = NodeType(node_type)
-    node.label = label
-    node.summary = f"Summary for {label}"
-    node.properties = properties or {}
-    node.created_at = datetime.now(tz=UTC)
-    node.updated_at = datetime.now(tz=UTC)
-    return node
-
-
-def _make_graph_edge(
-    source_id: UUID | None = None,
-    target_id: UUID | None = None,
-) -> MagicMock:
-    from pilot_space.domain.graph_edge import EdgeType
-
-    edge = MagicMock()
-    edge.id = uuid4()
-    edge.source_id = source_id or uuid4()
-    edge.target_id = target_id or uuid4()
-    edge.edge_type = EdgeType.RELATES_TO
-    edge.weight = 0.8
-    edge.properties = {}
-    return edge
-
-
-def _make_integration_link(
-    link_type: str = "pull_request",
-    title: str = "feat: add something",
-    external_id: str = "123",
-) -> MagicMock:
-    from pilot_space.infrastructure.database.models.integration import IntegrationLinkType
-
-    link = MagicMock()
-    link.link_type = IntegrationLinkType(link_type)
-    link.title = title
-    link.external_id = external_id
-    link.external_url = f"https://github.com/repo/pull/{external_id}"
-    link.author_name = "dev"
-    return link
-
-
-def _make_kg_repo(**overrides: Any) -> AsyncMock:
-    repo = AsyncMock()
-    repo.get_neighbors = AsyncMock(return_value=[])
-    repo.get_node_by_id = AsyncMock(return_value=None)
-    repo.get_subgraph = AsyncMock(return_value=([], []))
-    repo.get_user_context = AsyncMock(return_value=[])
-    repo.get_edges_between = AsyncMock(return_value=[])
-    repo.find_node_by_external_id = AsyncMock(return_value=None)
-    for key, value in overrides.items():
-        setattr(repo, key, value)
-    return repo
-
-
-def _make_il_repo(**overrides: Any) -> AsyncMock:
-    repo = AsyncMock()
-    repo.get_by_workspace_with_filter = AsyncMock(return_value=[])
-    for key, value in overrides.items():
-        setattr(repo, key, value)
-    return repo
-
-
-def _make_session(scalar_result: Any = None) -> AsyncMock:
-    session = AsyncMock()
-    execute_result = MagicMock()
-    execute_result.scalar_one_or_none = MagicMock(return_value=scalar_result)
-    session.execute = AsyncMock(return_value=execute_result)
-    return session
 
 
 def _make_sequential_session(*responses: Any) -> AsyncMock:

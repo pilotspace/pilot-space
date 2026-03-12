@@ -34,13 +34,21 @@ from pilot_space.api.v1.schemas.knowledge_graph import GraphResponse
 from pilot_space.application.services.memory.knowledge_graph_query_service import (
     EntityNotFoundError,
     EntitySubgraphResult,
-    EphemeralNode,
     NeighborResult,
     RootNodeNotFoundError,
     SubgraphResult,
     UserContextResult,
 )
 from pilot_space.domain.graph_edge import EdgeType, GraphEdge
+from tests.fixtures.knowledge_graph import (
+    RLS_PATCH as _RLS_PATCH,
+    make_ephemeral_node as _make_ephemeral_node,
+    make_graph_edge as _make_graph_edge,
+    make_graph_node as _make_graph_node,
+    make_kg_repo as _make_repo,
+    make_kg_service as _make_kg_service,
+    make_session as _make_session,
+)
 
 pytestmark = pytest.mark.asyncio
 
@@ -54,30 +62,8 @@ TEST_NODE_ID = UUID("cccccccc-0000-0000-0000-000000000003")
 TEST_ISSUE_ID = UUID("dddddddd-0000-0000-0000-000000000004")
 
 # ---------------------------------------------------------------------------
-# Helper factories
+# Helper factories (test-specific)
 # ---------------------------------------------------------------------------
-
-
-def _make_graph_node(
-    node_id: UUID | None = None,
-    node_type: str = "issue",
-    label: str = "Test Issue",
-    content: str = "",
-) -> MagicMock:
-    """Build a mock GraphNode domain object."""
-    from pilot_space.domain.graph_node import NodeType
-
-    node = MagicMock()
-    node.id = node_id or uuid4()
-    node.node_type = NodeType(node_type)
-    node.label = label
-    _content = content or f"Content for {label}"
-    node.content = _content
-    node.summary = _content[:120]
-    node.properties = {"state": "todo"}
-    node.created_at = datetime.now(tz=UTC)
-    node.updated_at = datetime.now(tz=UTC)
-    return node
 
 
 def _make_scored_node(score: float = 0.9, **kwargs: Any) -> MagicMock:
@@ -86,76 +72,6 @@ def _make_scored_node(score: float = 0.9, **kwargs: Any) -> MagicMock:
     scored.node = _make_graph_node(**kwargs)
     scored.score = score
     return scored
-
-
-def _make_graph_edge(
-    source_id: UUID | None = None,
-    target_id: UUID | None = None,
-    edge_type: str = "relates_to",
-) -> MagicMock:
-    """Build a mock GraphEdge domain object."""
-    edge = MagicMock()
-    edge.id = uuid4()
-    edge.source_id = source_id or uuid4()
-    edge.target_id = target_id or uuid4()
-    edge.edge_type = EdgeType(edge_type)
-    edge.weight = 0.8
-    edge.properties = {}
-    return edge
-
-
-def _make_ephemeral_node(
-    node_type: str = "pull_request",
-    label: str = "feat: fix login #42",
-    external_id: str = "123",
-) -> EphemeralNode:
-    now = datetime.now(tz=UTC)
-    return EphemeralNode(
-        id=f"ephemeral-{external_id}",
-        node_type=node_type,
-        label=label,
-        summary=f"GitHub {node_type}: {label}",
-        properties={
-            "external_id": external_id,
-            "external_url": f"https://github.com/repo/pull/{external_id}",
-            "author_name": "dev",
-            "ephemeral": True,
-        },
-        created_at=now,
-        updated_at=now,
-    )
-
-
-def _make_repo(**kwargs: Any) -> AsyncMock:
-    """Build a mock KnowledgeGraphRepository."""
-    repo = AsyncMock()
-    repo.hybrid_search = AsyncMock(return_value=[])
-    repo.get_neighbors = AsyncMock(return_value=[])
-    repo.get_node_by_id = AsyncMock(return_value=None)
-    repo.get_subgraph = AsyncMock(return_value=([], []))
-    repo.get_user_context = AsyncMock(return_value=[])
-    for key, value in kwargs.items():
-        setattr(repo, key, value)
-    return repo
-
-
-def _make_session() -> AsyncMock:
-    """Build a mock AsyncSession."""
-    return AsyncMock()
-
-
-def _make_kg_service() -> AsyncMock:
-    """Build a mock KnowledgeGraphQueryService."""
-    svc = AsyncMock()
-    svc.get_neighbors = AsyncMock()
-    svc.get_subgraph = AsyncMock()
-    svc.get_user_context = AsyncMock()
-    svc.get_issue_knowledge_graph = AsyncMock()
-    return svc
-
-
-# Shared patch target
-_RLS_PATCH = "pilot_space.api.v1.routers.knowledge_graph.set_rls_context"
 
 
 # ---------------------------------------------------------------------------

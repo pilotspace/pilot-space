@@ -106,9 +106,10 @@ function ProjectGraphCanvas({
     nodeTypes: nodeTypes_,
   });
 
-  // Report node count to parent for toolbar display
+  // Report node count to parent for toolbar display (guard against no-op updates)
   useEffect(() => {
-    onNodeCountChange(data?.nodes.length ?? 0);
+    const count = data?.nodes.length ?? 0;
+    onNodeCountChange(count);
   }, [data?.nodes.length, onNodeCountChange]);
 
   // Merge base + expanded neighbor nodes
@@ -202,6 +203,18 @@ function ProjectGraphCanvas({
     setSelectedNode(null);
   }, []);
 
+  const nodeTypedNodes = useMemo(
+    () =>
+      flowNodes.map((n) => ({
+        ...n,
+        data: {
+          ...(n.data as GraphNodeData),
+          onNodeClick: handleNodeClick,
+        },
+      })),
+    [flowNodes, handleNodeClick]
+  );
+
   const isLayoutComputing =
     !isLoading && !isError && !!data && data.nodes.length > 0 && flowNodes.length === 0;
 
@@ -228,14 +241,6 @@ function ProjectGraphCanvas({
       </div>
     );
   }
-
-  const nodeTypedNodes = flowNodes.map((n) => ({
-    ...n,
-    data: {
-      ...(n.data as GraphNodeData),
-      onNodeClick: handleNodeClick,
-    },
-  }));
 
   return (
     <>
@@ -317,7 +322,7 @@ export function ProjectKnowledgeGraph({ workspaceId, projectId }: ProjectKnowled
   const [nodeCount, setNodeCount] = useState(0);
 
   const handleNodeCountChange = useCallback((count: number) => {
-    setNodeCount(count);
+    setNodeCount((prev) => (prev === count ? prev : count));
   }, []);
 
   return (

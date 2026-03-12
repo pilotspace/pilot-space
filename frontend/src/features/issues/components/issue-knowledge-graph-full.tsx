@@ -62,6 +62,12 @@ const FILTER_CHIPS: FilterChip[] = [
   { label: 'All', nodeType: 'all' },
 ];
 
+const minimapNodeColor = (n: Node) => {
+  const d = n.data as GraphNodeData | undefined;
+  if (d?.isCurrent) return '#2563eb';
+  return '#94a3b8';
+};
+
 // ── Inner component (needs ReactFlowProvider context) ─────────────────────
 
 interface GraphCanvasProps {
@@ -198,9 +204,21 @@ function GraphCanvas({
     [data, depth, extraNodes, workspaceId]
   );
 
-  function handleNodeClick(node: GraphNodeDTO) {
+  const handleNodeClick = useCallback((node: GraphNodeDTO) => {
     setSelectedNode(node);
-  }
+  }, []);
+
+  const nodeTypedNodes = useMemo(
+    () =>
+      flowNodes.map((n) => ({
+        ...n,
+        data: {
+          ...(n.data as GraphNodeData),
+          onNodeClick: handleNodeClick,
+        },
+      })),
+    [flowNodes, handleNodeClick]
+  );
 
   const isLayoutComputing =
     !isLoading && !isError && !!data && data.nodes.length > 0 && flowNodes.length === 0;
@@ -229,14 +247,6 @@ function GraphCanvas({
     );
   }
 
-  const nodeTypedNodes = flowNodes.map((n) => ({
-    ...n,
-    data: {
-      ...(n.data as GraphNodeData),
-      onNodeClick: handleNodeClick,
-    },
-  }));
-
   return (
     <>
       {/* Graph canvas */}
@@ -264,11 +274,7 @@ function GraphCanvas({
             <MiniMap
               position="bottom-right"
               className="!bottom-4 !right-4"
-              nodeColor={(n) => {
-                const d = n.data as GraphNodeData | undefined;
-                if (d?.isCurrent) return '#2563eb';
-                return '#94a3b8';
-              }}
+              nodeColor={minimapNodeColor}
             />
             <Controls position="bottom-left" className="!bottom-4 !left-4" />
           </ReactFlow>
