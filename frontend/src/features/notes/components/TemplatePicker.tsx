@@ -481,6 +481,7 @@ export function TemplatePicker({ workspaceId, isAdmin, onConfirm, onClose }: Tem
                 type="button"
                 className="flex w-full items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm transition-colors hover:border-primary/40"
                 onClick={() => setShowProjectDropdown((v) => !v)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); } }}
               >
                 {selectedProject ? (
                   <>
@@ -506,7 +507,10 @@ export function TemplatePicker({ workspaceId, isAdmin, onConfirm, onClose }: Tem
               </button>
 
               {showProjectDropdown && (
-                <div className="absolute bottom-full left-0 right-0 mb-1 z-10 flex max-h-48 flex-col overflow-hidden rounded-lg border border-border bg-background shadow-lg">
+                <div
+                  className="absolute bottom-full left-0 right-0 mb-1 z-10 flex max-h-48 flex-col overflow-hidden rounded-lg border border-border bg-background shadow-lg"
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); } }}
+                >
                   <div className="flex items-center gap-2 border-b border-border px-3 py-2">
                     <Search
                       className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
@@ -518,6 +522,7 @@ export function TemplatePicker({ workspaceId, isAdmin, onConfirm, onClose }: Tem
                       onChange={(e) => setProjectSearch(e.target.value)}
                       placeholder="Search projects…"
                       className="h-6 border-none bg-transparent p-0 text-xs shadow-none focus-visible:ring-0"
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); } }}
                     />
                   </div>
                   <div className="overflow-y-auto">
@@ -528,6 +533,7 @@ export function TemplatePicker({ workspaceId, isAdmin, onConfirm, onClose }: Tem
                         setShowProjectDropdown(false);
                         setProjectSearch('');
                       }}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); } }}
                       className={cn(
                         'flex w-full items-center gap-2 px-3 py-2 text-xs transition-colors',
                         selectedProjectId === null
@@ -550,6 +556,7 @@ export function TemplatePicker({ workspaceId, isAdmin, onConfirm, onClose }: Tem
                           setShowProjectDropdown(false);
                           setProjectSearch('');
                         }}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); } }}
                         className={cn(
                           'flex w-full items-center gap-2 px-3 py-2 text-xs transition-colors',
                           selectedProjectId === project.id
