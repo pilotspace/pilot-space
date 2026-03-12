@@ -36,11 +36,13 @@ _TABLES_TO_FIX = [
 
 def upgrade() -> None:
     """Fix RLS policies and add missing indexes."""
-    # H-3: Add missing index on workspace_mcp_servers.workspace_id
-    op.create_index(
-        "ix_workspace_mcp_servers_workspace_id",
-        "workspace_mcp_servers",
-        ["workspace_id"],
+    # H-3: Index on workspace_mcp_servers.workspace_id
+    # Already created in 071_add_workspace_mcp_servers — use IF NOT EXISTS
+    op.execute(
+        text(
+            "CREATE INDEX IF NOT EXISTS ix_workspace_mcp_servers_workspace_id "
+            "ON workspace_mcp_servers (workspace_id)"
+        )
     )
 
     # M-4: Add UNIQUE constraint on workspace_github_credentials.workspace_id
