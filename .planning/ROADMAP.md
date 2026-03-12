@@ -47,7 +47,7 @@ Full archive: `.planning/milestones/v1.0-alpha-ROADMAP.md`
 
 - [x] Phase 21: Documentation & Verification Closure (completed 2026-03-12)
 - [x] Phase 22: Integration Safety — Session & OAuth2 UI (completed 2026-03-12)
-- [ ] Phase 23: Tech Debt Sweep
+- [x] Phase 23: Tech Debt Sweep (completed 2026-03-12)
 
 ### Phase 21: Documentation & Verification Closure
 **Goal:** Close all documentation and verification process gaps from v1.0-alpha audit
@@ -73,7 +73,7 @@ Plans:
 **Goal:** Close remaining tech debt items identified in v1.0-alpha audit
 **Requirements:** AIPR-05 (cosmetic), code quality
 **Gap Closure:** Closes 8 tech debt items across 5 phases
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 
 Plans:
 - [ ] 23-01-PLAN.md — Backend: extend provider key testing, remove dead code, refactor ai_chat.py
