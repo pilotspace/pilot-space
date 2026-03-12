@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Completed 24-01-PLAN.md
-last_updated: "2026-03-12T15:28:57.733Z"
+stopped_at: Completed 25-01-PLAN.md
+last_updated: "2026-03-12T16:11:48.431Z"
 last_activity: 2026-03-12 — Roadmap created for v1.0.0-alpha2 milestone
 progress:
   total_phases: 6
   completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
+  total_plans: 4
+  completed_plans: 3
 ---
 
 # Project State
@@ -53,6 +53,9 @@ Recent decisions affecting current work:
 - [Phase 24-page-tree-data-model]: notes_service_role bypass created fresh in migration 079 — did not exist before, removed entirely in downgrade
 - [Phase 24-page-tree-data-model]: No ORM parent/children relationship on Note — Phase 25 uses repository queries to avoid lazy-load N+1
 - [Phase 24-page-tree-data-model]: ondelete=SET NULL on parent_id — orphaned children become roots on parent deletion
+- [Phase 25-tree-api-page-service]: MagicMock strategy for Note service tests: avoids ORM eager-load join table explosion in SQLite
+- [Phase 25-tree-api-page-service]: get_descendants mocked in unit tests — SQLite cannot run WITH RECURSIVE CTE
+- [Phase 25-tree-api-page-service]: ReorderPageService stub DI slot registered in Plan 01 to avoid re-touching container.py in Plan 02
 
 ### Pending Todos
 
@@ -66,7 +69,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-12T15:25:13.502Z
-Stopped at: Completed 24-01-PLAN.md
+Last session: 2026-03-12T16:11:48.429Z
+Stopped at: Completed 25-01-PLAN.md
 Resume file: None
 Next action: `/gsd:plan-phase 24`

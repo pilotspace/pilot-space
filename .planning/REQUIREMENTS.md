@@ -10,7 +10,7 @@ Requirements for the Notion-Style Restructure milestone. Each maps to roadmap ph
 ### Page Tree & Data Model
 
 - [x] **TREE-01**: User can create pages nested up to 3 levels within a project (Project > Section > Page > Sub-page)
-- [ ] **TREE-02**: User can move a page to a different parent within the same project (re-parent)
+- [x] **TREE-02**: User can move a page to a different parent within the same project (re-parent)
 - [ ] **TREE-03**: User can reorder pages among siblings via position field
 - [x] **TREE-04**: User can create personal pages owned by their account, independent of any project
 - [x] **TREE-05**: Existing notes are migrated to project pages (if project_id set) or personal pages (if no project_id), workspace-level notes removed
@@ -71,7 +71,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | TREE-01 | Phase 24: Page Tree Data Model | Complete |
-| TREE-02 | Phase 25: Tree API & Page Service | Pending |
+| TREE-02 | Phase 25: Tree API & Page Service | Complete |
 | TREE-03 | Phase 25: Tree API & Page Service | Pending |
 | TREE-04 | Phase 24: Page Tree Data Model | Complete |
 | TREE-05 | Phase 24: Page Tree Data Model | Complete |
