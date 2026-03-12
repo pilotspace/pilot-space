@@ -153,10 +153,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     queue_client = app.state.container.queue_client()
     if queue_client and redis_client:
         from pilot_space.infrastructure.queue.models import QueueName
+        from pilot_space.infrastructure.queue.supabase_queue import QueueConnectionError
 
-        await queue_client.create_queue(QueueName.AI_LOW)
-        await queue_client.create_queue(QueueName.AI_NORMAL)
+        try:
+            await queue_client.create_queue(QueueName.AI_LOW)
+            await queue_client.create_queue(QueueName.AI_NORMAL)
+            await queue_client.create_queue(QueueName.NOTIFICATIONS)
+        except QueueConnectionError:
+            logger.warning("Queue unavailable — workers will not start (degraded mode)")
+            queue_client = None
 
+    if queue_client and redis_client:
         session_factory = app.state.container.session_factory()
 
         from pilot_space.ai.workers.digest_worker import DigestWorker
@@ -174,8 +181,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             google_api_key=_google_api_key,
         )
         memory_worker_task = asyncio.create_task(memory_worker.start())
-
-        await queue_client.create_queue(QueueName.NOTIFICATIONS)
 
         from pilot_space.ai.workers.notification_worker import NotificationWorker
 
