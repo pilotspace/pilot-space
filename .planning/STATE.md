@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Completed 25-01-PLAN.md
-last_updated: "2026-03-12T16:11:48.431Z"
-last_activity: 2026-03-12 — Roadmap created for v1.0.0-alpha2 milestone
+stopped_at: Completed 25-02-PLAN.md
+last_updated: "2026-03-12T16:21:23.000Z"
+last_activity: 2026-03-12 — Completed Phase 25 Plan 02 (ReorderPageService + tree endpoints)
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 4
-  completed_plans: 3
+  completed_plans: 4
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-03-12)
 
 ## Current Position
 
-Phase: 24 of 29 (Page Tree Data Model)
-Plan: 0 of 2 in current phase
-Status: Ready to plan
-Last activity: 2026-03-12 — Roadmap created for v1.0.0-alpha2 milestone
+Phase: 25 of 29 (Tree API & Page Service)
+Plan: 2 of 2 in current phase
+Status: Phase complete
+Last activity: 2026-03-12 — Completed 25-02: ReorderPageService and tree REST endpoints
 
 Milestone progress: [░░░░░░░░░░] 0% (0/~12 plans in v1.0.0-alpha2)
 
@@ -56,6 +56,8 @@ Recent decisions affecting current work:
 - [Phase 25-tree-api-page-service]: MagicMock strategy for Note service tests: avoids ORM eager-load join table explosion in SQLite
 - [Phase 25-tree-api-page-service]: get_descendants mocked in unit tests — SQLite cannot run WITH RECURSIVE CTE
 - [Phase 25-tree-api-page-service]: ReorderPageService stub DI slot registered in Plan 01 to avoid re-touching container.py in Plan 02
+- [Phase 25-tree-api-page-service]: Gap-exhaustion sentinel (-1) from _compute_insert_position delegates cleanly to _resequence_siblings, single check in execute()
+- [Phase 25-tree-api-page-service]: Annotation endpoints extracted to workspace_note_annotations.py — workspace_notes.py hit 775 lines after tree endpoint additions, exceeding 700-line pre-commit limit
 
 ### Pending Todos
 
