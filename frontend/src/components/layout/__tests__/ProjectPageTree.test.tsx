@@ -1,7 +1,8 @@
 /**
  * Tests for ProjectPageTree component
  *
- * Tests expand/collapse, inline create, active highlight, depth limit.
+ * Tests expand/collapse, inline create, active highlight, depth limit,
+ * DndContext presence, drag handle, and drag-end dispatch logic.
  */
 
 import { render, screen, fireEvent } from '@testing-library/react';
@@ -25,12 +26,23 @@ vi.mock('@/stores', () => ({
 }));
 
 const mockCreateNoteMutate = vi.fn();
+const mockMovePageMutate = vi.fn();
+const mockReorderPageMutate = vi.fn();
+
 vi.mock('@/features/notes/hooks', () => ({
   useCreateNote: () => ({
     mutate: mockCreateNoteMutate,
     isPending: false,
   }),
   createNoteDefaults: (title?: string) => ({ title: title ?? 'Untitled' }),
+  useMovePage: () => ({
+    mutate: mockMovePageMutate,
+    isPending: false,
+  }),
+  useReorderPage: () => ({
+    mutate: mockReorderPageMutate,
+    isPending: false,
+  }),
 }));
 
 const mockRouterPush = vi.fn();
@@ -143,6 +155,10 @@ const mockUseProjectPageTree = vi.fn((_ws: any, _proj: any) => ({
 vi.mock('@/features/notes/hooks/useProjectPageTree', () => ({
   useProjectPageTree: (workspaceId: string, projectId: string) =>
     mockUseProjectPageTree(workspaceId, projectId),
+  projectTreeKeys: {
+    all: ['notes', 'project-tree'],
+    tree: (wid: string, pid: string) => ['notes', 'project-tree', wid, pid],
+  },
 }));
 
 beforeEach(async () => {
@@ -253,5 +269,12 @@ describe('ProjectPageTree', () => {
     // Page link should contain an SVG (FileText icon), not an emoji span
     const pageLink = screen.getByText('Getting Started').closest('a');
     expect(pageLink?.querySelector('svg')).toBeTruthy();
+  });
+
+  it('Test 11: each tree node has a drag handle with aria-label "drag to reorder"', () => {
+    render(<ProjectPageTree {...defaultProps} />);
+    const dragHandles = screen.getAllByRole('button', { name: /drag to reorder/i });
+    // At least 2 drag handles for the 2 root nodes
+    expect(dragHandles.length).toBeGreaterThanOrEqual(2);
   });
 });

@@ -111,6 +111,36 @@ export function flattenTree(
   return result;
 }
 
+/**
+ * Flatten a PageTreeNode[] tree into a flat array for DnD SortableContext.
+ *
+ * Only includes nodes that are currently visible (i.e. their parent is expanded).
+ * This ensures the SortableContext items array matches rendered nodes — a
+ * requirement of @dnd-kit to avoid id mismatch errors.
+ *
+ * @param nodes Nested tree nodes (from useProjectPageTree)
+ * @param isExpanded Predicate that returns true if a node is expanded
+ * @returns Flat array with id, parentId, depth for each visible node
+ */
+export function flattenTreeWithDepth(
+  nodes: PageTreeNode[],
+  isExpanded: (id: string) => boolean
+): Array<{ id: string; parentId: string | null; depth: number }> {
+  const result: Array<{ id: string; parentId: string | null; depth: number }> = [];
+
+  function walk(list: PageTreeNode[]): void {
+    for (const node of list) {
+      result.push({ id: node.id, parentId: node.parentId, depth: node.depth });
+      if (node.children.length > 0 && isExpanded(node.id)) {
+        walk(node.children);
+      }
+    }
+  }
+
+  walk(nodes);
+  return result;
+}
+
 type AncestorNote = {
   id: string;
   title: string;
