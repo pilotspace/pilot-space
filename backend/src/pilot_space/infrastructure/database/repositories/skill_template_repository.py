@@ -13,7 +13,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import and_, select
+from sqlalchemy import and_, literal, select
 
 from pilot_space.infrastructure.database.models.skill_template import SkillTemplate
 from pilot_space.infrastructure.database.repositories.base import BaseRepository
@@ -86,6 +86,9 @@ class SkillTemplateRepository(BaseRepository[SkillTemplate]):
     async def get_active_by_workspace(
         self,
         workspace_id: UUID,
+        *,
+        limit: int | None = None,
+        offset: int = 0,
     ) -> Sequence[SkillTemplate]:
         """Get active templates for a workspace (catalog view).
 
@@ -94,6 +97,8 @@ class SkillTemplateRepository(BaseRepository[SkillTemplate]):
 
         Args:
             workspace_id: The workspace UUID.
+            limit: Maximum number of rows to return (None = no limit).
+            offset: Number of rows to skip for pagination.
 
         Returns:
             Active SkillTemplate rows for the workspace.
@@ -108,13 +113,48 @@ class SkillTemplateRepository(BaseRepository[SkillTemplate]):
                 )
             )
             .order_by(SkillTemplate.sort_order.asc())
+            .offset(offset)
         )
+        if limit is not None:
+            query = query.limit(limit)
         result = await self.session.execute(query)
         return result.scalars().all()
+
+    async def has_built_in_templates(
+        self,
+        workspace_id: UUID,
+    ) -> bool:
+        """Check if a workspace already has any built-in skill templates.
+
+        Uses a SELECT EXISTS query to avoid loading all template rows.
+        Used as an idempotency guard in SeedTemplatesService.
+
+        Args:
+            workspace_id: The workspace UUID.
+
+        Returns:
+            True if at least one built-in template exists, False otherwise.
+        """
+        subq = (
+            select(literal(1))
+            .where(
+                and_(
+                    SkillTemplate.workspace_id == workspace_id,
+                    SkillTemplate.source == "built_in",
+                    SkillTemplate.is_deleted == False,  # noqa: E712
+                )
+            )
+            .exists()
+        )
+        result = await self.session.execute(select(subq))
+        return bool(result.scalar())
 
     async def get_by_workspace(
         self,
         workspace_id: UUID,
+        *,
+        limit: int | None = None,
+        offset: int = 0,
     ) -> Sequence[SkillTemplate]:
         """Get all non-deleted templates for a workspace (admin list view).
 
@@ -122,6 +162,8 @@ class SkillTemplateRepository(BaseRepository[SkillTemplate]):
 
         Args:
             workspace_id: The workspace UUID.
+            limit: Maximum number of rows to return (None = no limit).
+            offset: Number of rows to skip for pagination.
 
         Returns:
             All non-deleted SkillTemplate rows for the workspace.
@@ -135,7 +177,10 @@ class SkillTemplateRepository(BaseRepository[SkillTemplate]):
                 )
             )
             .order_by(SkillTemplate.sort_order.asc())
+            .offset(offset)
         )
+        if limit is not None:
+            query = query.limit(limit)
         result = await self.session.execute(query)
         return result.scalars().all()
 

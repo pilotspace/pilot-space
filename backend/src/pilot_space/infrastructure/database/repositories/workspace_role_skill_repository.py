@@ -96,6 +96,9 @@ class WorkspaceRoleSkillRepository(BaseRepository[WorkspaceRoleSkill]):
     async def get_by_workspace(
         self,
         workspace_id: UUID,
+        *,
+        limit: int | None = None,
+        offset: int = 0,
     ) -> Sequence[WorkspaceRoleSkill]:
         """Get all non-deleted skills for a workspace (admin list view).
 
@@ -103,6 +106,8 @@ class WorkspaceRoleSkillRepository(BaseRepository[WorkspaceRoleSkill]):
 
         Args:
             workspace_id: The workspace UUID.
+            limit: Maximum number of rows to return (None = no limit).
+            offset: Number of rows to skip for pagination.
 
         Returns:
             All non-deleted WorkspaceRoleSkill rows for the workspace.
@@ -116,13 +121,19 @@ class WorkspaceRoleSkillRepository(BaseRepository[WorkspaceRoleSkill]):
                 )
             )
             .order_by(WorkspaceRoleSkill.created_at.desc())
+            .offset(offset)
         )
+        if limit is not None:
+            query = query.limit(limit)
         result = await self.session.execute(query)
         return result.scalars().all()
 
     async def get_active_by_workspace(
         self,
         workspace_id: UUID,
+        *,
+        limit: int | None = None,
+        offset: int = 0,
     ) -> Sequence[WorkspaceRoleSkill]:
         """Get active skills for a workspace (materializer hot-path).
 
@@ -131,6 +142,8 @@ class WorkspaceRoleSkillRepository(BaseRepository[WorkspaceRoleSkill]):
 
         Args:
             workspace_id: The workspace UUID.
+            limit: Maximum number of rows to return (None = no limit).
+            offset: Number of rows to skip for pagination.
 
         Returns:
             Active WorkspaceRoleSkill rows for the workspace.
@@ -145,7 +158,10 @@ class WorkspaceRoleSkillRepository(BaseRepository[WorkspaceRoleSkill]):
                 )
             )
             .order_by(WorkspaceRoleSkill.role_type.asc())
+            .offset(offset)
         )
+        if limit is not None:
+            query = query.limit(limit)
         result = await self.session.execute(query)
         return result.scalars().all()
 

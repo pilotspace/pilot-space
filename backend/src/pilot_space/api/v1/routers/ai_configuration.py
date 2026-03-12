@@ -33,6 +33,7 @@ from pilot_space.infrastructure.database.models.workspace_member import Workspac
 from pilot_space.infrastructure.database.repositories.ai_configuration_repository import (
     AIConfigurationRepository,
 )
+from pilot_space.infrastructure.database.rls import set_rls_context
 from pilot_space.infrastructure.encryption import (
     EncryptionError,
     decrypt_api_key,
@@ -87,7 +88,7 @@ async def _verify_workspace_membership(
         )
 
     member = next(
-        (m for m in (workspace.members or []) if m.user_id == user_id),
+        (m for m in (workspace.members or []) if m.user_id == user_id and not m.is_deleted),
         None,
     )
     if not member:
@@ -136,6 +137,7 @@ async def list_ai_configurations(
     current_user: CurrentUser,
     ai_config_repo: AIConfigRepo,
     workspace_repo: WorkspaceRepositoryDep,
+    session: DbSession,
 ) -> AIConfigurationListResponse:
     """List AI configurations for a workspace.
 
@@ -144,10 +146,12 @@ async def list_ai_configurations(
         current_user: Authenticated user.
         ai_config_repo: AI configuration repository.
         workspace_repo: Workspace repository.
+        session: Database session for RLS context.
 
     Returns:
         List of AI configurations (without API keys).
     """
+    await set_rls_context(session, current_user.user_id, workspace_id)
     await _verify_workspace_membership(workspace_id, current_user.user_id, workspace_repo)
 
     configs = await ai_config_repo.get_by_workspace(workspace_id, include_inactive=True)
@@ -187,6 +191,7 @@ async def create_ai_configuration(
     Raises:
         HTTPException: If not admin or provider already configured.
     """
+    await set_rls_context(session, current_user.user_id, workspace_id)
     await _verify_workspace_membership(
         workspace_id, current_user.user_id, workspace_repo, require_admin=True
     )
@@ -266,6 +271,7 @@ async def list_available_models(
     Returns:
         ModelListResponse with items from all active, configured providers.
     """
+    await set_rls_context(session, current_user.user_id, workspace_id)
     await _verify_workspace_membership(workspace_id, current_user.user_id, workspace_repo)
 
     from pilot_space.ai.providers.model_listing import ModelListingService
@@ -300,6 +306,7 @@ async def get_ai_configuration(
     current_user: CurrentUser,
     ai_config_repo: AIConfigRepo,
     workspace_repo: WorkspaceRepositoryDep,
+    session: DbSession,
 ) -> AIConfigurationResponse:
     """Get a specific AI configuration.
 
@@ -309,6 +316,7 @@ async def get_ai_configuration(
         current_user: Authenticated user.
         ai_config_repo: AI configuration repository.
         workspace_repo: Workspace repository.
+        session: Database session for RLS context.
 
     Returns:
         AI configuration (without API key).
@@ -316,6 +324,7 @@ async def get_ai_configuration(
     Raises:
         HTTPException: If not found or not a member.
     """
+    await set_rls_context(session, current_user.user_id, workspace_id)
     await _verify_workspace_membership(workspace_id, current_user.user_id, workspace_repo)
 
     config = await ai_config_repo.get_by_workspace_and_id(workspace_id, config_id)
@@ -360,6 +369,7 @@ async def update_ai_configuration(
     Raises:
         HTTPException: If not found or not admin.
     """
+    await set_rls_context(session, current_user.user_id, workspace_id)
     await _verify_workspace_membership(
         workspace_id, current_user.user_id, workspace_repo, require_admin=True
     )
@@ -435,6 +445,7 @@ async def delete_ai_configuration(
     Raises:
         HTTPException: If not found or not admin.
     """
+    await set_rls_context(session, current_user.user_id, workspace_id)
     await _verify_workspace_membership(
         workspace_id, current_user.user_id, workspace_repo, require_admin=True
     )
@@ -473,6 +484,7 @@ async def test_ai_configuration(
     current_user: CurrentUser,
     ai_config_repo: AIConfigRepo,
     workspace_repo: WorkspaceRepositoryDep,
+    session: DbSession,
 ) -> AIConfigurationTestResponse:
     """Test an AI configuration by validating the API key.
 
@@ -484,6 +496,7 @@ async def test_ai_configuration(
         current_user: Authenticated user.
         ai_config_repo: AI configuration repository.
         workspace_repo: Workspace repository.
+        session: Database session for RLS context.
 
     Returns:
         Test result with success status and latency.
@@ -491,6 +504,7 @@ async def test_ai_configuration(
     Raises:
         HTTPException: If configuration not found.
     """
+    await set_rls_context(session, current_user.user_id, workspace_id)
     await _verify_workspace_membership(workspace_id, current_user.user_id, workspace_repo)
 
     config = await ai_config_repo.get_by_workspace_and_id(workspace_id, config_id)

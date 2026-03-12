@@ -46,17 +46,29 @@ export const PluginsTabContent = observer(function PluginsTabContent({
   }, [pluginsStore.installedPlugins.length, workspaceId, pluginsStore]);
 
   const handleToggleRepo = async (repoUrl: string, isActive: boolean) => {
-    await pluginsStore.toggleRepo(workspaceId, repoUrl, isActive);
+    try {
+      await pluginsStore.toggleRepo(workspaceId, repoUrl, isActive);
+    } catch {
+      toast.error('Failed to toggle plugin');
+    }
   };
 
   const handleToggleSkill = async (pluginId: string, isActive: boolean) => {
-    await pluginsStore.toggleSkill(workspaceId, pluginId, isActive);
+    try {
+      await pluginsStore.toggleSkill(workspaceId, pluginId, isActive);
+    } catch {
+      toast.error('Failed to toggle skill');
+    }
   };
 
   const handleRemoveRepo = async (repoUrl: string) => {
-    await pluginsStore.uninstallRepo(workspaceId, repoUrl);
-    if (!pluginsStore.error) {
-      toast.success('Plugin removed');
+    try {
+      await pluginsStore.uninstallRepo(workspaceId, repoUrl);
+      if (!pluginsStore.error) {
+        toast.success('Plugin removed');
+      }
+    } catch {
+      toast.error('Failed to remove plugin');
     }
   };
 
@@ -107,6 +119,7 @@ export const PluginsTabContent = observer(function PluginsTabContent({
       />
 
       {/* Plugin Detail Dialog */}
+      {/* TODO: Wire onUpdate once pluginsStore.updateRepo is implemented */}
       <PluginDetailDialog
         group={pluginsStore.selectedGroup}
         open={!!pluginsStore.selectedRepoUrl}

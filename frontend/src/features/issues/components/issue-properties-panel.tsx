@@ -38,7 +38,6 @@ import { SourceNotesList } from '@/features/issues/components/source-notes-list'
 import { EffortField } from '@/features/issues/components/effort-field';
 import { FieldSaveIndicator } from '@/features/issues/components/field-save-indicator';
 import { BranchSuggestion } from '@/components/integrations/BranchSuggestion';
-import { RelatedIssuesPanel } from '@/features/issues/components/related-issues-panel';
 
 // ---------------------------------------------------------------------------
 // State group -> IssueState mapping
@@ -445,17 +444,6 @@ export const IssuePropertiesPanel = observer(function IssuePropertiesPanel({
           />
         )}
         <SourceNotesList links={noteLinks} workspaceSlug={workspaceSlug} />
-      </section>
-
-      <hr className="border-border" />
-
-      {/* ---- Related Issues ---- */}
-      <section className="p-4">
-        <RelatedIssuesPanel
-          workspaceId={workspaceId}
-          issueId={issue.id}
-          workspaceSlug={workspaceSlug}
-        />
       </section>
     </aside>
   );

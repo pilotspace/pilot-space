@@ -43,6 +43,9 @@ class SkillActionButtonRepository(BaseRepository[SkillActionButton]):
     async def get_active_by_workspace(
         self,
         workspace_id: UUID,
+        *,
+        limit: int | None = None,
+        offset: int = 0,
     ) -> Sequence[SkillActionButton]:
         """Get active buttons for a workspace (member hot-path).
 
@@ -51,6 +54,8 @@ class SkillActionButtonRepository(BaseRepository[SkillActionButton]):
 
         Args:
             workspace_id: The workspace UUID.
+            limit: Maximum number of rows to return (None = no limit).
+            offset: Number of rows to skip for pagination.
 
         Returns:
             Active SkillActionButton rows ordered by sort_order.
@@ -65,13 +70,19 @@ class SkillActionButtonRepository(BaseRepository[SkillActionButton]):
                 )
             )
             .order_by(SkillActionButton.sort_order.asc())
+            .offset(offset)
         )
+        if limit is not None:
+            query = query.limit(limit)
         result = await self.session.execute(query)
         return result.scalars().all()
 
     async def get_all_by_workspace(
         self,
         workspace_id: UUID,
+        *,
+        limit: int | None = None,
+        offset: int = 0,
     ) -> Sequence[SkillActionButton]:
         """Get all non-deleted buttons for a workspace (admin view).
 
@@ -79,6 +90,8 @@ class SkillActionButtonRepository(BaseRepository[SkillActionButton]):
 
         Args:
             workspace_id: The workspace UUID.
+            limit: Maximum number of rows to return (None = no limit).
+            offset: Number of rows to skip for pagination.
 
         Returns:
             All non-deleted SkillActionButton rows for the workspace.
@@ -92,7 +105,10 @@ class SkillActionButtonRepository(BaseRepository[SkillActionButton]):
                 )
             )
             .order_by(SkillActionButton.sort_order.asc())
+            .offset(offset)
         )
+        if limit is not None:
+            query = query.limit(limit)
         result = await self.session.execute(query)
         return result.scalars().all()
 

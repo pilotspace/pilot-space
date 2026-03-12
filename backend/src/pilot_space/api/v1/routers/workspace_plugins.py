@@ -8,10 +8,11 @@ Source: Phase 19, SKRG-01..05
 
 from __future__ import annotations
 
+import asyncio
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from pilot_space.api.middleware.request_context import WorkspaceId
 from pilot_space.api.v1.schemas.workspace_plugin import (
@@ -291,14 +292,32 @@ async def install_all_from_repo(
     install_svc = InstallPluginService(db_session=session)
     results: list[WorkspacePluginResponse] = []
     try:
-        for name in skill_names:
+        # Fetch all skill content concurrently to avoid sequential GitHub API calls
+        async def _fetch(name: str) -> tuple[str, object] | None:
             try:
                 content = await gh.fetch_skill_content(owner, repo, name)
+                return (name, content)
+            except Exception:
+                logger.warning(
+                    "[Plugins] Failed to fetch skill %s from %s/%s",
+                    name,
+                    owner,
+                    repo,
+                    exc_info=True,
+                )
+                return None
+
+        fetched_results = await asyncio.gather(*[_fetch(name) for name in skill_names])
+        fetched_skills = [r for r in fetched_results if r is not None]
+
+        # Batch DB inserts sequentially (install service handles upsert logic)
+        for name, content in fetched_skills:
+            try:
                 plugin = await install_svc.install(
                     workspace_id=workspace_id,
                     repo_url=request.repo_url,
                     skill_name=name,
-                    skill_content=content,
+                    skill_content=content,  # type: ignore[arg-type]
                     installed_sha=head_sha,
                     installed_by=current_user_id,
                 )
@@ -377,6 +396,7 @@ async def toggle_repo_plugins(
     await set_rls_context(session, current_user_id, workspace_id)
     await _require_admin(current_user_id, workspace_id, session)
 
+    from pilot_space.infrastructure.database.models.workspace_plugin import WorkspacePlugin
     from pilot_space.infrastructure.database.repositories.workspace_plugin_repository import (
         WorkspacePluginRepository,
     )
@@ -396,11 +416,19 @@ async def toggle_repo_plugins(
             status_code=status.HTTP_404_NOT_FOUND, detail="No plugins from this repo."
         )
 
-    results: list[WorkspacePluginResponse] = []
+    plugin_ids = [p.id for p in plugins]
+    await session.execute(
+        update(WorkspacePlugin)
+        .where(WorkspacePlugin.id.in_(plugin_ids))
+        .values(is_active=request.is_active)
+    )
+    await session.flush()
+
+    # Refresh in-memory objects to reflect updated state
     for plugin in plugins:
-        plugin.is_active = request.is_active
-        updated = await plugin_repo.update(plugin)
-        results.append(WorkspacePluginResponse.model_validate(updated))
+        await session.refresh(plugin)
+
+    results = [WorkspacePluginResponse.model_validate(p) for p in plugins]
 
     logger.info(
         "[Plugins] Toggled %d from %s/%s to %s", len(results), owner, repo, request.is_active
@@ -423,9 +451,8 @@ async def uninstall_repo_plugins(
     await set_rls_context(session, current_user_id, workspace_id)
     await _require_admin(current_user_id, workspace_id, session)
 
-    from pilot_space.application.services.workspace_plugin.install_plugin_service import (
-        InstallPluginService,
-    )
+    from pilot_space.infrastructure.database.models.skill_action_button import SkillActionButton
+    from pilot_space.infrastructure.database.models.workspace_plugin import WorkspacePlugin
     from pilot_space.infrastructure.database.repositories.workspace_plugin_repository import (
         WorkspacePluginRepository,
     )
@@ -445,9 +472,34 @@ async def uninstall_repo_plugins(
             status_code=status.HTTP_404_NOT_FOUND, detail="No plugins from this repo."
         )
 
-    install_svc = InstallPluginService(db_session=session)
-    for plugin in plugins:
-        await install_svc.uninstall(plugin)
+    plugin_ids = [p.id for p in plugins]
+    plugin_id_strs = [str(pid) for pid in plugin_ids]
+
+    # Bulk deactivate associated action buttons (non-fatal)
+    try:
+        await session.execute(
+            update(SkillActionButton)
+            .where(
+                SkillActionButton.workspace_id == workspace_id,
+                SkillActionButton.binding_metadata["plugin_id"].astext.in_(plugin_id_strs),
+                SkillActionButton.is_deleted == False,  # noqa: E712
+            )
+            .values(is_active=False)
+        )
+    except Exception:
+        logger.warning(
+            "Failed to bulk-deactivate action buttons for plugins in workspace %s",
+            workspace_id,
+            exc_info=True,
+        )
+
+    # Bulk soft-delete all plugins
+    await session.execute(
+        update(WorkspacePlugin)
+        .where(WorkspacePlugin.id.in_(plugin_ids))
+        .values(is_deleted=True, is_active=False)
+    )
+    await session.flush()
 
     logger.info(
         "[Plugins] Uninstalled %d from %s/%s in workspace %s",

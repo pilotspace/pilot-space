@@ -25,6 +25,13 @@ from claude_agent_sdk import McpSdkServerConfig, create_sdk_mcp_server, tool
 
 from pilot_space.ai.infrastructure.approval import ActionType as AT
 from pilot_space.ai.mcp.event_publisher import EventPublisher
+from pilot_space.ai.mcp.note_content_handlers import (
+    JSON_FENCE_RE as _JSON_FENCE_RE,
+    VALID_PM_BLOCK_TYPES as _VALID_PM_BLOCK_TYPES,
+    compile_search_regex as _compile_search_regex,
+    extract_block_text as _extract_block_text,
+    text_result as _text_result,
+)
 from pilot_space.ai.tools.mcp_server import ToolContext, check_approval_from_db
 from pilot_space.infrastructure.logging import get_logger
 
@@ -46,57 +53,6 @@ TOOL_NAMES = [
     f"mcp__{SERVER_NAME}__create_pm_block",
     f"mcp__{SERVER_NAME}__update_pm_block",
 ]
-
-_VALID_PM_BLOCK_TYPES = frozenset(
-    {
-        "decision",
-        "form",
-        "raci",
-        "risk",
-        "timeline",
-        "dashboard",
-        "sprint-board",
-        "dependency-map",
-        "capacity-plan",
-        "release-notes",
-    }
-)
-
-# Regex to detect a JSON code fence wrapping TipTap JSON (e.g. taskList)
-_JSON_FENCE_RE = re.compile(
-    r"^```(?:json)?\s*\n(.*?)\n```\s*$",
-    re.DOTALL,
-)
-
-
-def _text_result(text: str) -> dict[str, Any]:
-    """Create a standard MCP tool text result."""
-    return {"content": [{"type": "text", "text": text}]}
-
-
-_NESTED_QUANTIFIER_RE = re.compile(r"([+*]|\{\d+,?\d*\})\)?[+*]|\(\?[^)]*\)\+")
-
-
-def _compile_search_regex(pattern: str, *, case_sensitive: bool) -> re.Pattern[str]:
-    """Compile regex with ReDoS prevention. Raises re.error on invalid patterns."""
-    if len(pattern) > 500:
-        raise re.error("pattern exceeds maximum length of 500 characters")
-    if _NESTED_QUANTIFIER_RE.search(pattern):
-        raise re.error("pattern contains nested quantifiers (potential ReDoS)")
-    flags = 0 if case_sensitive else re.IGNORECASE
-    return re.compile(pattern, flags)
-
-
-def _extract_block_text(block: dict[str, Any]) -> str:
-    """Extract plain text from a TipTap block node."""
-    text_parts: list[str] = []
-    content = block.get("content", [])
-    for node in content:
-        if node.get("type") == "text":
-            text_parts.append(node.get("text", ""))
-        elif "content" in node:
-            text_parts.append(_extract_block_text(node))
-    return "".join(text_parts)
 
 
 def create_note_content_server(

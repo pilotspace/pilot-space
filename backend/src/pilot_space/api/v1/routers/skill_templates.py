@@ -231,6 +231,12 @@ async def update_skill_template(
             detail="Skill template not found",
         )
 
+    if template.workspace_id != workspace_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Skill template not found",
+        )
+
     # Built-in templates: only is_active can be changed
     if template.source == "built_in":
         update_data = body.model_dump(exclude_unset=True)
@@ -286,6 +292,20 @@ async def delete_skill_template(
     await _require_admin(current_user_id, workspace_id, session)
 
     repo = SkillTemplateRepository(session)
+    template = await repo.get_by_id(template_id)
+
+    if template is None or template.is_deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Skill template not found",
+        )
+
+    if template.workspace_id != workspace_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Skill template not found",
+        )
+
     result = await repo.soft_delete(template_id)
 
     if result is None:

@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import logging
 from typing import TYPE_CHECKING, Any
+from uuid import UUID
 
 from cryptography.fernet import Fernet, InvalidToken
 from sqlalchemy import select
@@ -181,13 +182,13 @@ def decrypt_content_with_fallback(
 
 async def _get_encrypted_notes(
     session: AsyncSession,
-    workspace_id: str,
+    workspace_id: UUID,
 ) -> list[Any]:
     """Fetch notes with content in the workspace.
 
     Args:
         session: Async database session.
-        workspace_id: Workspace UUID string.
+        workspace_id: Workspace UUID.
 
     Returns:
         List of Note model instances.
@@ -205,13 +206,13 @@ async def _get_encrypted_notes(
 
 async def _get_encrypted_issues(
     session: AsyncSession,
-    workspace_id: str,
+    workspace_id: UUID,
 ) -> list[Any]:
     """Fetch issues with non-null description in the workspace.
 
     Args:
         session: Async database session.
-        workspace_id: Workspace UUID string.
+        workspace_id: Workspace UUID.
 
     Returns:
         List of Issue model instances with encrypted description.
@@ -232,6 +233,7 @@ def _re_encrypt_string(value: str, old_key: str, new_key: str) -> str | None:
     """Re-encrypt a single string value from old key to new key.
 
     Returns None if the value cannot be decrypted (not encrypted or corrupt).
+    Callers MUST track None returns and raise before clearing the previous key.
     """
     try:
         plaintext = decrypt_content_with_fallback(value, new_key, old_key)
@@ -243,7 +245,7 @@ def _re_encrypt_string(value: str, old_key: str, new_key: str) -> str | None:
 
 async def rotate_workspace_key(
     session: AsyncSession,
-    workspace_id: str,
+    workspace_id: UUID,
     new_raw_key: str,
     batch_size: int = 100,
 ) -> dict[str, int]:
@@ -258,7 +260,7 @@ async def rotate_workspace_key(
 
     Args:
         session: Async database session.
-        workspace_id: Workspace UUID string.
+        workspace_id: Workspace UUID.
         new_raw_key: New Fernet key to rotate to.
         batch_size: Number of rows to process per commit batch.
 
@@ -268,6 +270,7 @@ async def rotate_workspace_key(
     Raises:
         ValueError: If new_raw_key is not a valid Fernet key.
         ValueError: If no existing key is configured for the workspace.
+        ValueError: If any records could not be re-encrypted (previous key preserved).
     """
     from pilot_space.infrastructure.database.repositories.workspace_encryption_repository import (
         WorkspaceEncryptionRepository,
@@ -292,6 +295,7 @@ async def rotate_workspace_key(
     # Re-encrypt notes
     notes = await _get_encrypted_notes(session, workspace_id)
     notes_count = 0
+    notes_skipped = 0
     for i, note in enumerate(notes):
         if note.content:
             content_str = (
@@ -304,22 +308,39 @@ async def rotate_workspace_key(
                 except json.JSONDecodeError:
                     note.content = re_encrypted  # type: ignore[assignment]
                 notes_count += 1
+            else:
+                notes_skipped += 1
         if (i + 1) % batch_size == 0:
             await session.flush()
 
     # Re-encrypt issue descriptions
     issues = await _get_encrypted_issues(session, workspace_id)
     issues_count = 0
+    issues_skipped = 0
     for i, issue in enumerate(issues):
         if issue.description:
             re_encrypted = _re_encrypt_string(issue.description, old_raw_key, new_raw_key)
             if re_encrypted is not None:
                 issue.description = re_encrypted
                 issues_count += 1
+            else:
+                issues_skipped += 1
         if (i + 1) % batch_size == 0:
             await session.flush()
 
     await session.flush()
+
+    # Abort if any records could not be re-encrypted — clearing the previous key
+    # would make those records permanently unreadable.
+    total_skipped = notes_skipped + issues_skipped
+    if total_skipped > 0:
+        msg = (
+            f"Key rotation aborted: {total_skipped} record(s) could not be re-encrypted "
+            f"({notes_skipped} note(s), {issues_skipped} issue(s)). "
+            "Previous key has NOT been cleared. Investigate undecryptable content before retrying."
+        )
+        logger.error(msg)
+        raise ValueError(msg)
 
     # Clear previous key -- rotation complete
     await repo.clear_previous_key(workspace_id)

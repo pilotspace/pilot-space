@@ -14,6 +14,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import and_, select
+from sqlalchemy.orm import selectinload
 
 from pilot_space.infrastructure.database.models.user_skill import UserSkill
 from pilot_space.infrastructure.database.repositories.base import BaseRepository
@@ -90,6 +91,7 @@ class UserSkillRepository(BaseRepository[UserSkill]):
         """
         query = (
             select(UserSkill)
+            .options(selectinload(UserSkill.template))
             .where(
                 and_(
                     UserSkill.user_id == user_id,

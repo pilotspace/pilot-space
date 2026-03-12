@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
+import { ConfirmActionDialog } from './confirm-action-dialog';
 
 import {
   useAdminActionButtons,
@@ -59,6 +60,7 @@ export function ActionButtonsTabContent({ workspaceId }: ActionButtonsTabContent
 
   const [addDialogOpen, setAddDialogOpen] = React.useState(false);
   const [editButton, setEditButton] = React.useState<SkillActionButton | null>(null);
+  const [buttonToDelete, setButtonToDelete] = React.useState<SkillActionButton | null>(null);
 
   // Form state
   const [formName, setFormName] = React.useState('');
@@ -146,10 +148,16 @@ export function ActionButtonsTabContent({ workspaceId }: ActionButtonsTabContent
     );
   };
 
-  const handleDelete = (btn: SkillActionButton) => {
-    deleteButton.mutate(btn.id, {
+  const handleDeleteClick = (btn: SkillActionButton) => {
+    setButtonToDelete(btn);
+  };
+
+  const handleDeleteConfirm = () => {
+    if (!buttonToDelete) return;
+    deleteButton.mutate(buttonToDelete.id, {
       onSuccess: () => {
         toast.success('Action button deleted');
+        setButtonToDelete(null);
       },
       onError: () => {
         toast.error('Failed to delete action button');
@@ -372,7 +380,7 @@ export function ActionButtonsTabContent({ workspaceId }: ActionButtonsTabContent
                   variant="ghost"
                   size="icon"
                   className="h-7 w-7 text-destructive hover:text-destructive"
-                  onClick={() => handleDelete(btn)}
+                  onClick={() => handleDeleteClick(btn)}
                   aria-label={`Delete ${btn.name}`}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
@@ -398,6 +406,18 @@ export function ActionButtonsTabContent({ workspaceId }: ActionButtonsTabContent
       )}
 
       {formDialog}
+
+      {buttonToDelete && (
+        <ConfirmActionDialog
+          open={!!buttonToDelete}
+          onCancel={() => setButtonToDelete(null)}
+          onConfirm={handleDeleteConfirm}
+          title={`Delete "${buttonToDelete.name}"?`}
+          description="This will permanently remove this action button. Team members will no longer see it on issue pages."
+          confirmLabel="Delete"
+          variant="destructive"
+        />
+      )}
     </div>
   );
 }

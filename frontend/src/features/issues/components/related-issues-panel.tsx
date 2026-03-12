@@ -11,6 +11,7 @@
  */
 
 import * as React from 'react';
+import { useDeferredValue } from 'react';
 import { observer } from 'mobx-react-lite';
 import { Link2, Trash2, X, Plus } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
@@ -31,7 +32,6 @@ import { useDismissSuggestion } from '@/features/issues/hooks/use-dismiss-sugges
 import { useIssueRelations } from '@/features/issues/hooks/use-issue-relations';
 import { useCreateRelation } from '@/features/issues/hooks/use-create-relation';
 import { useDeleteRelation } from '@/features/issues/hooks/use-delete-relation';
-import type { Issue } from '@/types';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -56,12 +56,12 @@ interface LinkIssueComboboxProps {
 function LinkIssueCombobox({ workspaceId, issueId, onSelect }: LinkIssueComboboxProps) {
   const [open, setOpen] = React.useState(false);
   const [search, setSearch] = React.useState('');
+  const deferredSearch = useDeferredValue(search);
 
-  const { data: searchResult } = useQuery<{ items: Issue[] }>({
-    queryKey: ['issues', workspaceId, 'search', search],
-    queryFn: () =>
-      issuesApi.list(workspaceId, { search }, 1, 10) as unknown as Promise<{ items: Issue[] }>,
-    enabled: open && search.length >= 1,
+  const { data: searchResult } = useQuery({
+    queryKey: ['issues', workspaceId, 'search', deferredSearch],
+    queryFn: () => issuesApi.list(workspaceId, { search: deferredSearch }, 1, 10),
+    enabled: open && deferredSearch.length >= 1,
     staleTime: 10_000,
   });
 

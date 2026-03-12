@@ -153,6 +153,7 @@ class InstallPluginService:
         Returns:
             Updated WorkspacePlugin entity.
         """
+        old_sha = plugin.installed_sha
         plugin.skill_content = skill_content.skill_md
         plugin.references = skill_content.references
         plugin.installed_sha = new_sha
@@ -163,7 +164,7 @@ class InstallPluginService:
         logger.info(
             "Updated plugin %s (SHA: %s -> %s)",
             plugin.skill_name,
-            plugin.installed_sha[:8] if plugin.installed_sha else "N/A",
+            old_sha[:8] if old_sha else "N/A",
             new_sha[:8],
         )
         return updated

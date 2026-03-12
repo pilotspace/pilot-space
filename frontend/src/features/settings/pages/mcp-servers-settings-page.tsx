@@ -42,6 +42,7 @@ export const MCPServersSettingsPage = observer(function MCPServersSettingsPage()
   const workspaceId = currentWorkspace?.id ?? workspaceSlug;
 
   const searchParams = useSearchParams();
+  const [deletingServerId, setDeletingServerId] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (workspaceId) {
@@ -66,11 +67,14 @@ export const MCPServersSettingsPage = observer(function MCPServersSettingsPage()
   };
 
   const handleDelete = async (serverId: string) => {
+    setDeletingServerId(serverId);
     try {
       await mcpStore.removeServer(workspaceId, serverId);
       toast.success('MCP server removed');
     } catch {
       toast.error('Failed to remove server');
+    } finally {
+      setDeletingServerId(null);
     }
   };
 
@@ -143,7 +147,7 @@ export const MCPServersSettingsPage = observer(function MCPServersSettingsPage()
                     onDelete={handleDelete}
                     onRefreshStatus={handleRefreshStatus}
                     onAuthorize={handleAuthorize}
-                    isDeleting={false}
+                    isDeleting={deletingServerId === server.id}
                   />
                 ))}
               </div>

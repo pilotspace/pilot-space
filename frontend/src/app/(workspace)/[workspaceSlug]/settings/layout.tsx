@@ -129,12 +129,6 @@ const settingsNavSections: NavSection[] = [
         icon: User,
         href: (slug: string) => `/${slug}/settings/profile`,
       },
-      {
-        id: 'ai-providers',
-        label: 'AI Providers',
-        icon: Sparkles,
-        href: (slug: string) => `/${slug}/settings/ai-providers`,
-      },
     ],
   },
 ];

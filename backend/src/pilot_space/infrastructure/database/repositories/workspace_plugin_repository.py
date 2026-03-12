@@ -39,6 +39,9 @@ class WorkspacePluginRepository(BaseRepository[WorkspacePlugin]):
     async def get_active_by_workspace(
         self,
         workspace_id: UUID,
+        *,
+        limit: int | None = None,
+        offset: int = 0,
     ) -> Sequence[WorkspacePlugin]:
         """Get active plugins for a workspace (materializer hot-path).
 
@@ -46,6 +49,8 @@ class WorkspacePluginRepository(BaseRepository[WorkspacePlugin]):
 
         Args:
             workspace_id: The workspace UUID.
+            limit: Maximum number of rows to return (None = no limit).
+            offset: Number of rows to skip for pagination.
 
         Returns:
             Active WorkspacePlugin rows ordered by display_name.
@@ -60,13 +65,19 @@ class WorkspacePluginRepository(BaseRepository[WorkspacePlugin]):
                 )
             )
             .order_by(WorkspacePlugin.display_name.asc())
+            .offset(offset)
         )
+        if limit is not None:
+            query = query.limit(limit)
         result = await self.session.execute(query)
         return result.scalars().all()
 
     async def get_installed_by_workspace(
         self,
         workspace_id: UUID,
+        *,
+        limit: int | None = None,
+        offset: int = 0,
     ) -> Sequence[WorkspacePlugin]:
         """Get all non-deleted plugins for a workspace (admin list view).
 
@@ -74,6 +85,8 @@ class WorkspacePluginRepository(BaseRepository[WorkspacePlugin]):
 
         Args:
             workspace_id: The workspace UUID.
+            limit: Maximum number of rows to return (None = no limit).
+            offset: Number of rows to skip for pagination.
 
         Returns:
             All non-deleted WorkspacePlugin rows for the workspace.
@@ -87,7 +100,10 @@ class WorkspacePluginRepository(BaseRepository[WorkspacePlugin]):
                 )
             )
             .order_by(WorkspacePlugin.created_at.desc())
+            .offset(offset)
         )
+        if limit is not None:
+            query = query.limit(limit)
         result = await self.session.execute(query)
         return result.scalars().all()
 

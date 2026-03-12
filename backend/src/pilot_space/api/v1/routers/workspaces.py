@@ -37,6 +37,7 @@ from pilot_space.dependencies import (
 )
 from pilot_space.dependencies.auth import SessionDep
 from pilot_space.infrastructure.database import get_db_session
+from pilot_space.infrastructure.database.rls import set_rls_context
 from pilot_space.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
@@ -70,6 +71,7 @@ async def list_workspaces(
     Returns:
         Paginated list of workspaces.
     """
+    await set_rls_context(session, current_user.user_id)
     result = await service.list_workspaces(
         ListWorkspacesPayload(
             user_id=current_user.user_id,
@@ -130,6 +132,7 @@ async def create_workspace(
     Raises:
         HTTPException: If slug already exists.
     """
+    await set_rls_context(session, current_user_id)
     try:
         result = await service.create_workspace(
             CreateWorkspacePayload(
@@ -188,6 +191,7 @@ async def get_workspace(
     Raises:
         HTTPException: If workspace not found or user not a member.
     """
+    await set_rls_context(session, current_user.user_id)
     try:
         result = await service.get_workspace(
             GetWorkspacePayload(
@@ -248,6 +252,7 @@ async def update_workspace(
     Raises:
         HTTPException: If workspace not found or user not admin.
     """
+    await set_rls_context(session, current_user.user_id)
     update_data = request.model_dump(exclude_unset=True)
 
     try:
@@ -317,6 +322,7 @@ async def delete_workspace(
     Raises:
         HTTPException: If workspace not found or user not owner.
     """
+    await set_rls_context(session, current_user.user_id)
     try:
         result = await service.delete_workspace(
             DeleteWorkspacePayload(
@@ -377,6 +383,7 @@ async def list_workspace_labels(
     Raises:
         HTTPException: If workspace not found or user not a member.
     """
+    await set_rls_context(session, current_user_id)
     try:
         result = await service.list_labels(
             ListLabelsPayload(

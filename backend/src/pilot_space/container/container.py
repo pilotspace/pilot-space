@@ -1,7 +1,8 @@
 """Main DI container with services, AI providers, and wiring configuration.
 
-Container inherits from InfraContainer (config, auth, repos, clients)
-and adds all service factories, AI infrastructure, and module wiring.
+Container inherits SkillContainer and PluginContainer (both inherit InfraContainer)
+to compose all providers while keeping each module under 700 lines.
+See _skill_providers.py and _plugin_providers.py for extracted groups.
 """
 
 from __future__ import annotations
@@ -79,15 +80,6 @@ from pilot_space.application.services.onboarding import (
 )
 from pilot_space.application.services.pm_block_insight_service import PMBlockInsightService
 from pilot_space.application.services.rbac_service import RbacService
-from pilot_space.application.services.role_skill import (
-    CreateRoleSkillService,
-    DeleteRoleSkillService,
-    GenerateRoleSkillService,
-    ListRoleSkillsService,
-    UpdateRoleSkillService,
-)
-from pilot_space.application.services.skill.concurrency_manager import SkillConcurrencyManager
-from pilot_space.application.services.skill.skill_execution_service import SkillExecutionService
 from pilot_space.application.services.sso_service import SsoService
 from pilot_space.application.services.task_service import TaskService
 from pilot_space.application.services.version.diff_service import VersionDiffService
@@ -104,12 +96,6 @@ from pilot_space.application.services.workspace_member import (
     MemberProfileService,
     WorkspaceMemberService,
 )
-from pilot_space.application.services.workspace_role_skill import (
-    ActivateWorkspaceSkillService,
-    CreateWorkspaceSkillService,
-    DeleteWorkspaceSkillService,
-    ListWorkspaceSkillsService,
-)
 from pilot_space.config import Settings
 from pilot_space.container._base import InfraContainer
 from pilot_space.container._factories import (
@@ -122,6 +108,8 @@ from pilot_space.container._factories import (
     create_tool_registry,
     get_default_redirect_origin,
 )
+from pilot_space.container._plugin_providers import PluginContainer
+from pilot_space.container._skill_providers import SkillContainer
 from pilot_space.dependencies.auth import get_current_session
 from pilot_space.infrastructure.database.repositories.audit_log_repository import (
     AuditLogRepository,
@@ -137,11 +125,12 @@ from pilot_space.infrastructure.database.repositories.workspace_member_repositor
 )
 
 
-class Container(InfraContainer):
+class Container(SkillContainer, PluginContainer):
     """Main application DI container.
 
-    Inherits infrastructure providers from InfraContainer and adds
-    service factories, AI infrastructure, and module wiring.
+    Inherits skill providers (SkillContainer) and plugin/seeding providers
+    (PluginContainer). Both intermediate containers inherit InfraContainer,
+    so all infrastructure providers are available here via MRO.
 
     Usage:
         container = Container()
@@ -479,53 +468,6 @@ class Container(InfraContainer):
         onboarding_repository=InfraContainer.onboarding_repository,
     )
 
-    # Role Skill Services
-    create_role_skill_service = providers.Factory(
-        CreateRoleSkillService,
-        session=providers.Callable(get_current_session),
-    )
-
-    update_role_skill_service = providers.Factory(
-        UpdateRoleSkillService,
-        session=providers.Callable(get_current_session),
-    )
-
-    delete_role_skill_service = providers.Factory(
-        DeleteRoleSkillService,
-        session=providers.Callable(get_current_session),
-    )
-
-    list_role_skills_service = providers.Factory(
-        ListRoleSkillsService,
-        session=providers.Callable(get_current_session),
-    )
-
-    generate_role_skill_service = providers.Factory(
-        GenerateRoleSkillService,
-        session=providers.Callable(get_current_session),
-    )
-
-    # Workspace Role Skill Services (WRSKL-01..02)
-    create_workspace_skill_service = providers.Factory(
-        CreateWorkspaceSkillService,
-        session=providers.Callable(get_current_session),
-    )
-
-    activate_workspace_skill_service = providers.Factory(
-        ActivateWorkspaceSkillService,
-        session=providers.Callable(get_current_session),
-    )
-
-    list_workspace_skills_service = providers.Factory(
-        ListWorkspaceSkillsService,
-        session=providers.Callable(get_current_session),
-    )
-
-    delete_workspace_skill_service = providers.Factory(
-        DeleteWorkspaceSkillService,
-        session=providers.Callable(get_current_session),
-    )
-
     # Homepage Services
     get_activity_service = providers.Factory(
         GetActivityService,
@@ -637,25 +579,10 @@ class Container(InfraContainer):
         intent_repository=InfraContainer.work_intent_repository,
     )
 
-    # Skill Concurrency Manager (T-047) — Redis-backed, one per process
-    skill_concurrency_manager = providers.Singleton(
-        SkillConcurrencyManager,
-        redis_client=InfraContainer.redis_client,
-    )
-
     # Note Write Lock (C-3) — Redis-backed mutex, one per process
     note_write_lock = providers.Singleton(
         NoteWriteLock,
         redis_client=InfraContainer.redis_client,
-    )
-
-    # Skill Execution Service (T-044, T-045)
-    skill_execution_service = providers.Factory(
-        SkillExecutionService,
-        session=providers.Callable(get_current_session),
-        skill_exec_repo=InfraContainer.skill_execution_repository,
-        intent_repo=InfraContainer.work_intent_repository,
-        concurrency_manager=skill_concurrency_manager,
     )
 
     # Note Version Services

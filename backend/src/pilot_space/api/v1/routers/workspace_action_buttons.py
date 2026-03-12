@@ -14,6 +14,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
 
+from pilot_space.api.middleware.request_context import WorkspaceId
 from pilot_space.api.v1.schemas.skill_action_button import (
     SkillActionButtonCreate,
     SkillActionButtonReorder,
@@ -81,7 +82,7 @@ async def _require_admin(user_id: UUID, workspace_id: UUID, session: DbSession) 
     summary="List active action buttons",
 )
 async def list_active_buttons(
-    workspace_id: UUID,
+    workspace_id: WorkspaceId,
     session: DbSession,
     current_user_id: CurrentUserId,
 ) -> list[SkillActionButtonResponse]:
@@ -99,7 +100,7 @@ async def list_active_buttons(
     summary="List all action buttons (admin)",
 )
 async def list_all_buttons(
-    workspace_id: UUID,
+    workspace_id: WorkspaceId,
     session: DbSession,
     current_user_id: CurrentUserId,
 ) -> list[SkillActionButtonResponse]:
@@ -118,7 +119,7 @@ async def list_all_buttons(
     summary="Create an action button",
 )
 async def create_button(
-    workspace_id: UUID,
+    workspace_id: WorkspaceId,
     request: SkillActionButtonCreate,
     session: DbSession,
     current_user_id: CurrentUserId,
@@ -152,7 +153,7 @@ async def create_button(
     summary="Update an action button",
 )
 async def update_button(
-    workspace_id: UUID,
+    workspace_id: WorkspaceId,
     button_id: UUID,
     request: SkillActionButtonUpdate,
     session: DbSession,
@@ -183,7 +184,7 @@ async def update_button(
     summary="Reorder action buttons",
 )
 async def reorder_buttons(
-    workspace_id: UUID,
+    workspace_id: WorkspaceId,
     request: SkillActionButtonReorder,
     session: DbSession,
     current_user_id: CurrentUserId,
@@ -214,7 +215,7 @@ async def reorder_buttons(
     summary="Delete an action button",
 )
 async def delete_button(
-    workspace_id: UUID,
+    workspace_id: WorkspaceId,
     button_id: UUID,
     session: DbSession,
     current_user_id: CurrentUserId,

@@ -6,6 +6,8 @@ No DELETE — encryption keys are archived, not deleted (key rotation creates a 
 
 from __future__ import annotations
 
+from uuid import UUID
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -33,11 +35,11 @@ class WorkspaceEncryptionRepository:
         """
         self.session = session
 
-    async def get_key_record(self, workspace_id: str) -> WorkspaceEncryptionKey | None:
+    async def get_key_record(self, workspace_id: UUID) -> WorkspaceEncryptionKey | None:
         """Fetch the encryption key record for a workspace.
 
         Args:
-            workspace_id: Workspace UUID string.
+            workspace_id: Workspace UUID.
 
         Returns:
             WorkspaceEncryptionKey record, or None if not configured.
@@ -49,14 +51,14 @@ class WorkspaceEncryptionRepository:
         )
         return result.scalar_one_or_none()
 
-    async def upsert_key(self, workspace_id: str, raw_key: str) -> WorkspaceEncryptionKey:
+    async def upsert_key(self, workspace_id: UUID, raw_key: str) -> WorkspaceEncryptionKey:
         """Store or update the workspace encryption key.
 
         Validates key format, then encrypts with master key before storing.
         Increments key_version on update.
 
         Args:
-            workspace_id: Workspace UUID string.
+            workspace_id: Workspace UUID.
             raw_key: Raw Fernet key to store.
 
         Returns:
@@ -89,14 +91,14 @@ class WorkspaceEncryptionRepository:
         await self.session.flush()
         return record
 
-    async def clear_previous_key(self, workspace_id: str) -> None:
+    async def clear_previous_key(self, workspace_id: UUID) -> None:
         """Null out previous_encrypted_key after re-encryption completes.
 
         Called after all content has been re-encrypted with the new key,
         so the old key is no longer needed for fallback decryption.
 
         Args:
-            workspace_id: Workspace UUID string.
+            workspace_id: Workspace UUID.
         """
         record = await self.get_key_record(workspace_id)
         if record is not None:

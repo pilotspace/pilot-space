@@ -8,9 +8,11 @@
 
 'use client';
 
+import * as React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { ConfirmActionDialog } from './confirm-action-dialog';
 import type { WorkspaceRoleSkill } from '@/services/api/workspace-role-skills';
 
 interface WorkspaceSkillCardProps {
@@ -28,51 +30,70 @@ export function WorkspaceSkillCard({
   isActivating = false,
   isRemoving = false,
 }: WorkspaceSkillCardProps) {
+  const [confirmRemoveOpen, setConfirmRemoveOpen] = React.useState(false);
+
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="font-medium">{skill.role_name}</span>
-            {skill.is_active ? (
-              <Badge variant="default" className="bg-green-500 hover:bg-green-500">
-                Active
-              </Badge>
-            ) : (
-              <Badge variant="outline" className="border-yellow-500 text-yellow-600">
-                Pending Review
-              </Badge>
-            )}
+    <>
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="font-medium">{skill.role_name}</span>
+              {skill.is_active ? (
+                <Badge variant="default" className="bg-green-500 hover:bg-green-500">
+                  Active
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="border-yellow-500 text-yellow-600">
+                  Pending Review
+                </Badge>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">{skill.role_type.replace(/_/g, ' ')}</p>
           </div>
-          <p className="text-xs text-muted-foreground">{skill.role_type.replace(/_/g, ' ')}</p>
-        </div>
-        <div className="flex gap-2">
-          {!skill.is_active && (
+          <div className="flex gap-2">
+            {!skill.is_active && (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => onActivate(skill.id)}
+                disabled={isActivating}
+              >
+                Activate
+              </Button>
+            )}
             <Button
-              variant="default"
+              variant="destructive"
               size="sm"
-              onClick={() => onActivate(skill.id)}
-              disabled={isActivating}
+              onClick={() => setConfirmRemoveOpen(true)}
+              disabled={isRemoving}
             >
-              Activate
+              Remove
             </Button>
-          )}
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={() => onRemove(skill.id)}
-            disabled={isRemoving}
-          >
-            Remove
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <p className="text-sm text-muted-foreground line-clamp-3 font-mono whitespace-pre-wrap">
-          {skill.skill_content.slice(0, 300)}
-          {skill.skill_content.length > 300 ? '\u2026' : ''}
-        </p>
-      </CardContent>
-    </Card>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground line-clamp-3 font-mono whitespace-pre-wrap">
+            {skill.skill_content.slice(0, 300)}
+            {skill.skill_content.length > 300 ? '\u2026' : ''}
+          </p>
+        </CardContent>
+      </Card>
+
+      {confirmRemoveOpen && (
+        <ConfirmActionDialog
+          open={confirmRemoveOpen}
+          onCancel={() => setConfirmRemoveOpen(false)}
+          onConfirm={() => {
+            onRemove(skill.id);
+            setConfirmRemoveOpen(false);
+          }}
+          title={`Remove "${skill.role_name}" skill?`}
+          description="This will permanently remove this workspace skill. This action cannot be undone."
+          confirmLabel="Remove"
+          variant="destructive"
+        />
+      )}
+    </>
   );
 }

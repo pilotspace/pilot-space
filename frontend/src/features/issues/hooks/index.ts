@@ -63,3 +63,7 @@ export { useRelatedSuggestions, relatedSuggestionsKeys } from './use-related-sug
 export { useDismissSuggestion } from './use-dismiss-suggestion';
 export { useCreateRelation } from './use-create-relation';
 export { useDeleteRelation } from './use-delete-relation';
+
+// Issue detail page extracted hooks (FE-M6)
+export { useIssueApprovals } from './use-issue-approvals';
+export { useIssueAiActions } from './use-issue-ai-actions';

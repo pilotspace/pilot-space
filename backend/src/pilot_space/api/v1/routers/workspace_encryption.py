@@ -21,6 +21,7 @@ References:
 
 from __future__ import annotations
 
+import hmac
 from datetime import datetime
 from typing import TYPE_CHECKING, Annotated
 from uuid import UUID
@@ -227,7 +228,7 @@ async def get_encryption_status(
     await _require_settings_read(session, current_user.user_id, workspace_id)
 
     repo = WorkspaceEncryptionRepository(session)
-    record = await repo.get_key_record(str(workspace_id))
+    record = await repo.get_key_record(workspace_id)
 
     if record is None:
         return EncryptionStatusResponse(enabled=False)
@@ -258,7 +259,9 @@ async def put_encryption_key(
         HTTPException 422: If key is not a valid Fernet key format.
         HTTPException 403: If user lacks OWNER permission.
     """
-    # Validate key format before auth check (cheap operation)
+    workspace_id = await _resolve_workspace(workspace_slug, session)
+    await _require_settings_manage(session, current_user.user_id, workspace_id)
+
     try:
         validate_workspace_key(body.key)
     except ValueError as exc:
@@ -267,11 +270,8 @@ async def put_encryption_key(
             detail=str(exc),
         ) from exc
 
-    workspace_id = await _resolve_workspace(workspace_slug, session)
-    await _require_settings_manage(session, current_user.user_id, workspace_id)
-
     repo = WorkspaceEncryptionRepository(session)
-    record = await repo.upsert_key(str(workspace_id), body.key)
+    record = await repo.upsert_key(workspace_id, body.key)
     await session.commit()
 
     return EncryptionKeyResponse(
@@ -302,7 +302,7 @@ async def verify_encryption_key(
     await _require_settings_read(session, current_user.user_id, workspace_id)
 
     repo = WorkspaceEncryptionRepository(session)
-    record = await repo.get_key_record(str(workspace_id))
+    record = await repo.get_key_record(workspace_id)
 
     if record is None:
         raise HTTPException(
@@ -310,9 +310,9 @@ async def verify_encryption_key(
             detail="No encryption key configured for this workspace",
         )
 
-    # Decrypt stored key and compare
+    # Decrypt stored key and compare using constant-time comparison to prevent timing attacks
     stored_key = retrieve_workspace_key(record.encrypted_workspace_key)
-    if stored_key != body.key:
+    if not hmac.compare_digest(stored_key, body.key):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Key does not match current workspace key",
@@ -373,6 +373,9 @@ async def rotate_encryption_key(
         HTTPException 403: If user is not workspace owner.
         HTTPException 500: If rotation fails mid-batch.
     """
+    workspace_id = await _resolve_workspace(workspace_slug, session)
+    await _require_settings_manage(session, current_user.user_id, workspace_id)
+
     try:
         validate_workspace_key(body.new_key)
     except ValueError as exc:
@@ -381,13 +384,8 @@ async def rotate_encryption_key(
             detail=str(exc),
         ) from exc
 
-    workspace_id = await _resolve_workspace(workspace_slug, session)
-    await _require_settings_manage(session, current_user.user_id, workspace_id)
-
     try:
-        counts = await rotate_workspace_key(
-            session, str(workspace_id), body.new_key, batch_size=100
-        )
+        counts = await rotate_workspace_key(session, workspace_id, body.new_key, batch_size=100)
         await session.commit()
     except ValueError as exc:
         raise HTTPException(
@@ -397,7 +395,7 @@ async def rotate_encryption_key(
 
     # Fetch updated key version
     repo = WorkspaceEncryptionRepository(session)
-    record = await repo.get_key_record(str(workspace_id))
+    record = await repo.get_key_record(workspace_id)
     key_version = record.key_version if record else 0
 
     return KeyRotationResponse(

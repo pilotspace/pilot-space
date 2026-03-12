@@ -9,7 +9,6 @@
 'use client';
 
 import * as React from 'react';
-import { observer } from 'mobx-react-lite';
 import { Layers, AlertCircle } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -50,7 +49,7 @@ function CardSkeleton() {
   );
 }
 
-export const TemplateCatalog = observer(function TemplateCatalog({
+export function TemplateCatalog({
   workspaceSlug,
   isAdmin,
   onUseThis,
@@ -164,4 +163,4 @@ export const TemplateCatalog = observer(function TemplateCatalog({
       )}
     </div>
   );
-});
+}

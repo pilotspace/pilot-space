@@ -14,6 +14,7 @@ from pilot_space.application.services.role_skill.generate_role_skill_service imp
     GenerateRoleSkillPayload,
     GenerateRoleSkillService,
 )
+from pilot_space.infrastructure.database.models.skill_template import SkillTemplate
 from pilot_space.infrastructure.database.repositories.skill_template_repository import (
     SkillTemplateRepository,
 )
@@ -123,7 +124,7 @@ class CreateUserSkillService:
     async def _generate_content(
         self,
         *,
-        template: object,
+        template: SkillTemplate,
         experience_description: str,
         user_id: UUID,
         workspace_id: UUID,
@@ -142,8 +143,8 @@ class CreateUserSkillService:
         Returns:
             Generated skill content markdown.
         """
-        role_type = getattr(template, "role_type", None) or "custom"
-        template_name = getattr(template, "name", "Custom Skill")
+        role_type = template.role_type or "custom"
+        template_name = template.name
 
         gen_service = GenerateRoleSkillService(self._session)
         payload = GenerateRoleSkillPayload(

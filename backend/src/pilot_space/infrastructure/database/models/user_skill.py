@@ -72,13 +72,16 @@ class UserSkill(WorkspaceScopedModel):
     )
 
     # Relationships
+    # lazy="raise" forces callers to use explicit eager loading (selectinload/joinedload).
+    # UserSkillRepository.get_by_user_workspace uses selectinload(UserSkill.template)
+    # for the materializer hot-path.
     user: Mapped[User] = relationship(
         "User",
-        lazy="joined",
+        lazy="raise",
     )
     template: Mapped[SkillTemplate | None] = relationship(
         "SkillTemplate",
-        lazy="joined",
+        lazy="raise",
     )
 
     __table_args__ = (

@@ -68,10 +68,8 @@ class SeedTemplatesService:
         """
         skill_repo = SkillTemplateRepository(self._session)
 
-        # Idempotency guard: check if workspace already has built_in templates
-        existing = await skill_repo.get_by_workspace(workspace_id)
-        has_built_in = any(getattr(t, "source", None) == "built_in" for t in existing)
-        if has_built_in:
+        # Idempotency guard: SELECT EXISTS instead of loading all template rows
+        if await skill_repo.has_built_in_templates(workspace_id):
             logger.debug(
                 "Workspace %s already has built_in templates, skipping seeding",
                 workspace_id,

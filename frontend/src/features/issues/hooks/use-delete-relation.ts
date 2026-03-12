@@ -6,6 +6,7 @@
  */
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { issuesApi } from '@/services/api';
 import { issueRelationsKeys } from './use-issue-relations';
 
@@ -17,6 +18,9 @@ export function useDeleteRelation(workspaceId: string, issueId: string) {
       void queryClient.invalidateQueries({
         queryKey: issueRelationsKeys.detail(workspaceId, issueId),
       });
+    },
+    onError: () => {
+      toast.error('Failed to unlink issue');
     },
   });
 }

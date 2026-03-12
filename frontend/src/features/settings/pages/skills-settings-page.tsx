@@ -120,6 +120,9 @@ export const SkillsSettingsPage = observer(function SkillsSettingsPage() {
         onSuccess: () => {
           toast.success(skill.is_active ? 'Skill deactivated' : 'Skill activated');
         },
+        onError: () => {
+          toast.error('Failed to toggle skill');
+        },
       }
     );
   };
@@ -134,6 +137,9 @@ export const SkillsSettingsPage = observer(function SkillsSettingsPage() {
       onSuccess: () => {
         toast.success('Skill removed');
         setSkillToDelete(null);
+      },
+      onError: () => {
+        toast.error('Failed to remove skill');
       },
     });
   };
@@ -158,6 +164,9 @@ export const SkillsSettingsPage = observer(function SkillsSettingsPage() {
         onSuccess: () => {
           toast.success(template.is_active ? 'Template deactivated' : 'Template activated');
         },
+        onError: () => {
+          toast.error('Failed to toggle template');
+        },
       }
     );
   };
@@ -172,6 +181,9 @@ export const SkillsSettingsPage = observer(function SkillsSettingsPage() {
       onSuccess: () => {
         toast.success('Template deleted');
         setTemplateToDelete(null);
+      },
+      onError: () => {
+        toast.error('Failed to delete template');
       },
     });
   };

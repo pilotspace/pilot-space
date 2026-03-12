@@ -6,6 +6,7 @@
  */
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { issuesApi } from '@/services/api';
 import { relatedSuggestionsKeys } from './use-related-suggestions';
 
@@ -18,6 +19,9 @@ export function useDismissSuggestion(workspaceId: string, issueId: string) {
       void queryClient.invalidateQueries({
         queryKey: relatedSuggestionsKeys.detail(workspaceId, issueId),
       });
+    },
+    onError: () => {
+      toast.error('Failed to dismiss suggestion');
     },
   });
 }

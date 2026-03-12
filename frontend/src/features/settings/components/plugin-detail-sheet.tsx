@@ -22,6 +22,7 @@ interface PluginDetailDialogProps {
   onOpenChange: (open: boolean) => void;
   onToggleSkill: (pluginId: string, isActive: boolean) => void;
   onRemove: (repoUrl: string) => void;
+  onUpdate?: (repoUrl: string) => void;
 }
 
 export function PluginDetailDialog({
@@ -30,6 +31,7 @@ export function PluginDetailDialog({
   onOpenChange,
   onToggleSkill,
   onRemove,
+  onUpdate,
 }: PluginDetailDialogProps) {
   const [confirmRemoveOpen, setConfirmRemoveOpen] = React.useState(false);
 
@@ -56,6 +58,7 @@ export function PluginDetailDialog({
                   size="sm"
                   variant="outline"
                   className="border-amber-500/30 text-amber-400 hover:bg-amber-500/10"
+                  onClick={() => onUpdate?.(group.repoUrl)}
                 >
                   <ArrowUpCircle className="mr-1.5 h-3.5 w-3.5" />
                   Update

@@ -19,8 +19,15 @@ from uuid import UUID
 import httpx
 from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
-from pydantic import BaseModel, Field
 
+from pilot_space.api.v1.routers._mcp_server_schemas import (
+    WORKSPACE_SLUG_RE,
+    McpOAuthUrlResponse,
+    McpServerStatusResponse,
+    WorkspaceMcpServerCreate,
+    WorkspaceMcpServerListResponse,
+    WorkspaceMcpServerResponse,
+)
 from pilot_space.dependencies import (
     CurrentUser,
     DbSession,
@@ -33,73 +40,13 @@ from pilot_space.infrastructure.database.models.workspace_mcp_server import (
 from pilot_space.infrastructure.database.repositories.workspace_repository import (
     WorkspaceRepository,
 )
+from pilot_space.infrastructure.database.rls import set_rls_context
 from pilot_space.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
 
 router = APIRouter()
 mcp_oauth_callback_router = APIRouter()
-
-
-# ---------------------------------------------------------------------------
-# Pydantic schemas (inline -- no separate file needed given size constraint)
-# ---------------------------------------------------------------------------
-
-
-class WorkspaceMcpServerCreate(BaseModel):
-    """Request body for registering a new remote MCP server."""
-
-    display_name: str = Field(..., max_length=128, description="Human-readable label")
-    url: str = Field(..., max_length=512, description="Remote MCP server endpoint (SSE)")
-    auth_type: McpAuthType = Field(default=McpAuthType.BEARER)
-    auth_token: str | None = Field(
-        default=None, description="Bearer token (will be encrypted at rest)"
-    )
-    oauth_client_id: str | None = Field(default=None, max_length=256)
-    oauth_auth_url: str | None = Field(default=None, max_length=512)
-    oauth_token_url: str | None = Field(default=None, max_length=512)
-    oauth_scopes: str | None = Field(default=None, max_length=512)
-
-
-class WorkspaceMcpServerResponse(BaseModel):
-    """Response for a single MCP server (never echoes raw token)."""
-
-    id: UUID
-    workspace_id: UUID
-    display_name: str
-    url: str
-    auth_type: McpAuthType
-    last_status: str | None
-    last_status_checked_at: datetime | None
-    created_at: datetime
-    # OAuth fields (returned only for oauth2 servers)
-    oauth_client_id: str | None = None
-    oauth_auth_url: str | None = None
-    oauth_scopes: str | None = None
-
-    model_config = {"from_attributes": True}
-
-
-class WorkspaceMcpServerListResponse(BaseModel):
-    """List response for workspace MCP servers."""
-
-    items: list[WorkspaceMcpServerResponse]
-    total: int
-
-
-class McpServerStatusResponse(BaseModel):
-    """Status probe result for an MCP server."""
-
-    server_id: UUID
-    status: str  # "connected" | "failed" | "unknown"
-    checked_at: datetime
-
-
-class McpOAuthUrlResponse(BaseModel):
-    """OAuth authorization URL for MCP server OAuth flow."""
-
-    auth_url: str
-    state: str
 
 
 # ---------------------------------------------------------------------------
@@ -134,13 +81,19 @@ async def _get_admin_workspace(
         )
 
     member = next(
-        (m for m in (workspace.members or []) if m.user_id == current_user.user_id),
+        (
+            m
+            for m in (workspace.members or [])
+            if m.user_id == current_user.user_id and not m.is_deleted
+        ),
         None,
     )
     if not member or not member.is_admin:
+        # SEC-M1: Return 404 for both missing workspace and non-admin to avoid
+        # workspace existence enumeration via 404/403 distinction.
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin role required",
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Workspace not found",
         )
 
     return workspace
@@ -179,6 +132,7 @@ async def register_mcp_server(
         Created MCP server details (without token).
     """
     await _get_admin_workspace(workspace_id, current_user, session)
+    await set_rls_context(session, current_user.user_id, workspace_id)
 
     from pilot_space.infrastructure.database.repositories.workspace_mcp_server_repository import (
         WorkspaceMcpServerRepository,
@@ -242,6 +196,7 @@ async def list_mcp_servers(
         List of MCP server summaries.
     """
     await _get_admin_workspace(workspace_id, current_user, session)
+    await set_rls_context(session, current_user.user_id, workspace_id)
 
     from pilot_space.infrastructure.database.repositories.workspace_mcp_server_repository import (
         WorkspaceMcpServerRepository,
@@ -290,6 +245,7 @@ async def get_mcp_server_status(
         Status probe result.
     """
     await _get_admin_workspace(workspace_id, current_user, session)
+    await set_rls_context(session, current_user.user_id, workspace_id)
 
     from pilot_space.infrastructure.database.repositories.workspace_mcp_server_repository import (
         WorkspaceMcpServerRepository,
@@ -317,10 +273,10 @@ async def get_mcp_server_status(
                 workspace_id=str(workspace_id),
             )
 
-    # HTTP probe
+    # HTTP probe — follow_redirects=False prevents redirect-based SSRF bypass (SEC-H3)
     probe_status = "unknown"
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
+        async with httpx.AsyncClient(timeout=5.0, follow_redirects=False) as client:
             response = await client.get(server.url, headers=headers)
             probe_status = "connected" if response.status_code < 500 else "failed"
     except (httpx.ConnectError, httpx.TimeoutException, httpx.RequestError):
@@ -378,6 +334,7 @@ async def delete_mcp_server(
         session: Database session.
     """
     await _get_admin_workspace(workspace_id, current_user, session)
+    await set_rls_context(session, current_user.user_id, workspace_id)
 
     from pilot_space.infrastructure.database.repositories.workspace_mcp_server_repository import (
         WorkspaceMcpServerRepository,
@@ -436,6 +393,7 @@ async def get_mcp_oauth_url(
         Authorization URL and state token.
     """
     workspace = await _get_admin_workspace(workspace_id, current_user, session)
+    await set_rls_context(session, current_user.user_id, workspace_id)
 
     from pilot_space.infrastructure.database.repositories.workspace_mcp_server_repository import (
         WorkspaceMcpServerRepository,
@@ -462,13 +420,15 @@ async def get_mcp_oauth_url(
     nonce = secrets.token_urlsafe(32)
     state = f"mcp_oauth_{server_id}_{nonce}"
 
-    # Store state in Redis with 10-minute TTL (includes workspace_slug for callback redirect)
+    # Store state in Redis with 10-minute TTL (includes workspace_slug for callback redirect
+    # and user_id so the callback can set RLS context without re-authentication)
     redis_client = _get_redis_client(request)
     if redis_client is not None:
         state_data: dict[str, Any] = {
             "server_id": str(server_id),
             "workspace_id": str(workspace_id),
             "workspace_slug": workspace.slug,
+            "user_id": str(current_user.user_id),
             "nonce": nonce,
         }
         import json
@@ -560,11 +520,16 @@ async def mcp_oauth_callback(
         state_data = json.loads(raw)
         server_id = UUID(state_data["server_id"])
         workspace_id = UUID(state_data["workspace_id"])
+        # user_id stored in state by get_mcp_oauth_url for RLS context in callback
+        initiating_user_id = UUID(state_data["user_id"])
     except (json.JSONDecodeError, KeyError, ValueError):
         return RedirectResponse(url=f"{fallback_redirect}?status=error&reason=state_decode_error")
 
-    # Build redirect base with workspace slug (if available in state)
+    # Build redirect base with workspace slug (if available in state).
+    # Validate slug against allowlist to prevent open redirect (SEC-C3).
     workspace_slug = state_data.get("workspace_slug", "")
+    if workspace_slug and not WORKSPACE_SLUG_RE.match(workspace_slug):
+        workspace_slug = ""
     redirect_base = (
         f"/{workspace_slug}/settings/mcp-servers" if workspace_slug else "/settings/mcp-servers"
     )
@@ -581,6 +546,8 @@ async def mcp_oauth_callback(
 
     try:
         async with get_db_session() as db_session:
+            # SEC-C3: Set RLS context using the initiating user's ID stored in OAuth state
+            await set_rls_context(db_session, initiating_user_id, workspace_id)
             repo = WorkspaceMcpServerRepository(session=db_session)
             server = await repo.get_by_workspace_and_id(
                 server_id=server_id, workspace_id=workspace_id
