@@ -46,7 +46,7 @@ Full archive: `.planning/milestones/v1.0-alpha-ROADMAP.md`
 ### v1.0-alpha Gap Closure (Phases 21–23)
 
 - [x] Phase 21: Documentation & Verification Closure (completed 2026-03-12)
-- [ ] Phase 22: Integration Safety — Session & OAuth2 UI
+- [x] Phase 22: Integration Safety — Session & OAuth2 UI (completed 2026-03-12)
 - [ ] Phase 23: Tech Debt Sweep
 
 ### Phase 21: Documentation & Verification Closure
@@ -63,7 +63,7 @@ Plans:
 **Goal:** Fix session sharing race condition and add OAuth2 MCP authorization UI
 **Requirements:** SKRG-05 (session safety), MCP-03 (OAuth2 flow completion)
 **Gap Closure:** Closes 2 integration gaps + 1 flow gap from audit
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 
 Plans:
 - [ ] 22-01-PLAN.md — Fix SeedPluginsService session race condition + OAuth callback redirect slug
