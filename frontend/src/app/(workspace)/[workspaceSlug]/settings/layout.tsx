@@ -204,7 +204,7 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
     <div className="flex h-full flex-col">
       {/* Desktop Header */}
       <div className="hidden border-b border-border px-6 py-4 md:block">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
             <Settings className="h-5 w-5 text-muted-foreground" />
           </div>
@@ -216,7 +216,7 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
       </div>
 
       {/* Mobile Header with Sheet trigger */}
-      <div className="flex items-center gap-3 border-b border-border px-4 py-3 md:hidden">
+      <div className="flex items-center gap-4 border-b border-border px-4 py-4 md:hidden">
         <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
           <SheetTrigger asChild>
             <Button
