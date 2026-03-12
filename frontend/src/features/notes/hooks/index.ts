@@ -2,6 +2,10 @@
  * Notes Hooks - Barrel Export
  */
 
+// Tree hooks
+export { useProjectPageTree, projectTreeKeys } from './useProjectPageTree';
+export { usePersonalPages, personalPagesKeys } from './usePersonalPages';
+
 // Query hooks
 export { useNotes, useInfiniteNotes, notesKeys, NOTES_QUERY_KEY } from './useNotes';
 export type { UseNotesOptions } from './useNotes';
