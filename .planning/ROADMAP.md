@@ -73,15 +73,11 @@ Plans:
 **Goal:** Close remaining tech debt items identified in v1.0-alpha audit
 **Requirements:** AIPR-05 (cosmetic), code quality
 **Gap Closure:** Closes 8 tech debt items across 5 phases
+**Plans:** 2 plans
 
-Tasks:
-1. Fix `_test_provider_api_key` for kimi/glm/custom providers
-2. Remove dead `schemas/mcp_server.py` file (3825 bytes, superseded)
-3. Fix stale `item["issue_id"]` in test_related_issues.py (lines 165, 427)
-4. Verify DELETE relation endpoint soft-delete vs hard-delete behavior
-5. Fix Update Available badge color (blue -> orange per spec)
-6. Refactor `ai_chat.py` below 700-line limit
-7. Extend `AISettingsStore.validateKey` to handle all provider types
+Plans:
+- [ ] 23-01-PLAN.md — Backend: extend provider key testing, remove dead code, refactor ai_chat.py
+- [ ] 23-02-PLAN.md — Frontend: fix Update badge color, extend validateKey for all providers
 
 ## Progress
 
@@ -89,9 +85,9 @@ Tasks:
 |-------|-----------|-------|--------|-----------|
 | 1–11 | v1.0 | 46/46 | Complete | 2026-03-09 |
 | 12–20 | v1.0-alpha | 31/31 | Complete | 2026-03-12 |
-| 21–23 | v1.0-alpha (gap closure) | 2/? | Pending | — |
+| 21–23 | v1.0-alpha (gap closure) | 4/6 | Pending | — |
 
-**Total: 23 phases, 79 plans, 69 requirements**
+**Total: 23 phases, 83 plans, 69 requirements**
 
 ---
 *v1.0 shipped: 2026-03-09 — 11 phases, 46 plans, 30/30 requirements*
