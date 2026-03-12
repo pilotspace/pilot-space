@@ -32,8 +32,8 @@ Requirements for the Notion-Style Restructure milestone. Each maps to roadmap ph
 ### Visual Design & Responsive
 
 - [x] **UI-01**: Typography, spacing, and colors are refreshed to a Notion-like feel (system fonts, 8px grid, muted palette)
-- [ ] **UI-02**: Sidebar collapses to icon rail or overlay on tablet (768-1024px)
-- [ ] **UI-03**: Content area adapts layout for tablet viewport
+- [x] **UI-02**: Sidebar collapses to icon rail or overlay on tablet (768-1024px)
+- [x] **UI-03**: Content area adapts layout for tablet viewport
 - [x] **UI-04**: User can drag-and-drop pages in sidebar tree to reorder and re-parent
 
 ## Future Requirements
@@ -84,8 +84,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | HUB-03 | Phase 27: Project Hub & Issue Views | Complete |
 | HUB-04 | Phase 27: Project Hub & Issue Views | Complete |
 | UI-01 | Phase 28: Visual Design Refresh | Complete |
-| UI-02 | Phase 29: Responsive & Drag-and-Drop | Pending |
-| UI-03 | Phase 29: Responsive & Drag-and-Drop | Pending |
+| UI-02 | Phase 29: Responsive & Drag-and-Drop | Complete |
+| UI-03 | Phase 29: Responsive & Drag-and-Drop | Complete |
 | UI-04 | Phase 29: Responsive & Drag-and-Drop | Complete |
 
 **Coverage:**
