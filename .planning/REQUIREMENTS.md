@@ -1,0 +1,98 @@
+# Requirements: Pilot Space v1.0.0-alpha2
+
+**Defined:** 2026-03-12
+**Core Value:** Enterprise teams can adopt AI-augmented SDLC workflows without sacrificing data sovereignty, compliance, or human control — AI accelerates without replacing human judgment.
+
+## v1.0.0-alpha2 Requirements
+
+Requirements for the Notion-Style Restructure milestone. Each maps to roadmap phases.
+
+### Page Tree & Data Model
+
+- [x] **TREE-01**: User can create pages nested up to 3 levels within a project (Project > Section > Page > Sub-page)
+- [ ] **TREE-02**: User can move a page to a different parent within the same project (re-parent)
+- [ ] **TREE-03**: User can reorder pages among siblings via position field
+- [x] **TREE-04**: User can create personal pages owned by their account, independent of any project
+- [x] **TREE-05**: Existing notes are migrated to project pages (if project_id set) or personal pages (if no project_id), workspace-level notes removed
+
+### Sidebar & Navigation
+
+- [ ] **NAV-01**: User can expand a project in the sidebar to see its nested page tree (3 levels, expand/collapse toggles)
+- [ ] **NAV-02**: User can create a new child page inline from the sidebar by clicking "+" on a tree node
+- [ ] **NAV-03**: User sees personal pages listed under "Notes" nav item in the sidebar
+- [ ] **NAV-04**: User sees breadcrumb navigation (parent > child > current) in the page header
+
+### Project Hub & Issue Views
+
+- [ ] **HUB-01**: User can view project issues as Board, List, or Table embedded within the project page
+- [ ] **HUB-02**: User can switch between issue views (Board/List/Table) via a toolbar within the project page
+- [ ] **HUB-03**: User can view issues grouped by priority swimlanes (Priority view)
+- [ ] **HUB-04**: User can set an emoji icon on any page, displayed in sidebar tree and page header
+
+### Visual Design & Responsive
+
+- [ ] **UI-01**: Typography, spacing, and colors are refreshed to a Notion-like feel (system fonts, 8px grid, muted palette)
+- [ ] **UI-02**: Sidebar collapses to icon rail or overlay on tablet (768-1024px)
+- [ ] **UI-03**: Content area adapts layout for tablet viewport
+- [ ] **UI-04**: User can drag-and-drop pages in sidebar tree to reorder and re-parent
+
+## Future Requirements
+
+### Enhanced Navigation
+
+- **NAV-05**: Cmd+K search results show breadcrumb path for tree-aware search
+- **NAV-06**: Keyboard navigation in sidebar tree (arrow keys, Enter, Tab)
+
+### Advanced Views
+
+- **HUB-05**: Timeline/Gantt view for project issues
+- **HUB-06**: AI ghost text completions context-aware of page position in tree hierarchy
+
+### Templates
+
+- **TMPL-01**: Page templates for tree nodes with auto-populated structure
+
+## Out of Scope
+
+| Feature | Reason |
+|---------|--------|
+| Unlimited nesting depth | Organizational anti-pattern; 3 levels covers 95% of use cases |
+| Real-time collaborative tree editing | Requires CRDT for tree structure; enormous complexity vs. value |
+| Full inline database engine (Notion-style) | Massive scope; embed existing issue views instead |
+| Page-level permissions (per-page ACL) | Breaks simple workspace RBAC model; use project-level access |
+| Mobile-first responsive | Developer workflows are desktop/tablet primary |
+| Synced blocks / transclusion | TipTap doesn't natively support; major architectural addition |
+| Custom page templates in tree | Template system for tree structures is complex; use flat templates |
+
+## Traceability
+
+Which phases cover which requirements. Updated during roadmap creation.
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| TREE-01 | Phase 24: Page Tree Data Model | Complete |
+| TREE-02 | Phase 25: Tree API & Page Service | Pending |
+| TREE-03 | Phase 25: Tree API & Page Service | Pending |
+| TREE-04 | Phase 24: Page Tree Data Model | Complete |
+| TREE-05 | Phase 24: Page Tree Data Model | Complete |
+| NAV-01 | Phase 26: Sidebar Tree & Navigation | Pending |
+| NAV-02 | Phase 26: Sidebar Tree & Navigation | Pending |
+| NAV-03 | Phase 26: Sidebar Tree & Navigation | Pending |
+| NAV-04 | Phase 26: Sidebar Tree & Navigation | Pending |
+| HUB-01 | Phase 27: Project Hub & Issue Views | Pending |
+| HUB-02 | Phase 27: Project Hub & Issue Views | Pending |
+| HUB-03 | Phase 27: Project Hub & Issue Views | Pending |
+| HUB-04 | Phase 27: Project Hub & Issue Views | Pending |
+| UI-01 | Phase 28: Visual Design Refresh | Pending |
+| UI-02 | Phase 29: Responsive & Drag-and-Drop | Pending |
+| UI-03 | Phase 29: Responsive & Drag-and-Drop | Pending |
+| UI-04 | Phase 29: Responsive & Drag-and-Drop | Pending |
+
+**Coverage:**
+- v1.0.0-alpha2 requirements: 17 total
+- Mapped to phases: 17
+- Unmapped: 0
+
+---
+*Requirements defined: 2026-03-12*
+*Last updated: 2026-03-12 after roadmap creation*
