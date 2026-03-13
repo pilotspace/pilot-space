@@ -5,7 +5,7 @@
  * and hydration of expandedNodes Set.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { autorun } from 'mobx';
 import { UIStore } from '../UIStore';
 
@@ -47,6 +47,10 @@ describe('UIStore — expandedNodes', () => {
     localStorageMock.clear();
     vi.clearAllMocks();
     uiStore = new UIStore();
+  });
+
+  afterEach(() => {
+    uiStore.dispose();
   });
 
   it('toggleNodeExpanded adds nodeId to expandedNodes set', () => {
@@ -105,6 +109,8 @@ describe('UIStore — expandedNodes', () => {
     expect(freshStore.expandedNodes.has('persisted-node-1')).toBe(true);
     expect(freshStore.expandedNodes.has('persisted-node-2')).toBe(true);
     expect(freshStore.expandedNodes.size).toBe(2);
+
+    freshStore.dispose();
   });
 
   it('expandedNodes is MobX-observable (Set mutations trigger reactions)', () => {

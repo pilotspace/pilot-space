@@ -160,8 +160,8 @@ async def test_move_cascades_depth_to_descendants() -> None:
     note = _make_note(workspace_id=workspace_id, project_id=project_id, depth=0)
 
     fake_desc: dict[str, Any] = {
-        "id": str(child_id),
-        "parent_id": str(note.id),
+        "id": child_id,
+        "parent_id": note.id,
         "depth": 1,
         "position": 1000,
     }
