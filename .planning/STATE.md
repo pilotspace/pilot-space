@@ -5,7 +5,7 @@ milestone_name: Notion-Style Restructure
 status: completed
 stopped_at: Milestone archived
 last_updated: "2026-03-13"
-last_activity: "2026-03-13 — Completed quick task 5: Per-user AI model defaults and base_url overrides"
+last_activity: "2026-03-13 — Completed quick task 6: RAG test coverage audit (71% overall, 42 tests needed)"
 progress:
   total_phases: 18
   completed_phases: 17
@@ -42,6 +42,8 @@ Next: `/gsd:new-milestone` to define next milestone
 Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase quick-04]: Skip SQLite-incompatible execute tests with @pytest.mark.skip and TEST_DATABASE_URL hint
 - [Phase quick-04]: Remove sys.modules module-level mocks that leak across test session
+- [Phase quick-06]: numpy 2.4.2 + coverage.py requires sitecustomize.py pre-import workaround on macOS
+- [Phase quick-06]: RAG coverage at 71% — _bulk_upsert_pg and hybrid_search_pg (production paths) have 0% coverage; priority fix before new RAG features
 
 ### Pending Todos
 
@@ -60,10 +62,11 @@ None.
 | 3 | Review and merge PR #31, #32, #33 | 2026-03-13 | 4e50a10c | [3-review-carefully-opening-pr-31-32-33-the](./quick/3-review-carefully-opening-pr-31-32-33-the/) |
 | 4 | Fix all preexisting pytest failures | 2026-03-13 | 1bd09554 | [4-checkout-new-branch-from-main-then-fix-a](./quick/4-checkout-new-branch-from-main-then-fix-a/) |
 | 5 | Per-user AI model defaults and base_url overrides | 2026-03-13 | bd06487e | [5-allow-user-to-setup-default-claude-agent](./quick/5-allow-user-to-setup-default-claude-agent/) |
+| 6 | RAG test coverage audit — 71% overall, 42 tests needed to reach 90% | 2026-03-13 | 887ed0f3 | [6-audit-rag-test-coverage-and-validate-emb](./quick/6-audit-rag-test-coverage-and-validate-emb/) |
 
 ## Session Continuity
 
 Last session: 2026-03-13
-Stopped at: Completed quick task 5 (per-user AI model defaults)
+Stopped at: Completed quick task 6 (RAG test coverage audit)
 Resume file: None
 Next action: `/gsd:new-milestone`
