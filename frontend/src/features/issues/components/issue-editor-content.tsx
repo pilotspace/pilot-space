@@ -18,7 +18,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useEditor, EditorContent } from '@tiptap/react';
 import type { Content } from '@tiptap/core';
-import { Link2, MessageSquare } from 'lucide-react';
+import { Activity, Network } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import { SelectionToolbar } from '@/components/editor/SelectionToolbar';
@@ -271,6 +271,10 @@ export function IssueEditorContent({
               </>
             )}
 
+            <CollapsibleSection title="Activity" icon={<Activity className="size-3.5" />}>
+              <ActivityTimeline issueId={issueId} workspaceId={workspaceId} />
+            </CollapsibleSection>
+
             <GitHubImplementationSection
               pullRequests={pullRequests}
               commits={commits}
@@ -283,15 +287,9 @@ export function IssueEditorContent({
               onAffectedNodeClick={onNodeClickHighlight}
             />
 
-            <IssueKnowledgeGraphMini
-              workspaceId={workspaceId}
-              issueId={issueId}
-              onExpandFullView={onExpandGraphFullView ?? (() => {})}
-            />
-
             <CollapsibleSection
               title="Relationships"
-              icon={<Link2 className="size-3.5" />}
+              icon={<Network className="size-3.5" />}
               count={(issue.noteLinks?.length ?? 0) + (issue.project ? 1 : 0) + relations.length}
             >
               <IssueGraph
@@ -303,14 +301,10 @@ export function IssueEditorContent({
               />
             </CollapsibleSection>
 
-            <CollapsibleSection title="Activity" icon={<MessageSquare className="size-3.5" />}>
-              <ActivityTimeline issueId={issueId} workspaceId={workspaceId} />
-            </CollapsibleSection>
-
-            <RelatedIssuesPanel
+            <IssueKnowledgeGraphMini
               workspaceId={workspaceId}
               issueId={issueId}
-              workspaceSlug={workspaceSlug}
+              onExpandFullView={onExpandGraphFullView ?? (() => {})}
             />
           </div>
         </div>
