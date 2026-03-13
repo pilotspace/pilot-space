@@ -119,7 +119,7 @@ export function ProjectCard({ project, variant = 'grid', onClick, index = 0 }: P
               </Avatar>
             )}
             <div className="flex items-center gap-2 flex-shrink-0">
-              <ProgressRing progress={progress} size={24} />
+              {progress > 0 && <ProgressRing progress={progress} size={24} />}
               <span className="text-xs text-muted-foreground tabular-nums">
                 {completedCount}/{project.issueCount}
               </span>
@@ -167,7 +167,7 @@ export function ProjectCard({ project, variant = 'grid', onClick, index = 0 }: P
                 </h3>
               </div>
             </div>
-            <ProgressRing progress={progress} />
+            {progress > 0 && <ProgressRing progress={progress} />}
           </div>
         </CardHeader>
         <CardContent>
