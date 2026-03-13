@@ -5,7 +5,7 @@ milestone_name: Notion-Style Restructure
 status: completed
 stopped_at: Milestone archived
 last_updated: "2026-03-13"
-last_activity: "2026-03-13 — Completed quick task 6: RAG test coverage audit (71% overall, 42 tests needed)"
+last_activity: "2026-03-13 — Completed quick task 7: Close 4 RAG gaps (pgvector search, Gemini removal, PG test docs)"
 progress:
   total_phases: 18
   completed_phases: 17
@@ -44,6 +44,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase quick-04]: Remove sys.modules module-level mocks that leak across test session
 - [Phase quick-06]: numpy 2.4.2 + coverage.py requires sitecustomize.py pre-import workaround on macOS
 - [Phase quick-06]: RAG coverage at 71% — _bulk_upsert_pg and hybrid_search_pg (production paths) have 0% coverage; priority fix before new RAG features
+- [Phase quick-07]: GraphSearchService injected via ctx.extra for MCP tool hybrid search; Gap 4 (Redis cache) deferred as premature optimization
 
 ### Pending Todos
 
@@ -63,10 +64,11 @@ None.
 | 4 | Fix all preexisting pytest failures | 2026-03-13 | 1bd09554 | [4-checkout-new-branch-from-main-then-fix-a](./quick/4-checkout-new-branch-from-main-then-fix-a/) |
 | 5 | Per-user AI model defaults and base_url overrides | 2026-03-13 | bd06487e | [5-allow-user-to-setup-default-claude-agent](./quick/5-allow-user-to-setup-default-claude-agent/) |
 | 6 | RAG test coverage audit — 71% overall, 42 tests needed to reach 90% | 2026-03-13 | 887ed0f3 | [6-audit-rag-test-coverage-and-validate-emb](./quick/6-audit-rag-test-coverage-and-validate-emb/) |
+| 7 | Close 4 RAG gaps: pgvector hybrid search, Gemini removal, PG test docs | 2026-03-13 | 93740d87 | [7-rag-remaining-gaps-pgvector-search-tool-](./quick/7-rag-remaining-gaps-pgvector-search-tool-/) |
 
 ## Session Continuity
 
 Last session: 2026-03-13
-Stopped at: Completed quick task 6 (RAG test coverage audit)
+Stopped at: Completed quick task 7 (RAG remaining gaps)
 Resume file: None
 Next action: `/gsd:new-milestone`
