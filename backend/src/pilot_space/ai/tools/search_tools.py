@@ -3,8 +3,9 @@
 These tools provide semantic and text-based search across
 workspace content including issues, notes, and pages.
 
-T025: semantic_search - Search issues, notes, and content using text matching
-T026: search_codebase - Search indexed codebase from GitHub integration
+T025: semantic_search - Hybrid search via GraphSearchService (pgvector + text),
+      with ILIKE fallback when GraphSearchService is unavailable.
+T026: search_codebase - Reports not_implemented status (code indexing not available).
 """
 
 from __future__ import annotations
@@ -15,12 +16,72 @@ from uuid import UUID
 from sqlalchemy import or_, select
 
 from pilot_space.ai.tools.mcp_server import ToolContext, register_tool
+from pilot_space.application.services.memory.graph_search_service import (
+    GraphSearchPayload,
+    GraphSearchResult,
+    GraphSearchService,
+)
+from pilot_space.domain.graph_node import NodeType
 from pilot_space.infrastructure.database.models import (
     Integration,
     IntegrationProvider,
     Issue,
     Note,
 )
+
+# Map content_type strings to NodeType enums for GraphSearchService
+_CONTENT_TYPE_TO_NODE_TYPES: dict[str, list[NodeType]] = {
+    "issue": [NodeType.ISSUE],
+    "note": [NodeType.NOTE, NodeType.NOTE_CHUNK],
+}
+
+
+def _map_content_types(content_types: list[str] | None) -> list[NodeType] | None:
+    """Map content_type strings to NodeType enums.
+
+    Args:
+        content_types: List of content type strings (e.g., ["issue", "note"]).
+
+    Returns:
+        List of NodeType enums, or None if no filter requested.
+    """
+    if content_types is None:
+        return None
+    node_types: list[NodeType] = []
+    for ct in content_types:
+        mapped = _CONTENT_TYPE_TO_NODE_TYPES.get(ct)
+        if mapped:
+            node_types.extend(mapped)
+    return node_types or None
+
+
+def _format_graph_results(result: GraphSearchResult) -> dict[str, Any]:
+    """Format GraphSearchResult into the MCP tool response dict.
+
+    Args:
+        result: GraphSearchResult from GraphSearchService.execute().
+
+    Returns:
+        Dict with results list, total, search_method, and query.
+    """
+    results: list[dict[str, Any]] = []
+    for scored in result.nodes:
+        node = scored.node
+        results.append(
+            {
+                "type": node.node_type.value,
+                "id": str(node.id),
+                "title": node.label,
+                "excerpt": (node.content or "")[:200],
+                "score": scored.score,
+            }
+        )
+    return {
+        "results": results,
+        "total": len(results),
+        "search_method": "hybrid" if result.embedding_used else "text_similarity",
+        "query": result.query,
+    }
 
 
 @register_tool("search")
@@ -32,9 +93,8 @@ async def semantic_search(
 ) -> dict[str, Any]:
     """Semantic search across workspace content.
 
-    Searches issues, notes, and other content using
-    text matching. Will use vector similarity when embeddings
-    are available.
+    Uses GraphSearchService for hybrid search (pgvector cosine + full-text)
+    when available. Falls back to ILIKE text matching otherwise.
 
     Args:
         query: Search query text
@@ -44,33 +104,46 @@ async def semantic_search(
 
     Returns:
         Search results with relevance scores and excerpts
-
-    Example:
-        results = await semantic_search(
-            query="authentication bug",
-            ctx=ctx,
-            content_types=["issue"],
-            limit=5
-        )
-        # Returns: {
-        #   "results": [
-        #     {
-        #       "type": "issue",
-        #       "id": "uuid",
-        #       "identifier": "PILOT-123",
-        #       "title": "Fix auth bug",
-        #       "excerpt": "...",
-        #       "score": 0.85
-        #     }
-        #   ],
-        #   "total": 1,
-        #   "search_method": "text_similarity"
-        # }
     """
     limit = min(limit, 50)
+    workspace_uuid = UUID(ctx.workspace_id)
+
+    # Hybrid path: delegate to GraphSearchService when available
+    graph_search_service: GraphSearchService | None = ctx.extra.get("graph_search_service")
+    if graph_search_service is not None:
+        payload = GraphSearchPayload(
+            query=query,
+            workspace_id=workspace_uuid,
+            user_id=UUID(ctx.user_id) if ctx.user_id else None,
+            node_types=_map_content_types(content_types),
+            limit=limit,
+        )
+        result = await graph_search_service.execute(payload)
+        return _format_graph_results(result)
+
+    # Fallback: ILIKE text search (backward compatibility)
+    return await _text_fallback_search(query, ctx, content_types, limit)
+
+
+async def _text_fallback_search(
+    query: str,
+    ctx: ToolContext,
+    content_types: list[str] | None,
+    limit: int,
+) -> dict[str, Any]:
+    """ILIKE text search fallback when GraphSearchService is unavailable.
+
+    Args:
+        query: Search query text.
+        ctx: Tool context with db_session.
+        content_types: Filter by type (issue, note).
+        limit: Maximum results.
+
+    Returns:
+        Search results dict with text_similarity method.
+    """
     search_pattern = f"%{query.lower()}%"
     results: list[dict[str, Any]] = []
-
     workspace_uuid = UUID(ctx.workspace_id)
 
     # Search issues
@@ -91,10 +164,9 @@ async def semantic_search(
         issues = issue_result.scalars().all()
 
         for issue in issues:
-            # Calculate simple relevance score based on match location
-            score = 0.85  # Default score
+            score = 0.85
             if issue.name and query.lower() in issue.name.lower():
-                score = 0.95  # Higher score for title matches
+                score = 0.95
 
             results.append(
                 {
@@ -127,8 +199,7 @@ async def semantic_search(
         notes = note_result.scalars().all()
 
         for note in notes:
-            # Calculate simple relevance score
-            score = 0.80  # Default score for notes
+            score = 0.80
             if note.title and query.lower() in note.title.lower():
                 score = 0.90
 
@@ -144,13 +215,12 @@ async def semantic_search(
                 }
             )
 
-    # Sort by score descending and limit
     results.sort(key=lambda x: x["score"], reverse=True)
 
     return {
         "results": results[:limit],
         "total": len(results),
-        "search_method": "text_similarity",  # Will be "vector" when pgvector ready
+        "search_method": "text_similarity",
         "query": query,
     }
 
@@ -163,34 +233,20 @@ async def search_codebase(
     file_pattern: str | None = None,
     limit: int = 10,
 ) -> dict[str, Any]:
-    """Search indexed codebase for patterns.
+    """Check codebase search availability.
 
-    Searches code indexed from GitHub integration.
-    Returns matching files and snippets.
+    Code indexing from GitHub integration is not yet implemented.
+    Returns connected integrations and an explicit not_implemented status.
 
     Args:
-        query: Search query (regex supported in future)
+        query: Search query
         ctx: Tool context with db_session
         repo_id: Optional repository integration ID
         file_pattern: Glob pattern for files (e.g., "*.py")
         limit: Maximum results (default 10, max 50)
 
     Returns:
-        Matching code snippets with file paths
-
-    Example:
-        results = await search_codebase(
-            query="async def create_issue",
-            ctx=ctx,
-            file_pattern="*.py",
-            limit=10
-        )
-        # Returns: {
-        #   "found": True,
-        #   "matches": [],
-        #   "note": "Code search requires GitHub code indexing",
-        #   "integrations": [...]
-        # }
+        Status dict with found=False and integration info
     """
     limit = min(limit, 50)
     workspace_uuid = UUID(ctx.workspace_id)
@@ -216,11 +272,8 @@ async def search_codebase(
             "query": query,
         }
 
-    # Note: Actual code search would use indexed content
-    # For MVP, return placeholder indicating feature availability
     integration_info = []
     for integration in integrations:
-        # Safe access to metadata (might be None)
         metadata = integration.settings or {}
         integration_info.append(
             {
@@ -231,9 +284,9 @@ async def search_codebase(
         )
 
     return {
-        "found": True,
-        "matches": [],
-        "note": "Code search requires GitHub code indexing (pending implementation)",
+        "found": False,
+        "status": "not_implemented",
+        "message": "Code search is not yet available. GitHub integration is connected but code indexing has not been implemented.",
         "integrations": integration_info,
         "query": query,
         "file_pattern": file_pattern,
