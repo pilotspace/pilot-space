@@ -201,6 +201,24 @@ class TestProjectKnowledgeGraphSuccess:
         call_kwargs = kg_service.get_project_knowledge_graph.call_args.kwargs
         assert call_kwargs["node_types"] == "issue"
 
+    async def test_rejects_invalid_node_types(self) -> None:
+        """Invalid node_types value raises HTTPException with status 422."""
+        kg_service = _make_kg_service()
+        session = _make_session()
+
+        with (
+            patch(_RLS_PATCH, new_callable=AsyncMock),
+            pytest.raises(HTTPException) as exc_info,
+        ):
+            await get_project_knowledge_graph(
+                session=session,
+                kg_service=kg_service,
+                **_default_kwargs(node_types="not_a_valid_type"),  # type: ignore[arg-type]
+            )
+
+        assert exc_info.value.status_code == 422
+        assert "Invalid node_type" in exc_info.value.detail
+
     async def test_sorts_nodes_by_importance_tier(self) -> None:
         """Service returns sorted nodes; verify order preserved in response."""
         issue_node = _make_graph_node(node_type="issue", label="Issue")
@@ -254,6 +272,8 @@ class TestProjectKnowledgeGraphSuccess:
         gh_nodes = [n for n in result.nodes if n.node_type == "pull_request"]
         assert len(gh_nodes) == 1
         assert gh_nodes[0].properties.get("ephemeral") is True
+        call_kwargs = kg_service.get_project_knowledge_graph.call_args.kwargs
+        assert call_kwargs["include_github"] is True
 
     async def test_include_github_false_forwarded(self) -> None:
         """include_github=False is forwarded to the service."""

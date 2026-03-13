@@ -556,6 +556,8 @@ class TestIssueKnowledgeGraph:
         assert "pull_request" in node_types
         gh_nodes = [n for n in result.nodes if n.node_type == "pull_request"]
         assert gh_nodes[0].properties.get("ephemeral") is True
+        call_kwargs = kg_service.get_issue_knowledge_graph.call_args.kwargs
+        assert call_kwargs["include_github"] is True
 
     async def test_issue_graph_applies_node_type_filter(self) -> None:
         """node_types param is forwarded to the service."""
@@ -586,6 +588,30 @@ class TestIssueKnowledgeGraph:
         assert all(n.node_type == "issue" for n in result.nodes)
         call_kwargs = kg_service.get_issue_knowledge_graph.call_args.kwargs
         assert call_kwargs["node_types"] == "issue"
+
+    async def test_issue_graph_rejects_invalid_node_types(self) -> None:
+        """Invalid node_types value raises HTTPException with status 422."""
+        kg_service = _make_kg_service()
+        session = _make_session()
+
+        with (
+            patch(_RLS_PATCH, new_callable=AsyncMock),
+            pytest.raises(HTTPException) as exc_info,
+        ):
+            await get_issue_knowledge_graph(
+                workspace_id=TEST_WORKSPACE_ID,
+                issue_id=TEST_ISSUE_ID,
+                session=session,
+                current_user_id=TEST_USER_ID,
+                kg_service=kg_service,
+                depth=2,
+                node_types="not_a_valid_type",
+                max_nodes=50,
+                include_github=False,
+            )
+
+        assert exc_info.value.status_code == 422
+        assert "Invalid node_type" in exc_info.value.detail
 
     async def test_issue_graph_sorts_by_importance_tier(self) -> None:
         """Service returns sorted nodes; verify order preserved in response."""

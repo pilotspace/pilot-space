@@ -331,14 +331,19 @@ class KnowledgeGraphQueryService:
         )
 
         # Step 4: Filter by node types if specified
+        allowed: set[str] | None = None
         if node_types:
             allowed = {t.strip() for t in node_types.split(",") if t.strip()}
             nodes = [n for n in nodes if n.node_type.value in allowed][:max_nodes]
             node_ids = {n.id for n in nodes}
             edges = [e for e in edges if e.source_id in node_ids and e.target_id in node_ids]
+            if center_node_id not in node_ids:
+                center_node_id = None
 
         # Step 5: Synthesize ephemeral GitHub nodes
         ephemeral_nodes = self._synthesize_github_nodes(nodes, integration_links)
+        if allowed is not None:
+            ephemeral_nodes = [n for n in ephemeral_nodes if n.node_type in allowed]
 
         # Step 6: Sort nodes by importance tier
         nodes.sort(key=lambda n: node_tier(n.node_type.value))
@@ -359,8 +364,8 @@ class KnowledgeGraphQueryService:
         if not integration_links:
             return []
 
-        existing_external_ids = {
-            str(n.properties.get("external_id"))
+        seen_keys: set[str] = {
+            f"{n.node_type.value}:{n.properties.get('external_url') or n.properties.get('external_id')}"
             for n in nodes
             if n.properties and n.properties.get("external_id") is not None
         }
@@ -368,12 +373,14 @@ class KnowledgeGraphQueryService:
         ephemeral: list[EphemeralNode] = []
 
         for link in integration_links:
-            if str(link.external_id) in existing_external_ids:
-                continue
             mapped_type = _GITHUB_NODE_TYPE_MAP.get(link.link_type, NodeType.NOTE.value)
+            key = f"{mapped_type}:{link.external_url or link.external_id}"
+            if key in seen_keys:
+                continue
+            seen_keys.add(key)
             ephemeral.append(
                 EphemeralNode(
-                    id=str(uuid5(NAMESPACE_URL, f"ephemeral:{link.external_id}")),
+                    id=str(uuid5(NAMESPACE_URL, f"ephemeral:{key}")),
                     node_type=mapped_type,
                     label=link.title or link.external_id,
                     summary=f"GitHub {link.link_type.value}: {link.title or link.external_id}",

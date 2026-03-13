@@ -257,6 +257,7 @@ function ProjectGraphCanvas({
             maxZoom={3}
             fitView
             fitViewOptions={{ padding: 0.15 }}
+            // React Flow MIT — attribution hidden per internal product decision (non-commercial/early-stage)
             proOptions={{ hideAttribution: true }}
             onNodeDoubleClick={(_evt, node) => void handleNodeDoubleClick(node.id)}
           >

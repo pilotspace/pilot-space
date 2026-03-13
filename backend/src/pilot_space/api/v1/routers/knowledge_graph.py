@@ -353,6 +353,7 @@ async def get_issue_knowledge_graph(
 ) -> GraphResponse:
     """Return knowledge graph subgraph for an issue, optionally enriched with GitHub links."""
     await set_rls_context(session, current_user_id, workspace_id)
+    _parse_csv_enum(node_types, NodeType, "node_type")
 
     try:
         result = await kg_service.get_issue_knowledge_graph(
@@ -406,6 +407,7 @@ async def get_project_knowledge_graph(
 ) -> GraphResponse:
     """Return knowledge graph subgraph for a project, optionally enriched with GitHub links."""
     await set_rls_context(session, current_user_id, workspace_id)
+    _parse_csv_enum(node_types, NodeType, "node_type")
 
     try:
         result = await kg_service.get_project_knowledge_graph(
