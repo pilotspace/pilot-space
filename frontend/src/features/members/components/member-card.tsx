@@ -75,7 +75,7 @@ export function MemberCard({
     <Card
       className={cn(
         'relative cursor-pointer px-4 py-4 transition-all duration-200',
-        'hover:-translate-y-0.5 hover:shadow-md',
+        'hover:shadow-md',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         isCurrentUser && 'ring-1 ring-primary/20'
       )}

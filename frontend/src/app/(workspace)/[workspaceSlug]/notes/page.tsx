@@ -86,10 +86,7 @@ function NoteGridCard({
   return (
     <Link href={`/${workspaceSlug}/notes/${note.id}`} onMouseEnter={onPrefetch}>
       <Card
-        className={cn(
-          'group cursor-pointer transition-all duration-200',
-          'hover:shadow-warm-md hover:-translate-y-0.5'
-        )}
+        className={cn('group cursor-pointer transition-all duration-200', 'hover:shadow-warm-md')}
       >
         <CardContent className="p-5">
           <div className="mb-3 flex items-start justify-between">

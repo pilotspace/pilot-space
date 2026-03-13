@@ -72,7 +72,12 @@ export function ProjectCard({ project, variant = 'grid', onClick, index = 0 }: P
   };
 
   const cardA11y = onClick
-    ? { role: 'button' as const, tabIndex: 0, onKeyDown: handleKeyDown, 'aria-label': `Open project ${project.name}` }
+    ? {
+        role: 'button' as const,
+        tabIndex: 0,
+        onKeyDown: handleKeyDown,
+        'aria-label': `Open project ${project.name}`,
+      }
     : {};
 
   if (variant === 'list') {
@@ -137,7 +142,7 @@ export function ProjectCard({ project, variant = 'grid', onClick, index = 0 }: P
       <Card
         className={cn(
           'group cursor-pointer transition-all duration-200',
-          'hover:shadow-warm-md hover:-translate-y-0.5',
+          'hover:shadow-warm-md',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary'
         )}
         onClick={onClick}
