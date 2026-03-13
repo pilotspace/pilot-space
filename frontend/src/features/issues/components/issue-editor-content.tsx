@@ -228,7 +228,7 @@ export function IssueEditorContent({
       <div
         role="main"
         aria-label="Issue editor"
-        className="relative flex-1 overflow-auto bg-background"
+        className="relative flex-1 overflow-hidden bg-background"
       >
         {editor && (
           <SelectionToolbar
@@ -243,13 +243,13 @@ export function IssueEditorContent({
           className={cn(
             'h-full overflow-auto scrollbar-thin',
             'px-4 sm:px-5 md:px-6 lg:px-8',
-            'py-2 sm:py-3'
+            'pt-6 sm:pt-8 pb-4 sm:pb-6'
           )}
         >
           <div className="mx-auto document-canvas max-w-[860px]">
             <IssueTitle title={issue.name} issueId={issueId} workspaceId={workspaceId} />
 
-            <div className="mt-1">
+            <div className="mt-3">
               <EditorContent editor={editor} />
               <IssueDescriptionEmptyState
                 editor={editor}

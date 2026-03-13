@@ -150,14 +150,14 @@ export const PropertyBlockView = observer(function PropertyBlockView() {
 
   if (collapsed) {
     return (
-      <NodeViewWrapper className="mb-2" data-testid="property-block">
+      <NodeViewWrapper className="mb-5" data-testid="property-block">
         <PropertyBlockCollapsed onExpand={toggleCollapsed} />
       </NodeViewWrapper>
     );
   }
 
   return (
-    <NodeViewWrapper className="mb-2" data-testid="property-block">
+    <NodeViewWrapper className="mb-5" data-testid="property-block">
       <div
         role="group"
         aria-label="Issue properties"
@@ -257,7 +257,7 @@ export const PropertyBlockView = observer(function PropertyBlockView() {
         </div>
 
         {/* Row 2: Labels, Start date, Effort, Collapse */}
-        <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1">
+        <div className="mt-2.5 flex flex-wrap items-center gap-x-1.5 gap-y-1">
           {selectedLabels.map((label) => (
             <span
               key={label.id}
