@@ -55,7 +55,7 @@ export const PropertyBlockCollapsed = observer(function PropertyBlockCollapsed({
   return (
     <div
       className={cn(
-        'flex w-full items-center gap-1.5 rounded-[10px] border border-[#E5E2DD] bg-[#F8F6F3]',
+        'flex w-full items-center gap-1.5 rounded-[10px] border border-border bg-muted/40',
         'px-2 py-1 text-xs',
         className
       )}

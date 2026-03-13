@@ -24,6 +24,14 @@
             "command": "entire hooks claude-code session-start"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/gsd-check-update.js"
+          }
+        ]
       }
     ],
     "SessionEnd": [
@@ -97,6 +105,14 @@
             "command": "entire hooks claude-code post-todo"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/gsd-context-monitor.js"
+          }
+        ]
       }
     ]
   },
@@ -114,5 +130,9 @@
     "agent-sdk-dev@claude-code-plugins": false,
     "plugin-dev@claude-plugins-official": false,
     "claude-memory@Claudest": true
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "node .claude/hooks/gsd-statusline.js"
   }
 }

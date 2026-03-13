@@ -18,7 +18,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useEditor, EditorContent } from '@tiptap/react';
 import type { Content } from '@tiptap/core';
-import { Link2, MessageSquare } from 'lucide-react';
+import { Activity, Network } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import { SelectionToolbar } from '@/components/editor/SelectionToolbar';
@@ -33,7 +33,6 @@ import {
 import { IssueDescriptionEmptyState } from './issue-description-empty-state';
 import { GitHubImplementationSection } from './github-implementation-section';
 import { IssueKnowledgeGraphMini } from './issue-knowledge-graph-mini';
-import { RelatedIssuesPanel } from './related-issues-panel';
 import { useIssueLinks, useIssueRelations } from '@/features/issues/hooks';
 import { createIssueNoteExtensions } from '@/features/issues/editor/create-issue-note-extensions';
 import { integrationsApi } from '@/services/api/integrations';
@@ -43,6 +42,7 @@ import type { Issue, UpdateIssueData } from '@/types';
 // Constants
 // ---------------------------------------------------------------------------
 const DEBOUNCE_MS = 2000;
+const NOOP = () => {};
 
 // ---------------------------------------------------------------------------
 // Props
@@ -228,7 +228,7 @@ export function IssueEditorContent({
       <div
         role="main"
         aria-label="Issue editor"
-        className="relative flex-1 overflow-auto bg-background"
+        className="relative flex-1 overflow-hidden bg-background"
       >
         {editor && (
           <SelectionToolbar
@@ -243,13 +243,13 @@ export function IssueEditorContent({
           className={cn(
             'h-full overflow-auto scrollbar-thin',
             'px-4 sm:px-5 md:px-6 lg:px-8',
-            'py-2 sm:py-3'
+            'pt-6 sm:pt-8 pb-4 sm:pb-6'
           )}
         >
           <div className="mx-auto document-canvas max-w-[860px]">
             <IssueTitle title={issue.name} issueId={issueId} workspaceId={workspaceId} />
 
-            <div className="mt-1">
+            <div className="mt-3">
               <EditorContent editor={editor} />
               <IssueDescriptionEmptyState
                 editor={editor}
@@ -271,6 +271,10 @@ export function IssueEditorContent({
               </>
             )}
 
+            <CollapsibleSection title="Activity" icon={<Activity className="size-3.5" />}>
+              <ActivityTimeline issueId={issueId} workspaceId={workspaceId} />
+            </CollapsibleSection>
+
             <GitHubImplementationSection
               pullRequests={pullRequests}
               commits={commits}
@@ -283,15 +287,9 @@ export function IssueEditorContent({
               onAffectedNodeClick={onNodeClickHighlight}
             />
 
-            <IssueKnowledgeGraphMini
-              workspaceId={workspaceId}
-              issueId={issueId}
-              onExpandFullView={onExpandGraphFullView ?? (() => {})}
-            />
-
             <CollapsibleSection
               title="Relationships"
-              icon={<Link2 className="size-3.5" />}
+              icon={<Network className="size-3.5" />}
               count={(issue.noteLinks?.length ?? 0) + (issue.project ? 1 : 0) + relations.length}
             >
               <IssueGraph
@@ -303,14 +301,10 @@ export function IssueEditorContent({
               />
             </CollapsibleSection>
 
-            <CollapsibleSection title="Activity" icon={<MessageSquare className="size-3.5" />}>
-              <ActivityTimeline issueId={issueId} workspaceId={workspaceId} />
-            </CollapsibleSection>
-
-            <RelatedIssuesPanel
+            <IssueKnowledgeGraphMini
               workspaceId={workspaceId}
               issueId={issueId}
-              workspaceSlug={workspaceSlug}
+              onExpandFullView={onExpandGraphFullView ?? NOOP}
             />
           </div>
         </div>
