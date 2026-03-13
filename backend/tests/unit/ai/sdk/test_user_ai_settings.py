@@ -147,3 +147,36 @@ class TestAuthSchemas:
             created_at=datetime.now(tz=UTC),
         )
         assert resp.ai_settings is None
+
+
+class TestUpdateProfilePayloadSentinel:
+    """Tests for the UNSET sentinel in UpdateProfilePayload."""
+
+    def test_default_ai_settings_is_unset(self) -> None:
+        """ai_settings defaults to UNSET sentinel, not None."""
+        from uuid import uuid4
+
+        from pilot_space.application.services.auth import UNSET, UpdateProfilePayload
+
+        payload = UpdateProfilePayload(user_id=uuid4())
+        assert payload.ai_settings is UNSET
+
+    def test_explicit_none_is_not_unset(self) -> None:
+        """Explicitly passing None is distinguishable from not provided."""
+        from uuid import uuid4
+
+        from pilot_space.application.services.auth import UNSET, UpdateProfilePayload
+
+        payload = UpdateProfilePayload(user_id=uuid4(), ai_settings=None)
+        assert payload.ai_settings is None
+        assert payload.ai_settings is not UNSET
+
+    def test_explicit_dict_is_not_unset(self) -> None:
+        """Explicitly passing a dict is distinguishable from not provided."""
+        from uuid import uuid4
+
+        from pilot_space.application.services.auth import UNSET, UpdateProfilePayload
+
+        payload = UpdateProfilePayload(user_id=uuid4(), ai_settings={"model_sonnet": "custom"})
+        assert payload.ai_settings is not UNSET
+        assert payload.ai_settings == {"model_sonnet": "custom"}

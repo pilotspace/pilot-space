@@ -22,6 +22,7 @@ from pilot_space.api.v1.schemas.auth import (
     UserProfileUpdateRequest,
 )
 from pilot_space.application.services.auth import (
+    UNSET,
     GetLoginUrlPayload,
     GetProfilePayload,
     LogoutPayload,
@@ -134,7 +135,7 @@ async def update_current_user_profile(
                 avatar_url=update_data.get("avatar_url"),
                 bio=update_data.get("bio"),
                 default_sdlc_role=update_data.get("default_sdlc_role"),
-                ai_settings=update_data.get("ai_settings"),
+                ai_settings=update_data.get("ai_settings", UNSET),
             ),
         )
     except ValueError as e:
