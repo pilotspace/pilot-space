@@ -5,7 +5,7 @@ suggestions are excluded from future responses for that user/issue pair.
 
 References:
 - specs/015-related-issues, Phase 0 scaffolding
-- Migration: 072_add_issue_suggestion_dismissals
+- Migration: 072_add_issue_suggestion
 """
 
 from __future__ import annotations
@@ -13,11 +13,10 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
+from pilot_space.infrastructure.database.base import WorkspaceScopedModel
 from sqlalchemy import DateTime, ForeignKey, Index, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
-
-from pilot_space.infrastructure.database.base import WorkspaceScopedModel
 
 
 class IssueSuggestionDismissal(WorkspaceScopedModel):
