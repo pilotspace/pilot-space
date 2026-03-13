@@ -175,12 +175,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
         from pilot_space.ai.workers.memory_worker import MemoryWorker
 
-        _google_secret = getattr(settings, "google_api_key", None)
-        _google_api_key: str | None = _google_secret.get_secret_value() if _google_secret else None
         memory_worker = MemoryWorker(
             queue=queue_client,
             session_factory=session_factory,
-            google_api_key=_google_api_key,
         )
         memory_worker_task = asyncio.create_task(memory_worker.start())
 

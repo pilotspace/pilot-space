@@ -52,7 +52,6 @@ def _make_session() -> AsyncMock:
 def _make_worker(
     queue: AsyncMock | None = None,
     openai_api_key: str | None = "sk-test",  # pragma: allowlist secret
-    google_api_key: str | None = None,
 ) -> tuple[MemoryWorker, AsyncMock]:
     session = _make_session()
     if queue is None:
@@ -61,7 +60,6 @@ def _make_worker(
     worker = MemoryWorker(
         queue=queue,
         session_factory=factory,
-        google_api_key=google_api_key,
         openai_api_key=openai_api_key,
     )
     return worker, session
@@ -93,7 +91,6 @@ class TestMemoryWorkerDispatchGraphEmbedding:
 
         MockHandler.assert_called_once_with(
             session,
-            google_api_key=None,
             embedding_service=worker._embedding_service,
         )
         mock_instance.handle_graph_node.assert_awaited_once_with(payload)

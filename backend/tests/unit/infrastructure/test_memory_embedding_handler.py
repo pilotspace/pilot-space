@@ -2,15 +2,16 @@
 
 Covers:
 - handle_graph_node: missing fields, node not found, no service, happy path, failure
-- handle: missing entry_id, content not found, embedding failure, success paths
-- _embed_text: no API key, success, exception handling
+- handle: missing entry_id, no EmbeddingService, content not found, embed returns None, success paths
 - _fetch_content: unknown table, row not found
 - _store_embedding: unknown table raises ValueError
+
+All embedding now uses EmbeddingService (Gemini _embed_text removed).
 """
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
@@ -18,7 +19,6 @@ import pytest
 from pilot_space.application.services.embedding_service import EmbeddingConfig, EmbeddingService
 from pilot_space.infrastructure.queue.handlers.memory_embedding_handler import (
     MemoryEmbeddingJobHandler,
-    _embed_text,
 )
 
 pytestmark = pytest.mark.asyncio
@@ -48,13 +48,12 @@ def _make_handler(
 ) -> MemoryEmbeddingJobHandler:
     return MemoryEmbeddingJobHandler(
         session=session,
-        google_api_key=None,
         embedding_service=embedding_service,
     )
 
 
 class TestHandleGraphNodeEarlyReturns:
-    """Guard clause tests — no DB calls or embedding calls should be made."""
+    """Guard clause tests -- no DB calls or embedding calls should be made."""
 
     async def test_returns_error_when_node_id_missing(self) -> None:
         session = _make_session()
@@ -169,7 +168,8 @@ class TestHandleGraphNodeHappyPath:
 
 
 # ---------------------------------------------------------------------------
-# Tests for handle() — memory_entries / constitution_rules embedding
+# Tests for handle() -- memory_entries / constitution_rules embedding
+# (Now uses EmbeddingService instead of Gemini _embed_text)
 # ---------------------------------------------------------------------------
 
 
@@ -185,41 +185,53 @@ class TestHandleMemoryEmbedding:
         assert result == {"success": False, "error": "missing entry_id"}
         session.execute.assert_not_called()
 
+    async def test_handle_no_embedding_service_returns_error(self) -> None:
+        """handle() returns error when no EmbeddingService is configured."""
+        session = _make_session()
+        handler = _make_handler(session, embedding_service=None)
+
+        entry_id = uuid4()
+        result = await handler.handle(
+            {"entry_id": str(entry_id), "table": "memory_entries"},
+        )
+
+        assert result["success"] is False
+        assert "no EmbeddingService" in result["error"]
+
     async def test_handle_content_not_found_returns_error(self) -> None:
         session = _make_session()
         entry_id = uuid4()
-        handler = MemoryEmbeddingJobHandler(
-            session=session,
-            google_api_key="fake-key",  # pragma: allowlist secret
-        )
+        embedding_svc = _make_embedding_service(embed_return=[0.1] * 768)
+        handler = _make_handler(session, embedding_service=embedding_svc)
 
-        with patch.object(handler, "_fetch_content", return_value=None):
-            result = await handler.handle(
-                {"entry_id": str(entry_id), "table": "memory_entries"},
-            )
+        # Simulate _fetch_content returning None (row not found)
+        mock_result = MagicMock()
+        mock_result.first.return_value = None
+        session.execute = AsyncMock(return_value=mock_result)
+
+        result = await handler.handle(
+            {"entry_id": str(entry_id), "table": "memory_entries"},
+        )
 
         assert result["success"] is False
         assert str(entry_id) in result["error"]
         assert "not found" in result["error"]
 
-    async def test_handle_embedding_generation_fails_returns_error(self) -> None:
+    async def test_handle_embedding_returns_none_returns_error(self) -> None:
+        """When EmbeddingService.embed() returns None, handle() returns error."""
         session = _make_session()
         entry_id = uuid4()
-        handler = MemoryEmbeddingJobHandler(
-            session=session,
-            google_api_key="fake-key",  # pragma: allowlist secret
-        )
+        embedding_svc = _make_embedding_service(embed_return=None)
+        handler = _make_handler(session, embedding_service=embedding_svc)
 
-        with (
-            patch.object(handler, "_fetch_content", return_value="some content"),
-            patch(
-                "pilot_space.infrastructure.queue.handlers.memory_embedding_handler._embed_text",
-                return_value=None,
-            ),
-        ):
-            result = await handler.handle(
-                {"entry_id": str(entry_id), "table": "memory_entries"},
-            )
+        # Simulate _fetch_content returning content
+        mock_result = MagicMock()
+        mock_result.first.return_value = ("some content",)
+        session.execute = AsyncMock(return_value=mock_result)
+
+        result = await handler.handle(
+            {"entry_id": str(entry_id), "table": "memory_entries"},
+        )
 
         assert result == {"success": False, "error": "embedding generation failed"}
 
@@ -227,113 +239,46 @@ class TestHandleMemoryEmbedding:
         session = _make_session()
         entry_id = uuid4()
         fake_embedding = [0.1] * 768
-        handler = MemoryEmbeddingJobHandler(
-            session=session,
-            google_api_key="fake-key",  # pragma: allowlist secret
-        )
+        embedding_svc = _make_embedding_service(embed_return=fake_embedding)
+        handler = _make_handler(session, embedding_service=embedding_svc)
 
-        with (
-            patch.object(handler, "_fetch_content", return_value="content"),
-            patch(
-                "pilot_space.infrastructure.queue.handlers.memory_embedding_handler._embed_text",
-                return_value=fake_embedding,
-            ),
-            patch.object(handler, "_store_embedding") as mock_store,
-        ):
-            result = await handler.handle(
-                {"entry_id": str(entry_id), "table": "memory_entries"},
-            )
+        # Simulate: first execute = SELECT (fetch content), second = UPDATE (store embedding)
+        mock_select = MagicMock()
+        mock_select.first.return_value = ("content text",)
+        mock_update = MagicMock()
+        session.execute = AsyncMock(side_effect=[mock_select, mock_update])
+
+        result = await handler.handle(
+            {"entry_id": str(entry_id), "table": "memory_entries"},
+        )
 
         assert result["success"] is True
         assert result["entry_id"] == str(entry_id)
         assert result["table"] == "memory_entries"
-        mock_store.assert_awaited_once()
         session.flush.assert_awaited_once()
+        embedding_svc.embed.assert_awaited_once_with("content text")
 
     async def test_handle_success_constitution_rules(self) -> None:
         session = _make_session()
         entry_id = uuid4()
         fake_embedding = [0.1] * 768
-        handler = MemoryEmbeddingJobHandler(
-            session=session,
-            google_api_key="fake-key",  # pragma: allowlist secret
-        )
+        embedding_svc = _make_embedding_service(embed_return=fake_embedding)
+        handler = _make_handler(session, embedding_service=embedding_svc)
 
-        with (
-            patch.object(handler, "_fetch_content", return_value="rule content"),
-            patch(
-                "pilot_space.infrastructure.queue.handlers.memory_embedding_handler._embed_text",
-                return_value=fake_embedding,
-            ),
-            patch.object(handler, "_store_embedding") as mock_store,
-        ):
-            result = await handler.handle(
-                {"entry_id": str(entry_id), "table": "constitution_rules"},
-            )
+        mock_select = MagicMock()
+        mock_select.first.return_value = ("rule content",)
+        mock_update = MagicMock()
+        session.execute = AsyncMock(side_effect=[mock_select, mock_update])
+
+        result = await handler.handle(
+            {"entry_id": str(entry_id), "table": "constitution_rules"},
+        )
 
         assert result["success"] is True
         assert result["entry_id"] == str(entry_id)
         assert result["table"] == "constitution_rules"
-        mock_store.assert_awaited_once()
         session.flush.assert_awaited_once()
-
-
-# ---------------------------------------------------------------------------
-# Tests for _embed_text() — module-level async function
-# ---------------------------------------------------------------------------
-
-
-class TestEmbedText:
-    """Tests for the _embed_text() module-level function."""
-
-    async def test_embed_text_no_api_key_returns_none(self) -> None:
-        result = await _embed_text("some content", api_key=None)
-
-        assert result is None
-
-    async def test_embed_text_success(self) -> None:
-        import sys
-
-        fake_embedding = [0.1] * 768
-        mock_genai = MagicMock()
-        mock_genai.embed_content.return_value = {"embedding": fake_embedding}
-
-        # Ensure the lazy import inside _embed_text resolves to our mock
-        saved = sys.modules.get("google.generativeai")
-        sys.modules["google.generativeai"] = mock_genai
-        try:
-            result = await _embed_text("content", "fake-key")
-        finally:
-            if saved is None:
-                sys.modules.pop("google.generativeai", None)
-            else:
-                sys.modules["google.generativeai"] = saved
-
-        assert result == fake_embedding
-        mock_genai.configure.assert_called_once_with(api_key="fake-key")  # pragma: allowlist secret
-        mock_genai.embed_content.assert_called_once_with(
-            model="models/gemini-embedding-exp-03-07",
-            content="content",
-            task_type="SEMANTIC_SIMILARITY",
-        )
-
-    async def test_embed_text_exception_returns_none(self) -> None:
-        import sys
-
-        mock_genai = MagicMock()
-        mock_genai.embed_content.side_effect = Exception("API down")
-
-        saved = sys.modules.get("google.generativeai")
-        sys.modules["google.generativeai"] = mock_genai
-        try:
-            result = await _embed_text("content", "fake-key")
-        finally:
-            if saved is None:
-                sys.modules.pop("google.generativeai", None)
-            else:
-                sys.modules["google.generativeai"] = saved
-
-        assert result is None
+        embedding_svc.embed.assert_awaited_once_with("rule content")
 
 
 # ---------------------------------------------------------------------------
@@ -380,3 +325,29 @@ class TestStoreEmbeddingValidation:
 
         with pytest.raises(ValueError, match="Unknown table for embedding storage"):
             await handler._store_embedding(uuid4(), "evil_table", "[0.1]")
+
+
+# ---------------------------------------------------------------------------
+# Verify Gemini is fully removed
+# ---------------------------------------------------------------------------
+
+
+class TestGeminiRemoved:
+    """Verify _embed_text and google.generativeai are removed from the module."""
+
+    def test_no_embed_text_function_exported(self) -> None:
+        import pilot_space.infrastructure.queue.handlers.memory_embedding_handler as mod
+
+        assert not hasattr(mod, "_embed_text")
+
+    def test_no_gemini_constant(self) -> None:
+        import pilot_space.infrastructure.queue.handlers.memory_embedding_handler as mod
+
+        assert not hasattr(mod, "_GEMINI_EMBEDDING_MODEL")
+
+    def test_init_has_no_google_api_key_param(self) -> None:
+        """MemoryEmbeddingJobHandler.__init__ should not accept google_api_key."""
+        import inspect
+
+        sig = inspect.signature(MemoryEmbeddingJobHandler.__init__)
+        assert "google_api_key" not in sig.parameters

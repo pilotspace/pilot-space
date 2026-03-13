@@ -62,7 +62,6 @@ class MemoryWorker:
     Args:
         queue: Supabase queue client.
         session_factory: Async session factory for per-job sessions.
-        google_api_key: Optional Google API key for Gemini embedding (deprecated tables).
         openai_api_key: Optional OpenAI API key for EmbeddingService.
         ollama_base_url: Ollama base URL for EmbeddingService fallback.
     """
@@ -71,13 +70,11 @@ class MemoryWorker:
         self,
         queue: SupabaseQueueClient,
         session_factory: async_sessionmaker[AsyncSession],
-        google_api_key: str | None = None,
         openai_api_key: str | None = None,
         ollama_base_url: str = "http://localhost:11434",
     ) -> None:
         self.queue = queue
         self._session_factory = session_factory
-        self._google_api_key = google_api_key
         self._embedding_service = EmbeddingService(
             EmbeddingConfig(openai_api_key=openai_api_key, ollama_base_url=ollama_base_url)
         )
@@ -229,7 +226,6 @@ class MemoryWorker:
 
             handler = MemoryEmbeddingJobHandler(
                 session,
-                google_api_key=self._google_api_key,
                 embedding_service=self._embedding_service,
             )
             if task_type == TASK_GRAPH_EMBEDDING:

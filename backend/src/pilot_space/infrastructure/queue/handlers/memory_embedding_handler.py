@@ -1,12 +1,16 @@
-"""MemoryEmbeddingJobHandler — embed memory entries, constitution rules, and graph nodes.
+"""MemoryEmbeddingJobHandler -- embed memory entries, constitution rules, and graph nodes.
 
 T-067: Handles 'memory_embedding' task_type for memory_entries and
-constitution_rules tables via Gemini 768-dim embeddings.
+constitution_rules tables via EmbeddingService (OpenAI -> Ollama cascade).
 
 Feature 016: Also handles 'graph_embedding' task_type for graph_nodes table
-via EmbeddingService (OpenAI → Ollama cascade).
+via EmbeddingService (same cascade).
 
-Feature 015: AI Workforce Platform — Memory Engine
+Feature 015: AI Workforce Platform -- Memory Engine
+
+Migration note: Previously used Gemini gemini-embedding-exp-03-07 for
+memory_entries and constitution_rules. Migrated to unified EmbeddingService
+to consolidate all embedding through a single provider cascade.
 """
 
 from __future__ import annotations
@@ -29,53 +33,23 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-_GEMINI_EMBEDDING_MODEL = "models/gemini-embedding-exp-03-07"
 _MEMORY_TABLE = "memory_entries"
 _CONSTITUTION_TABLE = "constitution_rules"
 _GRAPH_NODES_TABLE = "graph_nodes"
-
-
-async def _embed_text(content: str, api_key: str | None) -> list[float] | None:
-    """Embed text via Gemini gemini-embedding-exp-03-07 (768-dim).
-
-    DEPRECATED: Used only for memory_entries and constitution_rules (sunset 2026-06-01).
-    Graph nodes use EmbeddingService instead.
-
-    Args:
-        content: Text to embed.
-        api_key: Google AI API key.
-
-    Returns:
-        768-dim float list or None on failure.
-    """
-    if not api_key:
-        return None
-    try:
-        import google.generativeai as genai  # type: ignore[import-untyped]
-
-        genai.configure(api_key=api_key)  # type: ignore[attr-defined]
-        result = genai.embed_content(  # type: ignore[attr-defined]
-            model=_GEMINI_EMBEDDING_MODEL,
-            content=content,
-            task_type="SEMANTIC_SIMILARITY",
-        )
-        return list(result["embedding"])
-    except Exception:
-        logger.warning("Gemini embedding failed in MemoryEmbeddingJobHandler", exc_info=True)
-        return None
 
 
 class MemoryEmbeddingJobHandler:
     """Handles memory and graph embedding jobs from the ai_normal queue.
 
     Routes by payload type:
-    - payload['table'] in {memory_entries, constitution_rules}: embed via Gemini (768-dim)
-    - handle_graph_node(payload): embed graph_nodes row via EmbeddingService (OpenAI → Ollama).
+    - payload['table'] in {memory_entries, constitution_rules}: embed via EmbeddingService
+    - handle_graph_node(payload): embed graph_nodes row via EmbeddingService
+
+    Both paths use the same EmbeddingService (OpenAI -> Ollama cascade).
 
     Args:
         session: Async DB session.
-        google_api_key: Google AI API key for Gemini embeddings (deprecated tables).
-        embedding_service: EmbeddingService for graph node embeddings (OpenAI → Ollama cascade).
+        embedding_service: EmbeddingService for all embedding tasks.
     """
 
     _ALLOWED_TABLES: frozenset[str] = frozenset({_MEMORY_TABLE, _CONSTITUTION_TABLE})
@@ -83,11 +57,9 @@ class MemoryEmbeddingJobHandler:
     def __init__(
         self,
         session: AsyncSession,
-        google_api_key: str | None = None,
         embedding_service: EmbeddingService | None = None,
     ) -> None:
         self._session = session
-        self._api_key = google_api_key
         self._embedding = embedding_service
 
     async def handle(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -105,6 +77,9 @@ class MemoryEmbeddingJobHandler:
         if not entry_id_str:
             return {"success": False, "error": "missing entry_id"}
 
+        if self._embedding is None:
+            return {"success": False, "error": "no EmbeddingService configured"}
+
         entry_id = UUID(entry_id_str)
 
         # Fetch content from appropriate table
@@ -117,12 +92,12 @@ class MemoryEmbeddingJobHandler:
             )
             return {"success": False, "error": f"entry {entry_id} not found in {table}"}
 
-        # Generate embedding
-        embedding = await _embed_text(content, self._api_key)
+        # Generate embedding via EmbeddingService (OpenAI -> Ollama cascade)
+        embedding = await self._embedding.embed(content)
         if embedding is None:
             return {"success": False, "error": "embedding generation failed"}
 
-        # Store embedding — worker owns the commit
+        # Store embedding -- worker owns the commit
         await self._store_embedding(entry_id, table, serialize_embedding(embedding))
         await self._session.flush()
 
@@ -135,7 +110,7 @@ class MemoryEmbeddingJobHandler:
         return {"success": True, "entry_id": str(entry_id), "table": table}
 
     async def handle_graph_node(self, payload: dict[str, Any]) -> dict[str, Any]:
-        """Embed a graph node (768-dim) using EmbeddingService (OpenAI → Ollama).
+        """Embed a graph node (768-dim) using EmbeddingService (OpenAI -> Ollama).
 
         Args:
             payload: Queue message payload with node_id and workspace_id.
@@ -172,10 +147,10 @@ class MemoryEmbeddingJobHandler:
 
         embedding = await self._embedding.embed(content)
         if embedding is None:
-            # Transient infra failure — raise so the worker retries / dead-letters
+            # Transient infra failure -- raise so the worker retries / dead-letters
             raise RuntimeError("all embedding providers failed (OpenAI + Ollama)")
 
-        # Store embedding back to graph_nodes — worker owns the commit
+        # Store embedding back to graph_nodes -- worker owns the commit
         await self._store_graph_node_embedding(node_id, serialize_embedding(embedding))
         await self._session.flush()
 
