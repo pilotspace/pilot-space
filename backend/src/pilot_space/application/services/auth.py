@@ -8,7 +8,12 @@ Migrated from direct repo/settings usage in auth router per DD-064.
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass, field
+from dataclasses import (
+    dataclass,
+    field,
+    field as dataclass_field,
+)
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,6 +31,9 @@ from pilot_space.infrastructure.database.repositories.workspace_repository impor
 from pilot_space.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
+
+# Sentinel to distinguish "not provided" from "explicitly None"
+UNSET: Any = object()
 
 
 @dataclass
@@ -67,6 +75,7 @@ class UpdateProfilePayload:
     avatar_url: str | None = None
     bio: str | None = None
     default_sdlc_role: str | None = None
+    ai_settings: dict[str, Any] | None = dataclass_field(default_factory=lambda: UNSET)
 
 
 @dataclass
@@ -185,6 +194,9 @@ class AuthService:
         if payload.default_sdlc_role is not None:
             user.default_sdlc_role = payload.default_sdlc_role
             changed_fields.append("default_sdlc_role")
+        if payload.ai_settings is not UNSET:
+            user.ai_settings = payload.ai_settings  # Can be None (clear) or dict (set)
+            changed_fields.append("ai_settings")
 
         if changed_fields:
             user = await self._user_repo.update(user)
@@ -310,6 +322,7 @@ class ValidateAPIKeyService:
 
 
 __all__ = [
+    "UNSET",
     "AuthService",
     "GetLoginUrlPayload",
     "GetLoginUrlResult",
