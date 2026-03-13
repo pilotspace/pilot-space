@@ -274,7 +274,6 @@ class Container(SkillContainer, PluginContainer):
         NoteAIUpdateService,
         session=providers.Callable(get_current_session),
         note_repository=InfraContainer.note_repository,
-        activity_repository=InfraContainer.activity_repository,
     )
 
     list_notes_service = providers.Factory(
