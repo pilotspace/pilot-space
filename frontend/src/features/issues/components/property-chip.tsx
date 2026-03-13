@@ -55,7 +55,6 @@ export function PropertyChip({
         <PopoverTrigger asChild>
           <button
             type="button"
-            role="button"
             aria-label={label}
             aria-haspopup="listbox"
             aria-expanded={open}

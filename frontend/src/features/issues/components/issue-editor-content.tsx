@@ -42,6 +42,7 @@ import type { Issue, UpdateIssueData } from '@/types';
 // Constants
 // ---------------------------------------------------------------------------
 const DEBOUNCE_MS = 2000;
+const NOOP = () => {};
 
 // ---------------------------------------------------------------------------
 // Props
@@ -303,7 +304,7 @@ export function IssueEditorContent({
             <IssueKnowledgeGraphMini
               workspaceId={workspaceId}
               issueId={issueId}
-              onExpandFullView={onExpandGraphFullView ?? (() => {})}
+              onExpandFullView={onExpandGraphFullView ?? NOOP}
             />
           </div>
         </div>
