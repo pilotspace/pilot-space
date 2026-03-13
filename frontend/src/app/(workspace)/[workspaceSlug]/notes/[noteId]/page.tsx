@@ -147,8 +147,6 @@ const NoteDetailPage = observer(function NoteDetailPage() {
   // Get workspace ID from context (preferred) or workspaceSlug fallback
   const workspaceId = workspace?.id ?? workspaceSlug;
 
-  const queryClient = useQueryClient();
-
   // Emoji picker state
   const [emojiPopoverOpen, setEmojiPopoverOpen] = useState(false);
   const [emojiInput, setEmojiInput] = useState('');

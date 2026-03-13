@@ -70,7 +70,7 @@ async def list_workspaces(
     Returns:
         Paginated list of workspaces.
     """
-    await set_rls_context(session, current_user.user_id)
+    await set_rls_context(session, current_user_id)
     result = await service.list_workspaces(
         ListWorkspacesPayload(
             user_id=current_user_id,
@@ -192,7 +192,7 @@ async def get_workspace(
     Raises:
         HTTPException: If workspace not found or user not a member.
     """
-    await set_rls_context(session, current_user.user_id)
+    await set_rls_context(session, current_user_id)
     try:
         result = await service.get_workspace(
             GetWorkspacePayload(
@@ -255,7 +255,7 @@ async def update_workspace(
     Raises:
         HTTPException: If workspace not found or user not admin.
     """
-    await set_rls_context(session, current_user.user_id)
+    await set_rls_context(session, current_user_id)
     update_data = request.model_dump(exclude_unset=True)
 
     try:
@@ -325,7 +325,7 @@ async def delete_workspace(
     Raises:
         HTTPException: If workspace not found or user not owner.
     """
-    await set_rls_context(session, current_user.user_id)
+    await set_rls_context(session, current_user_id)
     try:
         result = await service.delete_workspace(
             DeleteWorkspacePayload(

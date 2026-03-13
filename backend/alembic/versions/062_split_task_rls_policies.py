@@ -31,7 +31,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "062_split_task_rls_policies"
-down_revision: str = "061_add_pgmq_rpc_wrappers"
+down_revision: str = "062_add_notifications_table"
 branch_labels: tuple[str, ...] | None = None
 depends_on: tuple[str, ...] | None = None
 
