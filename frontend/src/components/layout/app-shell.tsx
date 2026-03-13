@@ -29,10 +29,12 @@ export const AppShell = observer(function AppShell({ children }: AppShellProps) 
   // Register global Cmd+K / Ctrl+K shortcut
   useCommandPaletteShortcut();
 
-  // Auto-collapse sidebar on mobile and tablet (both default to icon-rail/hidden)
+  // Auto-collapse sidebar on mobile and tablet; restore on desktop
   useEffect(() => {
     if (isMobile || isTablet) {
       uiStore.setSidebarCollapsed(true);
+    } else {
+      uiStore.setSidebarCollapsed(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isMobile, isTablet]);
@@ -85,7 +87,7 @@ export const AppShell = observer(function AppShell({ children }: AppShellProps) 
         <motion.aside
           initial={false}
           animate={{
-            width: uiStore.sidebarCollapsed ? 60 : uiStore.sidebarWidth,
+            width: isTablet ? 60 : uiStore.sidebarCollapsed ? 60 : uiStore.sidebarWidth,
           }}
           transition={{ duration: 0.2, ease: [0, 0, 0.2, 1] }}
           className="relative flex h-full flex-col border-r border-sidebar-border bg-sidebar"

@@ -29,32 +29,38 @@ export function PageBreadcrumb({
   workspaceSlug,
   projectName,
 }: PageBreadcrumbProps) {
-  const hasItems = projectName || ancestors.length > 0;
-
   return (
-    <nav aria-label="Breadcrumb" className="flex items-center gap-1 text-xs text-muted-foreground">
-      {projectName && (
-        <>
-          <span className={cn('max-w-[120px] truncate', !hasItems && 'text-foreground')}>
-            {projectName}
+    <nav aria-label="Breadcrumb" className="text-xs text-muted-foreground">
+      <ol className="flex items-center gap-1">
+        {projectName && (
+          <li className="flex items-center gap-1">
+            <span
+              className={cn('max-w-[120px] truncate', ancestors.length === 0 && 'text-foreground')}
+            >
+              {projectName}
+            </span>
+            <ChevronRight className="h-3 w-3 shrink-0" aria-hidden="true" />
+          </li>
+        )}
+
+        {ancestors.map((ancestor) => (
+          <li key={ancestor.id} className="flex items-center gap-1">
+            <Link
+              href={`/${workspaceSlug}/notes/${ancestor.id}`}
+              className="max-w-[120px] truncate hover:text-foreground transition-colors"
+            >
+              {ancestor.title}
+            </Link>
+            <ChevronRight className="h-3 w-3 shrink-0" aria-hidden="true" />
+          </li>
+        ))}
+
+        <li>
+          <span className="max-w-[160px] truncate font-medium text-foreground" aria-current="page">
+            {currentTitle}
           </span>
-          <ChevronRight className="h-3 w-3 shrink-0" aria-hidden="true" />
-        </>
-      )}
-
-      {ancestors.map((ancestor) => (
-        <span key={ancestor.id} className="flex items-center gap-1">
-          <Link
-            href={`/${workspaceSlug}/notes/${ancestor.id}`}
-            className="max-w-[120px] truncate hover:text-foreground transition-colors"
-          >
-            {ancestor.title}
-          </Link>
-          <ChevronRight className="h-3 w-3 shrink-0" aria-hidden="true" />
-        </span>
-      ))}
-
-      <span className="max-w-[160px] truncate font-medium text-foreground">{currentTitle}</span>
+        </li>
+      </ol>
     </nav>
   );
 }

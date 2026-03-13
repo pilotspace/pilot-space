@@ -20,6 +20,7 @@ import { PageBreadcrumb } from '@/components/editor/PageBreadcrumb';
 import { VersionHistoryPanel, type NoteVersion } from '@/components/editor/VersionHistoryPanel';
 import { useNote, useUpdateNote, useAutoSave, useProjectPageTree } from '@/features/notes/hooks';
 import { projectTreeKeys } from '@/features/notes/hooks/useProjectPageTree';
+import { personalPagesKeys } from '@/features/notes/hooks/usePersonalPages';
 import { useDeleteNote } from '@/features/notes/hooks/useDeleteNote';
 import { useTogglePin } from '@/hooks/useTogglePin';
 import { useNoteVersions, useRestoreNoteVersion } from '@/hooks/useNoteVersions';
@@ -365,10 +366,14 @@ const NoteDetailPage = observer(function NoteDetailPage() {
   const handleEmojiChange = useCallback(
     (emoji: string | null) => {
       updateNote.mutate({ iconEmoji: emoji });
-      // Invalidate the project page tree so the sidebar emoji updates immediately
+      // Invalidate the page tree so the sidebar emoji updates immediately
       if (note?.projectId) {
         void queryClient.invalidateQueries({
           queryKey: projectTreeKeys.tree(workspaceId, note.projectId),
+        });
+      } else {
+        void queryClient.invalidateQueries({
+          queryKey: personalPagesKeys.all,
         });
       }
       setEmojiPopoverOpen(false);
