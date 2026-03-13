@@ -39,35 +39,37 @@ export function CollapsibleSection({
   }, [defaultOpen]);
 
   return (
-    <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-      <CollapsibleTrigger asChild>
-        <button
-          className={cn(
-            'flex w-full items-center gap-2 py-3 text-sm font-medium',
-            'text-foreground hover:text-foreground/80',
-            'focus-visible:outline-none focus-visible:ring-2',
-            'focus-visible:ring-ring focus-visible:ring-offset-2',
-            'rounded-md'
-          )}
-        >
-          {icon}
-          <span>{title}</span>
-          {count !== undefined && count > 0 && (
-            <span className="mr-2 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground tabular-nums">
-              {count}
-            </span>
-          )}
-          <ChevronRight
+    <div className="mt-6 pt-6 border-t border-border/50">
+      <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+        <CollapsibleTrigger asChild>
+          <button
             className={cn(
-              'ml-auto size-4 text-muted-foreground motion-safe:transition-transform duration-150',
-              isOpen && 'rotate-90'
+              'flex w-full items-center gap-2 py-3 text-sm font-medium',
+              'text-foreground hover:text-foreground/80',
+              'focus-visible:outline-none focus-visible:ring-2',
+              'focus-visible:ring-ring focus-visible:ring-offset-2',
+              'rounded-md'
             )}
-          />
-        </button>
-      </CollapsibleTrigger>
-      <CollapsibleContent>
-        <div className="pb-2">{children}</div>
-      </CollapsibleContent>
-    </Collapsible>
+          >
+            {icon}
+            <span>{title}</span>
+            {count !== undefined && count > 0 && (
+              <span className="mr-2 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground tabular-nums">
+                {count}
+              </span>
+            )}
+            <ChevronRight
+              className={cn(
+                'ml-auto size-4 text-muted-foreground motion-safe:transition-transform duration-150',
+                isOpen && 'rotate-90'
+              )}
+            />
+          </button>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <div className="pb-2">{children}</div>
+        </CollapsibleContent>
+      </Collapsible>
+    </div>
   );
 }
