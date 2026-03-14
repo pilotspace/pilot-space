@@ -25,6 +25,9 @@ from pilot_space.application.services.memory.graph_write_service import (
     NodeInput,
 )
 from pilot_space.application.services.note.content_converter import ContentConverter
+from pilot_space.application.services.note.contextual_enrichment import (
+    enrich_chunks_with_context,
+)
 from pilot_space.application.services.note.markdown_chunker import (
     chunk_markdown_by_headings,
 )
@@ -89,10 +92,12 @@ class KgPopulateHandler:
         session: AsyncSession,
         embedding_service: EmbeddingService,
         queue: SupabaseQueueClient | None,
+        anthropic_api_key: str | None = None,
     ) -> None:
         self._session = session
         self._embedding = embedding_service
         self._queue = queue
+        self._anthropic_api_key = anthropic_api_key
         self._repo = KnowledgeGraphRepository(session)
         self._converter = ContentConverter()
 
@@ -166,6 +171,12 @@ class KgPopulateHandler:
         if len(description) > _MIN_CHUNK_CHARS:
             issue_md = f"# {issue.name}\n\n{description}"
             chunks = chunk_markdown_by_headings(issue_md, min_chunk_chars=_MIN_CHUNK_CHARS)
+            try:
+                chunks = await enrich_chunks_with_context(
+                    chunks, issue_md, api_key=self._anthropic_api_key
+                )
+            except Exception as exc:
+                logger.warning("KgPopulateHandler: issue chunk enrichment failed: %s", exc)
             if len(chunks) > 1:
                 chunk_nodes = [
                     NodeInput(
@@ -291,6 +302,12 @@ class KgPopulateHandler:
 
         # Chunk markdown and upsert chunk nodes with PARENT_OF edges
         chunks = chunk_markdown_by_headings(markdown, min_chunk_chars=_MIN_CHUNK_CHARS)
+        try:
+            chunks = await enrich_chunks_with_context(
+                chunks, markdown, api_key=self._anthropic_api_key
+            )
+        except Exception as exc:
+            logger.warning("KgPopulateHandler: note chunk enrichment failed: %s", exc)
         all_node_ids: list[UUID] = list(parent_node_ids)
 
         if chunks:
