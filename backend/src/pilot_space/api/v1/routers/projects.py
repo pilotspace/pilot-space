@@ -268,6 +268,8 @@ async def create_project(
         identifier=request.identifier,
         description=request.description,
         workspace_id=request.workspace_id,
+        lead_id=request.lead_id,
+        icon=request.icon,
     )
     project = await project_repo.create_with_default_states(project_entity)
 
