@@ -66,7 +66,7 @@ export const AIFeatureToggles = observer(function AIFeatureToggles() {
 
   const handleToggle = async (feature: string, enabled: boolean) => {
     try {
-      await settings.saveSettings({ [feature]: enabled });
+      await settings.saveSettings({ features: { [feature]: enabled } });
     } catch (error) {
       // Error handling already done in store
       console.error('Failed to toggle feature:', error);

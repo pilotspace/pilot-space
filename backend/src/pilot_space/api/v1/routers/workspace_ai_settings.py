@@ -127,9 +127,9 @@ async def get_ai_settings(
         db=session, master_secret=settings.encryption_key.get_secret_value()
     )
 
-    # Get provider statuses
+    # Get provider statuses for all 6 providers
     providers = []
-    for provider in ["anthropic", "openai", "google"]:
+    for provider in ["anthropic", "openai", "google", "kimi", "glm", "ai_agent"]:
         key_info = await key_storage.get_key_info(workspace_id, provider)
         providers.append(
             ProviderStatus(
@@ -137,6 +137,8 @@ async def get_ai_settings(
                 is_configured=key_info is not None,
                 is_valid=key_info.is_valid if key_info else None,
                 last_validated_at=key_info.last_validated_at if key_info else None,
+                base_url=key_info.base_url if key_info else None,
+                model_name=key_info.model_name if key_info else None,
             )
         )
 
@@ -206,6 +208,8 @@ async def update_ai_settings(
                     workspace_id=workspace_id,
                     provider=key_update.provider,
                     api_key=key_update.api_key,
+                    base_url=key_update.base_url,
+                    model_name=key_update.model_name,
                 )
                 updated_providers.append(key_update.provider)
                 validation_results.append(

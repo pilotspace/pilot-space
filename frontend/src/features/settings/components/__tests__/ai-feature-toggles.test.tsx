@@ -118,7 +118,7 @@ describe('AIFeatureToggles', () => {
     await user.click(marginToggle);
 
     expect(mockSettings.saveSettings).toHaveBeenCalledWith({
-      margin_annotations_enabled: true,
+      features: { margin_annotations_enabled: true },
     });
   });
 

@@ -118,7 +118,7 @@ describe('APIKeyForm', () => {
 
     await waitFor(() => {
       expect(mockSettings.saveSettings).toHaveBeenCalledWith({
-        anthropic_api_key: 'sk-ant-valid-key-1234567890',
+        api_keys: [{ provider: 'anthropic', api_key: 'sk-ant-valid-key-1234567890' }],
       });
     });
 
