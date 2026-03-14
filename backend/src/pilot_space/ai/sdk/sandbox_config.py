@@ -15,6 +15,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Protocol
 
+# Valid model ID: alphanumeric, dashes, dots, underscores, colons, slashes
+_MODEL_ID_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9\-_.:/]+$")
+
 if TYPE_CHECKING:
     from pilot_space.spaces.base import SpaceContext
 
@@ -118,7 +121,12 @@ def resolve_model(
     if user_ai_settings:
         user_model = user_ai_settings.get(f"model_{tier.value}")
         if user_model:
-            return str(user_model)
+            model_str = str(user_model).strip()
+            # Reject obviously invalid model IDs (must be alphanumeric with dashes/dots/underscores)
+            if not model_str or len(model_str) > 200 or not _MODEL_ID_RE.match(model_str):
+                pass  # Fall through to env/hardcoded default
+            else:
+                return model_str
 
     # Fall back to env var then hardcoded default
     return tier.model_id

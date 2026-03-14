@@ -94,6 +94,40 @@ class TestResolveModelForUser:
             assert result == "user-sonnet"
 
 
+class TestResolveModelValidation:
+    """Tests for model ID format validation in resolve_model."""
+
+    def test_rejects_empty_model_string(self) -> None:
+        """Empty user model override falls back to default."""
+        settings: dict[str, Any] = {"model_sonnet": ""}
+        env = {k: v for k, v in os.environ.items() if k != "PILOTSPACE_MODEL_SONNET_DEFAULT"}
+        with patch.dict(os.environ, env, clear=True):
+            result = resolve_model(ModelTier.SONNET, user_ai_settings=settings)
+            assert result == "claude-sonnet-4-20250514"
+
+    def test_rejects_whitespace_only_model(self) -> None:
+        """Whitespace-only model override falls back to default."""
+        settings: dict[str, Any] = {"model_sonnet": "   "}
+        env = {k: v for k, v in os.environ.items() if k != "PILOTSPACE_MODEL_SONNET_DEFAULT"}
+        with patch.dict(os.environ, env, clear=True):
+            result = resolve_model(ModelTier.SONNET, user_ai_settings=settings)
+            assert result == "claude-sonnet-4-20250514"
+
+    def test_rejects_model_with_spaces(self) -> None:
+        """Model ID with spaces falls back to default."""
+        settings: dict[str, Any] = {"model_sonnet": "claude sonnet 4"}
+        env = {k: v for k, v in os.environ.items() if k != "PILOTSPACE_MODEL_SONNET_DEFAULT"}
+        with patch.dict(os.environ, env, clear=True):
+            result = resolve_model(ModelTier.SONNET, user_ai_settings=settings)
+            assert result == "claude-sonnet-4-20250514"
+
+    def test_accepts_valid_model_id_with_dashes_dots(self) -> None:
+        """Valid model ID with dashes and dots is accepted."""
+        settings: dict[str, Any] = {"model_opus": "claude-opus-4.5-20251101"}
+        result = resolve_model(ModelTier.OPUS, user_ai_settings=settings)
+        assert result == "claude-opus-4.5-20251101"
+
+
 class TestBuildSdkEnvForUser:
     """Tests for build_sdk_env function."""
 

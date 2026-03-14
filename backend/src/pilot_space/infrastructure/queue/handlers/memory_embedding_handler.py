@@ -142,6 +142,18 @@ class MemoryEmbeddingJobHandler:
                 "error": f"graph node {node_id} not found",
             }
 
+        # Empty/whitespace content cannot be embedded — skip gracefully
+        if not content.strip():
+            logger.info(
+                "MemoryEmbeddingJobHandler: graph node %s has empty content, skipping",
+                node_id,
+            )
+            return {
+                "success": True,
+                "node_id": str(node_id),
+                "skipped": "empty_content",
+            }
+
         if self._embedding is None:
             return {"success": False, "error": "no EmbeddingService configured"}
 

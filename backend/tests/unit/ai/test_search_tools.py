@@ -138,76 +138,18 @@ class TestSemanticSearch:
 
 
 class TestSearchCodebase:
-    """Test search_codebase tool."""
+    """Test search_codebase tool — now returns not_implemented stub."""
 
     @pytest.mark.asyncio
-    async def test_search_without_integration(self, tool_context: ToolContext) -> None:
-        """Verify error when no GitHub integration exists."""
-        # Arrange
-        mock_scalars = MagicMock()
-        mock_scalars.all.return_value = []
-        mock_result = MagicMock()
-        mock_result.scalars.return_value = mock_scalars
-        tool_context.db_session.execute = AsyncMock(return_value=mock_result)
-
-        # Act
+    async def test_returns_not_implemented(self, tool_context: ToolContext) -> None:
+        """search_codebase returns honest not_implemented status without DB query."""
         result = await search_codebase(
             query="async def",
             ctx=tool_context,
         )
 
-        # Assert
         assert result["found"] is False
-        assert "error" in result
-        assert "No GitHub integration" in result["error"]
-
-    @pytest.mark.asyncio
-    async def test_search_with_integration(self, tool_context: ToolContext) -> None:
-        """Verify placeholder response when integration exists."""
-        # Arrange
-        mock_integration = MagicMock()
-        mock_integration.id = uuid4()
-        mock_integration.settings = {"repo_name": "pilot-space/backend"}
-        mock_integration.external_account_name = "pilot-space"
-        mock_integration.is_deleted = False
-
-        mock_scalars = MagicMock()
-        mock_scalars.all.return_value = [mock_integration]
-        mock_result = MagicMock()
-        mock_result.scalars.return_value = mock_scalars
-        tool_context.db_session.execute = AsyncMock(return_value=mock_result)
-
-        # Act
-        result = await search_codebase(
-            query="class Issue",
-            ctx=tool_context,
-            file_pattern="*.py",
-            limit=10,
-        )
-
-        # Assert
-        assert result["found"] is True
-        assert len(result["integrations"]) > 0
-        assert "note" in result
-        assert "pending implementation" in result["note"]
-
-    @pytest.mark.asyncio
-    async def test_search_specific_repo(self, tool_context: ToolContext) -> None:
-        """Verify repo_id filtering."""
-        # Arrange
-        repo_uuid = uuid4()
-        mock_scalars = MagicMock()
-        mock_scalars.all.return_value = []
-        mock_result = MagicMock()
-        mock_result.scalars.return_value = mock_scalars
-        tool_context.db_session.execute = AsyncMock(return_value=mock_result)
-
-        # Act
-        await search_codebase(
-            query="test",
-            ctx=tool_context,
-            repo_id=str(repo_uuid),
-        )
-
-        # Assert - Should query with repo_id filter
-        tool_context.db_session.execute.assert_called_once()
+        assert result["status"] == "not_implemented"
+        assert "not yet available" in result["message"].lower()
+        assert result["query"] == "async def"
+        tool_context.db_session.execute.assert_not_called()
