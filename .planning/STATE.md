@@ -4,8 +4,8 @@ milestone: v1.0.0-alpha2
 milestone_name: Notion-Style Restructure
 status: completed
 stopped_at: Milestone archived
-last_updated: "2026-03-13"
-last_activity: "2026-03-14 — Completed quick task 8: Save features map and browser-test all features"
+last_updated: "2026-03-14"
+last_activity: "2026-03-14 — Completed quick task 9: Enhance chunker with code block/table preservation and contextual retrieval"
 progress:
   total_phases: 18
   completed_phases: 17
@@ -62,10 +62,11 @@ None.
 | 5 | Per-user AI model defaults and base_url overrides | 2026-03-13 | bd06487e | [5-allow-user-to-setup-default-claude-agent](./quick/5-allow-user-to-setup-default-claude-agent/) |
 | 6 | Phase 1 UI/UX quick wins (fonts, tokens, hover) | 2026-03-13 | 04ad972d | [6-implement-phase-1-ui-ux-quick-wins-from-](./quick/6-implement-phase-1-ui-ux-quick-wins-from-/) |
 | 8 | Save features map and browser-test all features | 2026-03-14 | 745fc9c3 | [8-save-features-map-and-browser-test-all-f](./quick/8-save-features-map-and-browser-test-all-f/) |
+| 9 | Enhance chunker: code block/table preservation + contextual retrieval | 2026-03-14 | cfba3e28 | [9-enhance-chunker-with-contextual-retrieva](./quick/9-enhance-chunker-with-contextual-retrieva/) |
 
 ## Session Continuity
 
-Last session: 2026-03-13
-Stopped at: Completed quick task 6 (Phase 1 UI/UX quick wins)
+Last session: 2026-03-14
+Stopped at: Completed quick task 9 (Enhance chunker with contextual retrieval)
 Resume file: None
 Next action: `/gsd:new-milestone`
