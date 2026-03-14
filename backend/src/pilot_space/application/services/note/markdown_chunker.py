@@ -112,22 +112,32 @@ def _build_heading_hierarchy(
     return ancestors
 
 
-def _is_fence_opener(line: str) -> bool:
-    """Return True if *line* starts a fenced code block (3+ backticks at start).
+def _is_fence_line(line: str) -> bool:
+    """Return True if *line* is a CommonMark fence (3+ backticks or tildes).
 
-    Lines like '```python' or '````' are openers.
-    A backtick sequence that appears mid-line (after other chars) is NOT an opener.
+    Supports: ```, `````, ~~~, ~~~~~, with optional info string for openers.
+    A fence char sequence that appears mid-line (after non-space chars) is NOT a fence.
     """
     stripped = line.lstrip()
-    return stripped.startswith("```") and (
-        len(stripped) == 3 or not stripped[3].strip() or stripped[3].isalpha()
-    )
-
-
-def _is_fence_closer(line: str) -> bool:
-    """Return True if *line* is a closing fence (exactly 3+ backticks, nothing else)."""
-    stripped = line.strip()
-    return len(stripped) >= 3 and all(c == "`" for c in stripped)
+    if not stripped:
+        return False
+    fence_char = stripped[0]
+    if fence_char not in ("`", "~"):
+        return False
+    run_len = 0
+    for ch in stripped:
+        if ch == fence_char:
+            run_len += 1
+        else:
+            break
+    if run_len < 3:
+        return False
+    # After the fence run: only whitespace or info string (alphanumeric) allowed
+    remainder = stripped[run_len:]
+    # Closing fences must have no info string (only whitespace)
+    # Opening fences can have an info string
+    # We return True for both — caller tracks open/close state
+    return not remainder or remainder.isspace() or remainder[0].isalpha() or remainder[0] == " "
 
 
 def _merge_atomic_blocks(paragraphs: list[str]) -> list[str]:
@@ -156,22 +166,26 @@ def _merge_atomic_blocks(paragraphs: list[str]) -> list[str]:
         non_empty = [ln for ln in lines if ln.strip()]
         return bool(non_empty) and all(ln.lstrip().startswith("|") for ln in non_empty)
 
-    def _para_toggles_fence(para: str) -> tuple[bool, bool]:
+    def _para_toggles_fence(para: str, *, initial_state: bool = False) -> tuple[bool, bool]:
         """Return (opens_fence, closes_fence) for a paragraph.
 
-        Scans each line for fence markers, tracking state.
-        Returns the state of in_code_fence before and after processing the paragraph.
+        Scans each line for fence markers, tracking state from initial_state.
+
+        Args:
+            para: Paragraph text.
+            initial_state: Whether we are already inside a fence when entering.
         """
-        state = False
+        state = initial_state
         opened = False
         closed = False
         for line in para.splitlines():
-            if not state and _is_fence_opener(line):
-                state = True
-                opened = True
-            elif state and _is_fence_closer(line):
-                state = False
-                closed = True
+            if _is_fence_line(line):
+                if not state:
+                    state = True
+                    opened = True
+                else:
+                    state = False
+                    closed = True
         return opened, closed
 
     i = 0
@@ -182,7 +196,7 @@ def _merge_atomic_blocks(paragraphs: list[str]) -> list[str]:
             # Inside a fence — accumulate unconditionally
             current_block.append(para)
             # Check if this paragraph closes the fence
-            _, closes = _para_toggles_fence(para)
+            _, closes = _para_toggles_fence(para, initial_state=True)
             if closes:
                 in_code_fence = False
                 merged.append("\n\n".join(current_block))
@@ -244,7 +258,11 @@ def _sub_chunk_by_paragraphs(
 
     raw_paragraphs = content.split("\n\n")
     # Short-circuit: skip atomic block merging if no code fences or tables
-    has_atomic = "```" in content or any(p.lstrip().startswith("|") for p in raw_paragraphs)
+    has_atomic = (
+        "```" in content
+        or "~~~" in content
+        or any(p.lstrip().startswith("|") for p in raw_paragraphs)
+    )
     paragraphs = _merge_atomic_blocks(raw_paragraphs) if has_atomic else raw_paragraphs
     sub_chunks: list[str] = []
     current_parts: list[str] = []
@@ -255,12 +273,18 @@ def _sub_chunk_by_paragraphs(
         # If adding this paragraph would exceed max, flush current
         if current_parts and current_len + para_len + 2 > max_chars:
             sub_chunks.append("\n\n".join(current_parts))
-            # Overlap: carry tail of previous chunk
+            # Overlap: carry tail of previous chunk (skip atomic blocks)
             if overlap_chars > 0:
                 tail = current_parts[-1]
-                overlap_text = tail[-overlap_chars:] if len(tail) > overlap_chars else tail
-                current_parts = [overlap_text, para]
-                current_len = len(overlap_text) + para_len + 2
+                is_atomic = tail.lstrip().startswith(("```", "~~~", "|"))
+                if is_atomic:
+                    # Don't slice into atomic blocks — skip overlap for this boundary
+                    current_parts = [para]
+                    current_len = para_len
+                else:
+                    overlap_text = tail[-overlap_chars:] if len(tail) > overlap_chars else tail
+                    current_parts = [overlap_text, para]
+                    current_len = len(overlap_text) + para_len + 2
             else:
                 current_parts = [para]
                 current_len = para_len

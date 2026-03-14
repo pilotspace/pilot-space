@@ -167,6 +167,8 @@ class KgPopulateHandler:
         all_node_ids: list[UUID] = list(result.node_ids)
 
         # Chunk long issue descriptions into NOTE_CHUNK nodes
+        # Delete stale issue chunks first (idempotent regeneration)
+        await self._delete_stale_issue_chunks(p.workspace_id, p.entity_id)
         description = issue.description or ""
         if len(description) > _MIN_CHUNK_CHARS:
             issue_md = f"# {issue.name}\n\n{description}"
@@ -560,6 +562,17 @@ class KgPopulateHandler:
                 GraphNodeModel.workspace_id == workspace_id,
                 GraphNodeModel.node_type == NodeType.NOTE_CHUNK.value,
                 GraphNodeModel.properties["parent_note_id"].as_string() == str(note_id),
+                GraphNodeModel.is_deleted == False,  # noqa: E712
+            )
+        )
+
+    async def _delete_stale_issue_chunks(self, workspace_id: UUID, issue_id: UUID) -> None:
+        """Remove previous NOTE_CHUNK nodes for this issue before recreating them."""
+        await self._session.execute(
+            delete(GraphNodeModel).where(
+                GraphNodeModel.workspace_id == workspace_id,
+                GraphNodeModel.node_type == NodeType.NOTE_CHUNK.value,
+                GraphNodeModel.properties["parent_issue_id"].as_string() == str(issue_id),
                 GraphNodeModel.is_deleted == False,  # noqa: E712
             )
         )

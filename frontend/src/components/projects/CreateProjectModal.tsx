@@ -152,11 +152,14 @@ export function CreateProjectModal({
             </div>
             <div className="grid gap-2">
               <Label htmlFor="project-lead">Lead</Label>
-              <Select value={leadId} onValueChange={setLeadId}>
+              <Select value={leadId} onValueChange={(v) => setLeadId(v === '__none__' ? '' : v)}>
                 <SelectTrigger id="project-lead">
                   <SelectValue placeholder="Select lead (optional)" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="__none__">
+                    <span className="text-muted-foreground">No lead</span>
+                  </SelectItem>
                   {members.map((member) => (
                     <SelectItem key={member.userId} value={member.userId}>
                       {member.fullName || member.email}

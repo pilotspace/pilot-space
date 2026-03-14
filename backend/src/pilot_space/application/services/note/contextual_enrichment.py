@@ -35,6 +35,7 @@ def _estimate_tokens(text: str) -> int:
 _CONTEXT_MODEL = "claude-haiku-4-5-20251001"
 _MAX_CONTEXT_TOKENS = 150
 _CONTEXT_ENRICHMENT_TIMEOUT_S = 15.0
+_MAX_CONCURRENT_ENRICHMENTS = 4
 
 _CONTEXT_PROMPT_TEMPLATE = """\
 Here is the full document:
@@ -54,23 +55,26 @@ async def _enrich_single_chunk(
     full_document: str,
     client: anthropic.AsyncAnthropic,
     content_cap: int,
+    semaphore: asyncio.Semaphore,
 ) -> MarkdownChunk:
     """Enrich a single chunk with an LLM-generated context prefix.
 
     Returns the original chunk unchanged on any LLM failure.
+    Uses semaphore to limit concurrent API calls.
     """
     try:
-        prompt = _CONTEXT_PROMPT_TEMPLATE.format(
-            full_document=full_document[:4000],
-            chunk_content=chunk.content[:1000],
-        )
-        response = await client.messages.create(
-            model=_CONTEXT_MODEL,
-            max_tokens=_MAX_CONTEXT_TOKENS,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        first_block = response.content[0]
-        context_text = getattr(first_block, "text", "").strip()
+        async with semaphore:
+            prompt = _CONTEXT_PROMPT_TEMPLATE.format(
+                full_document=full_document[:4000],
+                chunk_content=chunk.content[:1000],
+            )
+            response = await client.messages.create(
+                model=_CONTEXT_MODEL,
+                max_tokens=_MAX_CONTEXT_TOKENS,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            first_block = response.content[0]
+            context_text = getattr(first_block, "text", "").strip()
         if not context_text:
             return chunk
 
@@ -136,8 +140,12 @@ async def enrich_chunks_with_context(
         return chunks
 
     client = anthropic.AsyncAnthropic(api_key=api_key)
+    semaphore = asyncio.Semaphore(_MAX_CONCURRENT_ENRICHMENTS)
 
-    tasks = [_enrich_single_chunk(chunk, full_document, client, content_cap) for chunk in chunks]
+    tasks = [
+        _enrich_single_chunk(chunk, full_document, client, content_cap, semaphore)
+        for chunk in chunks
+    ]
 
     try:
         results = await asyncio.wait_for(
