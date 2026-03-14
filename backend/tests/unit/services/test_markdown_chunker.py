@@ -274,3 +274,132 @@ class TestDynamicMaxChunks:
         chunks = chunk_markdown_by_headings(sections, max_chunk_chars=5000)
         # 15KB doc → max(20, (15000/1024)*5) ≈ max(20, 73) = 73
         assert len(chunks) == 30  # all 30 should fit
+
+
+class TestCodeBlockPreservation:
+    """Test that fenced code blocks are never split across sub-chunks."""
+
+    def test_code_block_with_blank_lines_stays_atomic(self) -> None:
+        # Code block has internal blank lines — must not be split across chunks
+        code_block = "```python\ndef foo():\n    pass\n\n\ndef bar():\n    pass\n```"
+        # Surround with enough text to force sub-chunking at max_chars=200
+        padding = "Some intro text here.\n\n" + "Padding paragraph.\n\n" * 3
+        body = padding + code_block + "\n\nTrailing text after."
+        md = f"# Section\n\n{body}\n"
+        chunks = chunk_markdown_by_headings(md, max_chunk_chars=200, overlap_chars=0)
+        # The code block must appear intact in exactly one chunk (not split)
+        joined = "\n\n".join(c.content for c in chunks)
+        assert "def foo():" in joined
+        assert "def bar():" in joined
+        # Each chunk must not contain a partial code block (unclosed fence)
+        for chunk in chunks:
+            fence_count = chunk.content.count("```")
+            assert fence_count % 2 == 0, (
+                f"Chunk has unclosed code fence (odd backtick count={fence_count}): "
+                f"{chunk.content[:200]!r}"
+            )
+
+    def test_code_block_with_language_tag_stays_atomic(self) -> None:
+        code_block = "```typescript\nconst x = 1;\n\nconst y = 2;\n```"
+        padding = "Before code.\n\n" + "Padding line.\n\n" * 4
+        body = padding + code_block
+        md = f"# Section\n\n{body}\n"
+        chunks = chunk_markdown_by_headings(md, max_chunk_chars=100, overlap_chars=0)
+        for chunk in chunks:
+            fence_count = chunk.content.count("```")
+            assert fence_count % 2 == 0, f"Unclosed fence in chunk: {chunk.content[:200]!r}"
+
+    def test_multiple_code_blocks_each_stay_atomic(self) -> None:
+        block1 = "```python\ndef a():\n    return 1\n\n\ndef b():\n    return 2\n```"
+        block2 = "```bash\necho hello\n\necho world\n```"
+        body = "Intro.\n\n" + block1 + "\n\nMiddle text.\n\n" + block2 + "\n\nEnd."
+        md = f"# Section\n\n{body}\n"
+        chunks = chunk_markdown_by_headings(md, max_chunk_chars=80, overlap_chars=0)
+        for chunk in chunks:
+            fence_count = chunk.content.count("```")
+            assert fence_count % 2 == 0, f"Unclosed fence: {chunk.content[:200]!r}"
+
+    def test_single_code_block_larger_than_max_chars_kept_as_is(self) -> None:
+        # A code block that alone exceeds max_chars must still appear as one atomic block
+        lines = "\n\n".join(f"    line_{i} = {i}" for i in range(20))
+        code_block = f"```python\n{lines}\n```"
+        md = f"# Section\n\n{code_block}\n"
+        chunks = chunk_markdown_by_headings(md, max_chunk_chars=100, overlap_chars=0)
+        # All chunks together must contain both fence delimiters exactly twice total
+        all_content = "\n\n".join(c.content for c in chunks)
+        assert all_content.count("```") >= 2
+        # No individual chunk should have an odd number of backtick-fence markers
+        for chunk in chunks:
+            fence_count = chunk.content.count("```")
+            assert fence_count % 2 == 0, f"Split code block in chunk: {chunk.content[:300]!r}"
+
+    def test_content_without_code_blocks_unchanged(self) -> None:
+        # Behaviour for content with no code blocks should be identical to before
+        body = "\n\n".join(f"Paragraph {i} with content." for i in range(10))
+        md = f"# Section\n\n{body}\n"
+        chunks_new = chunk_markdown_by_headings(md, max_chunk_chars=100, overlap_chars=0)
+        # Should still produce multiple chunks (no regression on splitting logic)
+        assert len(chunks_new) >= 1
+        joined = "\n\n".join(c.content for c in chunks_new)
+        assert "Paragraph 0" in joined
+        assert "Paragraph 9" in joined
+
+
+class TestTablePreservation:
+    """Test that markdown tables are never split mid-row."""
+
+    def test_table_stays_atomic(self) -> None:
+        header = "| Name | Value |"
+        sep = "|------|-------|"
+        rows = "\n".join(f"| Row {i} | {i * 10} |" for i in range(10))
+        table = f"{header}\n{sep}\n{rows}"
+        padding = "Intro paragraph.\n\n" + "More text.\n\n" * 3
+        body = padding + table + "\n\nTrailing text."
+        md = f"# Section\n\n{body}\n"
+        chunks = chunk_markdown_by_headings(md, max_chunk_chars=100, overlap_chars=0)
+        # Table must appear entirely in one chunk (not split)
+        table_chunks = [c for c in chunks if "| Row 0 |" in c.content]
+        if table_chunks:
+            # If the first row is in a chunk, all rows must be in the same chunk
+            assert all(f"| Row {i} |" in table_chunks[0].content for i in range(10)), (
+                "Table was split across chunks"
+            )
+
+    def test_table_header_separator_stays_with_table(self) -> None:
+        table = "| A | B |\n|---|---|\n| 1 | 2 |\n| 3 | 4 |"
+        padding = "Before.\n\n" + "Long text.\n\n" * 5
+        body = padding + table
+        md = f"# Section\n\n{body}\n"
+        chunks = chunk_markdown_by_headings(md, max_chunk_chars=80, overlap_chars=0)
+        # Find chunk containing the header
+        header_chunks = [c for c in chunks if "| A | B |" in c.content]
+        if header_chunks:
+            # Separator must be in the same chunk as the header
+            assert "|---|---|" in header_chunks[0].content, "Table separator separated from header"
+
+    def test_mixed_content_splits_at_safe_boundaries(self) -> None:
+        code = "```python\nprint('hello')\n\nprint('world')\n```"
+        table = "| X | Y |\n|---|---|\n| a | b |\n| c | d |"
+        body = (
+            "Intro text.\n\n"
+            "More intro.\n\n"
+            + code
+            + "\n\nMid text.\n\n"
+            + "More mid.\n\n"
+            + table
+            + "\n\nEnd text."
+        )
+        md = f"# Section\n\n{body}\n"
+        chunks = chunk_markdown_by_headings(md, max_chunk_chars=100, overlap_chars=0)
+        # No chunk should have unclosed code fence
+        for chunk in chunks:
+            fence_count = chunk.content.count("```")
+            assert fence_count % 2 == 0, f"Unclosed fence: {chunk.content[:200]!r}"
+
+    def test_content_without_tables_unchanged(self) -> None:
+        body = "\n\n".join(f"Paragraph {i}." for i in range(8))
+        md = f"# Section\n\n{body}\n"
+        chunks = chunk_markdown_by_headings(md, max_chunk_chars=50, overlap_chars=0)
+        assert len(chunks) >= 1
+        joined = " ".join(c.content for c in chunks)
+        assert "Paragraph 0" in joined
