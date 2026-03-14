@@ -10,7 +10,6 @@ from pilot_space.ai.mcp.project_rag_helpers import (
     filter_nodes_by_project,
     format_knowledge_summary,
     format_search_results,
-    text_result,
 )
 
 
@@ -147,11 +146,3 @@ class TestFormatKnowledgeSummary:
 
         summary = format_knowledge_summary(result, nodes, max_nodes=5)  # type: ignore[arg-type]
         assert len(summary["nodes"]) == 5
-
-
-class TestTextResult:
-    """Test text_result helper."""
-
-    def test_format(self) -> None:
-        r = text_result("Hello world")
-        assert r == {"content": [{"type": "text", "text": "Hello world"}]}

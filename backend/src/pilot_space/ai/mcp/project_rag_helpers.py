@@ -7,7 +7,6 @@ get_project_context tools in project_server.py.
 
 from __future__ import annotations
 
-import json
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
@@ -16,6 +15,7 @@ from pilot_space.infrastructure.logging import get_logger
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
+    from pilot_space.ai.tools.mcp_server import ToolContext
     from pilot_space.application.services.memory.graph_search_service import (
         GraphSearchResult,
     )
@@ -115,21 +115,42 @@ def format_knowledge_summary(
     }
 
 
-def text_result(text: str) -> dict[str, Any]:
-    """Create a standard MCP tool text result."""
-    return {"content": [{"type": "text", "text": text}]}
+async def resolve_project(
+    project_id_input: str,
+    tool_context: ToolContext,
+    *,
+    with_states: bool = False,
+) -> tuple[Any | None, str | None]:
+    """Resolve project by UUID/identifier and validate workspace access.
 
+    Returns:
+        Tuple of (project, None) on success, or (None, error_message) on failure.
+    """
+    from pilot_space.ai.tools.entity_resolver import resolve_entity_id
+    from pilot_space.infrastructure.database.repositories.project_repository import (
+        ProjectRepository,
+    )
 
-def format_json(data: Any) -> str:
-    """Format data as indented JSON string."""
-    return json.dumps(data, indent=2)
+    project_uuid, error = await resolve_entity_id("project", project_id_input, tool_context)
+    if error or not project_uuid:
+        return None, f"Error: {error or 'Invalid project ID'}"
+
+    repo = ProjectRepository(tool_context.db_session)
+    project = (
+        await repo.get_with_states(project_uuid)
+        if with_states
+        else await repo.get_by_id(project_uuid)
+    )
+    if not project or str(project.workspace_id) != tool_context.workspace_id:
+        return None, f"Project '{project_id_input}' not found"
+
+    return project, None
 
 
 __all__ = [
     "build_graph_search",
     "filter_nodes_by_project",
-    "format_json",
     "format_knowledge_summary",
     "format_search_results",
-    "text_result",
+    "resolve_project",
 ]

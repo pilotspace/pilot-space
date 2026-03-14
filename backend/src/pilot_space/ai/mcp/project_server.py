@@ -614,16 +614,13 @@ def create_project_tools_server(
         from pilot_space.ai.mcp.project_rag_helpers import (
             build_graph_search,
             filter_nodes_by_project,
-            format_json,
             format_search_results,
+            resolve_project,
         )
         from pilot_space.application.services.memory.graph_search_service import (
             GraphSearchPayload,
         )
         from pilot_space.domain.graph_node import NodeType
-        from pilot_space.infrastructure.database.repositories.project_repository import (
-            ProjectRepository,
-        )
 
         project_id_input = args.get("project_id", "")
         query = args.get("query", "").strip()
@@ -633,14 +630,9 @@ def create_project_tools_server(
         if not query:
             return _text_result("Error: Search query cannot be empty")
 
-        project_uuid, error = await resolve_entity_id("project", project_id_input, tool_context)
-        if error or not project_uuid:
-            return _text_result(f"Error: {error or 'Invalid project ID'}")
-
-        project_repo = ProjectRepository(tool_context.db_session)
-        project = await project_repo.get_by_id(project_uuid)
-        if not project or str(project.workspace_id) != tool_context.workspace_id:
-            return _text_result(f"Project '{project_id_input}' not found")
+        project, error = await resolve_project(project_id_input, tool_context)
+        if error or not project:
+            return _text_result(error or "Project not found")
 
         # Parse node type filters
         parsed_types: list[NodeType] | None = None
@@ -677,7 +669,7 @@ def create_project_tools_server(
         return _text_result(
             f"Found {len(results_data)} relevant result(s) in project "
             f"'{project.identifier}' for query '{query}':\n\n"
-            f"{format_json(results_data)}"
+            f"{json.dumps(results_data, indent=2)}"
         )
 
     @tool(
@@ -722,8 +714,8 @@ def create_project_tools_server(
         from pilot_space.ai.mcp.project_rag_helpers import (
             build_graph_search,
             filter_nodes_by_project,
-            format_json,
             format_knowledge_summary,
+            resolve_project,
         )
         from pilot_space.application.services.memory.graph_search_service import (
             GraphSearchPayload,
@@ -731,23 +723,15 @@ def create_project_tools_server(
         from pilot_space.domain.graph_node import NodeType
         from pilot_space.infrastructure.database.models.issue import Issue
         from pilot_space.infrastructure.database.models.state import State
-        from pilot_space.infrastructure.database.repositories.project_repository import (
-            ProjectRepository,
-        )
 
         project_id_input = args.get("project_id", "")
         focus = args.get("focus", "").strip()
         include_issues = args.get("include_issues", True)
         include_knowledge = args.get("include_knowledge", True)
 
-        project_uuid, error = await resolve_entity_id("project", project_id_input, tool_context)
-        if error or not project_uuid:
-            return _text_result(f"Error: {error or 'Invalid project ID'}")
-
-        project_repo = ProjectRepository(tool_context.db_session)
-        project = await project_repo.get_with_states(project_uuid)
-        if not project or str(project.workspace_id) != tool_context.workspace_id:
-            return _text_result(f"Project '{project_id_input}' not found")
+        project, error = await resolve_project(project_id_input, tool_context, with_states=True)
+        if error or not project:
+            return _text_result(error or "Project not found")
 
         workspace_id = UUID(tool_context.workspace_id)
 
@@ -833,7 +817,7 @@ def create_project_tools_server(
             focus,
         )
         return _text_result(
-            f"Context for project '{project.identifier}':\n\n{format_json(context)}"
+            f"Context for project '{project.identifier}':\n\n{json.dumps(context, indent=2)}"
         )
 
     return create_sdk_mcp_server(

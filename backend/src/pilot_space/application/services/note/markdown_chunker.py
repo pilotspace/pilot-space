@@ -242,7 +242,10 @@ def _sub_chunk_by_paragraphs(
     if len(content) <= max_chars:
         return [content]
 
-    paragraphs = _merge_atomic_blocks(content.split("\n\n"))
+    raw_paragraphs = content.split("\n\n")
+    # Short-circuit: skip atomic block merging if no code fences or tables
+    has_atomic = "```" in content or any(p.lstrip().startswith("|") for p in raw_paragraphs)
+    paragraphs = _merge_atomic_blocks(raw_paragraphs) if has_atomic else raw_paragraphs
     sub_chunks: list[str] = []
     current_parts: list[str] = []
     current_len = 0
