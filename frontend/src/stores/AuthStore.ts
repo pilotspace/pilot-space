@@ -204,12 +204,16 @@ export class AuthStore {
   }
 
   private mapSupabaseUser(supabaseUser: User): AuthUser {
+    // Preserve aiSettings across auth state changes — Supabase user metadata
+    // doesn't contain AI settings, so we carry forward the existing value.
+    const preservedAiSettings = this.user?.aiSettings ?? null;
     return {
       id: supabaseUser.id,
       email: supabaseUser.email || '',
       name: supabaseUser.user_metadata?.name || supabaseUser.user_metadata?.full_name || '',
       avatarUrl: supabaseUser.user_metadata?.avatar_url || null,
       bio: supabaseUser.user_metadata?.['bio'] as string | undefined,
+      aiSettings: preservedAiSettings,
     };
   }
 

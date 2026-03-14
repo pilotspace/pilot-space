@@ -8,11 +8,7 @@ Migrated from direct repo/settings usage in auth router per DD-064.
 from __future__ import annotations
 
 import hashlib
-from dataclasses import (
-    dataclass,
-    field,
-    field as dataclass_field,
-)
+from dataclasses import dataclass, field
 from typing import Any
 from uuid import UUID
 
@@ -75,7 +71,7 @@ class UpdateProfilePayload:
     avatar_url: str | None = None
     bio: str | None = None
     default_sdlc_role: str | None = None
-    ai_settings: dict[str, Any] | None = dataclass_field(default_factory=lambda: UNSET)
+    ai_settings: Any = field(default=UNSET)  # UNSET sentinel or dict | None
 
 
 @dataclass

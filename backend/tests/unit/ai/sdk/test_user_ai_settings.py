@@ -2,8 +2,9 @@
 
 Verifies that per-user ai_settings overrides work correctly for:
 - Model tier resolution (user > env > hardcoded default)
-- SDK env base_url override
-- Auth schema serialization
+- Model ID format validation (reject invalid strings)
+- SDK env base_url override with SSRF prevention
+- Auth schema serialization with typed AiSettingsSchema
 """
 
 from __future__ import annotations
@@ -13,9 +14,20 @@ from datetime import UTC
 from typing import Any
 from unittest.mock import patch
 
-from pilot_space.ai.sdk.config import build_sdk_env_for_user
+import pytest
+
+from pilot_space.ai.sdk.config import build_sdk_env_for_user, validate_base_url
 from pilot_space.ai.sdk.sandbox_config import ModelTier, resolve_model_for_user
 from pilot_space.api.v1.schemas.auth import UserProfileResponse, UserProfileUpdateRequest
+from pilot_space.config import get_settings
+
+
+@pytest.fixture(autouse=True)
+def _clear_settings_cache() -> Any:
+    """Clear lru_cache on get_settings between tests (Gotcha #3)."""
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
 class TestResolveModelForUser:
@@ -33,9 +45,7 @@ class TestResolveModelForUser:
         haiku = resolve_model_for_user(ModelTier.HAIKU, user_ai_settings=settings)
         assert haiku == "custom-haiku"
 
-        # Sonnet and Opus should fall back to defaults (no env set)
         with patch.dict(os.environ, {}, clear=False):
-            # Remove env vars if they exist
             env = {
                 k: v
                 for k, v in os.environ.items()
@@ -83,47 +93,135 @@ class TestResolveModelForUser:
             assert result == "user-sonnet"
 
 
+class TestResolveModelValidation:
+    """Tests for model ID format validation in resolve_model_for_user."""
+
+    def test_rejects_empty_model_string(self) -> None:
+        """Empty user model override falls back to default."""
+        settings: dict[str, Any] = {"model_sonnet": ""}
+        env = {k: v for k, v in os.environ.items() if k != "PILOTSPACE_MODEL_SONNET_DEFAULT"}
+        with patch.dict(os.environ, env, clear=True):
+            result = resolve_model_for_user(ModelTier.SONNET, user_ai_settings=settings)
+            assert result == "claude-sonnet-4-20250514"
+
+    def test_rejects_whitespace_only_model(self) -> None:
+        """Whitespace-only model override falls back to default."""
+        settings: dict[str, Any] = {"model_sonnet": "   "}
+        env = {k: v for k, v in os.environ.items() if k != "PILOTSPACE_MODEL_SONNET_DEFAULT"}
+        with patch.dict(os.environ, env, clear=True):
+            result = resolve_model_for_user(ModelTier.SONNET, user_ai_settings=settings)
+            assert result == "claude-sonnet-4-20250514"
+
+    def test_rejects_model_with_spaces(self) -> None:
+        """Model ID with spaces falls back to default."""
+        settings: dict[str, Any] = {"model_sonnet": "claude sonnet 4"}
+        env = {k: v for k, v in os.environ.items() if k != "PILOTSPACE_MODEL_SONNET_DEFAULT"}
+        with patch.dict(os.environ, env, clear=True):
+            result = resolve_model_for_user(ModelTier.SONNET, user_ai_settings=settings)
+            assert result == "claude-sonnet-4-20250514"
+
+    def test_accepts_valid_model_id_with_dashes_dots(self) -> None:
+        """Valid model ID with dashes and dots is accepted."""
+        settings: dict[str, Any] = {"model_opus": "claude-opus-4.5-20251101"}
+        result = resolve_model_for_user(ModelTier.OPUS, user_ai_settings=settings)
+        assert result == "claude-opus-4.5-20251101"
+
+
+class TestValidateBaseUrl:
+    """Tests for validate_base_url SSRF prevention."""
+
+    def test_valid_https_url(self) -> None:
+        result = validate_base_url("https://proxy.example.com/v1")
+        assert result == "https://proxy.example.com/v1"
+
+    def test_rejects_http(self) -> None:
+        with pytest.raises(ValueError, match="must use HTTPS"):
+            validate_base_url("http://proxy.example.com")
+
+    def test_rejects_localhost(self) -> None:
+        with pytest.raises(ValueError, match="must not point to localhost"):
+            validate_base_url("https://localhost:8080")
+
+    def test_rejects_127_0_0_1(self) -> None:
+        with pytest.raises(ValueError, match="must not point to localhost"):
+            validate_base_url("https://127.0.0.1:8080")
+
+    def test_rejects_private_ip(self) -> None:
+        with pytest.raises(ValueError, match="private or reserved"):
+            validate_base_url("https://10.0.0.5:8080")
+
+    def test_rejects_link_local_ip(self) -> None:
+        with pytest.raises(ValueError, match="private or reserved"):
+            validate_base_url("https://169.254.1.1")
+
+    def test_rejects_no_hostname(self) -> None:
+        with pytest.raises(ValueError, match="no hostname"):
+            validate_base_url("https://")
+
+    def test_rejects_ftp_scheme(self) -> None:
+        with pytest.raises(ValueError, match="must use HTTPS"):
+            validate_base_url("ftp://files.example.com")
+
+
 class TestBuildSdkEnvForUser:
     """Tests for build_sdk_env_for_user function."""
 
     def test_user_base_url_override(self) -> None:
-        """User ai_settings base_url overrides system default."""
         settings: dict[str, Any] = {"base_url": "https://proxy.example.com"}
         env = build_sdk_env_for_user(
-            "test-key", user_ai_settings=settings
-        )  # pragma: allowlist secret
+            "test-key",
+            user_ai_settings=settings,  # pragma: allowlist secret
+        )
         assert env["ANTHROPIC_BASE_URL"] == "https://proxy.example.com"
 
     def test_no_user_base_url_uses_system(self) -> None:
-        """Without user base_url, falls back to Settings().anthropic_base_url."""
         env = build_sdk_env_for_user("test-key", user_ai_settings={})  # pragma: allowlist secret
-        # Should have same behavior as build_sdk_env
         assert env["ANTHROPIC_API_KEY"] == "test-key"  # pragma: allowlist secret
 
     def test_none_settings_uses_system(self) -> None:
-        """None ai_settings falls back to system default."""
         env = build_sdk_env_for_user("test-key", user_ai_settings=None)  # pragma: allowlist secret
         assert env["ANTHROPIC_API_KEY"] == "test-key"  # pragma: allowlist secret
+
+    def test_rejects_bad_user_url(self) -> None:
+        """build_sdk_env_for_user raises ValueError for non-HTTPS user base_url."""
+        with pytest.raises(ValueError, match="must use HTTPS"):
+            build_sdk_env_for_user(
+                "test-key",  # pragma: allowlist secret
+                user_ai_settings={"base_url": "http://evil.com"},
+            )
 
 
 class TestAuthSchemas:
     """Tests for ai_settings in auth schemas."""
 
     def test_update_request_accepts_ai_settings(self) -> None:
-        """UserProfileUpdateRequest accepts ai_settings dict."""
+        """UserProfileUpdateRequest accepts AiSettingsSchema dict."""
         req = UserProfileUpdateRequest(
             ai_settings={"model_sonnet": "custom-sonnet", "base_url": "https://proxy.example.com"}
         )
         assert req.ai_settings is not None
-        assert req.ai_settings["model_sonnet"] == "custom-sonnet"
+        assert req.ai_settings.model_sonnet == "custom-sonnet"
+        assert req.ai_settings.base_url == "https://proxy.example.com"
+
+    def test_update_request_rejects_http_base_url(self) -> None:
+        """UserProfileUpdateRequest rejects non-HTTPS base_url."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="base_url"):
+            UserProfileUpdateRequest(ai_settings={"base_url": "http://evil.com"})
+
+    def test_update_request_rejects_private_ip_base_url(self) -> None:
+        """UserProfileUpdateRequest rejects private IP base_url."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="base_url"):
+            UserProfileUpdateRequest(ai_settings={"base_url": "https://192.168.1.1"})
 
     def test_update_request_ai_settings_default_none(self) -> None:
-        """UserProfileUpdateRequest ai_settings defaults to None."""
         req = UserProfileUpdateRequest()
         assert req.ai_settings is None
 
     def test_response_includes_ai_settings(self) -> None:
-        """UserProfileResponse includes ai_settings field."""
         from datetime import datetime
         from uuid import uuid4
 
@@ -134,10 +232,9 @@ class TestAuthSchemas:
             ai_settings={"model_haiku": "custom-haiku"},
         )
         assert resp.ai_settings is not None
-        assert resp.ai_settings["model_haiku"] == "custom-haiku"
+        assert resp.ai_settings.model_haiku == "custom-haiku"
 
     def test_response_ai_settings_default_none(self) -> None:
-        """UserProfileResponse ai_settings defaults to None."""
         from datetime import datetime
         from uuid import uuid4
 
@@ -148,12 +245,20 @@ class TestAuthSchemas:
         )
         assert resp.ai_settings is None
 
+    def test_ai_settings_ignores_unknown_fields(self) -> None:
+        from pilot_space.api.v1.schemas.auth import AiSettingsSchema
+
+        settings = AiSettingsSchema.model_validate(
+            {"model_sonnet": "custom", "unknown_field": "value"}
+        )
+        assert settings.model_sonnet == "custom"
+        assert not hasattr(settings, "unknown_field")
+
 
 class TestUpdateProfilePayloadSentinel:
     """Tests for the UNSET sentinel in UpdateProfilePayload."""
 
     def test_default_ai_settings_is_unset(self) -> None:
-        """ai_settings defaults to UNSET sentinel, not None."""
         from uuid import uuid4
 
         from pilot_space.application.services.auth import UNSET, UpdateProfilePayload
@@ -162,7 +267,6 @@ class TestUpdateProfilePayloadSentinel:
         assert payload.ai_settings is UNSET
 
     def test_explicit_none_is_not_unset(self) -> None:
-        """Explicitly passing None is distinguishable from not provided."""
         from uuid import uuid4
 
         from pilot_space.application.services.auth import UNSET, UpdateProfilePayload
@@ -172,7 +276,6 @@ class TestUpdateProfilePayloadSentinel:
         assert payload.ai_settings is not UNSET
 
     def test_explicit_dict_is_not_unset(self) -> None:
-        """Explicitly passing a dict is distinguishable from not provided."""
         from uuid import uuid4
 
         from pilot_space.application.services.auth import UNSET, UpdateProfilePayload

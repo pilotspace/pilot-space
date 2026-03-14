@@ -9,9 +9,11 @@ Design Decisions: DD-002 (BYOK), DD-058 (SDK mode clarification)
 
 from __future__ import annotations
 
+import ipaddress
 import os
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Final
+from urllib.parse import urlparse
 from uuid import UUID
 
 from pilot_space.ai.sdk.sandbox_config import ModelTier
@@ -203,6 +205,34 @@ def build_sdk_env(api_key: str) -> dict[str, str]:
     return env
 
 
+def validate_base_url(url: str) -> str:
+    """Validate a user-provided base URL to prevent SSRF and key exfiltration.
+
+    Only HTTPS URLs with public hostnames are accepted. Rejects private/reserved
+    IPs, localhost, and non-HTTPS schemes.
+
+    Raises:
+        ValueError: If the URL is invalid, non-HTTPS, or points to a private network.
+    """
+    parsed = urlparse(url)
+    if parsed.scheme != "https":
+        raise ValueError(f"base_url must use HTTPS, got: {parsed.scheme!r}")
+    hostname = parsed.hostname
+    if not hostname:
+        raise ValueError("base_url has no hostname")
+    _blocked = {"localhost", "127.0.0.1", "::1", "0.0.0.0"}
+    if hostname.lower() in _blocked:
+        raise ValueError("base_url must not point to localhost")
+    try:
+        addr = ipaddress.ip_address(hostname)
+    except ValueError:
+        pass  # Not a bare IP — hostname is fine (e.g., "proxy.example.com")
+    else:
+        if addr.is_private or addr.is_reserved or addr.is_loopback or addr.is_link_local:
+            raise ValueError("base_url must not point to a private or reserved IP address")
+    return url
+
+
 def build_sdk_env_for_user(
     api_key: str,
     user_ai_settings: dict[str, Any] | None = None,
@@ -210,6 +240,7 @@ def build_sdk_env_for_user(
     """Build env dict for SDK subprocess with user-level overrides.
 
     Extends build_sdk_env with per-user base_url override from ai_settings.
+    User URLs are validated to prevent SSRF — only HTTPS with public hosts allowed.
 
     Args:
         api_key: Anthropic API key for the workspace.
@@ -217,6 +248,9 @@ def build_sdk_env_for_user(
 
     Returns:
         Environment dict for SDK subprocess execution.
+
+    Raises:
+        ValueError: If user base_url fails validation (non-HTTPS, private IP).
     """
     env = build_sdk_env(api_key)
 
@@ -224,6 +258,7 @@ def build_sdk_env_for_user(
     if user_ai_settings:
         user_base_url = user_ai_settings.get("base_url")
         if user_base_url:
-            env["ANTHROPIC_BASE_URL"] = str(user_base_url)
+            validated = validate_base_url(str(user_base_url))
+            env["ANTHROPIC_BASE_URL"] = validated
 
     return env
