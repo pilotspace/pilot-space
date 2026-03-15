@@ -98,7 +98,7 @@ class WorkspaceAPIKey(Base, TimestampMixin, WorkspaceScopedMixin):
     )
 
     base_url: Mapped[str | None] = mapped_column(
-        Text,
+        String(2048),
         nullable=True,
         doc="Custom base URL for provider API",
     )

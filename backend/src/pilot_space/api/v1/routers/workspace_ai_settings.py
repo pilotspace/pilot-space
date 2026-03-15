@@ -166,17 +166,16 @@ async def update_ai_settings(
         for key_update in body.api_keys:
             provider = key_update.provider
             service_type = key_update.service_type
+            provider_label = f"{provider}:{service_type}"
 
-            # Merge with existing config so omitted fields are preserved
             existing_info = await key_storage.get_key_info(workspace_id, provider, service_type)
 
-            # Only decrypt the existing key when needed (no new key provided)
-            if key_update.api_key is not None:
-                api_key = key_update.api_key
-            elif existing_info is not None:
-                api_key = await key_storage.get_api_key(workspace_id, provider, service_type)
-            else:
-                api_key = None
+            has_new_key = key_update.api_key is not None
+            has_metadata_change = (
+                key_update.base_url is not None or key_update.model_name is not None
+            )
+
+            # Merge metadata with existing values
             base_url = (
                 key_update.base_url
                 if key_update.base_url is not None
@@ -188,24 +187,8 @@ async def update_ai_settings(
                 else (existing_info.model_name if existing_info else None)
             )
 
-            # For providers that need an API key (google, anthropic),
-            # skip if no key provided and none exists
-            needs_api_key = provider in ("google", "anthropic")
-            if needs_api_key and not api_key:
-                continue
-
-            # For Ollama, base_url is required and must pass SSRF check
-            provider_label = f"{provider}:{service_type}"
-            if provider == "ollama":
-                if not base_url:
-                    validation_results.append(
-                        KeyValidationResult(
-                            provider=provider_label,
-                            is_valid=False,
-                            error_message="Base URL is required for Ollama",
-                        )
-                    )
-                    continue
+            # SSRF check for Ollama base_url
+            if provider == "ollama" and base_url:
                 try:
                     from pilot_space.ai.providers.constants import validate_ollama_base_url
 
@@ -220,33 +203,81 @@ async def update_ai_settings(
                     )
                     continue
 
-            await key_storage.store_api_key(
-                workspace_id=workspace_id,
-                provider=provider,
-                service_type=service_type,
-                api_key=api_key,
-                base_url=base_url,
-                model_name=model_name,
-            )
-            updated_providers.append(provider_label)
+            if has_new_key:
+                # For Ollama, base_url is required when storing a new key
+                if provider == "ollama" and not base_url:
+                    validation_results.append(
+                        KeyValidationResult(
+                            provider=provider_label,
+                            is_valid=False,
+                            error_message="Base URL is required for Ollama",
+                        )
+                    )
+                    continue
 
-            # Validate the stored key
-            try:
-                is_valid = await key_storage.validate_api_key(
+                await key_storage.store_api_key(
+                    workspace_id=workspace_id,
                     provider=provider,
-                    api_key=api_key,
+                    service_type=service_type,
+                    api_key=key_update.api_key,  # type: ignore[arg-type]
                     base_url=base_url,
+                    model_name=model_name,
                 )
-            except Exception:
-                is_valid = False
+                updated_providers.append(provider_label)
 
-            validation_results.append(
-                KeyValidationResult(
-                    provider=provider_label,
-                    is_valid=is_valid,
-                    error_message=None if is_valid else "Key validation failed",
+                # Validate the stored key
+                try:
+                    is_valid = await key_storage.validate_api_key(
+                        provider=provider,
+                        api_key=key_update.api_key,
+                        base_url=base_url,
+                    )
+                except Exception:
+                    is_valid = False
+
+                validation_results.append(
+                    KeyValidationResult(
+                        provider=provider_label,
+                        is_valid=is_valid,
+                        error_message=None if is_valid else "Key validation failed",
+                    )
                 )
-            )
+            elif has_metadata_change and existing_info is not None:
+                # Only metadata changed — update without touching encrypted key
+                await key_storage.update_metadata(
+                    workspace_id=workspace_id,
+                    provider=provider,
+                    service_type=service_type,
+                    base_url=base_url,
+                    model_name=model_name,
+                )
+                updated_providers.append(provider_label)
+                validation_results.append(
+                    KeyValidationResult(
+                        provider=provider_label,
+                        is_valid=True,
+                        error_message=None,
+                    )
+                )
+            elif has_metadata_change and existing_info is None:
+                validation_results.append(
+                    KeyValidationResult(
+                        provider=provider_label,
+                        is_valid=False,
+                        error_message="API key required before updating provider metadata",
+                    )
+                )
+            elif not has_new_key and not has_metadata_change and existing_info is not None:
+                # Explicit None api_key with no metadata changes — delete the key
+                await key_storage.delete_api_key(workspace_id, provider, service_type)
+                updated_providers.append(provider_label)
+                validation_results.append(
+                    KeyValidationResult(
+                        provider=provider_label,
+                        is_valid=True,
+                        error_message=None,
+                    )
+                )
 
     # Update feature toggles
     updated_features = False

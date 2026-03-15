@@ -9,18 +9,26 @@
 
 import * as React from 'react';
 import { observer } from 'mobx-react-lite';
-import { ChevronDown, ChevronUp, Loader2, Cpu, Sparkles } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronUp,
+  Loader2,
+  Cpu,
+  Sparkles,
+  CheckCircle2,
+  XCircle,
+  Circle,
+} from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { APIKeyInput } from './api-key-input';
 import { useStore } from '@/stores';
 import { toast } from 'sonner';
 import type { WorkspaceAISettingsProvider } from '@/services/api/ai';
-import { CheckCircle2, XCircle, Circle } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
 import { formatDistanceToNow } from 'date-fns';
 
 interface ProviderConfig {
@@ -156,7 +164,6 @@ export interface ProviderRowProps {
   provider: string;
   serviceType: 'embedding' | 'llm';
   status: WorkspaceAISettingsProvider | undefined;
-  workspaceId: string;
   onSaved: () => void;
 }
 
@@ -164,7 +171,6 @@ export const ProviderRow = observer(function ProviderRow({
   provider,
   serviceType,
   status,
-  workspaceId: _workspaceId,
   onSaved,
 }: ProviderRowProps) {
   const { ai } = useStore();
@@ -173,8 +179,8 @@ export const ProviderRow = observer(function ProviderRow({
 
   const [isOpen, setIsOpen] = React.useState(false);
   const [apiKey, setApiKey] = React.useState('');
-  const [baseUrl, setBaseUrl] = React.useState('');
-  const [modelName, setModelName] = React.useState('');
+  const [baseUrl, setBaseUrl] = React.useState(status?.baseUrl ?? '');
+  const [modelName, setModelName] = React.useState(status?.modelName ?? '');
   const [isSaving, setIsSaving] = React.useState(false);
 
   if (!config) return null;
@@ -189,10 +195,10 @@ export const ProviderRow = observer(function ProviderRow({
     } = { provider, service_type: serviceType };
 
     const hasApiKey = apiKey.trim().length > 0;
+    if (hasApiKey) entry.api_key = apiKey.trim();
+
     const hasBaseUrl = baseUrl.trim().length > 0;
     const hasModelName = modelName.trim().length > 0;
-
-    if (hasApiKey) entry.api_key = apiKey.trim();
     if (hasBaseUrl) entry.base_url = baseUrl.trim();
     if (hasModelName) entry.model_name = modelName.trim();
 
@@ -277,9 +283,6 @@ export const ProviderRow = observer(function ProviderRow({
                   disabled={isSaving}
                   autoComplete="off"
                 />
-                {status?.baseUrl && (
-                  <p className="text-xs text-muted-foreground">Current: {status.baseUrl}</p>
-                )}
               </div>
             )}
 
@@ -294,9 +297,6 @@ export const ProviderRow = observer(function ProviderRow({
                   disabled={isSaving}
                   autoComplete="off"
                 />
-                {status?.modelName && (
-                  <p className="text-xs text-muted-foreground">Current: {status.modelName}</p>
-                )}
               </div>
             )}
 

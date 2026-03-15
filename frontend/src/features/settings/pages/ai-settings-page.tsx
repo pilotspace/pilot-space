@@ -47,6 +47,7 @@ export const AISettingsPage = observer(function AISettingsPage() {
 
   const handleProviderSaved = () => {
     settings.loadSettings(workspaceId);
+    settings.loadModels(workspaceId);
   };
 
   if (settings.isLoading) {
@@ -99,7 +100,6 @@ export const AISettingsPage = observer(function AISettingsPage() {
                 provider={p.provider}
                 serviceType="embedding"
                 status={p}
-                workspaceId={workspaceId}
                 onSaved={handleProviderSaved}
               />
             ))}
@@ -125,7 +125,6 @@ export const AISettingsPage = observer(function AISettingsPage() {
                 provider={p.provider}
                 serviceType="llm"
                 status={p}
-                workspaceId={workspaceId}
                 onSaved={handleProviderSaved}
               />
             ))}
