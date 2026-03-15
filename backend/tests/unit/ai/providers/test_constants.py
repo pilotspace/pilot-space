@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import pytest
+
 from pilot_space.ai.providers.constants import (
     PROVIDER_SERVICE_SLOTS,
     VALID_PROVIDER_SERVICES,
     VALID_PROVIDERS,
+    validate_ollama_base_url,
 )
 
 
@@ -43,3 +46,50 @@ class TestProviderConstants:
         for provider, _st, supports_both in PROVIDER_SERVICE_SLOTS:
             if provider == "ollama":
                 assert supports_both is True
+
+
+class TestValidateOllamaBaseUrl:
+    """SSRF protection tests for Ollama base_url validation."""
+
+    def test_allows_localhost(self) -> None:
+        assert validate_ollama_base_url("http://localhost:11434") == "http://localhost:11434"
+
+    def test_allows_private_ip(self) -> None:
+        assert (
+            validate_ollama_base_url("http://192.168.1.100:11434") == "http://192.168.1.100:11434"
+        )
+
+    def test_allows_https(self) -> None:
+        assert (
+            validate_ollama_base_url("https://ollama.example.com") == "https://ollama.example.com"
+        )
+
+    def test_allows_hostname(self) -> None:
+        assert (
+            validate_ollama_base_url("http://ollama.internal:11434")
+            == "http://ollama.internal:11434"
+        )
+
+    def test_blocks_cloud_metadata_ip(self) -> None:
+        with pytest.raises(ValueError, match="cloud metadata"):
+            validate_ollama_base_url("http://169.254.169.254")
+
+    def test_blocks_cloud_metadata_hostname(self) -> None:
+        with pytest.raises(ValueError, match="cloud metadata"):
+            validate_ollama_base_url("http://metadata.google.internal")
+
+    def test_blocks_link_local_ip(self) -> None:
+        with pytest.raises(ValueError, match="link-local"):
+            validate_ollama_base_url("http://169.254.1.1")
+
+    def test_blocks_invalid_scheme(self) -> None:
+        with pytest.raises(ValueError, match="HTTP or HTTPS"):
+            validate_ollama_base_url("ftp://ollama.example.com")
+
+    def test_blocks_no_hostname(self) -> None:
+        with pytest.raises(ValueError, match="no hostname"):
+            validate_ollama_base_url("http://")
+
+    def test_blocks_metadata_with_path(self) -> None:
+        with pytest.raises(ValueError, match="cloud metadata"):
+            validate_ollama_base_url("http://169.254.169.254/latest/meta-data/")

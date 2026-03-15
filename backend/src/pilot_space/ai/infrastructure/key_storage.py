@@ -291,7 +291,10 @@ class SecureKeyStorage:
             elif provider == "ollama":
                 import httpx
 
+                from pilot_space.ai.providers.constants import validate_ollama_base_url
+
                 url = (base_url or "http://localhost:11434").rstrip("/")
+                validate_ollama_base_url(url)
                 async with httpx.AsyncClient(timeout=5.0) as client:
                     resp = await client.get(f"{url}/api/tags")
                     return resp.status_code == 200

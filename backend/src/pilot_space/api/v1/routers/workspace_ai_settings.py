@@ -194,17 +194,31 @@ async def update_ai_settings(
             if needs_api_key and not api_key:
                 continue
 
-            # For Ollama, base_url is required
+            # For Ollama, base_url is required and must pass SSRF check
             provider_label = f"{provider}:{service_type}"
-            if provider == "ollama" and not base_url:
-                validation_results.append(
-                    KeyValidationResult(
-                        provider=provider_label,
-                        is_valid=False,
-                        error_message="Base URL is required for Ollama",
+            if provider == "ollama":
+                if not base_url:
+                    validation_results.append(
+                        KeyValidationResult(
+                            provider=provider_label,
+                            is_valid=False,
+                            error_message="Base URL is required for Ollama",
+                        )
                     )
-                )
-                continue
+                    continue
+                try:
+                    from pilot_space.ai.providers.constants import validate_ollama_base_url
+
+                    validate_ollama_base_url(base_url)
+                except ValueError as e:
+                    validation_results.append(
+                        KeyValidationResult(
+                            provider=provider_label,
+                            is_valid=False,
+                            error_message=str(e),
+                        )
+                    )
+                    continue
 
             await key_storage.store_api_key(
                 workspace_id=workspace_id,
