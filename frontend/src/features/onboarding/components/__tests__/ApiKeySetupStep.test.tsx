@@ -61,10 +61,9 @@ describe('ApiKeySetupStep', () => {
 
     expect(screen.getByText('sk-ant-')).toBeInTheDocument();
 
-    const links = screen.getAllByRole('link', { name: /get your key/i });
-    const anthropicLink = links.find((l) =>
-      l.getAttribute('href')?.includes('console.anthropic.com')
-    );
+    const anthropicLink = screen
+      .getAllByRole('link', { name: /get your key/i })
+      .find((l) => l.getAttribute('href') === 'https://console.anthropic.com/settings/keys');
     expect(anthropicLink).toBeTruthy();
     expect(anthropicLink).toHaveAttribute('target', '_blank');
   });
@@ -75,8 +74,9 @@ describe('ApiKeySetupStep', () => {
 
     expect(screen.getByText('AIza')).toBeInTheDocument();
 
-    const links = screen.getAllByRole('link', { name: /get your key/i });
-    const geminiLink = links.find((l) => l.getAttribute('href')?.includes('aistudio.google.com'));
+    const geminiLink = screen
+      .getAllByRole('link', { name: /get your key/i })
+      .find((l) => l.getAttribute('href') === 'https://aistudio.google.com/apikey');
     expect(geminiLink).toBeTruthy();
   });
 
