@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from pydantic import EmailStr, Field
+from pydantic import EmailStr, Field, model_validator
 
 from pilot_space.api.v1.schemas.base import BaseSchema, EntitySchema
 
@@ -399,6 +399,24 @@ class APIKeyUpdate(BaseSchema):
         default=None,
         description="Default model name override",
     )
+
+    @model_validator(mode="after")
+    def check_provider_service_combo(self) -> APIKeyUpdate:
+        """Validate that provider + service_type is a supported combination."""
+        valid_combos: dict[str, set[str]] = {
+            "google": {"embedding"},
+            "anthropic": {"llm"},
+            "ollama": {"embedding", "llm"},
+        }
+        allowed = valid_combos.get(self.provider)
+        if allowed is not None and self.service_type not in allowed:
+            msg = (
+                f"Invalid combination: {self.provider} does not support "
+                f"service_type '{self.service_type}'. "
+                f"Allowed: {', '.join(sorted(allowed))}"
+            )
+            raise ValueError(msg)
+        return self
 
 
 class WorkspaceAISettingsUpdate(BaseSchema):

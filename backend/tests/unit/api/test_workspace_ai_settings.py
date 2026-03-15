@@ -19,23 +19,40 @@ from pilot_space.api.v1.schemas.workspace import APIKeyUpdate, ProviderStatus
 class TestAPIKeyUpdateSchema:
     """Tests for APIKeyUpdate Pydantic schema validation."""
 
-    @pytest.mark.parametrize("provider", ["google", "anthropic", "ollama"])
-    def test_valid_providers_accepted(self, provider: str) -> None:
+    @pytest.mark.parametrize(
+        ("provider", "service_type"),
+        [
+            ("google", "embedding"),
+            ("anthropic", "llm"),
+            ("ollama", "llm"),
+            ("ollama", "embedding"),
+        ],
+    )
+    def test_valid_provider_service_combos_accepted(self, provider: str, service_type: str) -> None:
         update = APIKeyUpdate(
             provider=provider,
-            service_type="llm",
-            api_key="sk-test-1234567890",  # pragma: allowlist secret
-        )
-        assert update.provider == provider
-
-    @pytest.mark.parametrize("service_type", ["embedding", "llm"])
-    def test_valid_service_types_accepted(self, service_type: str) -> None:
-        update = APIKeyUpdate(
-            provider="anthropic",
             service_type=service_type,
             api_key="sk-test-1234567890",  # pragma: allowlist secret
         )
+        assert update.provider == provider
         assert update.service_type == service_type
+
+    @pytest.mark.parametrize(
+        ("provider", "service_type"),
+        [
+            ("google", "llm"),
+            ("anthropic", "embedding"),
+        ],
+    )
+    def test_invalid_provider_service_combos_rejected(
+        self, provider: str, service_type: str
+    ) -> None:
+        with pytest.raises(pydantic.ValidationError, match="Invalid combination"):
+            APIKeyUpdate(
+                provider=provider,
+                service_type=service_type,
+                api_key="sk-test-1234567890",  # pragma: allowlist secret
+            )
 
     def test_invalid_provider_rejected(self) -> None:
         with pytest.raises(pydantic.ValidationError, match="provider"):

@@ -194,10 +194,11 @@ async def update_ai_settings(
                 continue
 
             # For Ollama, base_url is required
+            provider_label = f"{provider}:{service_type}"
             if provider == "ollama" and not base_url:
                 validation_results.append(
                     KeyValidationResult(
-                        provider=provider,
+                        provider=provider_label,
                         is_valid=False,
                         error_message="Base URL is required for Ollama",
                     )
@@ -212,13 +213,23 @@ async def update_ai_settings(
                 base_url=base_url,
                 model_name=model_name,
             )
-            provider_label = f"{provider}:{service_type}"
             updated_providers.append(provider_label)
+
+            # Validate the stored key
+            try:
+                is_valid = await key_storage.validate_api_key(
+                    provider=provider,
+                    api_key=api_key,
+                    base_url=base_url,
+                )
+            except Exception:
+                is_valid = False
+
             validation_results.append(
                 KeyValidationResult(
                     provider=provider_label,
-                    is_valid=True,
-                    error_message=None,
+                    is_valid=is_valid,
+                    error_message=None if is_valid else "Key validation failed",
                 )
             )
 

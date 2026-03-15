@@ -305,7 +305,7 @@ export const ProviderRow = observer(function ProviderRow({
                 label={config.apiKeyOptional ? 'API Key (optional)' : 'API Key'}
                 value={apiKey}
                 onChange={setApiKey}
-                isSet={status?.isConfigured ?? false}
+                isSet={!config.apiKeyOptional && (status?.isConfigured ?? false)}
                 provider={provider}
                 disabled={isSaving}
               />

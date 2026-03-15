@@ -40,7 +40,7 @@ function ProviderKeyInput({
   workspaceId,
 }: ProviderKeyInputProps) {
   const [apiKey, setApiKey] = useState('');
-  const { mutate: validateKey, isPending, data } = useValidateProviderKey({ workspaceId });
+  const { mutate: validateKey, isPending, data, reset } = useValidateProviderKey({ workspaceId });
 
   return (
     <div className="space-y-2">
@@ -59,7 +59,10 @@ function ProviderKeyInput({
           type="password"
           placeholder={placeholder}
           value={apiKey}
-          onChange={(e) => setApiKey(e.target.value)}
+          onChange={(e) => {
+            setApiKey(e.target.value);
+            if (data) reset();
+          }}
           className="h-8 text-sm font-mono"
         />
       </div>
