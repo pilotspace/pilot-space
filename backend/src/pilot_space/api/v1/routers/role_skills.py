@@ -174,20 +174,9 @@ async def create_role_skill(
             )
         )
     except ValueError as e:
-        error_msg = str(e)
-        if "Maximum" in error_msg:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=error_msg,
-            ) from e
-        if "already exists" in error_msg:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=error_msg,
-            ) from e
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error_msg,
+            detail=str(e),
         ) from e
 
     return RoleSkillResponse(
