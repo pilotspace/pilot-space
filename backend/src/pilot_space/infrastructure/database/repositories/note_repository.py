@@ -99,7 +99,7 @@ class NoteRepository(BaseRepository[Note]):
         if project_ids:
             query = query.where(Note.project_id.in_(project_ids))
         if is_pinned is not None:
-            query = query.where(Note.is_pinned == is_pinned)  # noqa: E712
+            query = query.where(Note.is_pinned == is_pinned)
         if search:
             safe_term = search.replace("%", r"\%").replace("_", r"\_")
             query = query.where(Note.title.ilike(f"%{safe_term}%"))

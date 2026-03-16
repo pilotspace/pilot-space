@@ -9,17 +9,9 @@ import json
 from typing import Annotated, Any
 from uuid import UUID
 
-from pilot_space.api.v1.routers.ai_annotations import AnnotationResponse
-from pilot_space.api.v1.schemas.annotation import (
-    AnnotationStatus,
-    AnnotationStatusUpdate,
-    AnnotationType,
-)
-from pilot_space.infrastructure.database.models.note_annotation import NoteAnnotation
 from fastapi import APIRouter, HTTPException, Path, Query, Response, status
 
 from pilot_space.api.middleware import create_problem_response
-
 from pilot_space.api.v1.dependencies import (
     CreateNoteServiceDep,
     DeleteNoteServiceDep,
@@ -27,7 +19,6 @@ from pilot_space.api.v1.dependencies import (
     ListAnnotationsServiceDep,
     ListNotesServiceDep,
     NoteRepositoryDep,
-    MovePageServiceDep,
     PinNoteServiceDep,
     ProjectRepositoryDep,
     ReorderPageServiceDep,
@@ -35,14 +26,19 @@ from pilot_space.api.v1.dependencies import (
     UpdateNoteServiceDep,
     WorkspaceRepositoryDep,
 )
+from pilot_space.api.v1.routers.ai_annotations import AnnotationResponse
 from pilot_space.api.v1.routers.workspace_quota import (
     _check_storage_quota,  # pyright: ignore[reportPrivateUsage]
     _update_storage_usage,  # pyright: ignore[reportPrivateUsage]
 )
+from pilot_space.api.v1.schemas.annotation import (
+    AnnotationStatus,
+    AnnotationStatusUpdate,
+    AnnotationType,
+)
 from pilot_space.api.v1.schemas.base import DeleteResponse, PaginatedResponse
 from pilot_space.api.v1.schemas.issue import IssueBriefResponse
 from pilot_space.api.v1.schemas.note import (
-    MovePageRequest,
     NoteCreate,
     NoteDetailResponse,
     NoteMove,
@@ -54,6 +50,7 @@ from pilot_space.api.v1.schemas.note import (
 )
 from pilot_space.dependencies.auth import CurrentUserId, SessionDep, SyncedUserId
 from pilot_space.infrastructure.database.models.note import Note
+from pilot_space.infrastructure.database.models.note_annotation import NoteAnnotation
 from pilot_space.infrastructure.database.models.workspace import Workspace
 from pilot_space.infrastructure.database.rls import set_rls_context
 from pilot_space.infrastructure.logging import get_logger

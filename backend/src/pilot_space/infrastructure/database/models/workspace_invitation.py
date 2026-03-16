@@ -8,23 +8,29 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime, timedelta
-from enum import Enum
+from enum import StrEnum
 from typing import TYPE_CHECKING
+
+from sqlalchemy import (
+    DateTime,
+    Enum as SQLEnum,
+    ForeignKey,
+    Index,
+    String,
+    UniqueConstraint,
+)
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from pilot_space.infrastructure.database.base import BaseModel
 from pilot_space.infrastructure.database.models.workspace_member import WorkspaceRole
-from sqlalchemy import DateTime
-from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import ForeignKey, Index, String, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 if TYPE_CHECKING:
     from pilot_space.infrastructure.database.models.user import User
     from pilot_space.infrastructure.database.models.workspace import Workspace
 
 
-class InvitationStatus(str, Enum):
+class InvitationStatus(StrEnum):
     """Status of a workspace invitation."""
 
     PENDING = "pending"

@@ -63,8 +63,8 @@ async def related_client(mock_link_repo: AsyncMock) -> AsyncGenerator[AsyncClien
         yield mock_session
 
     app.dependency_overrides[get_session] = mock_session_gen
-    app.dependency_overrides[ensure_user_synced] = lambda: uuid4()
-    app.dependency_overrides[_get_workspace_repository] = lambda: AsyncMock()
+    app.dependency_overrides[ensure_user_synced] = uuid4
+    app.dependency_overrides[_get_workspace_repository] = AsyncMock
     app.dependency_overrides[_get_issue_link_repository] = lambda: mock_link_repo
 
     transport = ASGITransport(app=app)

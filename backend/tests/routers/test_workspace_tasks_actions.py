@@ -107,8 +107,8 @@ async def task_client(mock_service: AsyncMock) -> AsyncGenerator[AsyncClient, No
         yield mock_session
 
     app.dependency_overrides[get_session] = mock_session_gen
-    app.dependency_overrides[ensure_user_synced] = lambda: uuid4()
-    app.dependency_overrides[_get_workspace_repository] = lambda: AsyncMock()
+    app.dependency_overrides[ensure_user_synced] = uuid4
+    app.dependency_overrides[_get_workspace_repository] = AsyncMock
     app.dependency_overrides[_get_task_service] = lambda: mock_service
 
     transport = ASGITransport(app=app)

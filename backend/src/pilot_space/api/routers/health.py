@@ -21,6 +21,7 @@ from datetime import UTC, datetime
 import structlog
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
+
 from pilot_space.infrastructure.health_checks import (
     check_database,
     check_redis,

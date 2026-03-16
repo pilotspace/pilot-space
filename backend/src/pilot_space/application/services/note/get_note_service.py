@@ -119,7 +119,7 @@ class GetNoteService:
         Returns:
             List of notes.
         """
-        
+
         return await self._note_repo.list_notes(
             workspace_id,
             project_ids=[project_id] if project_id else None,
