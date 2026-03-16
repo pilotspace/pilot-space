@@ -93,11 +93,23 @@ class CreateRoleSkillService:
             msg = f"Maximum {MAX_ROLES_PER_USER_WORKSPACE} roles per workspace"
             raise ValueError(msg)
 
-        # Check duplicate role_type
+        # Check duplicate role_type — custom allows upsert (update existing)
         existing = await self._repo.get_by_user_workspace_role_type(
             payload.user_id, payload.workspace_id, payload.role_type
         )
         if existing is not None:
+            if payload.role_type == "custom":
+                existing.role_name = payload.role_name or existing.role_name
+                existing.skill_content = payload.skill_content
+                existing.experience_description = payload.experience_description
+                if payload.is_primary:
+                    await self._demote_existing_primary(
+                        self._repo, payload.user_id, payload.workspace_id
+                    )
+                    existing.is_primary = True
+                await self._session.flush()
+                await self._session.refresh(existing)
+                return existing
             msg = f"Role type '{payload.role_type}' already exists in this workspace"
             raise ValueError(msg)
 
