@@ -48,9 +48,7 @@ router = APIRouter(prefix="/workspaces", tags=["workspaces"])
 WorkspaceIdOrSlug = Annotated[str, Path(description="Workspace ID (UUID) or slug")]
 
 
-@router.get(
-    "", response_model=PaginatedResponse[WorkspaceResponse], tags=["workspaces"]
-)
+@router.get("", response_model=PaginatedResponse[WorkspaceResponse], tags=["workspaces"])
 async def list_workspaces(
     current_user_id: SyncedUserId,
     session: SessionDep,
@@ -169,9 +167,7 @@ async def create_workspace(
     )
 
 
-@router.get(
-    "/{workspace_id}", response_model=WorkspaceDetailResponse, tags=["workspaces"]
-)
+@router.get("/{workspace_id}", response_model=WorkspaceDetailResponse, tags=["workspaces"])
 async def get_workspace(
     workspace_id: WorkspaceIdOrSlug,
     current_user_id: SyncedUserId,
@@ -228,9 +224,7 @@ async def get_workspace(
     )
 
 
-@router.patch(
-    "/{workspace_id}", response_model=WorkspaceDetailResponse, tags=["workspaces"]
-)
+@router.patch("/{workspace_id}", response_model=WorkspaceDetailResponse, tags=["workspaces"])
 async def update_workspace(
     workspace_id: WorkspaceIdOrSlug,
     request: WorkspaceUpdate,
@@ -366,9 +360,7 @@ async def list_workspace_labels(
     current_user_id: SyncedUserId,
     session: SessionDep,
     service: WorkspaceServiceDep,
-    project_id: Annotated[
-        UUID | None, Query(description="Filter by project ID")
-    ] = None,
+    project_id: Annotated[UUID | None, Query(description="Filter by project ID")] = None,
 ) -> list[LabelBriefSchema]:
     """List labels available in a workspace.
 

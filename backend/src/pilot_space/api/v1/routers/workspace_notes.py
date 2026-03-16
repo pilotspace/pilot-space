@@ -181,9 +181,7 @@ async def list_workspace_notes(
     current_user_id: CurrentUserId,
     list_service: ListNotesServiceDep,
     workspace_repo: WorkspaceRepositoryDep,
-    project_ids: list[UUID] = Query(
-        default=[], description="Filter by one or more projects"
-    ),
+    project_ids: list[UUID] = Query(default=[], description="Filter by one or more projects"),
     is_pinned: Annotated[bool | None, Query(description="Filter by pin status")] = None,
     search: Annotated[str | None, Query(description="Search query")] = None,
     cursor: Annotated[str | None, Query(description="Pagination cursor")] = None,
@@ -304,9 +302,7 @@ async def create_workspace_note(
         }
 
     delta_bytes = len(json.dumps(content_dict or {}).encode("utf-8"))
-    _quota_ok, _warning_pct = await _check_storage_quota(
-        session, workspace.id, delta_bytes
-    )
+    _quota_ok, _warning_pct = await _check_storage_quota(session, workspace.id, delta_bytes)
     if not _quota_ok:
         raise HTTPException(
             status_code=status.HTTP_507_INSUFFICIENT_STORAGE,
@@ -390,9 +386,7 @@ async def update_workspace_note(
         }
 
     delta_bytes = len(json.dumps(content_dict or {}).encode("utf-8"))
-    _quota_ok, _warning_pct = await _check_storage_quota(
-        session, workspace.id, delta_bytes
-    )
+    _quota_ok, _warning_pct = await _check_storage_quota(session, workspace.id, delta_bytes)
     if not _quota_ok:
         raise HTTPException(
             status_code=status.HTTP_507_INSUFFICIENT_STORAGE,
@@ -765,9 +759,7 @@ async def get_note_annotations(
         )
 
     # Get annotations via service
-    result = await list_annotations_service.execute(
-        ListAnnotationsPayload(note_id=note_id)
-    )
+    result = await list_annotations_service.execute(ListAnnotationsPayload(note_id=note_id))
 
     return [_annotation_to_response(a) for a in result.annotations]
 
