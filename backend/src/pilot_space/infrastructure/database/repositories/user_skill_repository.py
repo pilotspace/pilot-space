@@ -36,6 +36,35 @@ class UserSkillRepository(BaseRepository[UserSkill]):
     def __init__(self, session: AsyncSession) -> None:
         super().__init__(session, UserSkill)
 
+    async def get_by_id_with_template(
+        self,
+        skill_id: UUID,
+    ) -> UserSkill | None:
+        """Get a user skill by ID with template relationship eagerly loaded.
+
+        Needed because UserSkill.template uses lazy='raise', so the
+        relationship must be explicitly loaded before accessing template.name
+        in response serialization.
+
+        Args:
+            skill_id: The skill UUID.
+
+        Returns:
+            The UserSkill with template loaded, or None.
+        """
+        query = (
+            select(UserSkill)
+            .options(selectinload(UserSkill.template))
+            .where(
+                and_(
+                    UserSkill.id == skill_id,
+                    UserSkill.is_deleted == False,  # noqa: E712
+                )
+            )
+        )
+        result = await self.session.execute(query)
+        return result.scalar_one_or_none()
+
     async def create(  # type: ignore[override]
         self,
         *,
@@ -70,6 +99,18 @@ class UserSkillRepository(BaseRepository[UserSkill]):
         self.session.add(skill)
         await self.session.flush()
         await self.session.refresh(skill)
+        # Eagerly load template relationship so _to_schema() can access
+        # template.name without triggering lazy="raise".
+        if skill.template_id is not None:
+            query = (
+                select(UserSkill)
+                .options(selectinload(UserSkill.template))
+                .where(UserSkill.id == skill.id)
+            )
+            result = await self.session.execute(query)
+            loaded = result.scalar_one_or_none()
+            if loaded is not None:
+                return loaded
         return skill
 
     async def get_by_user_workspace(
@@ -77,17 +118,18 @@ class UserSkillRepository(BaseRepository[UserSkill]):
         user_id: UUID,
         workspace_id: UUID,
     ) -> Sequence[UserSkill]:
-        """Get active skills for a user in a workspace.
+        """Get all non-deleted skills for a user in a workspace.
 
-        Returns only rows where is_active=True AND is_deleted=False.
-        This is the materializer hot-path.
+        Returns rows where is_deleted=False (includes both active and inactive).
+        Inactive skills are shown with reduced opacity in the UI so the user
+        can toggle them back to active.
 
         Args:
             user_id: The user UUID.
             workspace_id: The workspace UUID.
 
         Returns:
-            Active UserSkill rows for the user in the workspace.
+            All non-deleted UserSkill rows for the user in the workspace.
         """
         query = (
             select(UserSkill)
@@ -96,7 +138,6 @@ class UserSkillRepository(BaseRepository[UserSkill]):
                 and_(
                     UserSkill.user_id == user_id,
                     UserSkill.workspace_id == workspace_id,
-                    UserSkill.is_active == True,  # noqa: E712
                     UserSkill.is_deleted == False,  # noqa: E712
                 )
             )
