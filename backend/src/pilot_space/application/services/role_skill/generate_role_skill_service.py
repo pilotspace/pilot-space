@@ -227,7 +227,8 @@ class GenerateRoleSkillService:
     ) -> tuple[str, str, str] | None:
         """Attempt AI-powered generation using the workspace's configured LLM provider.
 
-        Supports Anthropic (direct) and Ollama (OpenAI-compatible).
+        All providers use the Anthropic API format. Provider-specific
+        base_url and api_key are passed per-request from workspace config.
 
         Returns:
             Tuple of (skill_content, suggested_role_name, model_name) or None.
@@ -247,38 +248,28 @@ class GenerateRoleSkillService:
             role_name=role_name,
         )
 
-        # Use workspace model if configured, otherwise fall back to provider defaults
+        # Use workspace model if configured, otherwise provider default
         if model_name:
             model = model_name
-        elif provider == "anthropic":
+        else:
             selector = ProviderSelector()
             config = selector.select_with_config(TaskType.TEMPLATE_FILLING)
             model = config.model
-        else:
-            model = "llama3.2"  # Ollama default
 
         executor = ResilientExecutor()
         retry_config = RetryConfig(max_retries=2, base_delay_seconds=1.0)
 
         raw_response: str | None = None
         try:
-            if provider == "ollama":
-                raw_response = await self._call_ollama(
-                    base_url=base_url or "http://localhost:11434",
-                    model=model,
-                    prompt=prompt,
-                    api_key=api_key,
-                    executor=executor,
-                    retry_config=retry_config,
-                )
-            else:
-                raw_response = await self._call_anthropic(
-                    api_key=api_key,
-                    model=model,
-                    prompt=prompt,
-                    executor=executor,
-                    retry_config=retry_config,
-                )
+            raw_response = await self._call_llm(
+                api_key=api_key,
+                base_url=base_url,
+                model=model,
+                prompt=prompt,
+                provider=provider,
+                executor=executor,
+                retry_config=retry_config,
+            )
         except ProviderUnavailableError as e:
             msg = f"{provider} provider unavailable: {e}"
             raise SkillGenerationError(msg) from e
@@ -292,18 +283,23 @@ class GenerateRoleSkillService:
             raise SkillGenerationError(msg)
         return result
 
-    async def _call_anthropic(
+    async def _call_llm(
         self,
         api_key: str,
+        base_url: str | None,
         model: str,
         prompt: str,
+        provider: str,
         executor: ResilientExecutor,
         retry_config: RetryConfig,
     ) -> str:
-        """Call Anthropic API for skill generation."""
+        """Call LLM via Anthropic API format with provider-specific base_url/api_key."""
         from anthropic import AsyncAnthropic
 
-        client = AsyncAnthropic(api_key=api_key)
+        client = AsyncAnthropic(
+            api_key=api_key or None,
+            base_url=base_url or None,
+        )
 
         async def _call_api() -> str:
             response = await client.messages.create(
@@ -317,45 +313,9 @@ class GenerateRoleSkillService:
             return ""
 
         return await executor.execute(
-            provider="anthropic",
+            provider=provider,
             operation=_call_api,
             timeout_sec=30.0,
-            retry_config=retry_config,
-        )
-
-    async def _call_ollama(
-        self,
-        base_url: str,
-        model: str,
-        prompt: str,
-        api_key: str | None,
-        executor: ResilientExecutor,
-        retry_config: RetryConfig,
-    ) -> str:
-        """Call Ollama via OpenAI-compatible API for skill generation."""
-        import httpx
-
-        url = f"{base_url.rstrip('/')}/api/chat"
-
-        async def _call_api() -> str:
-            headers: dict[str, str] = {"Content-Type": "application/json"}
-            if api_key:
-                headers["Authorization"] = f"Bearer {api_key}"
-            payload = {
-                "model": model,
-                "messages": [{"role": "user", "content": prompt}],
-                "stream": False,
-            }
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                resp = await client.post(url, json=payload, headers=headers)
-                resp.raise_for_status()
-                data = resp.json()
-                return data.get("message", {}).get("content", "")
-
-        return await executor.execute(
-            provider="ollama",
-            operation=_call_api,
-            timeout_sec=60.0,
             retry_config=retry_config,
         )
 
