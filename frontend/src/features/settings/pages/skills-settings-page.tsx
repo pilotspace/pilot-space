@@ -131,6 +131,19 @@ export const SkillsSettingsPage = observer(function SkillsSettingsPage() {
     setSkillToDelete(skill);
   };
 
+  const handleEditSkill = (
+    skill: UserSkill,
+    updates: { skill_content?: string; skill_name?: string }
+  ) => {
+    updateUserSkill.mutate(
+      { id: skill.id, data: updates },
+      {
+        onSuccess: () => toast.success('Skill updated'),
+        onError: () => toast.error('Failed to update skill'),
+      }
+    );
+  };
+
   const handleDeleteSkillConfirm = () => {
     if (!skillToDelete) return;
     deleteUserSkill.mutate(skillToDelete.id, {
@@ -290,6 +303,7 @@ export const SkillsSettingsPage = observer(function SkillsSettingsPage() {
                       skill={skill}
                       onToggleActive={handleToggleSkillActive}
                       onDelete={handleDeleteSkill}
+                      onEdit={handleEditSkill}
                     />
                   ))}
                 </div>
@@ -357,7 +371,7 @@ export const SkillsSettingsPage = observer(function SkillsSettingsPage() {
               open={!!skillToDelete}
               onCancel={() => setSkillToDelete(null)}
               onConfirm={handleDeleteSkillConfirm}
-              title={`Remove ${skillToDelete.template_name ?? 'Custom'} Skill?`}
+              title={`Remove ${skillToDelete.skill_name ?? skillToDelete.template_name ?? 'Custom'} Skill?`}
               description="This will permanently delete this skill. The AI assistant will no longer use this skill in your conversations."
               confirmLabel="Remove Skill"
               variant="destructive"

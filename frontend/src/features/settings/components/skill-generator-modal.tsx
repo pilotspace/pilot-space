@@ -89,6 +89,7 @@ export function SkillGeneratorModal({
   const [description, setDescription] = React.useState('');
   const [preview, setPreview] = React.useState<SkillPreview | null>(null);
   const [editableName, setEditableName] = React.useState('');
+  const [editableContent, setEditableContent] = React.useState('');
   const [showError, setShowError] = React.useState(false);
 
   // Reset mode when defaultMode changes (e.g. different button clicked)
@@ -124,6 +125,7 @@ export function SkillGeneratorModal({
     setDescription('');
     setPreview(null);
     setEditableName('');
+    setEditableContent('');
     setShowError(false);
   }, []);
 
@@ -149,6 +151,7 @@ export function SkillGeneratorModal({
           wordCount: result.wordCount,
         });
         setEditableName(result.suggestedRoleName);
+        setEditableContent(result.skillContent);
       } else {
         const skill = await generateWorkspace.mutateAsync({
           experience_description: description,
@@ -159,6 +162,7 @@ export function SkillGeneratorModal({
           wordCount: skill.skill_content.split(/\s+/).length,
         });
         setEditableName(skill.role_name);
+        setEditableContent(skill.skill_content);
       }
       setStep('preview');
     } catch {
@@ -172,11 +176,12 @@ export function SkillGeneratorModal({
 
     if (mode === 'personal') {
       try {
-        // Save to user_skills table — template-based or custom
+        // Save to user_skills table — always send the (possibly edited) content
         await createUserSkill.mutateAsync({
           template_id: template?.id,
-          skill_content: template?.id ? undefined : preview.content,
+          skill_content: editableContent,
           experience_description: description || undefined,
+          skill_name: editableName || undefined,
         });
         handleClose();
       } catch {
@@ -190,8 +195,8 @@ export function SkillGeneratorModal({
     preview,
     mode,
     editableName,
+    editableContent,
     description,
-    createPersonal,
     createUserSkill,
     template,
     handleClose,
@@ -226,9 +231,10 @@ export function SkillGeneratorModal({
             {step === 'generating' && <GeneratingStep />}
             {step === 'preview' && preview && (
               <PreviewStep
-                preview={preview}
                 editableName={editableName}
                 onNameChange={setEditableName}
+                editableContent={editableContent}
+                onContentChange={setEditableContent}
                 onSave={handleSave}
                 onRetry={handleRetry}
                 onBack={() => setStep('form')}
@@ -494,9 +500,10 @@ function GeneratingStep() {
 // ---------------------------------------------------------------------------
 
 interface PreviewStepProps {
-  preview: SkillPreview;
   editableName: string;
   onNameChange: (name: string) => void;
+  editableContent: string;
+  onContentChange: (content: string) => void;
   onSave: () => void;
   onRetry: () => void;
   onBack: () => void;
@@ -505,9 +512,10 @@ interface PreviewStepProps {
 }
 
 function PreviewStep({
-  preview,
   editableName,
   onNameChange,
+  editableContent,
+  onContentChange,
   onSave,
   onRetry,
   onBack,
@@ -515,6 +523,7 @@ function PreviewStep({
   mode,
 }: PreviewStepProps) {
   const saveLabel = mode === 'personal' ? 'Save & Activate' : 'Done';
+  const wordCount = editableContent.trim().split(/\s+/).filter(Boolean).length;
 
   return (
     <div className="flex flex-col flex-1 gap-3">
@@ -555,20 +564,18 @@ function PreviewStep({
         </div>
       </div>
 
-      <div
-        className="flex-1 max-h-[220px] overflow-y-auto rounded-md border bg-muted/30 p-3"
-        aria-label="Generated skill preview"
-      >
-        <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed">
-          {preview.content}
-        </pre>
-      </div>
+      <Textarea
+        value={editableContent}
+        onChange={(e) => onContentChange(e.target.value)}
+        className="flex-1 max-h-[220px] font-mono text-xs leading-relaxed resize-none"
+        aria-label="Edit generated skill content"
+      />
 
       <div className="text-right">
         <span
-          className={`text-xs ${preview.wordCount >= 1800 ? 'text-destructive' : 'text-muted-foreground'}`}
+          className={`text-xs ${wordCount >= 1800 ? 'text-destructive' : 'text-muted-foreground'}`}
         >
-          {preview.wordCount} / 2000 words
+          {wordCount} / 2000 words
         </span>
       </div>
 
