@@ -109,8 +109,7 @@ export const ProviderSection = observer(function ProviderSection({
 
   const handleProviderChange = (provider: string) => {
     setSelectedProvider(provider);
-    // Persist selection as the active/default provider for this service type
-    settings.setDefaultProvider(serviceType, provider);
+    // Local-only — persisted atomically when user clicks Save in the form
   };
 
   const selectedStatus = providers.find((p) => p.provider === selectedProvider);
@@ -149,6 +148,7 @@ export const ProviderSection = observer(function ProviderSection({
             provider={selectedProvider}
             serviceType={serviceType}
             status={selectedStatus}
+            setAsDefault
             onSaved={onSaved}
           />
         )}

@@ -66,6 +66,8 @@ export interface ProviderConfigFormProps {
   provider: string;
   serviceType: 'embedding' | 'llm';
   status: WorkspaceAISettingsProvider | undefined;
+  /** When true, saving also sets this provider as the active default for its service type. */
+  setAsDefault?: boolean;
   onSaved: () => void;
 }
 
@@ -73,6 +75,7 @@ export function ProviderConfigForm({
   provider,
   serviceType,
   status,
+  setAsDefault,
   onSaved,
 }: ProviderConfigFormProps) {
   const { ai } = useStore();
@@ -124,7 +127,16 @@ export function ProviderConfigForm({
 
     setIsSaving(true);
     try {
-      await settings.saveSettings({ api_keys: [entry] });
+      // Include default provider selection atomically with the config save
+      const saveData: Parameters<typeof settings.saveSettings>[0] = { api_keys: [entry] };
+      if (setAsDefault) {
+        if (serviceType === 'llm') {
+          saveData.default_llm_provider = provider;
+        } else {
+          saveData.default_embedding_provider = provider;
+        }
+      }
+      await settings.saveSettings(saveData);
       // Check for validation warnings (saved but validation failed, e.g. Ollama not running)
       const providerLabel = `${provider}:${serviceType}`;
       const validationWarning = settings.validationErrors[providerLabel];

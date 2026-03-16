@@ -152,6 +152,8 @@ export class AISettingsStore {
       model_name?: string;
     }>;
     features?: Partial<WorkspaceAISettingsFeatures>;
+    default_llm_provider?: string;
+    default_embedding_provider?: string;
   }): Promise<void> {
     if (!this.currentWorkspaceId) return;
 
