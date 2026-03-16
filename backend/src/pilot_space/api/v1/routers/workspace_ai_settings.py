@@ -227,20 +227,17 @@ async def update_ai_settings(
                 updated_providers.append(provider_label)
 
                 # Validate the stored key
-                try:
-                    is_valid = await key_storage.validate_api_key(
-                        provider=provider,
-                        api_key=key_update.api_key,
-                        base_url=base_url,
-                    )
-                except Exception:
-                    is_valid = False
+                is_valid, val_error = await key_storage.validate_api_key(
+                    provider=provider,
+                    api_key=key_update.api_key,
+                    base_url=base_url,
+                )
 
                 validation_results.append(
                     KeyValidationResult(
                         provider=provider_label,
                         is_valid=is_valid,
-                        error_message=None if is_valid else "Key validation failed",
+                        error_message=val_error,
                     )
                 )
             elif has_metadata_change and existing_info is not None:
@@ -274,20 +271,17 @@ async def update_ai_settings(
                     updated_providers.append(provider_label)
 
                     # Validate connectivity
-                    try:
-                        is_valid = await key_storage.validate_api_key(
-                            provider=provider,
-                            api_key=None,
-                            base_url=base_url,
-                        )
-                    except Exception:
-                        is_valid = False
+                    is_valid, val_error = await key_storage.validate_api_key(
+                        provider=provider,
+                        api_key=None,
+                        base_url=base_url,
+                    )
 
                     validation_results.append(
                         KeyValidationResult(
                             provider=provider_label,
                             is_valid=is_valid,
-                            error_message=None if is_valid else "Connection validation failed",
+                            error_message=val_error,
                         )
                     )
                 else:

@@ -76,7 +76,7 @@ class TestOllamaMetadataOnlySave:
         mock_storage = AsyncMock()
         mock_storage.get_key_info = AsyncMock(return_value=None)
         mock_storage.store_api_key = AsyncMock()
-        mock_storage.validate_api_key = AsyncMock(return_value=True)
+        mock_storage.validate_api_key = AsyncMock(return_value=(True, None))
 
         with (
             patch(_ADMIN_WORKSPACE_PATH, return_value=_mock_workspace()),
@@ -157,7 +157,7 @@ class TestOllamaMetadataOnlySave:
         mock_storage = AsyncMock()
         mock_storage.get_key_info = AsyncMock(return_value=None)
         mock_storage.store_api_key = AsyncMock()
-        mock_storage.validate_api_key = AsyncMock(return_value=False)
+        mock_storage.validate_api_key = AsyncMock(return_value=(False, "Connection refused"))
 
         with (
             patch(_ADMIN_WORKSPACE_PATH, return_value=_mock_workspace()),
@@ -190,7 +190,7 @@ class TestOllamaMetadataOnlySave:
         # But success is False because validation failed
         assert data["success"] is False
         assert data["validationResults"][0]["isValid"] is False
-        assert "Connection validation failed" in data["validationResults"][0]["errorMessage"]
+        assert "Connection refused" in data["validationResults"][0]["errorMessage"]
 
 
 class TestDefaultProviderSelection:
