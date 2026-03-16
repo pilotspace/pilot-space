@@ -137,6 +137,7 @@ async def create_user_skill(
             template_id=body.template_id,
             experience_description=body.experience_description or "",
             skill_content=body.skill_content,
+            skill_name=body.skill_name,
         )
     except ValueError as exc:
         msg = str(exc)

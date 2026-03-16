@@ -10,6 +10,7 @@ Source: 011-role-based-skills, T010, FR-003, FR-004
 from __future__ import annotations
 
 import json
+import re
 import time
 from collections import defaultdict
 from dataclasses import dataclass
@@ -363,6 +364,24 @@ class GenerateRoleSkillService:
                 return (skill_content, suggested_name, model)
         except (json.JSONDecodeError, KeyError, TypeError):
             pass
+
+        # Second attempt: extract JSON object from surrounding text via regex
+        # Handles AI responses like "Here is your skill: {...} Hope this helps!"
+        match = re.search(r"\{[\s\S]*\}", text)
+        if match:
+            try:
+                data = json.loads(match.group())
+                skill_content = data.get("skill_content", "")
+                suggested_name = data.get("suggested_role_name", role_name or display_name)
+
+                if skill_content and len(skill_content.strip()) >= 50:
+                    logger.info(
+                        "AI response parsed via regex JSON extraction",
+                        extra={"model": model, "content_length": len(skill_content)},
+                    )
+                    return (skill_content, suggested_name, model)
+            except (json.JSONDecodeError, KeyError, TypeError):
+                pass
 
         # Fallback: treat raw response as markdown skill content directly
         if len(text.strip()) >= 50:

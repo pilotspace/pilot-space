@@ -29,6 +29,7 @@ class UserSkillSchema(BaseModel):
     created_at: datetime
     updated_at: datetime
     template_name: str | None = None
+    skill_name: str | None = None
 
 
 class UserSkillCreate(BaseModel):
@@ -47,6 +48,11 @@ class UserSkillCreate(BaseModel):
         default=None,
         description="Natural language input for AI personalization",
     )
+    skill_name: str | None = Field(
+        default=None,
+        description="User-visible skill name (AI-suggested or user-edited)",
+        max_length=200,
+    )
 
 
 class UserSkillUpdate(BaseModel):
@@ -57,6 +63,16 @@ class UserSkillUpdate(BaseModel):
 
     is_active: bool | None = None
     experience_description: str | None = None
+    skill_content: str | None = Field(
+        default=None,
+        description="Updated skill markdown content",
+        max_length=15000,
+    )
+    skill_name: str | None = Field(
+        default=None,
+        description="Updated user-visible skill name",
+        max_length=200,
+    )
 
 
 __all__ = [

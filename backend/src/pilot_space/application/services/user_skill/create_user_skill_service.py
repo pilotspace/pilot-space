@@ -59,6 +59,7 @@ class CreateUserSkillService:
         template_id: UUID | None,
         experience_description: str,
         skill_content: str | None = None,
+        skill_name: str | None = None,
     ) -> UserSkill:
         """Create a user skill from template or custom content.
 
@@ -68,6 +69,7 @@ class CreateUserSkillService:
             template_id: Source template UUID (None for custom skills).
             experience_description: User's experience for AI personalization.
             skill_content: Pre-generated skill content (for custom skills).
+            skill_name: User-visible skill name (AI-suggested or user-edited).
 
         Returns:
             The created UserSkill.
@@ -120,6 +122,7 @@ class CreateUserSkillService:
             template_id=template_id,
             skill_content=content,
             experience_description=experience_description,
+            skill_name=skill_name,
         )
 
         logger.info(
