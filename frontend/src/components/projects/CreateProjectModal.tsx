@@ -8,11 +8,19 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { useCreateProject } from '@/features/projects/hooks';
+import { useWorkspaceMembers } from '@/features/issues/hooks/use-workspace-members';
 import type { Project } from '@/types';
 
 interface CreateProjectModalProps {
@@ -41,7 +49,10 @@ export function CreateProjectModal({
   const [description, setDescription] = useState('');
   const [identifier, setIdentifier] = useState('');
   const [icon, setIcon] = useState('');
+  const [leadId, setLeadId] = useState<string>('');
   const [identifierManuallyEdited, setIdentifierManuallyEdited] = useState(false);
+
+  const { data: members = [] } = useWorkspaceMembers(workspaceId);
 
   const { mutate: createProject, isPending } = useCreateProject({
     workspaceId,
@@ -57,6 +68,7 @@ export function CreateProjectModal({
     setDescription('');
     setIdentifier('');
     setIcon('');
+    setLeadId('');
     setIdentifierManuallyEdited(false);
   }, []);
 
@@ -90,6 +102,7 @@ export function CreateProjectModal({
       identifier: identifier.trim(),
       description: description.trim() || undefined,
       icon: icon.trim() || undefined,
+      leadId: leadId || undefined,
     });
   };
 
@@ -136,6 +149,24 @@ export function CreateProjectModal({
                   maxLength={4}
                 />
               </div>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="project-lead">Lead</Label>
+              <Select value={leadId} onValueChange={(v) => setLeadId(v === '__none__' ? '' : v)}>
+                <SelectTrigger id="project-lead">
+                  <SelectValue placeholder="Select lead (optional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">
+                    <span className="text-muted-foreground">No lead</span>
+                  </SelectItem>
+                  {members.map((member) => (
+                    <SelectItem key={member.userId} value={member.userId}>
+                      {member.fullName || member.email}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="project-description">Description</Label>

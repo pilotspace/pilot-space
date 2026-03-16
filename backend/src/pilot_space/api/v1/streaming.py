@@ -84,8 +84,8 @@ async def sse_stream_generator(
         yield format_sse_event(
             "error",
             {
-                "message": "An internal error occurred. Please try again.",
-                "type": "internal_error",
+                "message": "An internal error occurred during streaming.",
+                "type": "stream_error",
             },
         )
 
@@ -160,8 +160,8 @@ async def sse_json_stream_generator(
         yield format_sse_event(
             "error",
             {
-                "message": "An internal error occurred. Please try again.",
-                "type": "internal_error",
+                "message": "An internal error occurred during streaming.",
+                "type": "stream_error",
             },
         )
 

@@ -66,14 +66,14 @@ export const AIFeatureToggles = observer(function AIFeatureToggles() {
 
   const handleToggle = async (feature: string, enabled: boolean) => {
     try {
-      await settings.saveSettings({ [feature]: enabled });
+      await settings.saveSettings({ features: { [feature]: enabled } });
     } catch (error) {
       // Error handling already done in store
       console.error('Failed to toggle feature:', error);
     }
   };
 
-  const allKeysConfigured = settings.anthropicKeySet && settings.openaiKeySet;
+  const allKeysConfigured = settings.anthropicKeySet && settings.embeddingConfigured;
   const isDisabled = settings.isSaving || !allKeysConfigured;
 
   return (
@@ -127,7 +127,7 @@ export const AIFeatureToggles = observer(function AIFeatureToggles() {
           description="Extract actionable issues from notes using AI"
           checked={settings.settings?.features?.issueExtractionEnabled ?? false}
           disabled={isDisabled}
-          onCheckedChange={(checked) => handleToggle('issueExtractionEnabled', checked)}
+          onCheckedChange={(checked) => handleToggle('issue_extraction_enabled', checked)}
         />
         <Separator />
         <FeatureToggle
@@ -136,7 +136,7 @@ export const AIFeatureToggles = observer(function AIFeatureToggles() {
           description="AI-powered pull request reviews with architecture and security analysis"
           checked={settings.settings?.features?.prReviewEnabled ?? false}
           disabled={isDisabled}
-          onCheckedChange={(checked) => handleToggle('prReviewEnabled', checked)}
+          onCheckedChange={(checked) => handleToggle('pr_review_enabled', checked)}
         />
       </CardContent>
     </Card>

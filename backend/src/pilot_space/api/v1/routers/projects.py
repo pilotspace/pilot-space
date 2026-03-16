@@ -251,6 +251,20 @@ async def create_project(
         workspace_repo, request.workspace_id, current_user.user_id, require_admin=True
     )
 
+    # Validate lead is a workspace member
+    if request.lead_id is not None:
+        workspace = await workspace_repo.get_by_id(request.workspace_id)
+        is_member = (
+            any(m.user_id == request.lead_id for m in (workspace.members or []))
+            if workspace
+            else False
+        )
+        if not is_member:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="lead_id must belong to a workspace member",
+            )
+
     # Check identifier uniqueness within workspace
     existing = await project_repo.find_by(
         workspace_id=request.workspace_id,
@@ -268,6 +282,8 @@ async def create_project(
         identifier=request.identifier,
         description=request.description,
         workspace_id=request.workspace_id,
+        lead_id=request.lead_id,
+        icon=request.icon,
     )
     project = await project_repo.create_with_default_states(project_entity)
 
@@ -355,6 +371,20 @@ async def update_project(
     await _check_workspace_access(
         workspace_repo, project.workspace_id, current_user.user_id, require_admin=True
     )
+
+    # Validate lead is a workspace member
+    if request.lead_id is not None:
+        workspace = await workspace_repo.get_by_id(project.workspace_id)
+        is_member = (
+            any(m.user_id == request.lead_id for m in (workspace.members or []))
+            if workspace
+            else False
+        )
+        if not is_member:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="lead_id must belong to a workspace member",
+            )
 
     # Update project
     update_data = request.model_dump(exclude_unset=True)

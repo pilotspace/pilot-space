@@ -274,7 +274,6 @@ class Container(SkillContainer, PluginContainer):
         NoteAIUpdateService,
         session=providers.Callable(get_current_session),
         note_repository=InfraContainer.note_repository,
-        activity_repository=InfraContainer.activity_repository,
     )
 
     list_notes_service = providers.Factory(
@@ -358,7 +357,6 @@ class Container(SkillContainer, PluginContainer):
 
     get_cycle_service = providers.Factory(
         GetCycleService,
-        session=providers.Callable(get_current_session),
         cycle_repository=InfraContainer.cycle_repository,
     )
 

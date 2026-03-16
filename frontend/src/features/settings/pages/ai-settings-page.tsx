@@ -1,8 +1,8 @@
 /**
  * AISettingsPage - Workspace AI configuration.
  *
- * T178: Main settings page with API keys, feature toggles, provider status.
- * 13-03: Expanded to show all 5 built-in providers + custom provider registration.
+ * Two service sections: Embedding Service and AI LLM Service.
+ * Supported providers: Google Gemini (embedding), Anthropic (llm), Ollama (both).
  */
 
 'use client';
@@ -10,18 +10,13 @@
 import * as React from 'react';
 import { observer } from 'mobx-react-lite';
 import { useParams } from 'next/navigation';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Database, BrainCircuit } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
-import { APIKeyForm } from '../components/api-key-form';
+import { ProviderRow } from '../components/provider-row';
 import { AIFeatureToggles } from '../components/ai-feature-toggles';
-import { ProviderStatusCard } from '../components/provider-status-card';
-import { CustomProviderForm } from '../components/custom-provider-form';
 import { useStore } from '@/stores';
-import type { WorkspaceAISettingsProvider } from '@/services/api/ai';
-
-const BUILT_IN_PROVIDERS = ['anthropic', 'openai', 'kimi', 'glm', 'google'] as const;
 
 function LoadingSkeleton() {
   return (
@@ -50,13 +45,7 @@ export const AISettingsPage = observer(function AISettingsPage() {
     }
   }, [workspaceId, settings]);
 
-  const getProviderStatus = (provider: string): WorkspaceAISettingsProvider | undefined =>
-    settings.settings?.providers?.find((p) => p.provider === provider);
-
-  const customProviders =
-    settings.settings?.providers?.filter((p) => p.provider === 'custom') ?? [];
-
-  const handleCustomProviderSuccess = () => {
+  const handleProviderSaved = () => {
     settings.loadSettings(workspaceId);
     settings.loadModels(workspaceId);
   };
@@ -81,80 +70,79 @@ export const AISettingsPage = observer(function AISettingsPage() {
     );
   }
 
+  const embeddingProviders = settings.getProvidersByService('embedding');
+  const llmProviders = settings.getProvidersByService('llm');
+
   return (
     <div className="max-w-3xl px-4 py-6 sm:px-6 lg:px-8">
       <div className="space-y-6">
         {/* Header */}
         <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">AI Providers</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">AI Services</h1>
           <p className="text-sm text-muted-foreground">
-            Configure AI provider API keys and manage AI-powered features for your workspace.
+            Configure the two AI services required for your workspace: Embedding and LLM.
           </p>
         </div>
 
-        {/* Provider Status Cards — all 5 built-in providers */}
-        <div className="space-y-3">
-          <h2 className="text-lg font-semibold">Provider Status</h2>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {BUILT_IN_PROVIDERS.map((provider) => {
-              const providerData = getProviderStatus(provider);
-              return (
-                <ProviderStatusCard
-                  key={provider}
-                  provider={provider}
-                  isKeySet={providerData?.isConfigured ?? false}
-                  lastValidated={providerData?.lastValidatedAt}
-                  status={providerData?.isValid ? 'connected' : 'unknown'}
-                />
-              );
-            })}
+        {/* Embedding Service Section */}
+        <section>
+          <div className="flex items-center gap-2 mb-3">
+            <Database className="h-5 w-5 text-muted-foreground" />
+            <h2 className="text-lg font-medium">Embedding Service</h2>
           </div>
-        </div>
+          <p className="text-sm text-muted-foreground mb-3">
+            Used for semantic search, knowledge graph, and RAG. Configure one provider.
+          </p>
+          <div className="space-y-2">
+            {embeddingProviders.map((p) => (
+              <ProviderRow
+                key={`${p.provider}-${p.serviceType}`}
+                provider={p.provider}
+                serviceType="embedding"
+                status={p}
+                onSaved={handleProviderSaved}
+              />
+            ))}
+          </div>
+        </section>
 
         <Separator />
 
-        {/* API Key Configuration */}
-        <APIKeyForm />
+        {/* AI LLM Service Section */}
+        <section>
+          <div className="flex items-center gap-2 mb-3">
+            <BrainCircuit className="h-5 w-5 text-muted-foreground" />
+            <h2 className="text-lg font-medium">AI LLM Service</h2>
+          </div>
+          <p className="text-sm text-muted-foreground mb-3">
+            Used for AI agents, ghost text, PR review, and issue extraction. Anthropic-compatible
+            API.
+          </p>
+          <div className="space-y-2">
+            {llmProviders.map((p) => (
+              <ProviderRow
+                key={`${p.provider}-${p.serviceType}`}
+                provider={p.provider}
+                serviceType="llm"
+                status={p}
+                onSaved={handleProviderSaved}
+              />
+            ))}
+          </div>
+        </section>
 
         <Separator />
 
         {/* Feature Toggles */}
         <AIFeatureToggles />
 
-        <Separator />
-
-        {/* Custom Providers Section */}
-        <div className="space-y-3">
-          <h2 className="text-lg font-semibold">Custom Providers</h2>
-          <p className="text-sm text-muted-foreground">
-            Add OpenAI-compatible API endpoints to use with Pilot Space.
-          </p>
-
-          {/* Existing custom provider cards */}
-          {customProviders.length > 0 && (
-            <div className="grid gap-3 sm:grid-cols-2">
-              {customProviders.map((p, idx) => (
-                <ProviderStatusCard
-                  key={`${p.provider}-${idx}`}
-                  provider="custom"
-                  isKeySet={p.isConfigured}
-                  lastValidated={p.lastValidatedAt}
-                  status={p.isValid ? 'connected' : 'unknown'}
-                />
-              ))}
-            </div>
-          )}
-
-          <CustomProviderForm workspaceId={workspaceId} onSuccess={handleCustomProviderSuccess} />
-        </div>
-
         {/* Info Alert */}
         <Alert>
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Security & Privacy</AlertTitle>
           <AlertDescription>
-            API keys are encrypted using Supabase Vault before storage. Keys are never logged or
-            exposed in responses. Each AI request is tracked for cost monitoring and audit purposes.
+            API keys are encrypted at rest using Fernet encryption. Keys are never logged or exposed
+            in responses. Each AI request is tracked for cost monitoring and audit purposes.
           </AlertDescription>
         </Alert>
       </div>

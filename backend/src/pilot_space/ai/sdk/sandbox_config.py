@@ -15,6 +15,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Protocol
 
+# Valid model ID: alphanumeric, dashes, dots, underscores, colons, slashes
+_MODEL_ID_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9\-_.:/]+$")
+
 if TYPE_CHECKING:
     from pilot_space.spaces.base import SpaceContext
 
@@ -40,7 +43,7 @@ class ModelTier(str, Enum):
         """Resolve tier to full model ID from env vars with sensible defaults."""
         defaults = {
             ModelTier.SONNET: "claude-sonnet-4-20250514",
-            ModelTier.OPUS: "claude-opus-4-20250514",
+            ModelTier.OPUS: "claude-opus-4-5-20251101",
             ModelTier.HAIKU: "claude-haiku-4-5-20251001",
         }
         env_keys = {
@@ -79,6 +82,38 @@ class ModelTier(str, Enum):
             ModelTier.HAIKU: 50,
         }
         return limits[self]
+
+
+def resolve_model_for_user(
+    tier: ModelTier,
+    user_ai_settings: dict[str, Any] | None = None,
+) -> str:
+    """Resolve tier to model ID with user override priority.
+
+    Priority chain:
+    1. user_ai_settings["model_{tier}"] (user override)
+    2. PILOTSPACE_MODEL_{TIER}_DEFAULT env var (admin override)
+    3. Hardcoded defaults
+
+    Args:
+        tier: Model tier to resolve.
+        user_ai_settings: Optional per-user AI settings dict.
+
+    Returns:
+        Full model identifier string.
+    """
+    # Check user override first
+    if user_ai_settings:
+        user_model = user_ai_settings.get(f"model_{tier.value}")
+        if user_model:
+            model_str = str(user_model).strip()
+            # Reject obviously invalid model IDs (must be alphanumeric with dashes/dots/underscores)
+            if model_str and len(model_str) <= 200 and _MODEL_ID_RE.match(model_str):
+                return model_str
+            # Fall through to env/hardcoded default for invalid values
+
+    # Fall back to env var then hardcoded default (existing behavior)
+    return tier.model_id
 
 
 def resolve_model(model: str | ModelTier) -> str:
@@ -387,6 +422,12 @@ def configure_sdk_for_space(
     env = space_context.to_sdk_env()
     if additional_env:
         env.update(additional_env)
+    # Forward custom Anthropic base URL if configured (admin override for proxy/staging)
+    from pilot_space.config import get_settings
+
+    _base_url = get_settings().anthropic_base_url
+    if _base_url:
+        env.setdefault("ANTHROPIC_BASE_URL", _base_url)
 
     # Get hooks from hook_executor if provided
     hooks: dict[str, list[dict[str, Any]]] = {}

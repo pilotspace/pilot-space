@@ -213,7 +213,8 @@ class TestOutputFormat:
 class TestModelTierHaiku:
     """Tests for Haiku tier (new in this phase)."""
 
-    def test_haiku_model_id_default(self) -> None:
+    def test_haiku_model_id_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("PILOTSPACE_MODEL_HAIKU_DEFAULT", raising=False)
         assert ModelTier.HAIKU.model_id == "claude-haiku-4-5-20251001"
 
     def test_haiku_model_id_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:

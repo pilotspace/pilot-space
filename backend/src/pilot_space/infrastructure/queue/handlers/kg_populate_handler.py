@@ -25,6 +25,9 @@ from pilot_space.application.services.memory.graph_write_service import (
     NodeInput,
 )
 from pilot_space.application.services.note.content_converter import ContentConverter
+from pilot_space.application.services.note.contextual_enrichment import (
+    enrich_chunks_with_context,
+)
 from pilot_space.application.services.note.markdown_chunker import (
     chunk_markdown_by_headings,
 )
@@ -89,10 +92,12 @@ class KgPopulateHandler:
         session: AsyncSession,
         embedding_service: EmbeddingService,
         queue: SupabaseQueueClient | None,
+        anthropic_api_key: str | None = None,
     ) -> None:
         self._session = session
         self._embedding = embedding_service
         self._queue = queue
+        self._anthropic_api_key = anthropic_api_key
         self._repo = KnowledgeGraphRepository(session)
         self._converter = ContentConverter()
 
@@ -132,6 +137,11 @@ class KgPopulateHandler:
 
         content = f"{issue.name}\n\n{issue.description or ''}".strip()
         label = issue.name[:120]
+        issue_props: dict[str, object] = {
+            "project_id": str(p.project_id),
+            "identifier": getattr(issue, "identifier", ""),
+            "state": str(getattr(issue, "state_id", "") or ""),
+        }
 
         write_svc = GraphWriteService(
             knowledge_graph_repository=self._repo,
@@ -146,33 +156,88 @@ class KgPopulateHandler:
                     NodeInput(
                         node_type=NodeType.ISSUE,
                         label=label,
-                        content=content,
+                        content=content[:2000],
                         external_id=p.entity_id,
-                        properties={
-                            "project_id": str(p.project_id),
-                            "identifier": getattr(issue, "identifier", ""),
-                            "state": str(getattr(issue, "state_id", "") or ""),
-                        },
+                        properties=issue_props,
                     )
                 ],
             )
         )
 
+        all_node_ids: list[UUID] = list(result.node_ids)
+
+        # Chunk long issue descriptions into NOTE_CHUNK nodes
+        # Delete stale issue chunks first (idempotent regeneration)
+        await self._delete_stale_issue_chunks(p.workspace_id, p.entity_id)
+        description = issue.description or ""
+        if len(description) > _MIN_CHUNK_CHARS:
+            issue_md = f"# {issue.name}\n\n{description}"
+            chunks = chunk_markdown_by_headings(issue_md, min_chunk_chars=_MIN_CHUNK_CHARS)
+            try:
+                chunks = await enrich_chunks_with_context(
+                    chunks, issue_md, api_key=self._anthropic_api_key
+                )
+            except Exception as exc:
+                logger.warning("KgPopulateHandler: issue chunk enrichment failed: %s", exc)
+            if len(chunks) > 1:
+                chunk_nodes = [
+                    NodeInput(
+                        node_type=NodeType.NOTE_CHUNK,
+                        label=f"{label} › {chunk.heading}" if chunk.heading else label,
+                        content=chunk.content[:2000],
+                        properties={
+                            **issue_props,
+                            "chunk_index": chunk.chunk_index,
+                            "heading": chunk.heading,
+                            "parent_issue_id": str(p.entity_id),
+                        },
+                    )
+                    for chunk in chunks
+                ]
+                chunk_result = await write_svc.execute(
+                    GraphWritePayload(
+                        workspace_id=p.workspace_id,
+                        nodes=chunk_nodes,
+                    )
+                )
+                all_node_ids.extend(chunk_result.node_ids)
+
+                # PARENT_OF edges: issue node → each chunk
+                if result.node_ids and chunk_result.node_ids:
+                    parent_id = result.node_ids[0]
+                    for chunk_node_id in chunk_result.node_ids:
+                        try:
+                            edge = GraphEdge(
+                                source_id=parent_id,
+                                target_id=chunk_node_id,
+                                edge_type=EdgeType.PARENT_OF,
+                                weight=1.0,
+                            )
+                            await self._repo.upsert_edge(edge)
+                        except Exception as exc:
+                            logger.warning(
+                                "KgPopulateHandler: issue chunk PARENT_OF edge failed: %s", exc
+                            )
+                    await self._session.flush()
+
         edges_created = 0
-        if result.node_ids:
+        if all_node_ids:
             edges_created = await self._find_and_link_similar(
-                result.node_ids, p.workspace_id, p.project_id, content
+                all_node_ids, p.workspace_id, p.project_id, content
             )
 
+        n_chunks = len(all_node_ids) - len(result.node_ids)
         logger.info(
-            "KgPopulateHandler: issue %s → node %s, %d similarity edges",
+            "KgPopulateHandler: issue %s → %d nodes (%d chunks), %d similarity edges",
             p.entity_id,
-            result.node_ids[0] if result.node_ids else None,
+            len(all_node_ids),
+            n_chunks,
             edges_created,
         )
         return {
             "success": True,
-            "node_ids": [str(n) for n in result.node_ids],
+            "node_ids": [str(n) for n in all_node_ids],
+            "chunks": n_chunks,
             "edges": edges_created,
         }
 
@@ -239,6 +304,12 @@ class KgPopulateHandler:
 
         # Chunk markdown and upsert chunk nodes with PARENT_OF edges
         chunks = chunk_markdown_by_headings(markdown, min_chunk_chars=_MIN_CHUNK_CHARS)
+        try:
+            chunks = await enrich_chunks_with_context(
+                chunks, markdown, api_key=self._anthropic_api_key
+            )
+        except Exception as exc:
+            logger.warning("KgPopulateHandler: note chunk enrichment failed: %s", exc)
         all_node_ids: list[UUID] = list(parent_node_ids)
 
         if chunks:
@@ -491,6 +562,17 @@ class KgPopulateHandler:
                 GraphNodeModel.workspace_id == workspace_id,
                 GraphNodeModel.node_type == NodeType.NOTE_CHUNK.value,
                 GraphNodeModel.properties["parent_note_id"].as_string() == str(note_id),
+                GraphNodeModel.is_deleted == False,  # noqa: E712
+            )
+        )
+
+    async def _delete_stale_issue_chunks(self, workspace_id: UUID, issue_id: UUID) -> None:
+        """Remove previous NOTE_CHUNK nodes for this issue before recreating them."""
+        await self._session.execute(
+            delete(GraphNodeModel).where(
+                GraphNodeModel.workspace_id == workspace_id,
+                GraphNodeModel.node_type == NodeType.NOTE_CHUNK.value,
+                GraphNodeModel.properties["parent_issue_id"].as_string() == str(issue_id),
                 GraphNodeModel.is_deleted == False,  # noqa: E712
             )
         )

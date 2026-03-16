@@ -329,16 +329,15 @@ class TestSessionHandlerForkSession:
 class TestModelNotHardcoded:
     """Verify configure_sdk_for_space uses DD-011 model routing, not hardcoded values."""
 
-    def test_default_model_is_sonnet(self) -> None:
-        """Default model should be claude-sonnet, not kimi or any non-Anthropic model."""
+    def test_default_model_resolves_to_sonnet_tier(self) -> None:
+        """Default model should resolve to the configured SONNET tier model."""
         context = SpaceContext(
             id="ws:user",
             path=Path("/workspace"),
             env={"PILOT_WORKSPACE_ID": "ws-1", "PILOT_USER_ID": "u-1"},
         )
         config = configure_sdk_for_space(context)
-        assert "claude" in config.model.lower() or "sonnet" in config.model.lower()
-        assert "kimi" not in config.model.lower()
+        assert config.model == ModelTier.SONNET.model_id
 
     def test_model_passed_through(self) -> None:
         """Model parameter is respected when explicitly provided."""
@@ -545,30 +544,30 @@ class TestSubagentProgressHook:
 class TestModelTier:
     """Tests for ModelTier enum and resolve_model helper."""
 
-    def test_sonnet_tier_resolves_to_default(self) -> None:
-        """ModelTier.SONNET resolves to default sonnet model ID."""
+    def test_sonnet_tier_resolves_to_configured(self) -> None:
+        """ModelTier.SONNET resolves to configured model ID (env or default)."""
         model_id = ModelTier.SONNET.model_id
-        assert "sonnet" in model_id.lower()
-        assert "claude" in model_id.lower()
+        assert model_id  # non-empty
+        assert model_id == resolve_model(ModelTier.SONNET)
 
-    def test_opus_tier_resolves_to_default(self) -> None:
-        """ModelTier.OPUS resolves to default opus model ID."""
+    def test_opus_tier_resolves_to_configured(self) -> None:
+        """ModelTier.OPUS resolves to configured model ID (env or default)."""
         model_id = ModelTier.OPUS.model_id
-        assert "opus" in model_id.lower()
-        assert "claude" in model_id.lower()
+        assert model_id  # non-empty
+        assert model_id == resolve_model(ModelTier.OPUS)
 
     def test_resolve_model_with_tier_enum(self) -> None:
         """resolve_model accepts ModelTier enum."""
         result = resolve_model(ModelTier.SONNET)
-        assert "sonnet" in result.lower()
+        assert result == ModelTier.SONNET.model_id
 
     def test_resolve_model_with_tier_string(self) -> None:
         """resolve_model accepts tier name as string."""
         result = resolve_model("sonnet")
-        assert "sonnet" in result.lower()
+        assert result == ModelTier.SONNET.model_id
 
         result = resolve_model("opus")
-        assert "opus" in result.lower()
+        assert result == ModelTier.OPUS.model_id
 
     def test_resolve_model_with_full_model_id(self) -> None:
         """resolve_model passes through full model IDs unchanged."""
@@ -578,7 +577,7 @@ class TestModelTier:
     def test_resolve_model_case_insensitive(self) -> None:
         """resolve_model handles case-insensitive tier names."""
         result = resolve_model("Sonnet")
-        assert "sonnet" in result.lower()
+        assert result == ModelTier.SONNET.model_id
 
     def test_resolve_model_with_env_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """ModelTier resolves from env var when set."""
@@ -598,7 +597,7 @@ class TestModelTier:
             env={"PILOT_WORKSPACE_ID": "ws-1", "PILOT_USER_ID": "u-1"},
         )
         config = configure_sdk_for_space(context, model=ModelTier.OPUS)
-        assert "opus" in config.model.lower()
+        assert config.model == ModelTier.OPUS.model_id
 
     def test_configure_sdk_with_tier_string(self) -> None:
         """configure_sdk_for_space accepts tier name string."""
@@ -608,7 +607,7 @@ class TestModelTier:
             env={"PILOT_WORKSPACE_ID": "ws-1", "PILOT_USER_ID": "u-1"},
         )
         config = configure_sdk_for_space(context, model="opus")
-        assert "opus" in config.model.lower()
+        assert config.model == ModelTier.OPUS.model_id
 
     def test_configure_sdk_default_is_sonnet_tier(self) -> None:
         """configure_sdk_for_space defaults to ModelTier.SONNET."""
@@ -618,4 +617,4 @@ class TestModelTier:
             env={"PILOT_WORKSPACE_ID": "ws-1", "PILOT_USER_ID": "u-1"},
         )
         config = configure_sdk_for_space(context)
-        assert "sonnet" in config.model.lower()
+        assert config.model == ModelTier.SONNET.model_id

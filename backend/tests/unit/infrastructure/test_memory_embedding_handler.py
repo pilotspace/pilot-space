@@ -105,6 +105,42 @@ class TestHandleGraphNodeEarlyReturns:
         assert "no EmbeddingService" in result["error"]
         session.commit.assert_not_called()
 
+    async def test_skips_empty_content_gracefully(self) -> None:
+        """Empty/whitespace content should return success with skipped flag."""
+        session = _make_session()
+        mock_result = MagicMock()
+        mock_result.first.return_value = ("   ",)
+        session.execute = AsyncMock(return_value=mock_result)
+
+        embedding_svc = _make_embedding_service()
+        handler = _make_handler(session, embedding_service=embedding_svc)
+
+        result = await handler.handle_graph_node(
+            {"node_id": str(_NODE_ID), "workspace_id": str(_WORKSPACE_ID)}
+        )
+
+        assert result["success"] is True
+        assert result["skipped"] == "empty_content"
+        embedding_svc.embed.assert_not_called()
+
+    async def test_skips_blank_content_gracefully(self) -> None:
+        """Completely empty string should return success with skipped flag."""
+        session = _make_session()
+        mock_result = MagicMock()
+        mock_result.first.return_value = ("",)
+        session.execute = AsyncMock(return_value=mock_result)
+
+        embedding_svc = _make_embedding_service()
+        handler = _make_handler(session, embedding_service=embedding_svc)
+
+        result = await handler.handle_graph_node(
+            {"node_id": str(_NODE_ID), "workspace_id": str(_WORKSPACE_ID)}
+        )
+
+        assert result["success"] is True
+        assert result["skipped"] == "empty_content"
+        embedding_svc.embed.assert_not_called()
+
 
 class TestHandleGraphNodeHappyPath:
     """Happy path: node found, embedding generated, stored successfully."""

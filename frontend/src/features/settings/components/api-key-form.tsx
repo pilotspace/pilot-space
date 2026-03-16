@@ -22,10 +22,10 @@ export const APIKeyForm = observer(function APIKeyForm() {
   const { settings } = ai;
 
   const [anthropicKey, setAnthropicKey] = React.useState('');
-  const [openaiKey, setOpenaiKey] = React.useState('');
+  const [googleKey, setGoogleKey] = React.useState('');
   const [validationErrors, setValidationErrors] = React.useState<{
     anthropic?: string;
-    openai?: string;
+    google?: string;
   }>({});
 
   const validateKey = (provider: string, key: string): string | undefined => {
@@ -39,8 +39,8 @@ export const APIKeyForm = observer(function APIKeyForm() {
       return 'Anthropic API keys must start with "sk-ant-"';
     }
 
-    if (provider === 'openai' && !key.startsWith('sk-')) {
-      return 'OpenAI API keys must start with "sk-"';
+    if (provider === 'google' && !key.startsWith('AIza')) {
+      return 'Google Gemini API keys must start with "AIza"';
     }
 
     return undefined;
@@ -50,10 +50,10 @@ export const APIKeyForm = observer(function APIKeyForm() {
     // Client-side validation
     const errors: typeof validationErrors = {};
     const anthropicError = validateKey('anthropic', anthropicKey);
-    const openaiError = validateKey('openai', openaiKey);
+    const googleError = validateKey('google', googleKey);
 
     if (anthropicError) errors.anthropic = anthropicError;
-    if (openaiError) errors.openai = openaiError;
+    if (googleError) errors.google = googleError;
 
     setValidationErrors(errors);
 
@@ -62,25 +62,27 @@ export const APIKeyForm = observer(function APIKeyForm() {
     }
 
     // Only send non-empty keys (unchanged keys remain empty)
-    const updates: {
-      anthropic_api_key?: string;
-      openai_api_key?: string;
-    } = {};
+    const apiKeys: Array<{
+      provider: string;
+      service_type: 'embedding' | 'llm';
+      api_key: string;
+    }> = [];
+    if (anthropicKey)
+      apiKeys.push({ provider: 'anthropic', service_type: 'llm', api_key: anthropicKey });
+    if (googleKey)
+      apiKeys.push({ provider: 'google', service_type: 'embedding', api_key: googleKey });
 
-    if (anthropicKey) updates.anthropic_api_key = anthropicKey;
-    if (openaiKey) updates.openai_api_key = openaiKey;
-
-    if (Object.keys(updates).length === 0) {
+    if (apiKeys.length === 0) {
       toast.info('No changes to save');
       return;
     }
 
     try {
-      await settings.saveSettings(updates);
+      await settings.saveSettings({ api_keys: apiKeys });
 
       // Clear input fields after successful save
       setAnthropicKey('');
-      setOpenaiKey('');
+      setGoogleKey('');
       setValidationErrors({});
 
       toast.success('API keys saved securely');
@@ -91,7 +93,7 @@ export const APIKeyForm = observer(function APIKeyForm() {
     }
   };
 
-  const hasChanges = anthropicKey.length > 0 || openaiKey.length > 0;
+  const hasChanges = anthropicKey.length > 0 || googleKey.length > 0;
 
   return (
     <Card>
@@ -109,8 +111,8 @@ export const APIKeyForm = observer(function APIKeyForm() {
         <Alert>
           <Info className="h-4 w-4" />
           <AlertDescription>
-            Both Anthropic and OpenAI API keys are required for full functionality. Anthropic powers
-            code generation, and OpenAI provides semantic search.
+            Both Anthropic and Google Gemini API keys are required for full functionality. Anthropic
+            powers code generation, and Google Gemini provides embeddings for semantic search.
           </AlertDescription>
         </Alert>
 
@@ -133,17 +135,17 @@ export const APIKeyForm = observer(function APIKeyForm() {
           <Separator />
 
           <APIKeyInput
-            label="OpenAI API Key"
-            value={openaiKey}
-            onChange={setOpenaiKey}
-            isSet={settings.openaiKeySet}
+            label="Google Gemini API Key"
+            value={googleKey}
+            onChange={setGoogleKey}
+            isSet={settings.embeddingConfigured}
             required
             error={
-              validationErrors.openai ?? (settings.validationErrors['openai'] as string | undefined)
+              validationErrors.google ?? (settings.validationErrors['google'] as string | undefined)
             }
             disabled={settings.isSaving}
-            provider="openai"
-            placeholder={settings.openaiKeySet ? '••••••••••••••••••••' : 'sk-...'}
+            provider="google"
+            placeholder={settings.embeddingConfigured ? '••••••••••••••••••••' : 'AIza...'}
           />
         </div>
 

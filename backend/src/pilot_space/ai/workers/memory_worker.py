@@ -65,6 +65,7 @@ class MemoryWorker:
         google_api_key: Optional Google API key for Gemini embedding (deprecated tables).
         openai_api_key: Optional OpenAI API key for EmbeddingService.
         ollama_base_url: Ollama base URL for EmbeddingService fallback.
+        anthropic_api_key: Optional Anthropic API key for contextual chunk enrichment.
     """
 
     def __init__(
@@ -74,10 +75,12 @@ class MemoryWorker:
         google_api_key: str | None = None,
         openai_api_key: str | None = None,
         ollama_base_url: str = "http://localhost:11434",
+        anthropic_api_key: str | None = None,
     ) -> None:
         self.queue = queue
         self._session_factory = session_factory
         self._google_api_key = google_api_key
+        self._anthropic_api_key = anthropic_api_key
         self._embedding_service = EmbeddingService(
             EmbeddingConfig(openai_api_key=openai_api_key, ollama_base_url=ollama_base_url)
         )
@@ -255,7 +258,12 @@ class MemoryWorker:
                 KgPopulateHandler,
             )
 
-            handler = KgPopulateHandler(session, self._embedding_service, self.queue)
+            handler = KgPopulateHandler(
+                session,
+                self._embedding_service,
+                self.queue,
+                anthropic_api_key=self._anthropic_api_key,
+            )
             return await handler.handle(payload)
 
         raise AssertionError(f"Unreachable: _dispatch called with unknown task_type {task_type!r}")

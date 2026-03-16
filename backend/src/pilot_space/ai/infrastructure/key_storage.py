@@ -22,6 +22,7 @@ from cryptography.fernet import Fernet
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 
+from pilot_space.ai.providers.constants import VALID_PROVIDERS
 from pilot_space.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
@@ -36,11 +37,14 @@ class APIKeyInfo:
 
     workspace_id: UUID
     provider: str
+    service_type: str
     is_valid: bool
     last_validated_at: datetime | None
     validation_error: str | None
     created_at: datetime
     updated_at: datetime
+    base_url: str | None = None
+    model_name: str | None = None
 
 
 class SecureKeyStorage:
@@ -56,11 +60,12 @@ class SecureKeyStorage:
 
     Usage:
         storage = SecureKeyStorage(db_session, master_secret="...")
-        await storage.store_api_key(workspace_id, "anthropic", "sk-ant-...")
-        key = await storage.get_api_key(workspace_id, "anthropic")
+        await storage.store_api_key(workspace_id, "anthropic", "llm", "sk-ant-...")
+        key = await storage.get_api_key(workspace_id, "anthropic", "llm")
     """
 
-    VALID_PROVIDERS = frozenset({"anthropic", "openai", "google", "kimi", "glm", "custom"})
+    VALID_PROVIDERS = VALID_PROVIDERS
+    VALID_SERVICE_TYPES = frozenset({"embedding", "llm"})
 
     def __init__(
         self,
@@ -82,17 +87,14 @@ class SecureKeyStorage:
         Uses PBKDF2-HMAC-SHA256 with 600,000 iterations per OWASP recommendations.
         A fixed salt is acceptable here since master_secret is per-deployment.
         """
-        # Use PBKDF2 with high iteration count for key derivation
-        # Fixed salt is acceptable since master_secret varies per deployment
         salt = b"pilotspace_fernet_kdf_v1"
         key = hashlib.pbkdf2_hmac(
             "sha256",
             master_secret.encode(),
             salt,
-            iterations=600_000,  # OWASP 2023 recommendation
-            dklen=32,  # 256 bits for AES-256
+            iterations=600_000,
+            dklen=32,
         )
-        # Fernet requires URL-safe base64 encoded key
         return Fernet(base64.urlsafe_b64encode(key))
 
     def _encrypt(self, value: str) -> str:
@@ -114,40 +116,55 @@ class SecureKeyStorage:
         self,
         workspace_id: UUID,
         provider: str,
-        api_key: str,
+        service_type: str,
+        api_key: str | None = None,
+        base_url: str | None = None,
+        model_name: str | None = None,
     ) -> None:
         """Store encrypted API key for workspace.
 
+        Resets validation status since the key changed.
+
         Args:
             workspace_id: Workspace UUID.
-            provider: Provider name (anthropic, openai, google).
-            api_key: Raw API key to encrypt and store.
+            provider: Provider name (google, anthropic, ollama).
+            service_type: Service category ('embedding' or 'llm').
+            api_key: Raw API key to encrypt and store (optional for ollama).
+            base_url: Custom base URL for provider API.
+            model_name: Default model name override.
 
         Raises:
-            ValueError: If provider is not valid.
+            ValueError: If provider or service_type is not valid.
         """
         if provider not in self.VALID_PROVIDERS:
             raise ValueError(f"Invalid provider: {provider}")
+        if service_type not in self.VALID_SERVICE_TYPES:
+            raise ValueError(f"Invalid service_type: {service_type}")
 
-        encrypted = self._encrypt(api_key)
+        encrypted = self._encrypt(api_key) if api_key else None
 
-        # Use PostgreSQL upsert
         from pilot_space.infrastructure.database.models import WorkspaceAPIKey
 
         stmt = insert(WorkspaceAPIKey).values(
             workspace_id=workspace_id,
             provider=provider,
+            service_type=service_type,
             encrypted_key=encrypted,
             is_valid=True,
             last_validated_at=None,
             validation_error=None,
+            base_url=base_url,
+            model_name=model_name,
         )
         stmt = stmt.on_conflict_do_update(
-            index_elements=["workspace_id", "provider"],
+            index_elements=["workspace_id", "provider", "service_type"],
             set_={
                 "encrypted_key": encrypted,
                 "is_valid": True,
                 "validation_error": None,
+                "last_validated_at": None,
+                "base_url": base_url,
+                "model_name": model_name,
                 "updated_at": datetime.now(UTC),
             },
         )
@@ -159,28 +176,82 @@ class SecureKeyStorage:
             "key_storage_api_key_stored",
             workspace_id=str(workspace_id),
             provider=provider,
-            key_preview=self._mask_key(api_key),
+            service_type=service_type,
+            key_preview=self._mask_key(api_key) if api_key else "none",
         )
+
+    async def update_metadata(
+        self,
+        workspace_id: UUID,
+        provider: str,
+        service_type: str,
+        base_url: str | None = None,
+        model_name: str | None = None,
+    ) -> bool:
+        """Update only metadata (base_url/model_name) without touching the encrypted key.
+
+        Preserves existing validation status and encrypted key.
+
+        Args:
+            workspace_id: Workspace UUID.
+            provider: Provider name.
+            service_type: Service category ('embedding' or 'llm').
+            base_url: New base URL (None keeps existing).
+            model_name: New model name (None keeps existing).
+
+        Returns:
+            True if row was updated, False if no existing key found.
+        """
+        from pilot_space.infrastructure.database.models import WorkspaceAPIKey
+
+        stmt = select(WorkspaceAPIKey).where(
+            WorkspaceAPIKey.workspace_id == workspace_id,
+            WorkspaceAPIKey.provider == provider,
+            WorkspaceAPIKey.service_type == service_type,
+        )
+
+        result = await self.db.execute(stmt)
+        row = result.scalar_one_or_none()
+
+        if row is None:
+            return False
+
+        if base_url is not None:
+            row.base_url = base_url
+        if model_name is not None:
+            row.model_name = model_name
+        row.updated_at = datetime.now(UTC)  # type: ignore[assignment]
+        await self.db.commit()
+
+        logger.info(
+            "key_storage_metadata_updated",
+            workspace_id=str(workspace_id),
+            provider=provider,
+        )
+        return True
 
     async def get_api_key(
         self,
         workspace_id: UUID,
         provider: str,
+        service_type: str,
     ) -> str | None:
         """Retrieve and decrypt API key.
 
         Args:
             workspace_id: Workspace UUID.
             provider: Provider name.
+            service_type: Service category.
 
         Returns:
-            Decrypted API key or None if not found.
+            Decrypted API key or None if not found or not set.
         """
         from pilot_space.infrastructure.database.models import WorkspaceAPIKey
 
         stmt = select(WorkspaceAPIKey.encrypted_key).where(
             WorkspaceAPIKey.workspace_id == workspace_id,
             WorkspaceAPIKey.provider == provider,
+            WorkspaceAPIKey.service_type == service_type,
         )
 
         result = await self.db.execute(stmt)
@@ -195,12 +266,14 @@ class SecureKeyStorage:
         self,
         workspace_id: UUID,
         provider: str,
+        service_type: str,
     ) -> bool:
-        """Delete API key for workspace/provider.
+        """Delete API key for workspace/provider/service_type.
 
         Args:
             workspace_id: Workspace UUID.
             provider: Provider name.
+            service_type: Service category.
 
         Returns:
             True if key was deleted, False if not found.
@@ -210,6 +283,7 @@ class SecureKeyStorage:
         stmt = select(WorkspaceAPIKey).where(
             WorkspaceAPIKey.workspace_id == workspace_id,
             WorkspaceAPIKey.provider == provider,
+            WorkspaceAPIKey.service_type == service_type,
         )
 
         result = await self.db.execute(stmt)
@@ -225,6 +299,7 @@ class SecureKeyStorage:
             "key_storage_api_key_deleted",
             workspace_id=str(workspace_id),
             provider=provider,
+            service_type=service_type,
         )
 
         return True
@@ -232,40 +307,49 @@ class SecureKeyStorage:
     async def validate_api_key(
         self,
         provider: str,
-        api_key: str,
+        api_key: str | None,
+        base_url: str | None = None,
     ) -> bool:
         """Validate API key by making test call to provider.
 
         Args:
             provider: Provider name.
-            api_key: API key to validate.
+            api_key: API key to validate (None for keyless providers).
+            base_url: Custom base URL (for Ollama).
 
         Returns:
-            True if key is valid, False otherwise.
+            True if key/connection is valid, False otherwise.
         """
         try:
             if provider == "anthropic":
+                if not api_key:
+                    return False
                 from anthropic import AsyncAnthropic
 
                 client = AsyncAnthropic(api_key=api_key)
-                # Use minimal tokens to validate
                 await client.messages.create(
                     model="claude-3-5-haiku-20241022",
                     max_tokens=1,
                     messages=[{"role": "user", "content": "ping"}],
                 )
-            elif provider == "openai":
-                from openai import AsyncOpenAI
-
-                client = AsyncOpenAI(api_key=api_key)
-                # List models is a cheap validation
-                await client.models.list()
             elif provider == "google":
+                if not api_key:
+                    return False
                 import google.generativeai as genai  # type: ignore[import-untyped]
 
                 genai.configure(api_key=api_key)  # type: ignore[attr-defined]
                 model = genai.GenerativeModel("gemini-2.0-flash")  # type: ignore[attr-defined]
                 await model.generate_content_async("ping")
+            elif provider == "ollama":
+                import httpx
+
+                from pilot_space.ai.providers.constants import validate_ollama_base_url
+
+                url = (base_url or "http://localhost:11434").rstrip("/")
+                validate_ollama_base_url(url)
+                async with httpx.AsyncClient(timeout=5.0) as client:
+                    resp = await client.get(f"{url}/api/tags")
+                    return resp.status_code == 200
             else:
                 logger.warning(
                     "key_storage_unknown_provider",
@@ -280,7 +364,7 @@ class SecureKeyStorage:
                 "key_storage_validation_failed",
                 provider=provider,
                 error=str(e),
-                key_preview=self._mask_key(api_key),
+                key_preview=self._mask_key(api_key) if api_key else "none",
             )
             return False
 
@@ -288,28 +372,32 @@ class SecureKeyStorage:
         self,
         workspace_id: UUID,
         provider: str,
+        service_type: str,
     ) -> bool:
         """Validate stored key and update validation status.
 
         Args:
             workspace_id: Workspace UUID.
             provider: Provider name.
+            service_type: Service category.
 
         Returns:
             True if key is valid, False otherwise.
         """
         from pilot_space.infrastructure.database.models import WorkspaceAPIKey
 
-        api_key = await self.get_api_key(workspace_id, provider)
-        if api_key is None:
-            return False
+        api_key = await self.get_api_key(workspace_id, provider, service_type)
 
-        is_valid = await self.validate_api_key(provider, api_key)
+        # Get key info for base_url (needed for Ollama validation)
+        key_info = await self.get_key_info(workspace_id, provider, service_type)
+        base_url = key_info.base_url if key_info else None
 
-        # Update validation status
+        is_valid = await self.validate_api_key(provider, api_key, base_url)
+
         stmt = select(WorkspaceAPIKey).where(
             WorkspaceAPIKey.workspace_id == workspace_id,
             WorkspaceAPIKey.provider == provider,
+            WorkspaceAPIKey.service_type == service_type,
         )
 
         result = await self.db.execute(stmt)
@@ -326,11 +414,13 @@ class SecureKeyStorage:
     async def list_providers(
         self,
         workspace_id: UUID,
+        service_type: str | None = None,
     ) -> list[str]:
         """List configured providers for workspace.
 
         Args:
             workspace_id: Workspace UUID.
+            service_type: Optional filter by service category.
 
         Returns:
             List of provider names with stored keys.
@@ -340,6 +430,8 @@ class SecureKeyStorage:
         stmt = select(WorkspaceAPIKey.provider).where(
             WorkspaceAPIKey.workspace_id == workspace_id,
         )
+        if service_type:
+            stmt = stmt.where(WorkspaceAPIKey.service_type == service_type)
 
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
@@ -348,12 +440,14 @@ class SecureKeyStorage:
         self,
         workspace_id: UUID,
         provider: str,
+        service_type: str,
     ) -> APIKeyInfo | None:
         """Get API key metadata (without actual key).
 
         Args:
             workspace_id: Workspace UUID.
             provider: Provider name.
+            service_type: Service category.
 
         Returns:
             APIKeyInfo or None if not found.
@@ -363,6 +457,7 @@ class SecureKeyStorage:
         stmt = select(WorkspaceAPIKey).where(
             WorkspaceAPIKey.workspace_id == workspace_id,
             WorkspaceAPIKey.provider == provider,
+            WorkspaceAPIKey.service_type == service_type,
         )
 
         result = await self.db.execute(stmt)
@@ -374,12 +469,47 @@ class SecureKeyStorage:
         return APIKeyInfo(
             workspace_id=row.workspace_id,
             provider=row.provider,
+            service_type=row.service_type,
             is_valid=row.is_valid,
             last_validated_at=row.last_validated_at,
             validation_error=row.validation_error,
             created_at=row.created_at,
             updated_at=row.updated_at,
+            base_url=row.base_url,
+            model_name=row.model_name,
         )
+
+    async def get_all_key_infos(self, workspace_id: UUID) -> list[APIKeyInfo]:
+        """Get all API key metadata for a workspace in a single query.
+
+        Args:
+            workspace_id: Workspace UUID.
+
+        Returns:
+            List of APIKeyInfo for all configured providers.
+        """
+        from pilot_space.infrastructure.database.models import WorkspaceAPIKey
+
+        stmt = select(WorkspaceAPIKey).where(
+            WorkspaceAPIKey.workspace_id == workspace_id,
+        )
+        result = await self.db.execute(stmt)
+        rows = result.scalars().all()
+        return [
+            APIKeyInfo(
+                workspace_id=r.workspace_id,
+                provider=r.provider,
+                service_type=r.service_type,
+                is_valid=r.is_valid,
+                last_validated_at=r.last_validated_at,
+                validation_error=r.validation_error,
+                created_at=r.created_at,
+                updated_at=r.updated_at,
+                base_url=r.base_url,
+                model_name=r.model_name,
+            )
+            for r in rows
+        ]
 
 
 __all__ = ["APIKeyInfo", "SecureKeyStorage"]

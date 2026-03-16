@@ -288,27 +288,31 @@ class KnowledgeGraphRepository:
         # data ever enters the SQL text directly.
         edge_type_clause = "AND edge_type = ANY(:edge_types)" if edge_types else ""
         ws_clause = "AND workspace_id = :workspace_id" if workspace_id is not None else ""
-        ws_node_clause = "AND gn.workspace_id = :workspace_id" if workspace_id is not None else ""
 
         raw = text(
             f"""
             WITH RECURSIVE neighbors(id, depth) AS (
-                SELECT target_id, 1 FROM graph_edges
-                  WHERE source_id = :nid {edge_type_clause} {ws_clause}
+                -- Anchor: direct neighbors in both directions (exclude deleted)
+                SELECT cand.id, 1
+                  FROM graph_edges
+                  JOIN graph_nodes cand
+                    ON cand.id = CASE WHEN source_id = :nid THEN target_id ELSE source_id END
+                   AND cand.is_deleted = false
+                  WHERE (source_id = :nid OR target_id = :nid) {edge_type_clause} {ws_clause}
                 UNION ALL
-                SELECT source_id, 1 FROM graph_edges
-                  WHERE target_id = :nid {edge_type_clause} {ws_clause}
-                UNION ALL
-                SELECT e.target_id, n.depth+1 FROM graph_edges e
-                  JOIN neighbors n ON e.source_id = n.id
-                  WHERE n.depth < :md {edge_type_clause} {ws_clause}
-                UNION ALL
-                SELECT e.source_id, n.depth+1 FROM graph_edges e
-                  JOIN neighbors n ON e.target_id = n.id
-                  WHERE n.depth < :md {edge_type_clause} {ws_clause}
+                -- Recursive: expand bidirectionally, skip deleted + anti-backtrack
+                SELECT cand.id, n.depth + 1
+                  FROM graph_edges e
+                  JOIN neighbors n ON (e.source_id = n.id OR e.target_id = n.id)
+                  JOIN graph_nodes cand
+                    ON cand.id = CASE WHEN e.source_id = n.id THEN e.target_id ELSE e.source_id END
+                   AND cand.is_deleted = false
+                  WHERE n.depth < :md
+                    AND cand.id != n.id
+                    {edge_type_clause} {ws_clause}
             )
-            SELECT DISTINCT gn.id FROM graph_nodes gn JOIN neighbors nb ON gn.id = nb.id
-            WHERE gn.is_deleted = false AND gn.id != :nid {ws_node_clause}
+            SELECT DISTINCT nb.id FROM neighbors nb
+            WHERE nb.id != :nid
             """
         )
         params: dict[str, object] = {"nid": str(node_id), "md": max_depth}

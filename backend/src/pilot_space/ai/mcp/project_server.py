@@ -1,11 +1,14 @@
 """In-process SDK custom tools for PilotSpace project operations.
 
-Creates an SDK MCP server using create_sdk_mcp_server() with 5 project tools.
+Creates an SDK MCP server using create_sdk_mcp_server() with 7 project tools.
 Tool handlers push content_update SSE events to a shared asyncio.Queue
 that the PilotSpaceAgent stream method interleaves with SDK messages.
 
 All project identifiers go through resolve_entity_id() for UUID/identifier resolution.
 Project mutations return operation payloads for approval flow.
+
+RAG tools (search_project_knowledge, get_project_context) use the existing
+GraphSearchService for hybrid vector + full-text + recency scoring.
 
 Architecture:
   ClaudeSDKClient (in-process) → tool handler → pushes via EventPublisher
@@ -44,6 +47,8 @@ TOOL_NAMES = [
     f"mcp__{SERVER_NAME}__create_project",
     f"mcp__{SERVER_NAME}__update_project",
     f"mcp__{SERVER_NAME}__update_project_settings",
+    f"mcp__{SERVER_NAME}__search_project_knowledge",
+    f"mcp__{SERVER_NAME}__get_project_context",
 ]
 
 # Project identifier validation (2-10 uppercase letters)
@@ -565,6 +570,256 @@ def create_project_tools_server(
             f"After: {json.dumps(merged_settings, indent=2)}"
         )
 
+    # ------------------------------------------------------------------
+    # RAG-powered tools (hybrid vector + full-text + recency search)
+    # ------------------------------------------------------------------
+
+    @tool(
+        "search_project_knowledge",
+        "Semantic search across a project's issues, notes, and note chunks. "
+        "Uses hybrid vector + full-text + recency scoring (RAG). "
+        "Returns the most relevant content fragments ranked by relevance.",
+        {
+            "type": "object",
+            "properties": {
+                "project_id": {
+                    "type": "string",
+                    "description": "UUID or identifier of the project to search within",
+                },
+                "query": {
+                    "type": "string",
+                    "description": "Natural language search query",
+                },
+                "node_types": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": (
+                        "Filter by node types: issue, note, note_chunk, "
+                        "decision, code_reference. Default: all"
+                    ),
+                },
+                "limit": {
+                    "type": "integer",
+                    "default": 10,
+                    "description": "Maximum results (1-50, default 10)",
+                },
+            },
+            "required": ["project_id", "query"],
+        },
+    )
+    async def search_project_knowledge(args: dict[str, Any]) -> dict[str, Any]:
+        """Semantic search within a project's knowledge graph."""
+        from uuid import UUID
+
+        from pilot_space.ai.mcp.project_rag_helpers import (
+            build_graph_search,
+            filter_nodes_by_project,
+            format_search_results,
+            resolve_project,
+        )
+        from pilot_space.application.services.memory.graph_search_service import (
+            GraphSearchPayload,
+        )
+        from pilot_space.domain.graph_node import NodeType
+
+        project_id_input = args.get("project_id", "")
+        query = args.get("query", "").strip()
+        raw_node_types = args.get("node_types")
+        limit = min(max(args.get("limit", 10), 1), 50)
+
+        if not query:
+            return _text_result("Error: Search query cannot be empty")
+
+        project, error = await resolve_project(project_id_input, tool_context)
+        if error or not project:
+            return _text_result(error or "Project not found")
+
+        # Parse node type filters
+        parsed_types: list[NodeType] | None = None
+        if raw_node_types:
+            valid_types = {nt.value for nt in NodeType}
+            parsed_types = [NodeType(t) for t in raw_node_types if t in valid_types] or None
+
+        workspace_id = UUID(tool_context.workspace_id)
+        search_svc, _ = await build_graph_search(tool_context.db_session, workspace_id)
+
+        user_id = UUID(tool_context.user_id) if tool_context.user_id else None
+        result = await search_svc.execute(
+            GraphSearchPayload(
+                query=query,
+                workspace_id=workspace_id,
+                user_id=user_id,
+                node_types=parsed_types,
+                limit=limit,
+            )
+        )
+
+        filtered = filter_nodes_by_project(result, project)
+        results_data = format_search_results(filtered)
+
+        logger.info(
+            "[ProjectTools] search_project_knowledge: project=%s query=%r "
+            "results=%d (from %d total) embedding=%s",
+            project.identifier,
+            query,
+            len(results_data),
+            len(result.nodes),
+            result.embedding_used,
+        )
+        return _text_result(
+            f"Found {len(results_data)} relevant result(s) in project "
+            f"'{project.identifier}' for query '{query}':\n\n"
+            f"{json.dumps(results_data, indent=2)}"
+        )
+
+    @tool(
+        "get_project_context",
+        "Retrieve comprehensive project context for AI reasoning. "
+        "Returns project details, knowledge graph summary, recent issues, "
+        "and related knowledge nodes. Use this before answering questions about a project.",
+        {
+            "type": "object",
+            "properties": {
+                "project_id": {
+                    "type": "string",
+                    "description": "UUID or identifier of the project",
+                },
+                "focus": {
+                    "type": "string",
+                    "description": (
+                        "Optional focus area to bias context retrieval. "
+                        "E.g., 'authentication', 'performance', 'recent blockers'"
+                    ),
+                },
+                "include_issues": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "Include recent issues summary",
+                },
+                "include_knowledge": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "Include knowledge graph context",
+                },
+            },
+            "required": ["project_id"],
+        },
+    )
+    async def get_project_context(args: dict[str, Any]) -> dict[str, Any]:
+        """Build comprehensive project context for AI agent reasoning."""
+        from uuid import UUID
+
+        from sqlalchemy import func, select
+
+        from pilot_space.ai.mcp.project_rag_helpers import (
+            build_graph_search,
+            filter_nodes_by_project,
+            format_knowledge_summary,
+            resolve_project,
+        )
+        from pilot_space.application.services.memory.graph_search_service import (
+            GraphSearchPayload,
+        )
+        from pilot_space.domain.graph_node import NodeType
+        from pilot_space.infrastructure.database.models.issue import Issue
+        from pilot_space.infrastructure.database.models.state import State
+
+        project_id_input = args.get("project_id", "")
+        focus = args.get("focus", "").strip()
+        include_issues = args.get("include_issues", True)
+        include_knowledge = args.get("include_knowledge", True)
+
+        project, error = await resolve_project(project_id_input, tool_context, with_states=True)
+        if error or not project:
+            return _text_result(error or "Project not found")
+
+        workspace_id = UUID(tool_context.workspace_id)
+
+        context: dict[str, Any] = {
+            "project": {
+                "id": str(project.id),
+                "name": project.name,
+                "identifier": project.identifier,
+                "description": project.description or "",
+                "icon": project.icon,
+                "lead_id": str(project.lead_id) if project.lead_id else None,
+                "states": [
+                    {"name": s.name, "group": s.group.value}
+                    for s in sorted(project.states, key=lambda s: s.sequence)
+                ],
+            },
+        }
+
+        if include_issues:
+            stats_query = (
+                select(State.name, func.count(Issue.id).label("count"))
+                .join(Issue, Issue.state_id == State.id)
+                .where(
+                    State.project_id == project.id,
+                    Issue.workspace_id == workspace_id,
+                    Issue.is_deleted == False,  # noqa: E712
+                )
+                .group_by(State.name)
+            )
+            stats_result = await tool_context.db_session.execute(stats_query)
+            context["issue_stats"] = {
+                row.name: row.count
+                for row in stats_result  # type: ignore[attr-defined]
+            }
+
+            recent_query = (
+                select(Issue)
+                .where(
+                    Issue.project_id == project.id,
+                    Issue.workspace_id == workspace_id,
+                    Issue.is_deleted == False,  # noqa: E712
+                )
+                .order_by(Issue.created_at.desc())
+                .limit(15)
+            )
+            recent_result = await tool_context.db_session.execute(recent_query)
+            context["recent_issues"] = [
+                {
+                    "id": str(issue.id),
+                    "identifier": f"{project.identifier}-{issue.sequence_id}",
+                    "title": issue.name,
+                    "priority": issue.priority.value if issue.priority else None,
+                    "created_at": issue.created_at.isoformat()[:10],
+                }
+                for issue in recent_result.scalars().all()
+            ]
+
+        if include_knowledge:
+            search_query = focus or f"project {project.name} {project.description or ''}"
+            search_svc, _ = await build_graph_search(tool_context.db_session, workspace_id)
+
+            user_id = UUID(tool_context.user_id) if tool_context.user_id else None
+            kg_result = await search_svc.execute(
+                GraphSearchPayload(
+                    query=search_query,
+                    workspace_id=workspace_id,
+                    user_id=user_id,
+                    node_types=[
+                        NodeType.ISSUE,
+                        NodeType.NOTE,
+                        NodeType.NOTE_CHUNK,
+                        NodeType.DECISION,
+                    ],
+                    limit=15,
+                )
+            )
+            project_nodes = filter_nodes_by_project(kg_result, project)
+            context["knowledge"] = format_knowledge_summary(kg_result, project_nodes)
+
+        logger.info(
+            "[ProjectTools] get_project_context: project=%s focus=%r",
+            project.identifier,
+            focus,
+        )
+        return _text_result(
+            f"Context for project '{project.identifier}':\n\n{json.dumps(context, indent=2)}"
+        )
+
     return create_sdk_mcp_server(
         name=SERVER_NAME,
         version="1.0.0",
@@ -574,5 +829,7 @@ def create_project_tools_server(
             create_project,
             update_project,
             update_project_settings,
+            search_project_knowledge,
+            get_project_context,
         ],
     )

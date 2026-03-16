@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Index, String, Text, UniqueConstraint
+from sqlalchemy import String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from pilot_space.infrastructure.database.base import WorkspaceScopedModel
@@ -44,7 +44,6 @@ class CustomRole(WorkspaceScopedModel):
             "name",
             name="uq_custom_roles_workspace_name",
         ),
-        Index("ix_custom_roles_workspace_id", "workspace_id"),
     )
 
     # Role identity

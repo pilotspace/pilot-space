@@ -177,10 +177,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
         _google_secret = getattr(settings, "google_api_key", None)
         _google_api_key: str | None = _google_secret.get_secret_value() if _google_secret else None
+        _anthropic_secret = getattr(settings, "anthropic_api_key", None)
+        _anthropic_api_key: str | None = (
+            _anthropic_secret.get_secret_value() if _anthropic_secret else None
+        )
         memory_worker = MemoryWorker(
             queue=queue_client,
             session_factory=session_factory,
             google_api_key=_google_api_key,
+            anthropic_api_key=_anthropic_api_key,
         )
         memory_worker_task = asyncio.create_task(memory_worker.start())
 
@@ -284,10 +289,13 @@ app.include_router(issue_implement_router, prefix=API_V1_PREFIX)
 app.include_router(issues_ai_router, prefix=API_V1_PREFIX)
 app.include_router(issues_ai_context_router, prefix=API_V1_PREFIX)
 app.include_router(issues_ai_context_streaming_router, prefix=API_V1_PREFIX)
-app.include_router(notes_ai_router, prefix=API_V1_PREFIX)
+if notes_ai_router is not None:  # type: ignore[reportUnnecessaryComparison]
+    app.include_router(notes_ai_router, prefix=API_V1_PREFIX)
 app.include_router(cycles_router, prefix=API_V1_PREFIX)
-app.include_router(ai_router, prefix=API_V1_PREFIX)
-app.include_router(ai_annotations_router, prefix=API_V1_PREFIX)
+if ai_router is not None:  # type: ignore[reportUnnecessaryComparison]
+    app.include_router(ai_router, prefix=API_V1_PREFIX)
+if ai_annotations_router is not None:  # type: ignore[reportUnnecessaryComparison]
+    app.include_router(ai_annotations_router, prefix=API_V1_PREFIX)
 app.include_router(ai_approvals_router, prefix=f"{API_V1_PREFIX}/ai")
 app.include_router(ai_attachments_router, prefix=f"{API_V1_PREFIX}/ai")
 app.include_router(ai_drive_router, prefix=f"{API_V1_PREFIX}/ai")
@@ -298,7 +306,8 @@ app.include_router(ai_extraction_router, prefix=API_V1_PREFIX)
 app.include_router(ghost_text_router, prefix=API_V1_PREFIX)
 app.include_router(ai_tasks_router, prefix=API_V1_PREFIX)
 app.include_router(mcp_tools_router, prefix=API_V1_PREFIX)
-app.include_router(ai_pr_review_router, prefix=API_V1_PREFIX)
+if ai_pr_review_router is not None:  # type: ignore[reportUnnecessaryComparison]
+    app.include_router(ai_pr_review_router, prefix=API_V1_PREFIX)
 app.include_router(ai_sessions_router, prefix=API_V1_PREFIX)
 app.include_router(integrations_router, prefix=API_V1_PREFIX)
 app.include_router(github_links_router, prefix=API_V1_PREFIX)

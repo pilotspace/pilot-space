@@ -88,10 +88,10 @@ class TestServerConfiguration:
         assert SERVER_NAME == "pilot-projects"
 
     def test_tool_names_list(self) -> None:
-        """Verify TOOL_NAMES contains all 5 tools."""
+        """Verify TOOL_NAMES contains all 7 tools (5 CRUD + 2 RAG)."""
         from pilot_space.ai.mcp.project_server import TOOL_NAMES
 
-        assert len(TOOL_NAMES) == 5
+        assert len(TOOL_NAMES) == 7
 
         expected_tools = [
             "mcp__pilot-projects__get_project",
@@ -99,6 +99,8 @@ class TestServerConfiguration:
             "mcp__pilot-projects__create_project",
             "mcp__pilot-projects__update_project",
             "mcp__pilot-projects__update_project_settings",
+            "mcp__pilot-projects__search_project_knowledge",
+            "mcp__pilot-projects__get_project_context",
         ]
         for tool_name in expected_tools:
             assert tool_name in TOOL_NAMES, f"{tool_name} not in TOOL_NAMES"

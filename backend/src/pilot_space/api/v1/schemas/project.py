@@ -21,6 +21,8 @@ class ProjectCreate(BaseSchema):
         identifier: Unique project identifier (e.g., 'PROJ').
         description: Optional project description.
         workspace_id: Parent workspace ID.
+        lead_id: Optional lead user ID.
+        icon: Optional icon/emoji identifier.
     """
 
     name: str = Field(
@@ -40,6 +42,8 @@ class ProjectCreate(BaseSchema):
         description="Project description",
     )
     workspace_id: UUID = Field(description="Parent workspace ID")
+    lead_id: UUID | None = Field(default=None, description="Lead user ID")
+    icon: str | None = Field(default=None, max_length=10, description="Icon/emoji identifier")
 
 
 class ProjectUpdate(BaseSchema):
@@ -48,6 +52,8 @@ class ProjectUpdate(BaseSchema):
     Attributes:
         name: New project name.
         description: New project description.
+        lead_id: New lead user ID (null to unset).
+        icon: New icon/emoji (null to unset).
         settings: Project-level settings.
     """
 
@@ -61,6 +67,15 @@ class ProjectUpdate(BaseSchema):
         default=None,
         max_length=2000,
         description="New description",
+    )
+    lead_id: UUID | None = Field(
+        default=None,
+        description="Lead user ID (null to unset)",
+    )
+    icon: str | None = Field(
+        default=None,
+        max_length=10,
+        description="Icon/emoji identifier (null to unset)",
     )
     settings: dict[str, Any] | None = Field(
         default=None,
