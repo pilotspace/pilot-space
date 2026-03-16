@@ -5,7 +5,7 @@ milestone_name: Notion-Style Restructure
 status: completed
 stopped_at: Milestone archived
 last_updated: "2026-03-15"
-last_activity: "2026-03-15 — Completed quick task 11: fix AI config workspace_id query param, NoteIssueLink creation on extraction, frontend/backend linkType alignment"
+last_activity: "2026-03-15 — Completed quick task 12: validate 3 AI flows, fix LLMProvider enum case mismatch"
 progress:
   total_phases: 18
   completed_phases: 17
@@ -64,10 +64,11 @@ None.
 | 8 | Unified AI Providers settings UI with expandable rows | 2026-03-14 | ca12777e | | [8-enhance-ai-providers-settings-ui-unified](./quick/8-enhance-ai-providers-settings-ui-unified/) |
 | 10 | Investigate Note-to-Issue pipeline: 5 pathways traced, 28 tests run | 2026-03-15 | n/a (investigation only) | Verified | [10-investigate-into-codebase-of-pilotspace-](./quick/10-investigate-into-codebase-of-pilotspace-/) |
 | 11 | Fix AI config POST 500, NoteIssueLink creation, linkType enum alignment | 2026-03-15 | d4a62dd5 | Done | [11-fix-all-issues-found-in-browser-testing-](./quick/11-fix-all-issues-found-in-browser-testing-/) |
+| 12 | Validate 3 AI flows + fix LLMProvider enum case mismatch | 2026-03-15 | 4e47d6d4 | Done | [12-validate-3-ai-issue-flows-via-browser-ex](./quick/12-validate-3-ai-issue-flows-via-browser-ex/) |
 
 ## Session Continuity
 
 Last session: 2026-03-15
-Stopped at: Completed quick task 11 (Browser testing bug fixes)
+Stopped at: Completed quick task 12 (3-flow validation + enum fix)
 Resume file: None
 Next action: `/gsd:new-milestone`
