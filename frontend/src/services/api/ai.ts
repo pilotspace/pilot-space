@@ -45,14 +45,12 @@ export interface WorkspaceAISettingsProvider {
   lastValidatedAt: string | null;
   baseUrl?: string | null;
   modelName?: string | null;
-  supportsBoth: boolean;
 }
 
 export interface WorkspaceAISettings {
   workspaceId: string;
   providers: WorkspaceAISettingsProvider[];
   features: WorkspaceAISettingsFeatures;
-  defaultProvider: string;
   defaultLlmProvider: string;
   defaultEmbeddingProvider: string;
   costLimitUsd: number | null;

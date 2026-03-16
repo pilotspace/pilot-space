@@ -309,7 +309,6 @@ class ProviderStatus(BaseSchema):
         last_validated_at: Timestamp of last successful validation.
         base_url: Custom base URL for provider API (if configured).
         model_name: Default model name override (if configured).
-        supports_both: Whether this provider can serve both embedding and LLM.
     """
 
     provider: str = Field(description="Provider name")
@@ -323,7 +322,6 @@ class ProviderStatus(BaseSchema):
     )
     base_url: str | None = Field(default=None, description="Custom base URL for provider API")
     model_name: str | None = Field(default=None, description="Default model name override")
-    supports_both: bool = Field(default=False, description="Supports both embedding and LLM")
 
 
 class AIFeatureToggles(BaseSchema):
@@ -362,7 +360,6 @@ class WorkspaceAISettingsResponse(BaseSchema):
     workspace_id: UUID = Field(description="Workspace UUID")
     providers: list[ProviderStatus] = Field(description="Provider statuses")
     features: AIFeatureToggles = Field(description="Feature toggles")
-    default_provider: str = Field(default="anthropic", description="Default AI provider (legacy)")
     default_llm_provider: str = Field(
         default="anthropic", description="Active LLM provider for this workspace"
     )
