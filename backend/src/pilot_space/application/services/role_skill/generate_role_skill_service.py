@@ -312,12 +312,21 @@ class GenerateRoleSkillService:
                     return block.text
             return ""
 
-        return await executor.execute(
+        logger.info(
+            "Calling LLM for skill generation",
+            extra={"provider": provider, "model": model, "has_base_url": bool(base_url)},
+        )
+        result = await executor.execute(
             provider=provider,
             operation=_call_api,
             timeout_sec=30.0,
             retry_config=retry_config,
         )
+        logger.info(
+            "LLM response received",
+            extra={"provider": provider, "response_length": len(result)},
+        )
+        return result
 
     def _parse_ai_response(
         self,
@@ -326,33 +335,53 @@ class GenerateRoleSkillService:
         role_name: str | None,
         model: str,
     ) -> tuple[str, str, str] | None:
-        """Parse AI response JSON into (skill_content, suggested_name, model).
+        """Parse AI response into (skill_content, suggested_name, model).
 
-        Returns None if parsing fails.
+        Tries JSON first, then treats raw text as markdown skill content.
+        Returns None only if content is empty or too short.
         """
-        try:
-            # Strip markdown fences if present
-            text = raw_response.strip()
-            if text.startswith("```"):
-                lines = text.split("\n")
-                lines = lines[1:]  # Remove opening fence
-                if lines and lines[-1].strip() == "```":
-                    lines = lines[:-1]
-                text = "\n".join(lines)
+        text = raw_response.strip()
+        if not text:
+            logger.warning("AI returned empty response")
+            return None
 
+        # Strip markdown fences if present
+        if text.startswith("```"):
+            lines = text.split("\n")
+            lines = lines[1:]  # Remove opening fence
+            if lines and lines[-1].strip() == "```":
+                lines = lines[:-1]
+            text = "\n".join(lines)
+
+        # Try JSON parse first (expected format)
+        try:
             data = json.loads(text)
             skill_content = data.get("skill_content", "")
             suggested_name = data.get("suggested_role_name", role_name or display_name)
 
-            if not skill_content or len(skill_content.strip()) < 50:
-                logger.warning("AI returned insufficient skill content, using fallback")
-                return None
-
-            return (skill_content, suggested_name, model)
-
+            if skill_content and len(skill_content.strip()) >= 50:
+                return (skill_content, suggested_name, model)
         except (json.JSONDecodeError, KeyError, TypeError):
-            logger.warning("Failed to parse AI response as JSON, using fallback")
-            return None
+            pass
+
+        # Fallback: treat raw response as markdown skill content directly
+        if len(text.strip()) >= 50:
+            suggested_name = self._suggest_role_name_heuristic(
+                display_name=display_name,
+                experience_description=text[:200],
+                provided_name=role_name,
+            )
+            logger.info(
+                "AI response parsed as raw markdown (non-JSON)",
+                extra={"model": model, "content_length": len(text)},
+            )
+            return (text, suggested_name, model)
+
+        logger.warning(
+            "AI returned insufficient content",
+            extra={"model": model, "response_length": len(text), "preview": text[:200]},
+        )
+        return None
 
     async def _resolve_llm_provider(
         self, workspace_id: UUID | None
