@@ -156,11 +156,13 @@ export class WorkspaceStore {
     }
   }
 
-  async fetchWorkspaces(): Promise<void> {
+  async fetchWorkspaces(options?: { ensureSelection?: boolean }): Promise<void> {
     if (!this.api) {
       this.error = 'Workspace API not initialized';
       return;
     }
+
+    const ensureSelection = options?.ensureSelection ?? false;
 
     this.isLoading = true;
     this.error = null;
@@ -174,17 +176,19 @@ export class WorkspaceStore {
           this.workspaces.set(workspace.id, workspace);
         });
 
-        const firstWorkspace = response.items[0];
-        if (!this.currentWorkspaceId && firstWorkspace) {
-          this.selectWorkspace(firstWorkspace.id);
-        }
+        if (ensureSelection) {
+          const firstWorkspace = response.items[0];
+          if (!this.currentWorkspaceId && firstWorkspace) {
+            this.selectWorkspace(firstWorkspace.id);
+          }
 
-        if (
-          this.currentWorkspaceId &&
-          !this.workspaces.has(this.currentWorkspaceId) &&
-          firstWorkspace
-        ) {
-          this.selectWorkspace(firstWorkspace.id);
+          if (
+            this.currentWorkspaceId &&
+            !this.workspaces.has(this.currentWorkspaceId) &&
+            firstWorkspace
+          ) {
+            this.selectWorkspace(firstWorkspace.id);
+          }
         }
 
         this.isLoading = false;
