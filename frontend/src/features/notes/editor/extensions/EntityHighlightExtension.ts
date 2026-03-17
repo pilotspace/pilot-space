@@ -63,6 +63,33 @@ let cachedEntities: Array<{ name: string; projectId: string }> = [];
 let activeCard: HTMLElement | null = null;
 let activeTimeout: ReturnType<typeof setTimeout> | null = null;
 
+// ---------------------------------------------------------------------------
+// C-2: Global pointermove guard — hides card when pointer leaves a highlight
+//      without triggering a pointerleave event (e.g. same-layout navigation
+//      where the editor component is not unmounted between route changes).
+// ---------------------------------------------------------------------------
+function onDocumentPointerMove(event: PointerEvent): void {
+  if (activeCard === null && activeTimeout === null) return;
+  const target = event.target as HTMLElement | null;
+  if (!target?.classList?.contains('entity-highlight')) {
+    hideCard();
+  }
+}
+
+let documentListenerAttached = false;
+
+function attachDocumentListener(): void {
+  if (documentListenerAttached) return;
+  document.addEventListener('pointermove', onDocumentPointerMove);
+  documentListenerAttached = true;
+}
+
+function detachDocumentListener(): void {
+  if (!documentListenerAttached) return;
+  document.removeEventListener('pointermove', onDocumentPointerMove);
+  documentListenerAttached = false;
+}
+
 /**
  * Escape special regex characters in a string
  */
@@ -241,6 +268,10 @@ function showCard(entity: EntityMatch, rect: DOMRect): void {
   activeCard?.remove();
   activeCard = null;
 
+  // C-2: Attach global guard so the card is hidden if the pointer moves off the
+  // highlight without firing pointerleave (e.g. same-layout route navigation).
+  attachDocumentListener();
+
   activeTimeout = setTimeout(() => {
     const card = createEntityPreviewCard(entity);
     document.body.appendChild(card);
@@ -258,6 +289,9 @@ function hideCard(): void {
   }
   activeCard?.remove();
   activeCard = null;
+
+  // C-2: Detach the global guard once there is nothing to hide.
+  detachDocumentListener();
 }
 
 /**
