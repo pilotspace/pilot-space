@@ -13,9 +13,9 @@
  * @see IssueLinkExtension — template for this pattern
  */
 import { Extension } from '@tiptap/core';
+import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
-import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 
 /**
  * Entity match found in document text
@@ -62,6 +62,50 @@ let cachedEntities: Array<{ name: string; projectId: string }> = [];
 // ---------------------------------------------------------------------------
 let activeCard: HTMLElement | null = null;
 let activeTimeout: ReturnType<typeof setTimeout> | null = null;
+
+// ---------------------------------------------------------------------------
+// C-2: Global pointermove guard — hides card when pointer leaves a highlight
+//      without triggering a pointerleave event (e.g. same-layout navigation
+//      where the editor component is not unmounted between route changes).
+// ---------------------------------------------------------------------------
+function onDocumentPointerMove(event: PointerEvent): void {
+  if (activeCard === null && activeTimeout === null) return;
+  const el =
+    event.target instanceof Element ? event.target : (event.target as Node | null)?.parentElement;
+  if (!el?.closest('.entity-highlight')) {
+    hideCard();
+  }
+}
+
+let documentListenerAttached = false;
+
+function attachDocumentListener(): void {
+  if (documentListenerAttached) return;
+  document.addEventListener('pointermove', onDocumentPointerMove);
+  documentListenerAttached = true;
+}
+
+function detachDocumentListener(): void {
+  if (!documentListenerAttached) return;
+  document.removeEventListener('pointermove', onDocumentPointerMove);
+  documentListenerAttached = false;
+}
+
+// ---------------------------------------------------------------------------
+// @internal — exported only for unit tests (not part of the public API)
+// ---------------------------------------------------------------------------
+/** @internal */
+export function _showCard(entity: EntityMatch, rect: DOMRect): void {
+  showCard(entity, rect);
+}
+/** @internal */
+export function _hideCard(): void {
+  hideCard();
+}
+/** @internal */
+export function _isDocumentListenerAttached(): boolean {
+  return documentListenerAttached;
+}
 
 /**
  * Escape special regex characters in a string
@@ -241,6 +285,10 @@ function showCard(entity: EntityMatch, rect: DOMRect): void {
   activeCard?.remove();
   activeCard = null;
 
+  // C-2: Attach global guard so the card is hidden if the pointer moves off the
+  // highlight without firing pointerleave (e.g. same-layout route navigation).
+  attachDocumentListener();
+
   activeTimeout = setTimeout(() => {
     const card = createEntityPreviewCard(entity);
     document.body.appendChild(card);
@@ -258,6 +306,9 @@ function hideCard(): void {
   }
   activeCard?.remove();
   activeCard = null;
+
+  // C-2: Detach the global guard once there is nothing to hide.
+  detachDocumentListener();
 }
 
 /**

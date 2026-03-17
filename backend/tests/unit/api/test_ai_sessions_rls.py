@@ -11,7 +11,11 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from pilot_space.api.v1.routers.ai_sessions import list_sessions, resume_session
+from pilot_space.api.v1.routers.ai_sessions import (
+    delete_session,
+    list_sessions,
+    resume_session,
+)
 
 TEST_USER_ID = UUID("77a6813e-0aa3-400c-8d4e-540b6ed2187a")
 TEST_WORKSPACE_ID = uuid4()
@@ -86,3 +90,103 @@ async def test_resume_session_sets_rls_context() -> None:
 
         mock_rls.assert_called_once_with(mock_db, user_id, workspace_id)
         assert result.session_id == session_id
+
+
+@pytest.mark.asyncio
+async def test_list_sessions_works_without_redis() -> None:
+    """list_sessions should return results when session_manager is None (degraded mode)."""
+    mock_db = AsyncMock()
+
+    with (
+        patch(
+            "pilot_space.api.v1.routers.ai_sessions.set_rls_context",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "pilot_space.ai.sdk.session_store.SessionStore.list_sessions_for_user",
+            new_callable=AsyncMock,
+            return_value=[],
+        ),
+    ):
+        result = await list_sessions(
+            user_id=TEST_USER_ID,
+            db_session=mock_db,
+            session_manager=None,
+            workspace_id=TEST_WORKSPACE_ID,
+        )
+
+        assert result.total == 0
+        assert result.sessions == []
+
+
+@pytest.mark.asyncio
+async def test_resume_session_works_without_redis() -> None:
+    """resume_session should load from DB when session_manager is None."""
+    mock_db = AsyncMock()
+    session_id = uuid4()
+
+    mock_session = MagicMock()
+    mock_session.user_id = TEST_USER_ID
+    mock_session.messages = []
+    mock_session.context = {}
+    mock_session.turn_count = 0
+    mock_session.id = session_id
+
+    with (
+        patch(
+            "pilot_space.api.v1.routers.ai_sessions.set_rls_context",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "pilot_space.ai.sdk.session_store.SessionStore.load_from_db",
+            new_callable=AsyncMock,
+            return_value=mock_session,
+        ),
+    ):
+        result = await resume_session(
+            session_id=session_id,
+            user_id=TEST_USER_ID,
+            db_session=mock_db,
+            session_manager=None,
+            workspace_id=TEST_WORKSPACE_ID,
+            limit=3,
+            offset=0,
+        )
+
+        assert result.session_id == session_id
+
+
+@pytest.mark.asyncio
+async def test_delete_session_works_without_redis() -> None:
+    """delete_session should delete from DB when session_manager is None."""
+    mock_db = AsyncMock()
+    session_id = uuid4()
+
+    mock_session = MagicMock()
+    mock_session.user_id = TEST_USER_ID
+
+    with (
+        patch(
+            "pilot_space.api.v1.routers.ai_sessions.set_rls_context",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "pilot_space.ai.sdk.session_store.SessionStore.load_from_db",
+            new_callable=AsyncMock,
+            return_value=mock_session,
+        ),
+        patch(
+            "pilot_space.ai.sdk.session_store.SessionStore.delete_session",
+            new_callable=AsyncMock,
+            return_value=True,
+        ),
+    ):
+        result = await delete_session(
+            session_id=session_id,
+            user_id=TEST_USER_ID,
+            db_session=mock_db,
+            session_manager=None,
+            workspace_id=TEST_WORKSPACE_ID,
+        )
+
+        assert result["message"] == "Session deleted successfully"
