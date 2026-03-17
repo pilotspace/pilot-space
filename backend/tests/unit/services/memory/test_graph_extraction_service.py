@@ -25,6 +25,7 @@ from pilot_space.application.services.memory.graph_extraction_service import (
     _build_conversation_text,
     _build_pattern_nodes,
     _build_preference_nodes,
+    _extract_json_object,
     _parse_llm_response,
 )
 from pilot_space.domain.graph_node import NodeType
@@ -100,6 +101,69 @@ class TestParseLlmResponse:
     def test_empty_string_returns_empty_dict(self) -> None:
         result = _parse_llm_response("")
         assert result == {}
+
+    def test_whitespace_only_returns_empty_dict(self) -> None:
+        result = _parse_llm_response("   \n  \t  ")
+        assert result == {}
+
+    def test_empty_code_fence_returns_empty_dict(self) -> None:
+        result = _parse_llm_response("```json\n```")
+        assert result == {}
+
+    def test_code_fence_with_only_whitespace_returns_empty_dict(self) -> None:
+        result = _parse_llm_response("```json\n  \n```")
+        assert result == {}
+
+    def test_json_wrapped_in_prose_extracted_via_fallback(self) -> None:
+        """Non-Anthropic providers may wrap JSON in explanatory text."""
+        inner = json.dumps({"decisions": [{"text": "Use Redis", "context": "caching"}]})
+        raw = f"Here is the analysis:\n{inner}\nHope this helps!"
+        result = _parse_llm_response(raw)
+        assert "decisions" in result
+        assert result["decisions"][0]["text"] == "Use Redis"
+
+    def test_prose_without_json_returns_empty_dict(self) -> None:
+        result = _parse_llm_response("No JSON object here, just plain text.")
+        assert result == {}
+
+
+# ---------------------------------------------------------------------------
+# Unit tests: _extract_json_object
+# ---------------------------------------------------------------------------
+
+
+class TestExtractJsonObject:
+    """Tests for JSON object extraction from prose."""
+
+    def test_extracts_simple_json_object(self) -> None:
+        text = 'prefix {"a": 1} suffix'
+        assert _extract_json_object(text) == '{"a": 1}'
+
+    def test_extracts_nested_json_object(self) -> None:
+        text = 'before {"outer": {"inner": 42}} after'
+        result = _extract_json_object(text)
+        assert result is not None
+        assert json.loads(result) == {"outer": {"inner": 42}}
+
+    def test_handles_strings_with_braces(self) -> None:
+        text = '{"key": "value with { and } inside"}'
+        result = _extract_json_object(text)
+        assert result is not None
+        assert json.loads(result)["key"] == "value with { and } inside"
+
+    def test_handles_escaped_quotes(self) -> None:
+        text = r'{"key": "value with \" escaped"}'
+        result = _extract_json_object(text)
+        assert result is not None
+
+    def test_returns_none_for_no_braces(self) -> None:
+        assert _extract_json_object("no json here") is None
+
+    def test_returns_none_for_unbalanced_braces(self) -> None:
+        assert _extract_json_object("{unclosed") is None
+
+    def test_empty_string(self) -> None:
+        assert _extract_json_object("") is None
 
 
 # ---------------------------------------------------------------------------
@@ -345,6 +409,43 @@ class TestGraphExtractionServiceMalformedJson:
         assert result.nodes == []
 
 
+class TestGraphExtractionServiceWhitespaceResponse:
+    """Verify empty/whitespace LLM responses return empty result (not JSONDecodeError)."""
+
+    @pytest.mark.asyncio
+    async def test_whitespace_only_llm_response_returns_empty(
+        self, service: GraphExtractionService, base_messages: list[dict[str, str]]
+    ) -> None:
+        mock_anthropic_cls = _make_anthropic_mock("   \n  ")
+
+        with patch("anthropic.AsyncAnthropic", mock_anthropic_cls):
+            payload = ConversationExtractionPayload(
+                messages=base_messages,
+                workspace_id=uuid4(),
+                api_key="sk-ant-test",  # pragma: allowlist secret
+            )
+            result = await service.execute(payload)
+
+        assert result.nodes == []
+        assert result.raw_response is None
+
+    @pytest.mark.asyncio
+    async def test_empty_fence_llm_response_returns_empty(
+        self, service: GraphExtractionService, base_messages: list[dict[str, str]]
+    ) -> None:
+        mock_anthropic_cls = _make_anthropic_mock("```json\n```")
+
+        with patch("anthropic.AsyncAnthropic", mock_anthropic_cls):
+            payload = ConversationExtractionPayload(
+                messages=base_messages,
+                workspace_id=uuid4(),
+                api_key="sk-ant-test",  # pragma: allowlist secret
+            )
+            result = await service.execute(payload)
+
+        assert result.nodes == []
+
+
 class TestGraphExtractionServicePatterns:
     """Verify pattern extraction with confidence scores."""
 
@@ -394,3 +495,70 @@ class TestGraphExtractionServicePatterns:
         assert result.nodes == []
         assert result.decisions == []
         assert result.patterns == []
+
+
+# ---------------------------------------------------------------------------
+# Unit tests: _background_graph_extraction
+# ---------------------------------------------------------------------------
+
+
+class TestBackgroundGraphExtraction:
+    """Verify the fire-and-forget background extraction wrapper."""
+
+    @pytest.mark.asyncio
+    async def test_runs_extraction_with_own_db_session(self) -> None:
+        from pilot_space.ai.agents.pilotspace_agent import _background_graph_extraction
+
+        mock_session = AsyncMock()
+        mock_cm = AsyncMock()
+        mock_cm.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_cm.__aexit__ = AsyncMock(return_value=None)
+
+        with (
+            patch(
+                "pilot_space.infrastructure.database.get_db_session",
+                return_value=mock_cm,
+            ) as mock_get_db,
+            patch(
+                "pilot_space.ai.agents.pilotspace_agent.extract_and_persist_to_graph",
+                new_callable=AsyncMock,
+            ) as mock_extract,
+            patch(
+                "pilot_space.ai.agents.pilotspace_agent.build_graph_write_service_for_session",
+            ) as mock_build_svc,
+        ):
+            ws_id = uuid4()
+            user_id = uuid4()
+            messages = [{"role": "user", "content": "test"}]
+
+            await _background_graph_extraction(
+                graph_queue_client=None,
+                workspace_id=ws_id,
+                user_id=user_id,
+                messages=messages,
+                anthropic_api_key="sk-test",  # pragma: allowlist secret
+            )
+
+            mock_get_db.assert_called_once()
+            mock_build_svc.assert_called_once_with(mock_session, None)
+            mock_extract.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_swallows_exceptions_without_raising(self) -> None:
+        from pilot_space.ai.agents.pilotspace_agent import _background_graph_extraction
+
+        mock_cm = AsyncMock()
+        mock_cm.__aenter__ = AsyncMock(side_effect=RuntimeError("DB unavailable"))
+        mock_cm.__aexit__ = AsyncMock(return_value=None)
+
+        with patch(
+            "pilot_space.infrastructure.database.get_db_session",
+            return_value=mock_cm,
+        ):
+            # Must not raise
+            await _background_graph_extraction(
+                graph_queue_client=None,
+                workspace_id=uuid4(),
+                user_id=uuid4(),
+                messages=[{"role": "user", "content": "test"}],
+            )

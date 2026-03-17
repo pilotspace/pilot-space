@@ -70,6 +70,44 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
+async def _background_graph_extraction(
+    graph_queue_client: Any,
+    workspace_id: UUID,
+    user_id: UUID | None,
+    messages: list[dict[str, str]],
+    issue_id: UUID | None = None,
+    anthropic_api_key: str | None = None,
+    base_url: str | None = None,
+    model_name: str | None = None,
+) -> None:
+    """Run graph extraction in a background task with its own DB session.
+
+    Opens a dedicated DB session so the request-scoped session can close
+    immediately, allowing the SSE connection to terminate without waiting
+    for the LLM extraction call (~20-25s).
+    """
+    from pilot_space.infrastructure.database import get_db_session
+
+    try:
+        async with get_db_session() as bg_session:
+            graph_write_svc = build_graph_write_service_for_session(bg_session, graph_queue_client)
+            await extract_and_persist_to_graph(
+                graph_write_service=graph_write_svc,
+                workspace_id=workspace_id,
+                user_id=user_id,
+                messages=messages,
+                issue_id=issue_id,
+                anthropic_api_key=anthropic_api_key,
+                base_url=base_url,
+                model_name=model_name,
+            )
+    except Exception:
+        logger.warning(
+            "[SDK/BackgroundGraph] Graph extraction task failed (non-fatal)",
+            exc_info=True,
+        )
+
+
 @dataclass
 class ChatInput:
     """Input for PilotSpace conversational agent."""
@@ -793,16 +831,14 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
                         await self._save_session_messages(input_data, content_blocks)
 
                         # T-050: persist conversation outcome to knowledge graph
+                        # Fire-and-forget: graph extraction makes an LLM call (~20-25s)
+                        # that must NOT block SSE connection closure.
                         if content_blocks and context.workspace_id:
                             assistant_texts = [
                                 block.get("text", "")
                                 for block in content_blocks.values()
                                 if block.get("text")
                             ]
-                            # Build fresh GraphWriteService per request — avoids session=None (T-050)
-                            _graph_write_svc = build_graph_write_service_for_session(
-                                db_session, self._graph_queue_client
-                            )
                             if assistant_texts:
                                 _ctx_issue = input_data.context.get("issue_id")
                                 _issue_id_uuid: UUID | None = None
@@ -812,18 +848,25 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
                                         if isinstance(_ctx_issue, UUID)
                                         else UUID(str(_ctx_issue))
                                     )
-                                await extract_and_persist_to_graph(
-                                    graph_write_service=_graph_write_svc,
-                                    workspace_id=context.workspace_id,
-                                    user_id=context.user_id,
-                                    messages=[
-                                        {"role": "user", "content": input_data.message},
-                                        {"role": "assistant", "content": assistant_texts[-1]},
-                                    ],
-                                    issue_id=_issue_id_uuid,
-                                    anthropic_api_key=provider_config.api_key,
-                                    base_url=provider_config.base_url,
-                                    model_name=provider_config.model_name,
+                                _bg_task = asyncio.create_task(
+                                    _background_graph_extraction(
+                                        graph_queue_client=self._graph_queue_client,
+                                        workspace_id=context.workspace_id,
+                                        user_id=context.user_id,
+                                        messages=[
+                                            {"role": "user", "content": input_data.message},
+                                            {"role": "assistant", "content": assistant_texts[-1]},
+                                        ],
+                                        issue_id=_issue_id_uuid,
+                                        anthropic_api_key=provider_config.api_key,
+                                        base_url=provider_config.base_url,
+                                        model_name=provider_config.model_name,
+                                    )
+                                )
+                                _bg_task.add_done_callback(
+                                    lambda t: t.result()
+                                    if not t.cancelled() and not t.exception()
+                                    else None
                                 )
 
                     await client.disconnect()

@@ -142,10 +142,46 @@ def _build_prompt(messages: list[dict[str, str]]) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _extract_json_object(text: str) -> str | None:
+    """Find the first top-level JSON object in text by brace matching.
+
+    Handles cases where LLM wraps JSON in prose or markdown.
+    Returns the JSON substring, or None if no balanced braces found.
+    """
+    start = text.find("{")
+    if start == -1:
+        return None
+    depth = 0
+    in_string = False
+    escape = False
+    for i in range(start, len(text)):
+        ch = text[i]
+        if escape:
+            escape = False
+            continue
+        if ch == "\\":
+            escape = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start : i + 1]
+    return None
+
+
 def _parse_llm_response(raw: str) -> dict[str, Any]:
     """Parse raw LLM response into a structured dict.
 
     Strips markdown code fences if present, then JSON-parses the result.
+    Falls back to extracting the first JSON object from prose if direct
+    parsing fails (handles non-Anthropic providers wrapping JSON in text).
     Returns an empty dict on any parse failure.
 
     Args:
@@ -155,12 +191,17 @@ def _parse_llm_response(raw: str) -> dict[str, Any]:
         Parsed dict or {} on failure.
     """
     text = raw.strip()
+    if not text:
+        return {}
     # Strip ```json ... ``` or ``` ... ``` fences
     if text.startswith("```"):
         lines = text.splitlines()
         # Remove first and last fence lines
         inner = lines[1:-1] if lines[-1].strip() == "```" else lines[1:]
-        text = "\n".join(inner)
+        text = "\n".join(inner).strip()
+    if not text:
+        logger.warning("GraphExtractionService: empty content after stripping code fences")
+        return {}
     try:
         parsed = json.loads(text)
         if isinstance(parsed, dict):
@@ -168,11 +209,23 @@ def _parse_llm_response(raw: str) -> dict[str, Any]:
         logger.warning("GraphExtractionService: LLM returned non-dict JSON — ignoring")
         return {}
     except json.JSONDecodeError:
-        logger.warning(
-            "GraphExtractionService: failed to parse LLM response as JSON",
-            exc_info=True,
-        )
-        return {}
+        pass
+
+    # Fallback: extract first JSON object from prose (non-Anthropic providers
+    # sometimes wrap the JSON in explanatory text).
+    extracted = _extract_json_object(text)
+    if extracted:
+        try:
+            parsed = json.loads(extracted)
+            if isinstance(parsed, dict):
+                return parsed
+        except json.JSONDecodeError:
+            pass
+
+    logger.warning(
+        "GraphExtractionService: failed to parse LLM response as JSON",
+    )
+    return {}
 
 
 # ---------------------------------------------------------------------------
@@ -380,13 +433,13 @@ class GraphExtractionService:
             if message.content:
                 for block in message.content:
                     text_val = getattr(block, "text", None)
-                    if text_val:
-                        return str(text_val)
+                    if text_val and str(text_val).strip():
+                        return str(text_val).strip()
                 # Fallback to thinking blocks
                 for block in message.content:
                     thinking_val = getattr(block, "thinking", None)
-                    if thinking_val:
-                        return str(thinking_val)
+                    if thinking_val and str(thinking_val).strip():
+                        return str(thinking_val).strip()
             return None
         except Exception:
             logger.warning(
