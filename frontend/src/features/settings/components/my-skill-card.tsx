@@ -34,6 +34,8 @@ export function MySkillCard({ skill, onToggleActive, onDelete, onClick }: MySkil
       tabIndex={0}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
+          // Ignore events bubbling from inner buttons (toggle, delete)
+          if (e.target !== e.currentTarget) return;
           e.preventDefault();
           onClick(skill);
         }

@@ -238,7 +238,7 @@ export function SkillGeneratorModal({
                 onSave={handleSave}
                 onRetry={handleRetry}
                 onBack={() => setStep('form')}
-                isSaving={createPersonal.isPending}
+                isSaving={createUserSkill.isPending}
                 mode={mode}
               />
             )}
@@ -524,6 +524,8 @@ function PreviewStep({
 }: PreviewStepProps) {
   const saveLabel = mode === 'personal' ? 'Save & Activate' : 'Done';
   const wordCount = editableContent.trim().split(/\s+/).filter(Boolean).length;
+  // Workspace skills are persisted during generation — preview is read-only
+  const isReadOnly = mode === 'workspace';
 
   return (
     <div className="flex flex-col flex-1 gap-3">
@@ -547,7 +549,7 @@ function PreviewStep({
 
       <div>
         <label htmlFor="skill-name" className="text-xs text-muted-foreground">
-          Skill Name (auto-generated — click to edit)
+          {isReadOnly ? 'Skill Name' : 'Skill Name (auto-generated — click to edit)'}
         </label>
         <div className="relative mt-1">
           <input
@@ -555,20 +557,32 @@ function PreviewStep({
             type="text"
             value={editableName}
             onChange={(e) => onNameChange(e.target.value)}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 pr-8 text-sm font-semibold focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+            readOnly={isReadOnly}
+            className={cn(
+              'w-full rounded-md border border-border bg-background px-3 py-2 pr-8 text-sm font-semibold focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30',
+              isReadOnly && 'opacity-60 cursor-default'
+            )}
           />
-          <Pencil
-            className="absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground pointer-events-none"
-            aria-hidden="true"
-          />
+          {!isReadOnly && (
+            <Pencil
+              className="absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground pointer-events-none"
+              aria-hidden="true"
+            />
+          )}
         </div>
       </div>
 
       <Textarea
         value={editableContent}
         onChange={(e) => onContentChange(e.target.value)}
-        className="flex-1 max-h-[220px] font-mono text-xs leading-relaxed resize-none"
-        aria-label="Edit generated skill content"
+        readOnly={isReadOnly}
+        className={cn(
+          'flex-1 max-h-[220px] font-mono text-xs leading-relaxed resize-none',
+          isReadOnly && 'opacity-60 cursor-default'
+        )}
+        aria-label={
+          isReadOnly ? 'Generated skill content (read-only)' : 'Edit generated skill content'
+        }
       />
 
       <div className="text-right">

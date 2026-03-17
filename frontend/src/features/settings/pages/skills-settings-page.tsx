@@ -113,6 +113,18 @@ export const SkillsSettingsPage = observer(function SkillsSettingsPage() {
   const [skillToDelete, setSkillToDelete] = React.useState<UserSkill | null>(null);
   const [templateToDelete, setTemplateToDelete] = React.useState<SkillTemplate | null>(null);
 
+  // Reconcile skillToView with latest data after mutations
+  React.useEffect(() => {
+    if (skillToView && userSkills) {
+      const updated = userSkills.find((s) => s.id === skillToView.id);
+      if (!updated) {
+        setSkillToView(null);
+      } else if (updated !== skillToView) {
+        setSkillToView(updated);
+      }
+    }
+  }, [userSkills, skillToView]);
+
   // ---------------------------------------------------------------------------
   // Handlers: User Skills
   // ---------------------------------------------------------------------------

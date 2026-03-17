@@ -118,7 +118,10 @@ export class AISettingsStore {
         this.settings = refreshed;
       });
     } catch (err) {
-      console.error('Failed to set default provider:', err);
+      runInAction(() => {
+        this.error = err instanceof Error ? err.message : 'Failed to set default provider';
+      });
+      throw err;
     }
   }
 
