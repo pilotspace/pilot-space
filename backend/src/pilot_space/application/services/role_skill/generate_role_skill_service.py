@@ -259,6 +259,9 @@ class GenerateRoleSkillService:
 
         executor = ResilientExecutor()
         retry_config = RetryConfig(max_retries=2, base_delay_seconds=1.0)
+        # Cloud-proxied models (e.g., kimi-k2.5:cloud via Ollama) need longer
+        # timeouts since they relay to remote APIs
+        timeout_sec = 90.0 if provider == "ollama" else 30.0
 
         raw_response: str | None = None
         try:
@@ -270,6 +273,7 @@ class GenerateRoleSkillService:
                 provider=provider,
                 executor=executor,
                 retry_config=retry_config,
+                timeout_sec=timeout_sec,
             )
         except ProviderUnavailableError as e:
             msg = f"{provider} provider unavailable: {e}"
@@ -293,6 +297,7 @@ class GenerateRoleSkillService:
         provider: str,
         executor: ResilientExecutor,
         retry_config: RetryConfig,
+        timeout_sec: float = 30.0,
     ) -> str:
         """Call LLM via Anthropic API format with provider-specific base_url/api_key."""
         from anthropic import AsyncAnthropic
@@ -326,7 +331,7 @@ class GenerateRoleSkillService:
         result = await executor.execute(
             provider=provider,
             operation=_call_api,
-            timeout_sec=30.0,
+            timeout_sec=timeout_sec,
             retry_config=retry_config,
         )
         logger.info(
