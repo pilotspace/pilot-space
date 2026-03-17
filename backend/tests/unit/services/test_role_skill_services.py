@@ -767,6 +767,55 @@ class TestAIResponseParsing:
         assert "Dev Role" in skill_content
         assert name == "Dev"
 
+    def test_parse_ai_response_with_literal_newlines(self) -> None:
+        """Parses JSON with literal (unescaped) newlines in string values.
+
+        Some models (Ollama/kimi) return JSON with actual newline bytes instead
+        of \\n escape sequences. strict=False handles this.
+        """
+        service = GenerateRoleSkillService.__new__(GenerateRoleSkillService)
+
+        # Build JSON with literal newlines inside the skill_content value
+        raw = (
+            '{"skill_content": "# Senior Developer\n\n'
+            "## Context\n\n"
+            "This skill is configured for a **Developer** role.\n\n"
+            "## Experience & Background\n\n"
+            "10 years of full-stack development with Python and TypeScript.\n\n"
+            "## Expertise Areas\n\n"
+            '- Backend: Python, FastAPI, SQLAlchemy", '
+            '"suggested_role_name": "Senior Full-Stack Developer"}'
+        )
+        result = service._parse_ai_response(raw, "Developer", None, "test-model")
+
+        assert result is not None
+        skill_content, name, model = result
+        assert "Senior Developer" in skill_content
+        assert name == "Senior Full-Stack Developer"
+        assert model == "test-model"
+
+    def test_parse_ai_response_rejects_leaked_json_wrapper(self) -> None:
+        """Raw JSON with skill_content key must not leak as skill content.
+
+        When all JSON parsing attempts fail (e.g. unescaped quotes inside
+        values), the fallback must NOT return the raw JSON blob as markdown.
+        """
+        service = GenerateRoleSkillService.__new__(GenerateRoleSkillService)
+
+        # JSON with unescaped quotes that breaks all parsers
+        raw = (
+            '{"skill_content": "# Role with "emphasis" in the title and '
+            "enough text to pass the 50-char threshold easily for content "
+            'validation purposes", "suggested_role_name": "Dev"}'
+        )
+        result = service._parse_ai_response(raw, "Developer", None, "test-model")
+
+        # Should either parse successfully or return None — never the raw JSON
+        if result is not None:
+            skill_content, _, _ = result
+            assert not skill_content.startswith("{")
+            assert '"skill_content"' not in skill_content
+
     def test_parse_ai_response_invalid_json(self) -> None:
         """Returns None for unparseable AI response."""
         service = GenerateRoleSkillService.__new__(GenerateRoleSkillService)

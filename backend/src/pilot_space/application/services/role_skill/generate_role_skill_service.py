@@ -366,8 +366,10 @@ class GenerateRoleSkillService:
             text = "\n".join(lines)
 
         # Try JSON parse first (expected format)
+        # strict=False allows literal control characters (newlines, tabs) inside
+        # JSON string values — common with Ollama/kimi models that don't escape them.
         try:
-            data = json.loads(text)
+            data = json.loads(text, strict=False)
             skill_content = data.get("skill_content", "")
             suggested_name = data.get("suggested_role_name", role_name or display_name)
 
@@ -381,7 +383,7 @@ class GenerateRoleSkillService:
         match = re.search(r"\{[\s\S]*\}", text)
         if match:
             try:
-                data = json.loads(match.group())
+                data = json.loads(match.group(), strict=False)
                 skill_content = data.get("skill_content", "")
                 suggested_name = data.get("suggested_role_name", role_name or display_name)
 
@@ -414,8 +416,11 @@ class GenerateRoleSkillService:
                 )
                 return (skill_content, suggested_name, model)
 
-        # Fallback: treat raw response as markdown skill content directly
-        if len(text.strip()) >= 50:
+        # Fallback: treat raw response as markdown skill content directly,
+        # but guard against leaking raw JSON as user-visible content.
+        stripped = text.strip()
+        is_leaked_json = stripped.startswith("{") and '"skill_content"' in stripped
+        if not is_leaked_json and len(stripped) >= 50:
             suggested_name = self._suggest_role_name_heuristic(
                 display_name=display_name,
                 experience_description=text[:200],
@@ -428,8 +433,8 @@ class GenerateRoleSkillService:
             return (text, suggested_name, model)
 
         logger.warning(
-            "AI returned insufficient content",
-            extra={"model": model, "response_length": len(text), "preview": text[:200]},
+            "AI returned invalid or insufficient content",
+            extra={"model": model, "response_length": len(text), "preview": stripped[:200]},
         )
         return None
 

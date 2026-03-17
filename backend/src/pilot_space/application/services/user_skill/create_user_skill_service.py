@@ -81,7 +81,7 @@ class CreateUserSkillService:
         user_skill_repo = UserSkillRepository(self._session)
 
         if template_id is not None:
-            # Template-based: validate, check duplicate, AI-generate
+            # Template-based: validate, check duplicate
             template_repo = SkillTemplateRepository(self._session)
             template = await template_repo.get_by_id(template_id)
             if template is None:
@@ -103,12 +103,17 @@ class CreateUserSkillService:
                 msg = f"User already has a skill from template {template_id}"
                 raise ValueError(msg)
 
-            content = await self._generate_content(
-                template=template,
-                experience_description=experience_description,
-                user_id=user_id,
-                workspace_id=workspace_id,
-            )
+            if skill_content:
+                # Frontend already generated + user may have edited — use as-is
+                content = skill_content
+            else:
+                # No pre-generated content — AI-generate from template
+                content = await self._generate_content(
+                    template=template,
+                    experience_description=experience_description,
+                    user_id=user_id,
+                    workspace_id=workspace_id,
+                )
         else:
             # Custom skill: use provided content directly
             if not skill_content:
