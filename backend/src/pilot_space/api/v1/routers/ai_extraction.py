@@ -98,6 +98,9 @@ class CreateExtractedIssuesRequest(BaseModel):
 
     issues: list[ExtractedIssueInput] = Field(default_factory=list)
     project_id: str | None = Field(default=None, description="Project UUID to assign issues to")
+    note_id: str | None = Field(
+        default=None, description="Source note ID (for no-note extraction route)"
+    )
 
 
 @router.post(
@@ -212,45 +215,26 @@ async def extract_issues_stream(
     return SSEResponse(generate_events())
 
 
-@router.post(
-    "/notes/{note_id}/extract-issues/approve",
-    summary="Create extracted issues",
-    description="Auto-approve and create extracted issues directly (DD-003 non-destructive).",
-)
-async def approve_extracted_issues(
-    workspace_id: WorkspaceId,
-    note_id: str,
+async def _create_extracted_issues(
+    workspace_id: UUID,
+    note_id: str | None,
     body: CreateExtractedIssuesRequest,
-    current_user_id: CurrentUserId,
-    session: DbSession,
-    _member: Annotated[UUID, Depends(require_workspace_member)],
+    current_user_id: UUID,
+    session: Any,
 ) -> dict[str, Any]:
-    """Create extracted issues directly (auto-approve).
+    """Shared logic for creating extracted issues.
 
-    Issues are content creation (non-destructive per DD-003), so no approval
-    gate is required. Issues are created from the provided list.
-
-    Args:
-        workspace_id: Workspace UUID from request context.
-        note_id: Source note ID.
-        body: Issues to create with optional project_id.
-        current_user_id: Current user ID.
-        session: Database session.
-
-    Returns:
-        Created issue IDs and count.
+    Returns enriched response with identifier and title per created issue.
     """
+    from sqlalchemy import select as sa_select
+
     from pilot_space.application.services.issue import CreateIssuePayload, CreateIssueService
     from pilot_space.infrastructure.database.models.issue import IssuePriority
-    from pilot_space.infrastructure.database.models.note_issue_link import (
-        NoteIssueLink,
-        NoteLinkType,
-    )
+    from pilot_space.infrastructure.database.models.project import Project
     from pilot_space.infrastructure.database.repositories import (
         ActivityRepository,
         IssueRepository,
         LabelRepository,
-        NoteIssueLinkRepository,
     )
 
     if not body.issues:
@@ -279,15 +263,23 @@ async def approve_extracted_issues(
             "message": "Invalid project_id format",
         }
 
-    try:
-        note_uuid = UUID(note_id)
-    except (ValueError, AttributeError):
-        return {
-            "created_issues": [],
-            "created_count": 0,
-            "source_note_id": note_id,
-            "message": "Invalid note_id format",
-        }
+    # Pre-fetch project identifier for constructing issue identifiers
+    project_row = await session.execute(
+        sa_select(Project.identifier).where(Project.id == project_id)
+    )
+    project_identifier = project_row.scalar_one_or_none() or "???"
+
+    note_uuid: UUID | None = None
+    if note_id:
+        try:
+            note_uuid = UUID(note_id)
+        except (ValueError, AttributeError):
+            return {
+                "created_issues": [],
+                "created_count": 0,
+                "source_note_id": note_id,
+                "message": "Invalid note_id format",
+            }
 
     issue_service = CreateIssueService(
         session=session,
@@ -295,7 +287,6 @@ async def approve_extracted_issues(
         activity_repository=ActivityRepository(session),
         label_repository=LabelRepository(session),
     )
-    link_repo = NoteIssueLinkRepository(session)
 
     priority_map = {
         0: IssuePriority.URGENT,
@@ -305,7 +296,7 @@ async def approve_extracted_issues(
         4: IssuePriority.NONE,
     }
 
-    created_ids = []
+    created_issues_data: list[dict[str, str]] = []
     for issue_data in body.issues:
         payload = CreateIssuePayload(
             workspace_id=workspace_id,
@@ -319,23 +310,41 @@ async def approve_extracted_issues(
             result = await issue_service.execute(payload)
             if result.issue:
                 issue_id = result.issue.id
-                created_ids.append(str(issue_id))
-                # Create NoteIssueLink so the note shows this extracted issue
-                existing = await link_repo.find_existing(
-                    note_id=note_uuid,
-                    issue_id=issue_id,
-                    link_type=NoteLinkType.EXTRACTED,
-                    workspace_id=UUID(str(workspace_id)),
+                identifier = f"{project_identifier}-{result.issue.sequence_id}"
+                created_issues_data.append(
+                    {
+                        "id": str(issue_id),
+                        "identifier": identifier,
+                        "title": result.issue.name,
+                    }
                 )
-                if not existing:
-                    link = NoteIssueLink(
+
+                # Create NoteIssueLink when note_id is provided
+                if note_uuid:
+                    from pilot_space.infrastructure.database.models.note_issue_link import (
+                        NoteIssueLink,
+                        NoteLinkType,
+                    )
+                    from pilot_space.infrastructure.database.repositories import (
+                        NoteIssueLinkRepository,
+                    )
+
+                    link_repo = NoteIssueLinkRepository(session)
+                    existing = await link_repo.find_existing(
                         note_id=note_uuid,
                         issue_id=issue_id,
                         link_type=NoteLinkType.EXTRACTED,
-                        block_id=issue_data.source_block_id,
                         workspace_id=UUID(str(workspace_id)),
                     )
-                    await link_repo.create(link)
+                    if not existing:
+                        link = NoteIssueLink(
+                            note_id=note_uuid,
+                            issue_id=issue_id,
+                            link_type=NoteLinkType.EXTRACTED,
+                            block_id=issue_data.source_block_id,
+                            workspace_id=UUID(str(workspace_id)),
+                        )
+                        await link_repo.create(link)
         except ValueError as e:
             logger.warning(
                 "Failed to create issue",
@@ -346,11 +355,56 @@ async def approve_extracted_issues(
     await session.commit()
 
     return {
-        "created_issues": created_ids,
-        "created_count": len(created_ids),
+        "created_issues": created_issues_data,
+        "created_count": len(created_issues_data),
         "source_note_id": note_id,
-        "message": f"Successfully created {len(created_ids)} issues",
+        "message": f"Successfully created {len(created_issues_data)} issues",
     }
+
+
+@router.post(
+    "/notes/{note_id}/extract-issues/approve",
+    summary="Create extracted issues from note",
+    description="Auto-approve and create extracted issues directly (DD-003 non-destructive).",
+)
+async def approve_extracted_issues(
+    workspace_id: WorkspaceId,
+    note_id: str,
+    body: CreateExtractedIssuesRequest,
+    current_user_id: CurrentUserId,
+    session: DbSession,
+    _member: Annotated[UUID, Depends(require_workspace_member)],
+) -> dict[str, Any]:
+    """Create extracted issues from a note (auto-approve)."""
+    return await _create_extracted_issues(
+        workspace_id=workspace_id,
+        note_id=note_id,
+        body=body,
+        current_user_id=current_user_id,
+        session=session,
+    )
+
+
+@router.post(
+    "/extract-issues/approve",
+    summary="Create extracted issues without note context",
+    description="Create issues from chat extraction when no note is in context (DD-003 non-destructive).",
+)
+async def approve_extracted_issues_no_note(
+    workspace_id: WorkspaceId,
+    body: CreateExtractedIssuesRequest,
+    current_user_id: CurrentUserId,
+    session: DbSession,
+    _member: Annotated[UUID, Depends(require_workspace_member)],
+) -> dict[str, Any]:
+    """Create extracted issues without note context (auto-approve)."""
+    return await _create_extracted_issues(
+        workspace_id=workspace_id,
+        note_id=body.note_id,
+        body=body,
+        current_user_id=current_user_id,
+        session=session,
+    )
 
 
 __all__ = ["router"]
