@@ -376,4 +376,38 @@ export const AutoTOC = observer(function AutoTOC({
   );
 });
 
+/**
+ * Extract all block IDs and text content for a section
+ * (from the target heading to the next same-level-or-higher heading).
+ */
+export function extractSectionBlocks(
+  editor: Editor,
+  headingBlockId: string
+): { text: string; blockIds: string[] } {
+  const doc = editor.state.doc;
+  let collecting = false;
+  let headingLevel = 0;
+  const blockIds: string[] = [];
+  const textParts: string[] = [];
+
+  for (let i = 0; i < doc.childCount; i++) {
+    const node = doc.child(i);
+    const blockId = node.attrs.blockId as string | undefined;
+
+    if (blockId === headingBlockId && node.type.name === 'heading') {
+      collecting = true;
+      headingLevel = (node.attrs.level as number) || 1;
+    } else if (collecting && node.type.name === 'heading') {
+      if ((node.attrs.level as number) <= headingLevel) break;
+    }
+
+    if (collecting && blockId) {
+      blockIds.push(blockId);
+      if (node.textContent) textParts.push(node.textContent);
+    }
+  }
+
+  return { text: textParts.join('\n'), blockIds };
+}
+
 export default AutoTOC;
