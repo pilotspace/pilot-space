@@ -20,6 +20,8 @@ export function DocsPage({ slug, content, headings }: DocsPageProps) {
 
   // Strip leading markdown H1 to avoid duplicate heading (page header already shows doc.title)
   const strippedContent = content.replace(/^#\s+.+\n+/, '');
+  // Filter out level-1 headings from TOC to match strippedContent (H1 is rendered by page header)
+  const tocHeadings = headings.filter((h) => h.level > 1);
 
   return (
     <div className="flex h-full">
@@ -53,7 +55,7 @@ export function DocsPage({ slug, content, headings }: DocsPageProps) {
           </main>
 
           <TableOfContents
-            headings={headings}
+            headings={tocHeadings}
             className="hidden xl:block border-l border-border p-4"
           />
         </div>

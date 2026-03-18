@@ -38,6 +38,13 @@ describe('extractHeadings', () => {
     expect(headings[0]?.text).toBe('Real heading');
   });
 
+  it('should handle mixed fence markers correctly (backtick open, tilde inside)', () => {
+    const md = '```\n~~~\n## Not a heading\n~~~\n```\n## Real heading';
+    const headings = extractHeadings(md);
+    expect(headings).toHaveLength(1);
+    expect(headings[0]?.text).toBe('Real heading');
+  });
+
   it('should deduplicate heading IDs with suffix', () => {
     const md = '## Setup\n## Setup\n## Setup';
     const headings = extractHeadings(md);
