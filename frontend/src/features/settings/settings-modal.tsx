@@ -171,7 +171,7 @@ export const SettingsModal = observer(function SettingsModal() {
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && closeSettings()}>
       <DialogContent
-        className="flex h-[85vh] max-h-[900px] w-full max-w-5xl flex-col gap-0 overflow-hidden rounded-xl p-0"
+        className="flex h-[85vh] max-h-[900px] w-full sm:max-w-5xl flex-col gap-0 overflow-hidden rounded-xl p-0"
         showCloseButton={false}
       >
         <DialogTitle className="sr-only">Settings</DialogTitle>
