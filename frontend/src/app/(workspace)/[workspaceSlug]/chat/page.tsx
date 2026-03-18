@@ -24,7 +24,7 @@ export default observer(function ChatPage() {
   // Ensure workspaces are loaded so slug→UUID resolution works
   useEffect(() => {
     if (workspaceStore.workspaceList.length === 0 && !workspaceStore.isLoading) {
-      workspaceStore.fetchWorkspaces();
+      workspaceStore.fetchWorkspaces({ ensureSelection: true });
     }
   }, [workspaceStore]);
 
