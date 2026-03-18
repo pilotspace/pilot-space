@@ -6,7 +6,7 @@ PilotSpace backend exposes a RESTful API at `/api/v1/` with SSE streaming for AI
 
 All API requests require a Bearer token:
 
-```
+```text
 Authorization: Bearer <jwt>
 X-Workspace-Id: <uuid>
 ```

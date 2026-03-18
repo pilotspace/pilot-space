@@ -4,7 +4,7 @@ PilotSpace uses a **centralized AI orchestrator** pattern built on the Claude Ag
 
 ## Architecture Overview
 
-```
+```text
 User Message
   ↓
 POST /api/v1/ai/chat (SSE)
@@ -148,7 +148,7 @@ Sessions track: messages, tool calls, token usage, costs, and approval state.
 
 ### Circuit Breaker (per provider)
 
-```
+```text
 CLOSED (normal) → 3 failures → OPEN (fail-fast) → 30s → HALF_OPEN (probe)
                                                               ↓ success
                                                            CLOSED

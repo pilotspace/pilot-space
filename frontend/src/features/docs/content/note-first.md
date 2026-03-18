@@ -4,7 +4,7 @@ The Note-First paradigm is PilotSpace's core design philosophy (DD-013): **users
 
 ## How It Works
 
-```
+```text
 User writes in Note Canvas (TipTap Editor)
   ↓
 Ghost Text (500ms pause → inline AI suggestions)
@@ -138,7 +138,7 @@ The AI agent uses human-readable block references instead of raw UUIDs:
 
 Notes feed into the knowledge graph asynchronously:
 
-```
+```text
 Note created/updated
   → Enqueue kg_populate job (pgmq)
   → MemoryWorker processes job

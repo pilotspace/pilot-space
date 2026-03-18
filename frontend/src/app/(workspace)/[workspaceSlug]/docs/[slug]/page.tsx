@@ -27,11 +27,9 @@ export async function generateMetadata({ params }: PageProps) {
   };
 }
 
-function loadMarkdownContent(slug: string): string | null {
-  if (slug.includes('/') || slug.includes('..')) return null;
-
+function loadMarkdownContent(file: string): string | null {
   const contentDir = path.join(process.cwd(), 'src', 'features', 'docs', 'content');
-  const filePath = path.join(contentDir, `${slug}.md`);
+  const filePath = path.join(contentDir, `${file}.md`);
 
   try {
     return fs.readFileSync(filePath, 'utf-8');
@@ -43,11 +41,12 @@ function loadMarkdownContent(slug: string): string | null {
 export default async function DocsDetailPage({ params }: PageProps) {
   const { slug } = await params;
 
-  if (!docsBySlug.has(slug)) {
+  const doc = docsBySlug.get(slug);
+  if (!doc) {
     notFound();
   }
 
-  const content = loadMarkdownContent(slug);
+  const content = loadMarkdownContent(doc.file);
   if (!content) {
     notFound();
   }

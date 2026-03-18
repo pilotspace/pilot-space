@@ -15,13 +15,20 @@ export function TableOfContents({ headings, className }: TableOfContentsProps) {
   useEffect(() => {
     if (headings.length === 0) return;
 
+    const visibleIds = new Set<string>();
+
     const observer = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
           if (entry.isIntersecting) {
-            setActiveId((prev) => (prev === entry.target.id ? prev : entry.target.id));
+            visibleIds.add(entry.target.id);
+          } else {
+            visibleIds.delete(entry.target.id);
           }
         }
+        // Pick the first heading in document order that is visible
+        const first = headings.find((h) => visibleIds.has(h.id));
+        if (first) setActiveId(first.id);
       },
       { rootMargin: '-80px 0px -70% 0px', threshold: 0 }
     );

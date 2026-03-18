@@ -4,7 +4,7 @@ PilotSpace follows a **5-layer Clean Architecture** with CQRS-lite services, dep
 
 ## Layer Overview
 
-```
+```text
 ┌─────────────────────────────────────────────┐
 │  Clients: Browser (3000), CLI, Mobile       │
 ├─────────────────────────────────────────────┤
@@ -34,7 +34,7 @@ PilotSpace follows a **5-layer Clean Architecture** with CQRS-lite services, dep
 
 **Golden Rule**: MobX for UI state, TanStack Query for server state. Never store API data in MobX.
 
-```
+```text
 RootStore (singleton)
 ├── auth: AuthStore         — Session lifecycle
 ├── ui: UIStore             — Sidebar, theme, modals
@@ -107,7 +107,7 @@ class CreateIssueService:
 
 ### Dependency Injection (DD-064)
 
-```
+```text
 InfraContainer (DB, auth, repos, clients)
   └── SkillContainer (AI skill providers)
       └── PluginContainer (plugins/seeding)

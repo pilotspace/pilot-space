@@ -28,7 +28,7 @@ PilotSpace is an AI-augmented Software Development Lifecycle platform built on a
 
 ## Monorepo Structure
 
-```
+```text
 backend/       Python FastAPI — Clean Architecture, CQRS-lite
 frontend/      Next.js App Router — MobX + TanStack Query, shadcn/ui
 cli/           pilot-cli — login, implement commands
