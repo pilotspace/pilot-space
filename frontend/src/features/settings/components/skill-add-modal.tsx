@@ -201,7 +201,7 @@ export function SkillAddModal({
   );
 
   // AI tab
-  const canGenerate = aiDescription.length >= AI_MIN_CHARS;
+  const canGenerate = aiDescription.trim().length >= AI_MIN_CHARS;
 
   const handleGenerate = React.useCallback(async () => {
     if (!canGenerate) return;
@@ -211,7 +211,7 @@ export function SkillAddModal({
       if (mode === 'personal') {
         const r = await generatePersonal.mutateAsync({
           roleType: 'custom',
-          experienceDescription: aiDescription,
+          experienceDescription: aiDescription.trim(),
         });
         setAiPreview({
           content: r.skillContent,
@@ -221,7 +221,9 @@ export function SkillAddModal({
         setAiEditableName(r.suggestedRoleName);
         setAiEditableContent(r.skillContent);
       } else {
-        const s = await generateWorkspace.mutateAsync({ experience_description: aiDescription });
+        const s = await generateWorkspace.mutateAsync({
+          experience_description: aiDescription.trim(),
+        });
         setAiPreview({
           content: s.skill_content,
           suggestedName: s.role_name,
@@ -239,6 +241,8 @@ export function SkillAddModal({
 
   const handleAiSave = React.useCallback(async () => {
     if (!aiPreview) return;
+    const previewWords = countWords(aiEditableContent);
+    if (previewWords === 0 || previewWords > MAX_WORDS) return;
     if (mode === 'personal') {
       try {
         await createUserSkill.mutateAsync({

@@ -319,16 +319,11 @@ class GenerateRoleSkillService:
                 max_tokens=2048,
                 messages=[{"role": "user", "content": prompt}],
             )
-            # Prefer text blocks, fall back to thinking blocks
             text_parts: list[str] = []
-            thinking_parts: list[str] = []
             for block in response.content:
                 if block.type == "text" and block.text:
                     text_parts.append(block.text)
-                elif block.type == "thinking" and getattr(block, "thinking", None):
-                    thinking_parts.append(block.thinking)
 
-            # TODO: streaming all to client as progress annotation
             return "\n".join(text_parts)
 
         logger.info(

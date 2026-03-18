@@ -1118,7 +1118,7 @@ async def main() -> None:
         print("   - Issues: 51 across all states")
         print("   - Labels: 14")
         print("   - States: 18 (6 per project)")
-        print("   - Skill Templates: 8 (built-in from role_templates)")
+        print("   - Skill Templates: seeded from role_templates")
         print("\n📝 Login credentials:")
         print(f"   - Email: {DEMO_EMAIL}")
         print("   - Password: [redacted — see DEMO_PASSWORD env var]")

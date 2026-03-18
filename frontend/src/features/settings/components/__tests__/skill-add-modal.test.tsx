@@ -315,10 +315,10 @@ describe('SkillAddModal', () => {
   });
 
   describe('9. Modal close resets state', () => {
-    it('should reset all state after modal close', async () => {
+    it('should call onOpenChange(false) and reset fields after reopen', async () => {
       const user = userEvent.setup();
       const onOpenChange = vi.fn();
-      renderModal({ onOpenChange });
+      const { rerender } = renderModal({ onOpenChange });
 
       // Fill manual name
       const nameInput = screen.getByPlaceholderText('e.g. Senior Backend Developer');
@@ -329,6 +329,39 @@ describe('SkillAddModal', () => {
       await user.click(cancelBtn);
 
       expect(onOpenChange).toHaveBeenCalledWith(false);
+
+      // Simulate close + reopen after reset timeout
+      const queryClient = createQueryClient();
+      await vi.waitFor(() => {
+        rerender(
+          <QueryClientProvider client={queryClient}>
+            <SkillAddModal
+              open={false}
+              onOpenChange={onOpenChange}
+              workspaceId="ws-123"
+              workspaceSlug="test-ws"
+            />
+          </QueryClientProvider>
+        );
+      });
+
+      // Wait for reset timeout (200ms)
+      await new Promise((r) => setTimeout(r, 250));
+
+      rerender(
+        <QueryClientProvider client={queryClient}>
+          <SkillAddModal
+            open={true}
+            onOpenChange={onOpenChange}
+            workspaceId="ws-123"
+            workspaceSlug="test-ws"
+          />
+        </QueryClientProvider>
+      );
+
+      // Name should be cleared after reopen
+      const reopenedInput = screen.getByPlaceholderText('e.g. Senior Backend Developer');
+      expect(reopenedInput).toHaveValue('');
     });
   });
 

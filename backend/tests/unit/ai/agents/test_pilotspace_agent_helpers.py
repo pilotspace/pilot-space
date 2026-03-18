@@ -495,3 +495,79 @@ class TestEntityCreationOpsNotDropped:
         assert len(events) == 1
         assert events[0]["event"] == "tool_result"
         assert events[0]["data"]["status"] == "completed"
+
+
+# ---------------------------------------------------------------------------
+# 5: Auto-executed entity creation ops emit generic tool_result
+# ---------------------------------------------------------------------------
+
+
+class TestAutoExecutedOpsEmitToolResult:
+    """Verify auto-executed (status='executed') results emit generic tool_result."""
+
+    def test_create_issue_executed_emits_tool_result(self) -> None:
+        """create_issue with executed status emits generic tool_result."""
+        msg = _make_tool_result_msg(
+            result={
+                "status": "executed",
+                "operation": "create_issue",
+                "issue": {
+                    "id": "issue-1",
+                    "identifier": "PS-1",
+                    "name": "Bug fix",
+                    "priority": "medium",
+                },
+            },
+            tool_use_id="tu-exec-issue",
+            name="create_issue",
+        )
+        raw = transform_tool_result(msg)
+        assert raw is not None
+
+        events = _parse_sse_events(raw)
+        assert len(events) == 1
+        assert events[0]["event"] == "tool_result"
+        assert events[0]["data"]["toolCallId"] == "tu-exec-issue"
+        assert events[0]["data"]["status"] == "completed"
+        assert events[0]["data"]["output"]["operation"] == "create_issue"
+        assert events[0]["data"]["output"]["issue"]["id"] == "issue-1"
+
+    def test_create_note_executed_emits_tool_result(self) -> None:
+        """create_note with executed status emits generic tool_result."""
+        msg = _make_tool_result_msg(
+            result={
+                "status": "executed",
+                "operation": "create_note",
+                "note": {"id": "note-1", "title": "My Note"},
+            },
+            tool_use_id="tu-exec-note",
+            name="create_note",
+        )
+        raw = transform_tool_result(msg)
+        assert raw is not None
+
+        events = _parse_sse_events(raw)
+        assert len(events) == 1
+        assert events[0]["event"] == "tool_result"
+        assert events[0]["data"]["toolCallId"] == "tu-exec-note"
+        assert events[0]["data"]["status"] == "completed"
+        assert events[0]["data"]["output"]["operation"] == "create_note"
+        assert events[0]["data"]["output"]["note"]["title"] == "My Note"
+
+    def test_user_message_executed_note_emits_tool_result(self) -> None:
+        """UserMessage path: executed create_note emits generic tool_result."""
+        payload = json.dumps(
+            {
+                "status": "executed",
+                "operation": "create_note",
+                "note": {"id": "note-2", "title": "Auto Note"},
+            }
+        )
+        msg = FakeUserMessage([ToolResultBlock(tool_use_id="tu-um-exec", content=payload)])
+        raw = transform_user_message_tool_results(msg)
+        assert raw is not None
+
+        events = _parse_sse_events(raw)
+        assert len(events) == 1
+        assert events[0]["event"] == "tool_result"
+        assert events[0]["data"]["status"] == "completed"

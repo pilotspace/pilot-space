@@ -638,10 +638,19 @@ def create_note_tools_server(
             TemplateRepository,
         )
 
+        # Convert markdown content to TipTap JSON if provided
+        tiptap_content: dict[str, Any] | None = None
+        if args.get("content_markdown"):
+            from pilot_space.application.services.note.content_converter import ContentConverter
+
+            converter = ContentConverter()
+            tiptap_content = converter.markdown_to_tiptap(args["content_markdown"])
+
         svc_payload = CreateNotePayload(
             workspace_id=UUID(tool_context.workspace_id),
             owner_id=UUID(tool_context.user_id) if tool_context.user_id else UUID(int=0),
             title=title,
+            content=tiptap_content,
             project_id=UUID(args["project_id"]) if args.get("project_id") else None,
         )
 

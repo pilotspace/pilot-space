@@ -505,19 +505,35 @@ def create_issue_tools_server(
             with contextlib.suppress(ValueError):
                 target_date = date_type.fromisoformat(args["target_date"])
 
+        def _safe_uuid(value: str | None) -> UUID | None:
+            """Parse a UUID string, returning None on invalid input."""
+            if not value:
+                return None
+            try:
+                return UUID(value)
+            except (ValueError, AttributeError):
+                return None
+
+        try:
+            label_ids = [UUID(lid) for lid in args.get("label_ids", [])]
+        except (ValueError, AttributeError):
+            label_ids = []
+
+        reporter_id = UUID(tool_context.user_id) if tool_context.user_id else UUID(int=0)
+
         svc_payload = CreateIssuePayload(
             workspace_id=UUID(tool_context.workspace_id),
             project_id=project_uuid,
-            reporter_id=UUID(tool_context.user_id) if tool_context.user_id else UUID(int=0),
+            reporter_id=reporter_id,
             name=args["title"],
             description=args.get("description"),
             priority=priority_map.get(args.get("priority", "medium"), IssuePriority.MEDIUM),
-            state_id=UUID(args["state_id"]) if args.get("state_id") else None,
-            assignee_id=UUID(args["assignee_id"]) if args.get("assignee_id") else None,
-            parent_id=UUID(args["parent_id"]) if args.get("parent_id") else None,
+            state_id=_safe_uuid(args.get("state_id")),
+            assignee_id=_safe_uuid(args.get("assignee_id")),
+            parent_id=_safe_uuid(args.get("parent_id")),
             estimate_points=args.get("estimate_points"),
             target_date=target_date,
-            label_ids=[UUID(lid) for lid in args.get("label_ids", [])],
+            label_ids=label_ids,
             ai_enhanced=True,
             ai_metadata={"source": "mcp_tool", "tool": "create_issue"},
         )
