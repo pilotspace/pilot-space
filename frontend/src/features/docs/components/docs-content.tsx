@@ -1,6 +1,6 @@
 'use client';
 
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import { cn } from '@/lib/utils';
@@ -28,7 +28,7 @@ function extractText(children: React.ReactNode): string {
 
 /** Factory for heading components that inject IDs for TOC anchor linking. */
 function createHeading(Tag: 'h1' | 'h2' | 'h3' | 'h4') {
-  const HeadingComponent = ({ children, ...props }: React.HTMLAttributes<HTMLHeadingElement>) => {
+  const HeadingComponent: Components['h1'] = ({ node: _node, children, ...props }) => {
     const text = extractText(children);
     return (
       <Tag id={slugifyHeading(text)} {...props}>
@@ -40,12 +40,12 @@ function createHeading(Tag: 'h1' | 'h2' | 'h3' | 'h4') {
   return HeadingComponent;
 }
 
-const markdownComponents = {
+const markdownComponents: Components = {
   h1: createHeading('h1'),
   h2: createHeading('h2'),
   h3: createHeading('h3'),
   h4: createHeading('h4'),
-  table: ({ children, ...props }: React.HTMLAttributes<HTMLTableElement>) => (
+  table: ({ node: _node, children, ...props }) => (
     <div className="table-wrapper">
       <table {...props}>{children}</table>
     </div>

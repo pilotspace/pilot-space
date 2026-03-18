@@ -27,7 +27,7 @@ export function extractHeadings(markdown: string): TocHeading[] {
   const slugCounts = new Map<string, number>();
 
   for (const line of lines) {
-    if (line.trim().startsWith('```')) {
+    if (/^(```|~~~)/.test(line.trim())) {
       inCodeBlock = !inCodeBlock;
       continue;
     }

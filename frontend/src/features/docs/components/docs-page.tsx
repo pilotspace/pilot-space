@@ -18,6 +18,9 @@ interface DocsPageProps {
 export function DocsPage({ slug, content, headings }: DocsPageProps) {
   const doc = docsBySlug.get(slug);
 
+  // Strip leading markdown H1 to avoid duplicate heading (page header already shows doc.title)
+  const strippedContent = content.replace(/^#\s+.+\n+/, '');
+
   return (
     <div className="flex h-full">
       <DocsSidebar className="hidden lg:block" />
@@ -46,7 +49,7 @@ export function DocsPage({ slug, content, headings }: DocsPageProps) {
                 <p className="mt-1 text-sm text-muted-foreground">{doc.description}</p>
               </div>
             )}
-            <DocsContent content={content} />
+            <DocsContent content={strippedContent} />
           </main>
 
           <TableOfContents
