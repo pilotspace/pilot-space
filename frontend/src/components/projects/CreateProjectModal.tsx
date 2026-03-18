@@ -99,9 +99,11 @@ export function CreateProjectModal({
     setIdentifierManuallyEdited(true);
   };
 
+  const isFormValid = name.trim().length > 0 && identifier.trim().length >= 2;
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || identifier.trim().length < 2) return;
+    if (!isFormValid) return;
 
     createProject({
       name: name.trim(),
@@ -196,10 +198,7 @@ export function CreateProjectModal({
             >
               Cancel
             </Button>
-            <Button
-              type="submit"
-              disabled={!name.trim() || identifier.trim().length < 2 || isPending}
-            >
+            <Button type="submit" disabled={!isFormValid || isPending}>
               {isPending ? 'Creating...' : 'Create Project'}
             </Button>
           </DialogFooter>

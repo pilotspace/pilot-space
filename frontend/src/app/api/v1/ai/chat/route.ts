@@ -24,10 +24,12 @@ export async function POST(request: Request): Promise<Response> {
     }
   }
 
+  const abortController = new AbortController();
   const backendResponse = await fetch(`${BACKEND_URL}/api/v1/ai/chat`, {
     method: 'POST',
     headers,
     body,
+    signal: abortController.signal,
   });
 
   if (!backendResponse.ok || !backendResponse.body) {
@@ -59,8 +61,8 @@ export async function POST(request: Request): Promise<Response> {
       }
     },
     cancel() {
-      // Client disconnected — abort the backend request
-      backendResponse.body?.cancel();
+      // Client disconnected — abort the backend fetch to free resources
+      abortController.abort();
     },
   });
 
