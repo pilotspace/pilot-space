@@ -10,7 +10,7 @@ import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Suspense } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type {
   Issue,
   Note,
@@ -44,6 +44,7 @@ vi.mock('@/stores/RootStore', () => ({
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
+  useSearchParams: () => ({ get: () => null }),
 }));
 
 vi.mock('next/link', () => ({
@@ -195,12 +196,15 @@ async function renderNotesPage(notes: Note[], projects: Project[] = []) {
   // Ensure the promise is settled before rendering
   await resolvedParams;
 
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   let result!: ReturnType<typeof render>;
   await act(async () => {
     result = render(
-      <Suspense fallback={<div>Loading...</div>}>
-        <NotesPage params={resolvedParams} />
-      </Suspense>
+      <QueryClientProvider client={queryClient}>
+        <Suspense fallback={<div>Loading...</div>}>
+          <NotesPage params={resolvedParams} />
+        </Suspense>
+      </QueryClientProvider>
     );
   });
 
