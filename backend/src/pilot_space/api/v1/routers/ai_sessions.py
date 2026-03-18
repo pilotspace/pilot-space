@@ -253,9 +253,6 @@ async def list_sessions(
     Raises:
         HTTPException: If session manager is not available.
     """
-    if session_manager is None:
-        raise HTTPException(status_code=503, detail="Session manager not available")
-
     # Set RLS context so PostgreSQL policies allow access
     await set_rls_context(db_session, user_id, workspace_id)
 
@@ -391,11 +388,8 @@ async def resume_session(
 
     Raises:
         HTTPException: 404 if session not found or expired.
-        HTTPException: 503 if session manager not available.
-    """
-    if session_manager is None:
-        raise HTTPException(status_code=503, detail="Session manager not available")
 
+    """
     # Set RLS context so PostgreSQL policies allow access
     await set_rls_context(db_session, user_id, workspace_id)
 
@@ -508,11 +502,8 @@ async def delete_session(
 
     Raises:
         HTTPException: 404 if session not found.
-        HTTPException: 503 if session manager not available.
-    """
-    if session_manager is None:
-        raise HTTPException(status_code=503, detail="Session manager not available")
 
+    """
     # Set RLS context so PostgreSQL policies allow access
     await set_rls_context(db_session, user_id, workspace_id)
 

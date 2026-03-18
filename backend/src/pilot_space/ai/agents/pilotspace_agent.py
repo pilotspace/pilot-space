@@ -25,7 +25,6 @@ from pilot_space.ai.agents.pilotspace_agent_helpers import (
 )
 from pilot_space.ai.agents.pilotspace_intent_pipeline import (
     ConfirmationBus,
-    extract_and_persist_to_graph,
     recall_graph_context,
     run_intent_pipeline_step,
 )
@@ -68,6 +67,92 @@ if TYPE_CHECKING:
     from pilot_space.spaces.base import SpaceContext
 
 logger = get_logger(__name__)
+
+
+async def _background_graph_extraction(
+    graph_queue_client: Any,
+    workspace_id: UUID,
+    user_id: UUID | None,
+    messages: list[dict[str, str]],
+    issue_id: UUID | None = None,
+    anthropic_api_key: str | None = None,
+    base_url: str | None = None,
+    model_name: str | None = None,
+) -> None:
+    """Run graph extraction in a background task with its own DB session.
+
+    Separates the slow LLM call from the write phase so the DB session is
+    held only during the actual persistence step, not during the ~20-25s
+    LLM round-trip.
+
+    Phase 1 (no DB session): LLM extraction — identifies decisions, patterns,
+      and user preferences from the conversation.
+    Phase 2 (scoped DB session with RLS): persistence — writes extracted nodes
+      and edges to the RLS-protected graph tables.
+    """
+    if not messages:
+        return
+    if not anthropic_api_key and not base_url:
+        return
+
+    try:
+        from pilot_space.application.services.memory.graph_extraction_service import (
+            ConversationExtractionPayload,
+            GraphExtractionService,
+        )
+        from pilot_space.application.services.memory.graph_write_service import GraphWritePayload
+        from pilot_space.infrastructure.database import get_db_session
+        from pilot_space.infrastructure.database.rls import set_rls_context
+
+        # Phase 1: LLM call — outside DB session to avoid holding a connection
+        # for the full ~20-25s extraction round-trip.
+        extraction_svc = GraphExtractionService()
+        result = await extraction_svc.execute(
+            ConversationExtractionPayload(
+                messages=messages,
+                workspace_id=workspace_id,
+                user_id=user_id,
+                issue_id=issue_id,
+                api_key=anthropic_api_key or "ollama",
+                base_url=base_url,
+                model_name=model_name,
+            )
+        )
+
+        if not result.nodes:
+            logger.debug(
+                "[SDK/BackgroundGraph] No meaningful nodes extracted workspace=%s",
+                workspace_id,
+            )
+            return
+
+        # Phase 2: Write phase — open session only now that we have data to persist.
+        # set_rls_context is required: graph tables are RLS-protected and inserts
+        # will be denied without the app.current_user_id session variable.
+        async with get_db_session() as bg_session:
+            if user_id is not None:
+                await set_rls_context(bg_session, user_id, workspace_id)
+            graph_write_svc = build_graph_write_service_for_session(bg_session, graph_queue_client)
+            await graph_write_svc.execute(
+                GraphWritePayload(
+                    workspace_id=workspace_id,
+                    nodes=result.nodes,
+                    edges=result.edges,
+                    user_id=user_id,
+                    issue_id=issue_id,
+                )
+            )
+            logger.info(
+                "[SDK/BackgroundGraph] Extracted %d nodes, %d edges to knowledge graph workspace=%s",
+                len(result.nodes),
+                len(result.edges),
+                workspace_id,
+            )
+    except Exception:
+        logger.warning(
+            "[SDK/BackgroundGraph] Graph extraction task failed (non-fatal)",
+            exc_info=True,
+        )
 
 
 @dataclass
@@ -157,6 +242,10 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
         self._session_factory = session_factory
         self._message_id_holder: dict[str, str | None] = {"_current_message_id": None}
         self._active_clients: dict[str, ClaudeSDKClient] = {}
+        # Strong references to fire-and-forget background tasks.
+        # asyncio only keeps weak references to tasks; without this set a task
+        # can be garbage-collected mid-execution before it completes.
+        self._background_tasks: set[asyncio.Task[None]] = set()
 
     def _build_subagent_definitions(self) -> dict[str, AgentDefinition]:
         return build_subagent_definitions()
@@ -189,12 +278,23 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
                     master_secret=get_settings().encryption_key.get_secret_value(),
                 )
             except RuntimeError:
+                logger.debug("[SDK/ProviderConfig] No request session, using singleton key_storage")
                 ks = self._key_storage
 
             if ks:
                 config = await self._resolve_workspace_provider(ks, workspace_id)
                 if config is not None:
+                    logger.info(
+                        "[SDK/ProviderConfig] Resolved: provider=%s, model=%s, has_base_url=%s",
+                        config.provider,
+                        config.model_name or "default",
+                        bool(config.base_url),
+                    )
                     return config
+                logger.warning(
+                    "[SDK/ProviderConfig] _resolve_workspace_provider returned None for workspace=%s",
+                    workspace_id,
+                )
 
             raise AINotConfiguredError(workspace_id=workspace_id)
 
@@ -222,17 +322,30 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
 
                 db = get_current_session()
             except RuntimeError:
+                logger.debug("[SDK/ResolveProvider] No DB session available")
                 return None
 
         stmt = sa_select(Workspace.settings).where(Workspace.id == workspace_id)
         result = await db.execute(stmt)
         ws_settings = result.scalar_one_or_none() or {}
         default_provider = ws_settings.get("default_llm_provider", "anthropic")
+        logger.debug(
+            "[SDK/ResolveProvider] workspace=%s default_llm_provider=%s",
+            workspace_id,
+            default_provider,
+        )
 
         # Try the default provider first
         key_info = await ks.get_key_info(workspace_id, default_provider, "llm")
         if key_info is not None:
             api_key = await ks.get_api_key(workspace_id, default_provider, "llm")
+            logger.debug(
+                "[SDK/ResolveProvider] Found key for %s: has_base_url=%s, model_name=%s, has_key=%s",
+                default_provider,
+                bool(key_info.base_url),
+                key_info.model_name,
+                bool(api_key),
+            )
             return _ProviderConfig(
                 api_key=api_key or "no-key-required",  # Ollama doesn't need a real key
                 base_url=key_info.base_url,
@@ -242,6 +355,11 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
 
         # Fall back to any configured LLM provider
         all_keys = await ks.get_all_key_infos(workspace_id)
+        logger.debug(
+            "[SDK/ResolveProvider] Default provider %s has no key, checking %d total keys",
+            default_provider,
+            len(all_keys),
+        )
         for ki in all_keys:
             if ki.service_type == "llm":
                 api_key = await ks.get_api_key(workspace_id, ki.provider, "llm")
@@ -253,6 +371,7 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
                         provider=ki.provider,
                     )
 
+        logger.warning("[SDK/ResolveProvider] No LLM key found for workspace=%s", workspace_id)
         return None
 
     async def interrupt_session(self, session_id: str) -> bool:
@@ -456,9 +575,9 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
         if provider_config.base_url:
             provider_env["ANTHROPIC_BASE_URL"] = provider_config.base_url
         logger.info(
-            "[SDK/Space] Provider: %s, base_url=%s, model=%s",
+            "[SDK/Space] Provider: %s, has_base_url=%s, model=%s",
             provider_config.provider,
-            provider_config.base_url or "default",
+            bool(provider_config.base_url),
             provider_config.model_name or "default",
         )
 
@@ -496,6 +615,13 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
                 provider_config.model_name
                 or sdk_params.get("model", self.DEFAULT_MODEL_TIER.model_id)
             )
+        )
+        logger.info(
+            "[SDK/Space] Model resolution: resolved=%s, provider_model=%s, sdk_default=%s, has_base_url=%s",
+            _model,
+            provider_config.model_name,
+            sdk_params.get("model", self.DEFAULT_MODEL_TIER.model_id),
+            bool(provider_config.base_url),
         )
         sdk_options = ClaudeAgentOptions(
             model=_model,
@@ -562,6 +688,7 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
                 yield chunk
 
         except Exception as e:
+            logger.error("[SDK/Stream] Top-level error: %s: %s", type(e).__name__, e, exc_info=True)
             err = {"errorCode": "sdk_error", "message": str(e), "retryable": False}
             yield f"event: error\ndata: {json.dumps(err)}\n\n"
 
@@ -755,16 +882,14 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
                         await self._save_session_messages(input_data, content_blocks)
 
                         # T-050: persist conversation outcome to knowledge graph
+                        # Fire-and-forget: graph extraction makes an LLM call (~20-25s)
+                        # that must NOT block SSE connection closure.
                         if content_blocks and context.workspace_id:
                             assistant_texts = [
                                 block.get("text", "")
                                 for block in content_blocks.values()
                                 if block.get("text")
                             ]
-                            # Build fresh GraphWriteService per request — avoids session=None (T-050)
-                            _graph_write_svc = build_graph_write_service_for_session(
-                                db_session, self._graph_queue_client
-                            )
                             if assistant_texts:
                                 _ctx_issue = input_data.context.get("issue_id")
                                 _issue_id_uuid: UUID | None = None
@@ -774,19 +899,25 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
                                         if isinstance(_ctx_issue, UUID)
                                         else UUID(str(_ctx_issue))
                                     )
-                                await extract_and_persist_to_graph(
-                                    graph_write_service=_graph_write_svc,
-                                    workspace_id=context.workspace_id,
-                                    user_id=context.user_id,
-                                    messages=[
-                                        {"role": "user", "content": input_data.message},
-                                        {"role": "assistant", "content": assistant_texts[-1]},
-                                    ],
-                                    issue_id=_issue_id_uuid,
-                                    anthropic_api_key=provider_config.api_key,
-                                    base_url=provider_config.base_url,
-                                    model_name=provider_config.model_name,
+                                _bg_task = asyncio.create_task(
+                                    _background_graph_extraction(
+                                        graph_queue_client=self._graph_queue_client,
+                                        workspace_id=context.workspace_id,
+                                        user_id=context.user_id,
+                                        messages=[
+                                            {"role": "user", "content": input_data.message},
+                                            {"role": "assistant", "content": assistant_texts[-1]},
+                                        ],
+                                        issue_id=_issue_id_uuid,
+                                        anthropic_api_key=provider_config.api_key,
+                                        base_url=provider_config.base_url,
+                                        model_name=provider_config.model_name,
+                                    )
                                 )
+                                # Keep a strong reference so asyncio's weak-ref
+                                # GC cannot discard the task mid-execution.
+                                self._background_tasks.add(_bg_task)
+                                _bg_task.add_done_callback(self._background_tasks.discard)
 
                     await client.disconnect()
                 clear_context()

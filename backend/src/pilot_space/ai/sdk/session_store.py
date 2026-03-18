@@ -56,13 +56,13 @@ class SessionStore:
 
     def __init__(
         self,
-        session_manager: SessionManager,
+        session_manager: SessionManager | None,
         db_session: AsyncSession,
     ) -> None:
         """Initialize session store.
 
         Args:
-            session_manager: Redis-backed session manager.
+            session_manager: Redis-backed session manager (None in degraded mode).
             db_session: PostgreSQL database session.
         """
         self._session_manager = session_manager
@@ -79,6 +79,10 @@ class SessionStore:
         Returns:
             True if saved successfully, False otherwise.
         """
+        if self._session_manager is None:
+            logger.warning("save_to_db skipped: no session manager (degraded mode)")
+            return False
+
         try:
             # Get from Redis
             redis_session = await self._session_manager.get_session(session_id)
@@ -239,28 +243,29 @@ class SessionStore:
             )
 
             # Restore to Redis (best-effort, don't fail resume if Redis is down)
-            try:
-                from pilot_space.ai.session.session_manager import SESSION_TTL_SECONDS
+            if self._session_manager is not None:
+                try:
+                    from pilot_space.ai.session.session_manager import SESSION_TTL_SECONDS
 
-                session_key = self._session_manager._session_key(session_id)  # type: ignore[attr-defined]  # noqa: SLF001
-                await self._session_manager._redis.set(  # type: ignore[attr-defined]  # noqa: SLF001
-                    session_key,
-                    redis_session.to_dict(),
-                    ttl=SESSION_TTL_SECONDS,
-                )
+                    session_key = self._session_manager._session_key(session_id)  # type: ignore[attr-defined]  # noqa: SLF001
+                    await self._session_manager._redis.set(  # type: ignore[attr-defined]  # noqa: SLF001
+                        session_key,
+                        redis_session.to_dict(),
+                        ttl=SESSION_TTL_SECONDS,
+                    )
 
-                index_key = self._session_manager._user_session_index_key(  # type: ignore[attr-defined]  # noqa: SLF001
-                    row.user_id,
-                    row.agent_name,
-                    row.context_id,
-                )
-                await self._session_manager._redis.set(  # type: ignore[attr-defined]  # noqa: SLF001
-                    index_key,
-                    str(session_id),
-                    ttl=SESSION_TTL_SECONDS,
-                )
-            except Exception:
-                logger.warning("Failed to restore session %s to Redis (non-fatal)", session_id)
+                    index_key = self._session_manager._user_session_index_key(  # type: ignore[attr-defined]  # noqa: SLF001
+                        row.user_id,
+                        row.agent_name,
+                        row.context_id,
+                    )
+                    await self._session_manager._redis.set(  # type: ignore[attr-defined]  # noqa: SLF001
+                        index_key,
+                        str(session_id),
+                        ttl=SESSION_TTL_SECONDS,
+                    )
+                except Exception:
+                    logger.warning("Failed to restore session %s to Redis (non-fatal)", session_id)
 
             logger.info(
                 "session_store_restored",
@@ -444,7 +449,11 @@ class SessionStore:
         Returns:
             True if deleted from either storage, False if not found.
         """
-        redis_deleted = await self._session_manager.end_session(session_id)
+        redis_deleted = (
+            await self._session_manager.end_session(session_id)
+            if self._session_manager is not None
+            else False
+        )
 
         from sqlalchemy import delete
 

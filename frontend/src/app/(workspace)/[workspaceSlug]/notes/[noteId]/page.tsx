@@ -12,16 +12,13 @@ import { FileX, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { NoteCanvas } from '@/components/editor/NoteCanvas';
-import { PageBreadcrumb } from '@/components/editor/PageBreadcrumb';
 import { VersionHistoryPanel, type NoteVersion } from '@/components/editor/VersionHistoryPanel';
-import { useNote, useUpdateNote, useAutoSave, useProjectPageTree } from '@/features/notes/hooks';
+import { useNote, useUpdateNote, useAutoSave } from '@/features/notes/hooks';
 import { useDeleteNote } from '@/features/notes/hooks/useDeleteNote';
 import { useTogglePin } from '@/hooks/useTogglePin';
 import { useNoteVersions, useRestoreNoteVersion } from '@/hooks/useNoteVersions';
 import { useNoteStore } from '@/stores/RootStore';
 import { useWorkspace } from '@/components/workspace-guard';
-import { useProjects, selectAllProjects } from '@/features/projects/hooks/useProjects';
-import { getAncestors, flattenTree } from '@/lib/tree-utils';
 import { notesApi } from '@/services/api';
 import { notesKeys } from '@/features/notes/hooks';
 import type { JSONContent } from '@/types';
@@ -155,31 +152,6 @@ const NoteDetailPage = observer(function NoteDetailPage() {
     noteId,
     enabled: hasValidParams,
   });
-
-  // Fetch project tree — shares same TanStack Query cache key as sidebar (no duplicate fetch).
-  // Returns PageTreeNode[] (post-select tree structure); enabled only for project pages.
-  const { data: treeData } = useProjectPageTree(
-    workspaceId,
-    note?.projectId ?? '',
-    !!note?.projectId
-  );
-
-  // Fetch projects for breadcrumb project name display — shares cache with sidebar.
-  const { data: projectsData } = useProjects({ workspaceId, enabled: !!note?.projectId });
-  const projects = selectAllProjects(projectsData);
-
-  // Derive breadcrumb ancestors by flattening tree then walking parentId chain (root-first).
-  const ancestors = useMemo(() => {
-    if (!treeData || !note?.id) return [];
-    const flatNotes = flattenTree(treeData);
-    return getAncestors(note.id, flatNotes);
-  }, [treeData, note?.id]);
-
-  // Get project name for breadcrumb root segment.
-  const projectName = useMemo(() => {
-    if (!note?.projectId) return undefined;
-    return projects.find((p) => p.id === note.projectId)?.name;
-  }, [note?.projectId, projects]);
 
   // Memoize sanitized content to avoid creating a new object reference on every render.
   // sanitizeNoteContent returns a new object each call; memoizing prevents NoteCanvas from
@@ -390,18 +362,6 @@ const NoteDetailPage = observer(function NoteDetailPage() {
 
   return (
     <div className="flex h-full flex-col">
-      {/* Breadcrumb navigation — NAV-04. Only shown for project pages (note.projectId truthy). */}
-      {note.projectId && (
-        <div className="border-b border-border px-6 py-1.5">
-          <PageBreadcrumb
-            ancestors={ancestors}
-            currentTitle={note.title || 'Untitled'}
-            workspaceSlug={workspaceSlug}
-            projectName={projectName}
-          />
-        </div>
-      )}
-
       {/* Editor with merged header - Three-column layout per Prototype v4 */}
       <div className="relative flex-1 overflow-hidden">
         <NoteCanvas

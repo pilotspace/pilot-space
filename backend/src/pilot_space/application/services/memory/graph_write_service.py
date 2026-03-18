@@ -110,6 +110,7 @@ class GraphWritePayload:
     nodes: list[NodeInput]
     edges: list[EdgeInput] = field(default_factory=list)
     user_id: UUID | None = None
+    issue_id: UUID | None = None
 
 
 @dataclass
