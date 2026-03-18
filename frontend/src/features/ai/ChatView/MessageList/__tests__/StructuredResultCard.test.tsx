@@ -339,5 +339,35 @@ describe('ExtractionResultCard', () => {
       // Title input should be gone
       expect(screen.queryByLabelText('Edit issue title')).not.toBeInTheDocument();
     });
+
+    it('passes edited title and priority in overrides when creating', async () => {
+      const user = userEvent.setup();
+      renderExtractionCard({ onCreateIssues: mockOnCreateIssues });
+
+      // Edit the first issue's title
+      const editButtons = screen.getAllByRole('button', { name: 'Edit issue' });
+      await user.click(editButtons[0]!);
+
+      const titleInput = screen.getByLabelText('Edit issue title');
+      await user.clear(titleInput);
+      await user.type(titleInput, 'Updated title');
+
+      const prioritySelect = screen.getByLabelText('Edit issue priority');
+      await user.selectOptions(prioritySelect, 'low');
+
+      // Close edit mode
+      await user.click(screen.getByRole('button', { name: 'Done editing' }));
+
+      // Select the edited issue and create
+      const selectButtons = screen.getAllByRole('button', { name: /Select issue/i });
+      await user.click(selectButtons[0]!);
+      await user.click(screen.getByText('Create 1 Issue'));
+
+      expect(mockOnCreateIssues).toHaveBeenCalledOnce();
+      const [indices, overrides] = mockOnCreateIssues.mock.calls[0]!;
+      expect(indices).toContain(0);
+      expect(overrides).toBeInstanceOf(Map);
+      expect(overrides.get(0)).toEqual({ title: 'Updated title', priority: 'low' });
+    });
   });
 });

@@ -291,11 +291,10 @@ async def _create_extracted_issues(
     )
     project_identifier = project_row.scalar_one_or_none()
     if not project_identifier:
-        logger.warning(
-            "Project identifier not found for issue creation",
-            extra={"project_id": str(project_id)},
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Project not found for id {project_id}",
         )
-        project_identifier = "???"
 
     note_uuid: UUID | None = None
     if note_id:
@@ -348,25 +347,35 @@ async def _create_extracted_issues(
 
                 # Create NoteIssueLink when note_id is provided
                 if note_uuid and link_repo:
-                    existing = await link_repo.find_existing(
-                        note_id=note_uuid,
-                        issue_id=issue_id,
-                        link_type=NoteLinkType.EXTRACTED,
-                        workspace_id=workspace_id,
-                    )
-                    if not existing:
-                        link = NoteIssueLink(
+                    try:
+                        existing = await link_repo.find_existing(
                             note_id=note_uuid,
                             issue_id=issue_id,
                             link_type=NoteLinkType.EXTRACTED,
-                            block_id=issue_data.source_block_id,
                             workspace_id=workspace_id,
                         )
-                        await link_repo.create(link)
-        except ValueError as e:
+                        if not existing:
+                            link = NoteIssueLink(
+                                note_id=note_uuid,
+                                issue_id=issue_id,
+                                link_type=NoteLinkType.EXTRACTED,
+                                block_id=issue_data.source_block_id,
+                                workspace_id=workspace_id,
+                            )
+                            await link_repo.create(link)
+                    except Exception:
+                        logger.warning(
+                            "Failed to create NoteIssueLink, issue was still created",
+                            extra={
+                                "note_id": str(note_uuid),
+                                "issue_id": str(issue_id),
+                            },
+                        )
+        except Exception:
             logger.warning(
                 "Failed to create issue",
-                extra={"title": issue_data.title, "error": str(e)},
+                extra={"title": issue_data.title},
+                exc_info=True,
             )
             continue
 

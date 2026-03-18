@@ -6,7 +6,7 @@
 
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { CalendarCheck, Copy, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -105,12 +105,24 @@ function StandupSection({
   );
 }
 
+function isStandupItemArray(value: unknown): value is StandupItem[] {
+  return (
+    Array.isArray(value) &&
+    value.every((item) => typeof item === 'object' && item !== null && 'title' in item)
+  );
+}
+
 export function StandupResultCard({ data }: { data: Record<string, unknown> }) {
-  const standup = data as unknown as StandupResultData;
-  const yesterday = standup.yesterday ?? [];
-  const today = standup.today ?? [];
-  const blockers = standup.blockers ?? [];
-  const period = standup.period ?? '';
+  const yesterday = useMemo(
+    () => (isStandupItemArray(data.yesterday) ? data.yesterday : []),
+    [data.yesterday]
+  );
+  const today = useMemo(() => (isStandupItemArray(data.today) ? data.today : []), [data.today]);
+  const blockers = useMemo(
+    () => (isStandupItemArray(data.blockers) ? data.blockers : []),
+    [data.blockers]
+  );
+  const period = typeof data.period === 'string' ? data.period : '';
 
   const [copied, setCopied] = useState(false);
 
