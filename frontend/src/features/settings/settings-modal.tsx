@@ -169,43 +169,48 @@ export const SettingsModal = observer(function SettingsModal() {
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && closeSettings()}>
       <DialogContent
-        className="flex h-[85vh] max-h-[900px] w-full max-w-5xl flex-col gap-0 overflow-hidden p-0"
-        showCloseButton
+        className="flex h-[80vh] max-h-[800px] w-full max-w-4xl flex-col gap-0 overflow-hidden rounded-xl p-0"
+        showCloseButton={false}
       >
         <DialogTitle className="sr-only">Settings</DialogTitle>
-        <div className="flex h-full min-h-0">
-          {/* Sidebar */}
+
+        <div className="flex h-full min-h-0 flex-col md:flex-row">
+          {/* Sidebar — hidden below md */}
           <nav
-            className="hidden w-52 shrink-0 border-r border-border bg-muted/30 md:block"
+            className="hidden w-48 shrink-0 border-r border-border md:flex md:flex-col"
             aria-label="Settings navigation"
           >
-            <ScrollArea className="h-full p-3">
-              <div className="space-y-4">
+            {/* Sidebar header */}
+            <div className="flex h-12 items-center gap-2 border-b border-border px-4">
+              <span className="text-sm font-semibold text-foreground">Settings</span>
+            </div>
+
+            <ScrollArea className="flex-1 p-2">
+              <div className="space-y-3">
                 {settingsNavSections.map((section) => {
-                  // Guests only see Account section
                   if (isGuest && section.label !== 'Account') return null;
 
                   return (
                     <div key={section.label}>
-                      <p className="mb-1 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">
+                      <p className="mb-0.5 px-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
                         {section.label}
                       </p>
-                      <ul className="space-y-0.5" role="list">
+                      <ul className="space-y-px" role="list">
                         {section.items.map((item) => (
                           <li key={item.id}>
                             <button
                               onClick={() => setActiveSection(item.id)}
                               className={cn(
-                                'flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors text-left',
-                                'hover:bg-muted hover:text-foreground',
+                                'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[13px] font-medium transition-colors text-left',
+                                'hover:bg-accent hover:text-accent-foreground',
                                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                                 effectiveSection === item.id
-                                  ? 'bg-muted text-foreground'
+                                  ? 'bg-accent text-accent-foreground'
                                   : 'text-muted-foreground'
                               )}
                               aria-current={effectiveSection === item.id ? 'page' : undefined}
                             >
-                              <item.icon className="h-4 w-4 shrink-0" />
+                              <item.icon className="h-3.5 w-3.5 shrink-0" />
                               {item.label}
                             </button>
                           </li>
@@ -218,12 +223,12 @@ export const SettingsModal = observer(function SettingsModal() {
             </ScrollArea>
           </nav>
 
-          {/* Mobile section selector (shown below md) */}
-          <div className="border-b border-border p-3 md:hidden">
+          {/* Mobile header + section selector (shown below md) */}
+          <div className="flex items-center gap-2 border-b border-border px-4 py-3 md:hidden">
             <select
               value={effectiveSection}
               onChange={(e) => setActiveSection(e.target.value as SettingsSection)}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              className="flex-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm font-medium"
               aria-label="Settings section"
             >
               {settingsNavSections
@@ -235,13 +240,46 @@ export const SettingsModal = observer(function SettingsModal() {
                   </option>
                 ))}
             </select>
+            <button
+              onClick={closeSettings}
+              className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+              aria-label="Close settings"
+            >
+              <svg width="14" height="14" viewBox="0 0 15 15" fill="none">
+                <path
+                  d="M11.7816 4.03157C12.0062 3.80702 12.0062 3.44295 11.7816 3.2184C11.5571 2.99385 11.193 2.99385 10.9685 3.2184L7.50005 6.68682L4.03164 3.2184C3.80708 2.99385 3.44301 2.99385 3.21846 3.2184C2.99391 3.44295 2.99391 3.80702 3.21846 4.03157L6.68688 7.49999L3.21846 10.9684C2.99391 11.193 2.99391 11.557 3.21846 11.7816C3.44301 12.0061 3.80708 12.0061 4.03164 11.7816L7.50005 8.31316L10.9685 11.7816C11.193 12.0061 11.5571 12.0061 11.7816 11.7816C12.0062 11.557 12.0062 11.193 11.7816 10.9684L8.31322 7.49999L11.7816 4.03157Z"
+                  fill="currentColor"
+                  fillRule="evenodd"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </button>
           </div>
 
-          {/* Content area */}
-          <div className="flex-1 min-w-0 overflow-y-auto">
-            <Suspense fallback={<PanelSkeleton />}>
-              <ActiveComponent />
-            </Suspense>
+          {/* Content area with close button */}
+          <div className="relative flex-1 min-w-0 flex flex-col">
+            {/* Desktop close button — positioned inside content area */}
+            <button
+              onClick={closeSettings}
+              className="absolute right-3 top-3 z-10 hidden rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors md:flex items-center justify-center"
+              aria-label="Close settings"
+            >
+              <svg width="14" height="14" viewBox="0 0 15 15" fill="none">
+                <path
+                  d="M11.7816 4.03157C12.0062 3.80702 12.0062 3.44295 11.7816 3.2184C11.5571 2.99385 11.193 2.99385 10.9685 3.2184L7.50005 6.68682L4.03164 3.2184C3.80708 2.99385 3.44301 2.99385 3.21846 3.2184C2.99391 3.44295 2.99391 3.80702 3.21846 4.03157L6.68688 7.49999L3.21846 10.9684C2.99391 11.193 2.99391 11.557 3.21846 11.7816C3.44301 12.0061 3.80708 12.0061 4.03164 11.7816L7.50005 8.31316L10.9685 11.7816C11.193 12.0061 11.5571 12.0061 11.7816 11.7816C12.0062 11.557 12.0062 11.193 11.7816 10.9684L8.31322 7.49999L11.7816 4.03157Z"
+                  fill="currentColor"
+                  fillRule="evenodd"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </button>
+
+            {/* Scrollable content */}
+            <div className="flex-1 overflow-y-auto">
+              <Suspense fallback={<PanelSkeleton />}>
+                <ActiveComponent />
+              </Suspense>
+            </div>
           </div>
         </div>
       </DialogContent>
