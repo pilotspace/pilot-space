@@ -1,7 +1,7 @@
 'use client';
 
 import { observer } from 'mobx-react-lite';
-import { motion } from 'motion/react';
+import { motion, useReducedMotion } from 'motion/react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef } from 'react';
@@ -278,6 +278,7 @@ function getWorkspaceSlugFromPathname(pathname: string): string {
 }
 
 export const Sidebar = observer(function Sidebar() {
+  const shouldReduceMotion = useReducedMotion();
   const uiStore = useUIStore();
   const notificationStore = useNotificationStore();
   const authStore = useAuthStore();
@@ -402,7 +403,7 @@ export const Sidebar = observer(function Sidebar() {
           )}
         >
           <motion.div
-            whileHover={{ rotate: 15 }}
+            whileHover={shouldReduceMotion ? undefined : { rotate: 15 }}
             transition={{ type: 'spring', stiffness: 400, damping: 10 }}
           >
             <Compass className="h-5 w-5 text-primary" />
@@ -411,9 +412,9 @@ export const Sidebar = observer(function Sidebar() {
             <WorkspaceSwitcher currentSlug={workspaceSlug} collapsed />
           ) : (
             <motion.div
-              initial={{ opacity: 0, x: -10 }}
+              initial={shouldReduceMotion ? false : { opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -10 }}
+              exit={shouldReduceMotion ? undefined : { opacity: 0, x: -10 }}
               className="flex flex-col"
             >
               <WorkspaceSwitcher currentSlug={workspaceSlug} />
@@ -482,9 +483,9 @@ export const Sidebar = observer(function Sidebar() {
                         />
                         {!collapsed && (
                           <motion.span
-                            initial={{ opacity: 0 }}
+                            initial={shouldReduceMotion ? false : { opacity: 0 }}
                             animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
+                            exit={shouldReduceMotion ? undefined : { opacity: 0 }}
                             className="flex flex-1 items-center justify-between"
                           >
                             {item.name}
@@ -541,9 +542,9 @@ export const Sidebar = observer(function Sidebar() {
                     return (
                       <motion.div
                         key={note.id}
-                        initial={{ opacity: 0, y: 8 }}
+                        initial={shouldReduceMotion ? false : { opacity: 0, y: 8 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: index * 0.05 }}
+                        transition={shouldReduceMotion ? { duration: 0 } : { delay: index * 0.05 }}
                       >
                         <Link
                           href={note.href}

@@ -78,13 +78,13 @@ function BillingPlaceholder() {
         <h2 className="text-lg font-semibold text-foreground">Billing</h2>
         <p className="text-sm text-muted-foreground">Manage your workspace plan and usage.</p>
       </div>
-      <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border p-12 text-center">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-          <CreditCard className="h-6 w-6 text-muted-foreground" />
+      <div className="flex flex-col items-center justify-center rounded-xl bg-background-subtle p-12 text-center shadow-warm-sm">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary-muted">
+          <CreditCard className="h-6 w-6 text-primary" />
         </div>
-        <h3 className="mt-4 text-sm font-medium text-foreground">Billing coming soon</h3>
-        <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-          Pilot Space is free and open source. Paid tiers for support SLAs will be available in a
+        <h3 className="mt-4 text-sm font-semibold text-foreground">Free &amp; open source</h3>
+        <p className="mt-1.5 max-w-sm text-sm text-muted-foreground leading-relaxed">
+          Pilot Space is free and open source. Paid tiers with support SLAs will be available in a
           future release.
         </p>
       </div>
@@ -204,7 +204,7 @@ export const SettingsModal = observer(function SettingsModal() {
                             <button
                               onClick={() => setActiveSection(item.id)}
                               className={cn(
-                                'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[13px] font-medium transition-all duration-150 text-left',
+                                'flex w-full items-center gap-2 rounded-md px-2 py-2 text-[13px] font-medium transition-all duration-150 text-left',
                                 'hover:bg-accent hover:text-accent-foreground',
                                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                                 effectiveSection === item.id
@@ -239,7 +239,7 @@ export const SettingsModal = observer(function SettingsModal() {
             <select
               value={effectiveSection}
               onChange={(e) => setActiveSection(e.target.value as SettingsSection)}
-              className="flex-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm font-medium"
+              className="flex-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label="Settings section"
             >
               {settingsNavSections
@@ -256,7 +256,7 @@ export const SettingsModal = observer(function SettingsModal() {
             </select>
             <button
               onClick={closeSettings}
-              className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+              className="flex items-center justify-center rounded-md min-h-[44px] min-w-[44px] p-2 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
               aria-label="Close settings"
             >
               <X className="h-4 w-4" />
@@ -268,7 +268,7 @@ export const SettingsModal = observer(function SettingsModal() {
             {/* Desktop close button — positioned inside content area */}
             <button
               onClick={closeSettings}
-              className="absolute right-3 top-3 z-10 hidden rounded-md p-1.5 text-muted-foreground/60 hover:bg-accent hover:text-foreground transition-colors md:flex items-center justify-center"
+              className="absolute right-3 top-3 z-10 hidden rounded-md min-h-[44px] min-w-[44px] p-2.5 text-muted-foreground/60 hover:bg-accent hover:text-foreground transition-colors md:flex items-center justify-center"
               aria-label="Close settings"
             >
               <X className="h-4 w-4" />

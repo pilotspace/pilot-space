@@ -294,6 +294,25 @@
 }
 
 /* =============================================================================
+   REDUCED MOTION — C-1/C-2: Respect prefers-reduced-motion globally
+   ============================================================================= */
+@media (prefers-reduced-motion: reduce) {
+  .animate-spin {
+    animation-duration: 0s;
+  }
+
+  .animate-in,
+  .animate-out {
+    animation-duration: 0s !important;
+  }
+
+  /* Disable smooth scrolling */
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+/* =============================================================================
    BASE STYLES
    ============================================================================= */
 @layer base {

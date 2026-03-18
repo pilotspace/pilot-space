@@ -324,9 +324,16 @@ export const SkillsSettingsPage = observer(function SkillsSettingsPage() {
                   ))}
                 </div>
               ) : (
-                <div className="rounded-xl border border-dashed border-border/50 bg-muted/20 p-8 text-center">
-                  <p className="text-sm text-muted-foreground">
-                    No skills yet. Browse templates below to get started.
+                <div className="flex flex-col items-center rounded-xl bg-background-subtle p-8 text-center shadow-warm-sm">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-ai-muted">
+                    <Wand2 className="h-5 w-5 text-ai" />
+                  </div>
+                  <h3 className="mt-3 text-sm font-medium text-foreground">
+                    Personalize your AI co-pilot
+                  </h3>
+                  <p className="mt-1 max-w-xs text-xs text-muted-foreground leading-relaxed">
+                    Skills shape how AI assists you — from code reviews to writing style. Browse
+                    templates below to add your first skill.
                   </p>
                 </div>
               )}
