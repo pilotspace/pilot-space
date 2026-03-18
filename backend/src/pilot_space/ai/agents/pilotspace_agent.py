@@ -139,6 +139,7 @@ async def _background_graph_extraction(
                     nodes=result.nodes,
                     edges=result.edges,
                     user_id=user_id,
+                    issue_id=issue_id,
                 )
             )
             logger.info(
@@ -284,10 +285,10 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
                 config = await self._resolve_workspace_provider(ks, workspace_id)
                 if config is not None:
                     logger.info(
-                        "[SDK/ProviderConfig] Resolved: provider=%s, model=%s, base_url=%s",
+                        "[SDK/ProviderConfig] Resolved: provider=%s, model=%s, has_base_url=%s",
                         config.provider,
                         config.model_name or "default",
-                        config.base_url or "default",
+                        bool(config.base_url),
                     )
                     return config
                 logger.warning(
@@ -339,9 +340,9 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
         if key_info is not None:
             api_key = await ks.get_api_key(workspace_id, default_provider, "llm")
             logger.debug(
-                "[SDK/ResolveProvider] Found key for %s: base_url=%s, model_name=%s, has_key=%s",
+                "[SDK/ResolveProvider] Found key for %s: has_base_url=%s, model_name=%s, has_key=%s",
                 default_provider,
-                key_info.base_url,
+                bool(key_info.base_url),
                 key_info.model_name,
                 bool(api_key),
             )
@@ -574,9 +575,9 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
         if provider_config.base_url:
             provider_env["ANTHROPIC_BASE_URL"] = provider_config.base_url
         logger.info(
-            "[SDK/Space] Provider: %s, base_url=%s, model=%s",
+            "[SDK/Space] Provider: %s, has_base_url=%s, model=%s",
             provider_config.provider,
-            provider_config.base_url or "default",
+            bool(provider_config.base_url),
             provider_config.model_name or "default",
         )
 
