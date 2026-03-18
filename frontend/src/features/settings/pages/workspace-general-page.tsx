@@ -91,8 +91,11 @@ export const WorkspaceGeneralPage = observer(function WorkspaceGeneralPage() {
   }, [hasChanges]);
 
   const handleSlugChange = (value: string) => {
-    setSlug(value);
-    if (value && !SLUG_PATTERN.test(value)) {
+    const next = value.trim();
+    setSlug(next);
+    if (!next) {
+      setSlugError('Slug is required.');
+    } else if (!SLUG_PATTERN.test(next)) {
       setSlugError('Slug must contain only lowercase letters, numbers, and hyphens.');
     } else {
       setSlugError(null);
@@ -212,6 +215,8 @@ export const WorkspaceGeneralPage = observer(function WorkspaceGeneralPage() {
               <Input
                 id="workspace-slug"
                 type="text"
+                required
+                minLength={1}
                 value={slug}
                 onChange={(e) => handleSlugChange(e.target.value)}
                 readOnly={!isAdmin}

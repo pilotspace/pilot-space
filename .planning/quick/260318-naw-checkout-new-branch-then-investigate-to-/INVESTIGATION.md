@@ -67,7 +67,7 @@ config and a scrollable right content area. On mobile/tablet, the sidebar is rep
 | profile | `authStore` (user, updateProfile) | none (MobX-only) | displayName, bio, aiSettings, hasChanges |
 | ai-providers | `ai.settings` (AISettingsStore), `workspaceStore` | none (MobX-only) | none (all in MobX store) |
 | mcp-servers | `ai.mcpServers`, `workspaceStore` | none (MobX-only) | showAddForm |
-| integrations | `workspaceStore` | `useQuery` (settings), `useQuery` (github), `useMutation` (update) | autoTransition, branchFormat, mergeTransition |
+| integrations | `workspaceStore` | `useQuery` (settings), `useQuery` (GitHub), `useMutation` (update) | autoTransition, branchFormat, mergeTransition |
 | encryption | `workspaceStore` | `useWorkspaceEncryption`, `useUploadEncryptionKey`, `useRotateEncryptionKey` | confirmRotate, showKey |
 | usage | `workspaceStore` | `useWorkspaceQuota`, `useUpdateWorkspaceQuota` | editing state |
 | ai-governance | `workspaceStore` | TanStack Query (governance policies) | policyMatrix, editMode |
@@ -142,7 +142,7 @@ onSelect={() => router.push(`/${workspaceSlug}/settings/profile`)}
 onSelect={() => router.push(`/${workspaceSlug}/settings`)}
 ```
 
-Both use `router.push()` which causes full page navigation. The modal approach replaces these
+Both use `router.push()` which causes full-page navigation. The modal approach replaces these
 with state mutations that open the modal.
 
 ### 1.8 Settings Hooks Catalogue
@@ -191,7 +191,7 @@ The settings modal renders its own Portal and Overlay — it does NOT wrap exist
 
 ### 2.2 Internal Layout
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │  [Settings]                                          [X]    │  ← modal header (h-12)
 ├──────────────┬──────────────────────────────────────────────│
@@ -513,6 +513,7 @@ for score-1 (drop-in) pages.
 | `frontend/src/hooks/use-settings-unsaved-changes.ts` | Hook: tracks unsaved state for close-guard |
 
 **Modifications required:**
+
 | File | Change |
 |------|--------|
 | `frontend/src/app/(workspace)/[workspaceSlug]/layout.tsx` | Add `SettingsModalProvider` |
@@ -650,7 +651,7 @@ section grouping is strictly better for this content density.
 workspace view (like a "fake modal").
 
 **Rejected because:** This does not achieve the core UX goal of "stay in context". When settings
-occupies a full page route, the workspace canvas (notes, issues, projects) is completely replaced
+occupies a full-page route, the workspace canvas (notes, issues, projects) is completely replaced
 in the browser history. The user must press Back to return to their work. A true Dialog modal
 preserves the underlying page in DOM and memory, gives a clear dismiss action, and keeps the
 user's scroll position and active state when they close settings.
@@ -661,7 +662,7 @@ user's scroll position and active state when they close settings.
 
 ### Current Architecture
 
-```
+```text
 app/(workspace)/[workspaceSlug]/settings/
 ├── layout.tsx                          ← settings layout (to be removed in Phase 4)
 ├── page.tsx                            ← general settings route (thin wrapper)
@@ -714,7 +715,7 @@ features/settings/
 
 ### Target Architecture (after Phase 4)
 
-```
+```text
 app/(workspace)/[workspaceSlug]/
 ├── layout.tsx                          ← add SettingsModalProvider here
 └── settings/

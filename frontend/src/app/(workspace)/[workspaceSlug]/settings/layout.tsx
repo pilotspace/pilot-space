@@ -44,20 +44,20 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
   return <SettingsRedirectBridge>{children}</SettingsRedirectBridge>;
 }
 
-function SettingsRedirectBridge({ children }: { children: React.ReactNode }) {
+function SettingsRedirectBridge({ children: _children }: { children: React.ReactNode }) {
   const params = useParams();
   const pathname = usePathname();
   const router = useRouter();
   const workspaceSlug = params?.workspaceSlug as string;
   const { openSettings } = useSettingsModal();
 
-  // When navigating to /settings/* directly, open the modal and redirect
+  // When navigating to /settings/* directly, open the modal and redirect.
+  // Return null to avoid mounting page children (prevents unnecessary data fetches / flash).
   React.useEffect(() => {
     const section = pathnameToSection(pathname);
     openSettings(section);
     router.replace(`/${workspaceSlug}`);
   }, [pathname, workspaceSlug, router, openSettings]);
 
-  // Render children briefly during redirect (Next.js requires layout to use children)
-  return <>{children}</>;
+  return null;
 }

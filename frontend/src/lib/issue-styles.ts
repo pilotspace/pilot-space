@@ -104,7 +104,7 @@ export function getConfidenceFromScore(score: number): {
     };
   return {
     label: 'Low',
-    className: 'bg-priority-urgent/10 text-[var(--priority-urgent)]',
+    className: 'bg-priority-none/10 text-[var(--priority-none)]',
   };
 }
 
