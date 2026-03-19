@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.1.0
-milestone_name: MCP Platform Hardening
-status: planned
-stopped_at: "33-01 complete — wave 1 done, ready for 33-02 + 33-03 parallel execution"
-last_updated: "2026-03-19T21:00:59Z"
-last_activity: "2026-03-19 — 33-01 executed: migration 093, McpApprovalMode ORM, PATCH endpoint, ActionType.REMOTE_MCP_TOOL"
+milestone: v1.0
+milestone_name: milestone
+status: executing
+stopped_at: Completed 33-02-PLAN.md
+last_updated: "2026-03-19T21:10:47.908Z"
+last_activity: 2026-03-19 — 33-01 executed (migration 093 + ORM + PATCH endpoint + ActionType.REMOTE_MCP_TOOL)
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 11
-  completed_plans: 7
-  percent: 0
+  completed_plans: 8
+  percent: 9
 ---
 
 # Project State
@@ -82,6 +82,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 33]: workspace_mcp_servers.py is at ~670 lines — PATCH /approval-mode endpoint must stay lean or extract to helper; check line count before writing
 - [Phase 33]: can_use_tool callback uses lazy imports inside _handle_remote_mcp_approval to avoid circular imports (same pattern as existing lazy imports in question_adapter.py)
 - [Phase 33]: MCPServerCard is NOT an observer — approval mode toggle uses onUpdateApprovalMode prop pattern, parent mcp-servers-settings-page.tsx (observer) owns the store call
+- [Phase 33]: Server key format for approval map uses UUID from _load_remote_mcp_servers (remote_{id}), not display_name normalization
 
 ### Pending Todos
 
@@ -93,7 +94,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-19
-Stopped at: 33-01 complete — execute 33-02 and 33-03 next (can run in parallel)
+Last session: 2026-03-19T21:10:47.907Z
+Stopped at: Completed 33-02-PLAN.md
 Resume file: None
 Next action: /gsd:execute-phase 33 (plans 33-02 + 33-03 in parallel)
