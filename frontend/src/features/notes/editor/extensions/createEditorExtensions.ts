@@ -56,6 +56,8 @@ import TaskList from '@tiptap/extension-task-list';
 import { TaskItemEnhanced } from './pm-blocks/TaskItemEnhanced';
 import { ProgressBarDecoration } from './pm-blocks/ProgressBarDecoration';
 import { PMBlockExtension } from './pm-blocks/PMBlockExtension';
+import { FileCardExtension } from './file-card/FileCardExtension';
+import { FigureExtension } from './figure/FigureExtension';
 import { Table } from '@tiptap/extension-table';
 import { TableRow } from '@tiptap/extension-table-row';
 import { TableHeader } from '@tiptap/extension-table-header';
@@ -389,6 +391,8 @@ export function createEditorExtensions(options: EditorExtensionsOptions = {}): A
 
   // PMBlockExtension — generic PM block node (decision, form, raci, risk, timeline, dashboard)
   extensions.push(PMBlockExtension);
+  extensions.push(FileCardExtension); // Group 3 — ARTF-01, ARTF-02, ARTF-03
+  extensions.push(FigureExtension); // Group 3 — EDIT-04, EDIT-05
 
   // ── Group 4: Block IDs (MUST be after all block-type extensions) ────
   // BlockIdExtension assigns stable UUIDs to every block-level node.
