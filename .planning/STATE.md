@@ -1,17 +1,15 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.1.0
-milestone_name: MCP Platform Hardening
-status: planning
-stopped_at: Completed Phase 35 planning — 35-01-PLAN.md and 35-02-PLAN.md written
-last_updated: "2026-03-20T00:00:00.000Z"
-last_activity: 2026-03-20 — Phase 35 plans created (backend catalog + frontend catalog UI)
+milestone: v1.0
+milestone_name: milestone
+status: Planned
+stopped_at: Completed 35-01-PLAN.md
+last_updated: "2026-03-19T22:39:38.398Z"
 progress:
   total_phases: 6
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 15
-  completed_plans: 11
-  percent: 25
+  completed_plans: 12
 ---
 
 # Project State
@@ -94,6 +92,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 35]: Update badge (amber "Update Available") shown on MCPCatalogCard in Catalog tab only — not on mcp-server-card.tsx; avoids passing catalog entries into the server list component
 - [Phase 35]: Version comparison is simple string inequality (installed_catalog_version !== catalog_version) — no semver parsing for MVP
 - [Phase 35]: MCPCatalogCard is a plain component (not observer) — mirrors MCPServerCard pattern from Phase 33
+- [Phase 35]: Global mcp_catalog_entries table (BaseModel, no workspace_id) — catalog is identical for all workspaces, no RLS needed
+- [Phase 35]: MCP catalog seeded in migration 095 (static data — Context7 bearer/http + GitHub oauth2/http)
 
 ### Pending Todos
 
@@ -105,7 +105,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-20T00:00:00Z
-Stopped at: Completed Phase 35 planning
+Last session: 2026-03-19T22:39:38.396Z
+Stopped at: Completed 35-01-PLAN.md
 Resume file: None
 Next action: /gsd:execute-phase 35 (execute 35-01 then 35-02)

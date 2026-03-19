@@ -171,7 +171,7 @@ Plans:
 | 32. OAuth Refresh Flow | v1.1.0 | 3/3 | Complete | 2026-03-19 |
 | 33. Remote MCP Approval Framework | 3/3 | Complete | 2026-03-19 | - |
 | 34. MCP Observability | 2/2 | Complete   | 2026-03-19 | - |
-| 35. MCP Server Catalog | v1.1.0 | 0/2 | Planned | - |
+| 35. MCP Server Catalog | 1/2 | In Progress|  | - |
 
 **Total to date: 35 phases, 110+ plans across 4 milestones**
 

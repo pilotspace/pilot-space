@@ -36,10 +36,10 @@ Requirements for MCP platform hardening. Each maps to roadmap phases.
 
 ### MCP Catalog
 
-- [ ] **MCPC-01**: Browsable MCP server catalog with official/community entries (name, description, transport, auth type)
-- [ ] **MCPC-02**: One-click install from catalog registers server in workspace with pre-filled config
-- [ ] **MCPC-03**: Catalog entries are versioned with update notifications when newer versions available
-- [ ] **MCPC-04**: Seeded catalog includes context7 and GitHub MCP as official entries
+- [x] **MCPC-01**: Browsable MCP server catalog with official/community entries (name, description, transport, auth type)
+- [x] **MCPC-02**: One-click install from catalog registers server in workspace with pre-filled config
+- [x] **MCPC-03**: Catalog entries are versioned with update notifications when newer versions available
+- [x] **MCPC-04**: Seeded catalog includes context7 and GitHub MCP as official entries
 
 ## Future Requirements
 
@@ -82,10 +82,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MCPA-04 | Phase 33 | Complete |
 | MCPOB-01 | Phase 34 | Complete |
 | MCPOB-02 | Phase 34 | Complete |
-| MCPC-01 | Phase 35 | Pending |
-| MCPC-02 | Phase 35 | Pending |
-| MCPC-03 | Phase 35 | Pending |
-| MCPC-04 | Phase 35 | Pending |
+| MCPC-01 | Phase 35 | Complete |
+| MCPC-02 | Phase 35 | Complete |
+| MCPC-03 | Phase 35 | Complete |
+| MCPC-04 | Phase 35 | Complete |
 
 **Coverage:**
 - v1.1.0 requirements: 19 total
