@@ -4,6 +4,8 @@
  * Phase 14 Plan 04: Observer component that loads registered MCP servers,
  * provides registration form, and renders server cards with status/delete actions.
  *
+ * Phase 35 Plan 02: Added "Catalog" tab for browsable catalog with one-click install.
+ *
  * Pattern: mirrors ai-settings-page.tsx (useStore() + observer + useParams).
  */
 
@@ -16,10 +18,13 @@ import { AlertCircle, ServerCog } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { MCPServerCard } from '../components/mcp-server-card';
 import { MCPServerForm } from '../components/mcp-server-form';
+import { MCPCatalogTabContent } from '../components/mcp-catalog-tab-content';
 import { useStore } from '@/stores';
 import { toast } from 'sonner';
+import type { McpCatalogEntry } from '@/services/api/mcp-catalog';
 
 function LoadingSkeleton() {
   return (
@@ -43,6 +48,7 @@ export const MCPServersSettingsPage = observer(function MCPServersSettingsPage()
 
   const searchParams = useSearchParams();
   const [deletingServerId, setDeletingServerId] = React.useState<string | null>(null);
+  const [activeTab, setActiveTab] = React.useState<string>('registered');
 
   React.useEffect(() => {
     if (workspaceId) {
@@ -102,6 +108,26 @@ export const MCPServersSettingsPage = observer(function MCPServersSettingsPage()
     }
   };
 
+  const handleInstallFromCatalog = async (entry: McpCatalogEntry) => {
+    try {
+      await mcpStore.registerServer(workspaceId, {
+        display_name: entry.name,
+        url: entry.url_template,
+        auth_type: entry.auth_type,
+        transport_type: entry.transport_type,
+        oauth_auth_url: entry.oauth_auth_url ?? undefined,
+        oauth_token_url: entry.oauth_token_url ?? undefined,
+        oauth_scopes: entry.oauth_scopes ?? undefined,
+        catalog_entry_id: entry.id,
+        installed_catalog_version: entry.catalog_version,
+      });
+      toast.success('Server installed — add your auth token to activate it.');
+      setActiveTab('registered');
+    } catch {
+      toast.error('Failed to install server from catalog');
+    }
+  };
+
   if (mcpStore.isLoading) {
     return (
       <div className="max-w-3xl px-4 py-6 sm:px-6 lg:px-8">
@@ -137,56 +163,75 @@ export const MCPServersSettingsPage = observer(function MCPServersSettingsPage()
           </p>
         </div>
 
-        {/* Registration Form */}
-        <MCPServerForm
-          workspaceId={workspaceId}
-          onRegister={handleRegister}
-          onSuccess={() => mcpStore.loadServers(workspaceId)}
-        />
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList>
+            <TabsTrigger value="registered">Registered Servers</TabsTrigger>
+            <TabsTrigger value="catalog">Catalog</TabsTrigger>
+          </TabsList>
 
-        {/* Server List */}
-        {mcpStore.servers.length > 0 && (
-          <>
-            <Separator />
-            <div className="space-y-3">
-              <h2 className="text-lg font-semibold">Registered Servers</h2>
-              <div className="space-y-3">
-                {mcpStore.servers.map((server) => (
-                  <MCPServerCard
-                    key={server.id}
-                    server={server}
-                    onDelete={handleDelete}
-                    onRefreshStatus={handleRefreshStatus}
-                    onAuthorize={handleAuthorize}
-                    onUpdateApprovalMode={handleUpdateApprovalMode}
-                    isDeleting={deletingServerId === server.id}
-                  />
-                ))}
+          {/* Registered Servers tab */}
+          <TabsContent value="registered" className="space-y-6 mt-6">
+            {/* Registration Form */}
+            <MCPServerForm
+              workspaceId={workspaceId}
+              onRegister={handleRegister}
+              onSuccess={() => mcpStore.loadServers(workspaceId)}
+            />
+
+            {/* Server List */}
+            {mcpStore.servers.length > 0 && (
+              <>
+                <Separator />
+                <div className="space-y-3">
+                  <h2 className="text-lg font-semibold">Registered Servers</h2>
+                  <div className="space-y-3">
+                    {mcpStore.servers.map((server) => (
+                      <MCPServerCard
+                        key={server.id}
+                        server={server}
+                        onDelete={handleDelete}
+                        onRefreshStatus={handleRefreshStatus}
+                        onAuthorize={handleAuthorize}
+                        onUpdateApprovalMode={handleUpdateApprovalMode}
+                        isDeleting={deletingServerId === server.id}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {mcpStore.servers.length === 0 && !mcpStore.isLoading && (
+              <div className="rounded-lg border border-dashed border-border p-8 text-center">
+                <ServerCog className="mx-auto h-8 w-8 text-muted-foreground/50" />
+                <p className="mt-2 text-sm text-muted-foreground">No MCP servers registered yet.</p>
+                <p className="text-xs text-muted-foreground">
+                  Use the form above to add your first remote MCP server, or browse the Catalog tab.
+                </p>
               </div>
-            </div>
-          </>
-        )}
+            )}
 
-        {mcpStore.servers.length === 0 && !mcpStore.isLoading && (
-          <div className="rounded-lg border border-dashed border-border p-8 text-center">
-            <ServerCog className="mx-auto h-8 w-8 text-muted-foreground/50" />
-            <p className="mt-2 text-sm text-muted-foreground">No MCP servers registered yet.</p>
-            <p className="text-xs text-muted-foreground">
-              Use the form above to add your first remote MCP server.
-            </p>
-          </div>
-        )}
+            {/* Info Alert */}
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>About Remote MCP Servers</AlertTitle>
+              <AlertDescription>
+                MCP (Model Context Protocol) servers expose custom tools to the AI agent. Bearer
+                tokens are encrypted server-side. OAuth2 servers require authorization before tools
+                become available.
+              </AlertDescription>
+            </Alert>
+          </TabsContent>
 
-        {/* Info Alert */}
-        <Alert>
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>About Remote MCP Servers</AlertTitle>
-          <AlertDescription>
-            MCP (Model Context Protocol) servers expose custom tools to the AI agent. Bearer tokens
-            are encrypted server-side. OAuth2 servers require authorization before tools become
-            available.
-          </AlertDescription>
-        </Alert>
+          {/* Catalog tab */}
+          <TabsContent value="catalog" className="mt-6">
+            <MCPCatalogTabContent
+              workspaceId={workspaceId}
+              installedServers={mcpStore.servers}
+              onInstall={handleInstallFromCatalog}
+            />
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );
