@@ -1007,6 +1007,17 @@
   color: var(--foreground-muted);
 }
 
+/* Pull quote — editorial variant. Activated by data-pull-quote attribute on blockquote. */
+/* EDIT-01 (v1.1): larger font, accent border (--accent not --ai), full-color text */
+.document-canvas .prose blockquote[data-pull-quote] {
+  font-size: 1.2em;
+  font-style: italic;
+  border-left: 4px solid var(--accent);
+  padding-left: 1.25rem;
+  margin: 1.5rem 0;
+  color: var(--foreground);
+}
+
 /* =============================================================================
    AI THREAD INLINE INDICATOR
    ============================================================================= */

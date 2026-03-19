@@ -107,6 +107,21 @@ export function getDefaultCommands(
       execute: (editor) => editor.chain().focus().toggleBlockquote().run(),
     },
     {
+      name: 'pullquote',
+      label: 'Pull Quote',
+      description: 'Editorial-style emphasized quote with visual accent',
+      icon: 'Quote',
+      group: 'blocks',
+      keywords: ['pullquote', 'pull', 'quote', 'editorial', 'emphasis', 'callout', 'highlight'],
+      execute: (editor) =>
+        editor
+          .chain()
+          .focus()
+          .toggleBlockquote()
+          .updateAttributes('blockquote', { pullQuote: true })
+          .run(),
+    },
+    {
       name: 'code',
       label: 'Code Block',
       description: 'Capture a code snippet',

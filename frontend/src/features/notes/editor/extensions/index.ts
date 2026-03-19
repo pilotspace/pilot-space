@@ -5,6 +5,7 @@
 
 // Core extensions
 export { BlockIdExtension, type BlockIdOptions } from './BlockIdExtension';
+export { PullQuoteExtension } from './PullQuoteExtension';
 export {
   GhostTextExtension,
   ghostTextStyles,

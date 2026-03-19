@@ -50,6 +50,7 @@
  */
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
+import { PullQuoteExtension } from './PullQuoteExtension';
 import CharacterCount from '@tiptap/extension-character-count';
 import TaskList from '@tiptap/extension-task-list';
 import { TaskItemEnhanced } from './pm-blocks/TaskItemEnhanced';
@@ -270,6 +271,7 @@ export function createEditorExtensions(options: EditorExtensionsOptions = {}): A
   extensions.push(
     StarterKit.configure({
       codeBlock: false,
+      blockquote: false, // Disabled — replaced by PullQuoteExtension below (EDIT-01)
       heading: {
         levels: [1, 2, 3],
       },
@@ -283,6 +285,11 @@ export function createEditorExtensions(options: EditorExtensionsOptions = {}): A
       },
     })
   );
+
+  // PullQuoteExtension replaces StarterKit's blockquote (blockquote: false above).
+  // Stays in Group 1 (same schema role as blockquote). Name 'blockquote' kept so
+  // BlockIdExtension covers it automatically. See PRE-002 comment for Group 3 rules.
+  extensions.push(PullQuoteExtension);
 
   // Markdown extension for bidirectional markdown support
   extensions.push(
