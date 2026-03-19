@@ -45,6 +45,8 @@ from pilot_space.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
 
+MCP_SERVER_CAP = 10
+
 router = APIRouter()
 mcp_oauth_callback_router = APIRouter()
 
@@ -137,6 +139,18 @@ async def register_mcp_server(
     from pilot_space.infrastructure.database.repositories.workspace_mcp_server_repository import (
         WorkspaceMcpServerRepository,
     )
+
+    repo = WorkspaceMcpServerRepository(session=session)
+    count = await repo.count_active_by_workspace(workspace_id)
+    if count >= MCP_SERVER_CAP:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                f"Workspace has reached the maximum of {MCP_SERVER_CAP} MCP servers. "
+                "Delete an existing server before registering a new one."
+            ),
+        )
+
     from pilot_space.infrastructure.encryption import encrypt_api_key
 
     token_encrypted: str | None = None
@@ -156,7 +170,6 @@ async def register_mcp_server(
         oauth_scopes=body.oauth_scopes,
     )
 
-    repo = WorkspaceMcpServerRepository(session=session)
     server = await repo.create(server)
 
     logger.info(

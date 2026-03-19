@@ -14,7 +14,7 @@ import contextlib
 import json
 import re
 from collections.abc import AsyncIterator
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from claude_agent_sdk import McpServerConfig
 from claude_agent_sdk._internal import message_parser as _sdk_parser
@@ -633,32 +633,59 @@ async def _load_remote_mcp_servers(  # pyright: ignore[reportUnusedFunction]
     """Load registered remote MCP servers for workspace (MCP-04).
 
     Called from PilotSpaceAgent.stream() before build_mcp_servers() to fetch
-    workspace-registered remote servers and construct McpSSEServerConfig entries.
+    workspace-registered remote servers and construct McpSSEServerConfig or
+    McpHttpServerConfig entries depending on transport_type (MCPI-02).
+
     Uses lazy imports to avoid circular dependencies.
 
+    Guards applied per server (all failures are silent skips, not exceptions):
+    - MCPI-03: Skips servers with last_status='failed' (health-check gating).
+    - MCPI-05: Re-validates URL at connect time via validate_mcp_url to prevent
+      DNS rebinding attacks; ValueError → server skipped with WARNING log.
+    - Auth token decryption failure → server skipped with WARNING log.
+
     Returns empty dict if workspace_id or db_session is None.
-    Silently skips servers with corrupt/undecodable tokens (logs WARNING).
 
     Args:
         workspace_id: Workspace UUID, or None for non-workspace (CLI/anonymous) requests.
         db_session: Active async DB session, or None if not available.
 
     Returns:
-        Dict keyed by "remote_{server.id}" with McpSSEServerConfig values.
+        Dict keyed by "remote_{server.id}" with McpSSEServerConfig or
+        McpHttpServerConfig values.
     """
     if workspace_id is None or db_session is None:
         return {}
 
+    from pilot_space.infrastructure.database.models.workspace_mcp_server import McpTransportType
     from pilot_space.infrastructure.database.repositories.workspace_mcp_server_repository import (
         WorkspaceMcpServerRepository,
     )
     from pilot_space.infrastructure.encryption import decrypt_api_key
+    from pilot_space.infrastructure.ssrf import validate_mcp_url
 
     repo = WorkspaceMcpServerRepository(session=db_session)
     registered = await repo.get_active_by_workspace(workspace_id)
     remote: dict[str, McpServerConfig] = {}
 
     for server in registered:
+        # MCPI-03: skip servers that have previously failed health checks
+        if server.last_status == "failed":
+            logger.info("mcp_server_skipped_failed", server_id=str(server.id))
+            continue
+
+        # MCPI-05: re-validate URL at connect time (DNS rebinding guard)
+        try:
+            validate_mcp_url(server.url)
+        except ValueError:
+            logger.warning(
+                "mcp_server_ssrf_blocked_at_connect",
+                server_id=str(server.id),
+                workspace_id=str(workspace_id),
+            )
+            continue
+
+        # Decrypt auth token (existing logic — unchanged)
         token: str | None = None
         if server.auth_token_encrypted:
             try:
@@ -671,14 +698,23 @@ async def _load_remote_mcp_servers(  # pyright: ignore[reportUnusedFunction]
                 )
                 continue
 
+        headers: dict[str, str] = {}
         if token:
-            config: McpServerConfig = {  # type: ignore[typeddict-item]
-                "type": "sse",
-                "url": server.url,
-                "headers": {"Authorization": f"Bearer {token}"},
-            }
+            headers["Authorization"] = f"Bearer {token}"
+
+        # MCPI-02: select transport type and build typed config
+        if server.transport_type == McpTransportType.HTTP:
+            config: McpServerConfig = (
+                cast("McpServerConfig", {"type": "http", "url": server.url, "headers": headers})
+                if headers
+                else cast("McpServerConfig", {"type": "http", "url": server.url})
+            )
         else:
-            config = {"type": "sse", "url": server.url}  # type: ignore[typeddict-item]
+            config = (
+                cast("McpServerConfig", {"type": "sse", "url": server.url, "headers": headers})
+                if headers
+                else cast("McpServerConfig", {"type": "sse", "url": server.url})
+            )
 
         remote[f"remote_{server.id}"] = config
 

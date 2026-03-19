@@ -660,3 +660,204 @@ class TestGetWorkspaceEmbeddingKey:
     def test_alias_points_to_same_function(self) -> None:
         """get_workspace_openai_key is an alias for get_workspace_embedding_key."""
         assert get_workspace_openai_key is get_workspace_embedding_key
+
+
+# ---------------------------------------------------------------------------
+# _load_remote_mcp_servers hardening (MCPI-02/03/05)
+# ---------------------------------------------------------------------------
+
+
+def _make_fake_server(
+    *,
+    server_id: str = "aaaaaaaa-0000-0000-0000-000000000001",
+    url: str = "https://mcp.example.com/sse",
+    last_status: str | None = "connected",
+    transport_type: str = "sse",
+    auth_token_encrypted: str | None = None,
+) -> Any:
+    """Build a minimal fake WorkspaceMcpServer-like object for tests."""
+    from unittest.mock import MagicMock
+
+    from pilot_space.infrastructure.database.models.workspace_mcp_server import McpTransportType
+
+    server = MagicMock()
+    server.id = server_id
+    server.url = url
+    server.last_status = last_status
+    server.transport_type = McpTransportType(transport_type)
+    server.auth_token_encrypted = auth_token_encrypted
+    return server
+
+
+class TestLoadRemoteMcpServersHardening:
+    """Tests for MCPI-02/03/05 guards in _load_remote_mcp_servers."""
+
+    @pytest.mark.asyncio
+    async def test_failed_server_skipped(self) -> None:
+        """MCPI-03: server with last_status='failed' is excluded from result."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+        from uuid import UUID
+
+        from pilot_space.ai.agents.pilotspace_stream_utils import _load_remote_mcp_servers
+
+        workspace_id = UUID("11111111-0000-0000-0000-000000000001")
+        failed_server = _make_fake_server(last_status="failed")
+
+        fake_repo = MagicMock()
+        fake_repo.get_active_by_workspace = AsyncMock(return_value=[failed_server])
+
+        with (
+            patch(
+                "pilot_space.infrastructure.database.repositories.workspace_mcp_server_repository.WorkspaceMcpServerRepository",
+                return_value=fake_repo,
+            ),
+            patch(
+                "pilot_space.infrastructure.encryption.decrypt_api_key",
+            ),
+        ):
+            result = await _load_remote_mcp_servers(workspace_id, MagicMock())
+
+        assert result == {}
+
+    @pytest.mark.asyncio
+    async def test_ssrf_blocked_at_connect(self) -> None:
+        """MCPI-05: server URL that fails re-validation is skipped with WARNING."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+        from uuid import UUID
+
+        from pilot_space.ai.agents.pilotspace_stream_utils import _load_remote_mcp_servers
+
+        workspace_id = UUID("11111111-0000-0000-0000-000000000002")
+        server = _make_fake_server(url="https://192.168.1.10/sse", last_status="connected")
+
+        fake_repo = MagicMock()
+        fake_repo.get_active_by_workspace = AsyncMock(return_value=[server])
+
+        # patch validate_mcp_url at the source module it will be imported from
+        with (
+            patch(
+                "pilot_space.infrastructure.database.repositories.workspace_mcp_server_repository.WorkspaceMcpServerRepository",
+                return_value=fake_repo,
+            ),
+            patch(
+                "pilot_space.infrastructure.ssrf.validate_mcp_url",
+                side_effect=ValueError("private IP"),
+            ),
+        ):
+            result = await _load_remote_mcp_servers(workspace_id, MagicMock())
+
+        assert result == {}
+
+    @pytest.mark.asyncio
+    async def test_http_transport_config(self) -> None:
+        """MCPI-02: server with transport_type='http' produces type='http' config."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+        from uuid import UUID
+
+        from pilot_space.ai.agents.pilotspace_stream_utils import _load_remote_mcp_servers
+
+        workspace_id = UUID("11111111-0000-0000-0000-000000000003")
+        server = _make_fake_server(
+            server_id="bbbbbbbb-0000-0000-0000-000000000001",
+            url="https://mcp.example.com/http",
+            last_status="connected",
+            transport_type="http",
+        )
+
+        fake_repo = MagicMock()
+        fake_repo.get_active_by_workspace = AsyncMock(return_value=[server])
+
+        with (
+            patch(
+                "pilot_space.infrastructure.database.repositories.workspace_mcp_server_repository.WorkspaceMcpServerRepository",
+                return_value=fake_repo,
+            ),
+            patch(
+                "pilot_space.infrastructure.ssrf.validate_mcp_url",
+                side_effect=lambda url: url,
+            ),
+        ):
+            result = await _load_remote_mcp_servers(workspace_id, MagicMock())
+
+        assert len(result) == 1
+        key = "remote_bbbbbbbb-0000-0000-0000-000000000001"
+        assert key in result
+        assert result[key]["type"] == "http"
+        assert result[key]["url"] == "https://mcp.example.com/http"
+
+    @pytest.mark.asyncio
+    async def test_sse_transport_config(self) -> None:
+        """MCPI-02: server with transport_type='sse' (default) produces type='sse' config."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+        from uuid import UUID
+
+        from pilot_space.ai.agents.pilotspace_stream_utils import _load_remote_mcp_servers
+
+        workspace_id = UUID("11111111-0000-0000-0000-000000000004")
+        server = _make_fake_server(
+            server_id="cccccccc-0000-0000-0000-000000000001",
+            url="https://mcp.example.com/sse",
+            last_status="connected",
+            transport_type="sse",
+        )
+
+        fake_repo = MagicMock()
+        fake_repo.get_active_by_workspace = AsyncMock(return_value=[server])
+
+        with (
+            patch(
+                "pilot_space.infrastructure.database.repositories.workspace_mcp_server_repository.WorkspaceMcpServerRepository",
+                return_value=fake_repo,
+            ),
+            patch(
+                "pilot_space.infrastructure.ssrf.validate_mcp_url",
+                side_effect=lambda url: url,
+            ),
+        ):
+            result = await _load_remote_mcp_servers(workspace_id, MagicMock())
+
+        assert len(result) == 1
+        key = "remote_cccccccc-0000-0000-0000-000000000001"
+        assert key in result
+        assert result[key]["type"] == "sse"
+        assert result[key]["url"] == "https://mcp.example.com/sse"
+
+    @pytest.mark.asyncio
+    async def test_failed_server_does_not_block_other_servers(self) -> None:
+        """MCPI-03: one failed server does not prevent other healthy servers from loading."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+        from uuid import UUID
+
+        from pilot_space.ai.agents.pilotspace_stream_utils import _load_remote_mcp_servers
+
+        workspace_id = UUID("11111111-0000-0000-0000-000000000005")
+        failed_server = _make_fake_server(
+            server_id="dddddddd-0000-0000-0000-000000000001",
+            last_status="failed",
+        )
+        healthy_server = _make_fake_server(
+            server_id="eeeeeeee-0000-0000-0000-000000000001",
+            url="https://healthy.example.com/sse",
+            last_status="connected",
+            transport_type="sse",
+        )
+
+        fake_repo = MagicMock()
+        fake_repo.get_active_by_workspace = AsyncMock(return_value=[failed_server, healthy_server])
+
+        with (
+            patch(
+                "pilot_space.infrastructure.database.repositories.workspace_mcp_server_repository.WorkspaceMcpServerRepository",
+                return_value=fake_repo,
+            ),
+            patch(
+                "pilot_space.infrastructure.ssrf.validate_mcp_url",
+                side_effect=lambda url: url,
+            ),
+        ):
+            result = await _load_remote_mcp_servers(workspace_id, MagicMock())
+
+        # Only healthy server should appear
+        assert len(result) == 1
+        assert "remote_eeeeeeee-0000-0000-0000-000000000001" in result
+        assert "remote_dddddddd-0000-0000-0000-000000000001" not in result

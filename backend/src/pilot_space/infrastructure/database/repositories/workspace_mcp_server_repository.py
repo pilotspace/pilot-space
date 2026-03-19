@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import and_, select
+from sqlalchemy import and_, func, select
 
 from pilot_space.infrastructure.database.models.workspace_mcp_server import (
     WorkspaceMcpServer,
@@ -87,6 +87,26 @@ class WorkspaceMcpServerRepository(BaseRepository[WorkspaceMcpServer]):
         )
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
+
+    async def count_active_by_workspace(self, workspace_id: UUID) -> int:
+        """Count non-deleted MCP servers for a workspace.
+
+        Used by the registration endpoint to enforce the per-workspace server cap.
+
+        Args:
+            workspace_id: The workspace UUID.
+
+        Returns:
+            Count of non-deleted MCP servers.
+        """
+        query = select(func.count()).where(
+            and_(
+                WorkspaceMcpServer.workspace_id == workspace_id,
+                WorkspaceMcpServer.is_deleted == False,  # noqa: E712
+            )
+        )
+        result = await self.session.execute(query)
+        return result.scalar_one()
 
     async def create(self, entity: WorkspaceMcpServer) -> WorkspaceMcpServer:  # type: ignore[override]
         """Persist a new MCP server row.

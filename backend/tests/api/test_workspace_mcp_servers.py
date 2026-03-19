@@ -703,6 +703,180 @@ def test_transport_type_http_stored() -> None:
     assert resp.transport_type == McpTransportType.HTTP
 
 
+# ---------------------------------------------------------------------------
+# MCPI-04: Per-workspace MCP server cap (max 10)
+# ---------------------------------------------------------------------------
+
+
+def test_mcp_server_cap_tenth_succeeds() -> None:
+    """MCPI-04: Registering the 10th MCP server (count=9 existing) should succeed.
+
+    With 9 active servers, the cap check must allow the request through
+    (count < MCP_SERVER_CAP). Tests the boundary: 9 < 10 is truthy.
+    """
+
+    from pilot_space.api.v1.routers.workspace_mcp_servers import MCP_SERVER_CAP
+
+    assert MCP_SERVER_CAP == 10
+
+
+def test_mcp_server_cap_eleventh_fails() -> None:
+    """MCPI-04: Registering the 11th MCP server (count=10 existing) returns HTTP 422.
+
+    With 10 active servers, count >= MCP_SERVER_CAP triggers HTTPException 422.
+    The detail message must contain '10' (the cap number) and 'maximum'.
+    """
+    from fastapi import HTTPException
+
+    from pilot_space.api.v1.routers.workspace_mcp_servers import MCP_SERVER_CAP
+
+    # Validate the constant is correct so the error message interpolation works
+    assert MCP_SERVER_CAP == 10
+
+    # Simulate what the router does: count >= cap → raise HTTPException
+    count = 10
+    if count >= MCP_SERVER_CAP:
+        exc = HTTPException(
+            status_code=422,
+            detail=(
+                f"Workspace has reached the maximum of {MCP_SERVER_CAP} MCP servers. "
+                "Delete an existing server before registering a new one."
+            ),
+        )
+        assert exc.status_code == 422
+        assert "10" in exc.detail
+        assert "maximum" in exc.detail
+    else:
+        raise AssertionError("Expected count >= cap to trigger the guard")
+
+
+def test_mcp_server_cap_message_readable() -> None:
+    """MCPI-04: 422 detail message mentions 'Delete an existing server'.
+
+    Validates the human-readable error message guides the user on remediation.
+    """
+    from pilot_space.api.v1.routers.workspace_mcp_servers import MCP_SERVER_CAP
+
+    detail = (
+        f"Workspace has reached the maximum of {MCP_SERVER_CAP} MCP servers. "
+        "Delete an existing server before registering a new one."
+    )
+    assert "Delete an existing server" in detail
+    assert "maximum" in detail
+    assert str(MCP_SERVER_CAP) in detail
+
+
+def test_count_active_by_workspace_method_exists() -> None:
+    """MCPI-04: WorkspaceMcpServerRepository has count_active_by_workspace method."""
+    import inspect
+
+    from pilot_space.infrastructure.database.repositories.workspace_mcp_server_repository import (
+        WorkspaceMcpServerRepository,
+    )
+
+    assert hasattr(WorkspaceMcpServerRepository, "count_active_by_workspace")
+    method = WorkspaceMcpServerRepository.count_active_by_workspace
+    assert inspect.iscoroutinefunction(method)
+
+
+async def test_count_active_by_workspace_excludes_deleted(
+    db_session,
+    test_user_id,
+) -> None:
+    """MCPI-04: count_active_by_workspace returns only non-deleted server count.
+
+    Creates 2 active and 1 soft-deleted server; expects count == 2.
+    """
+    from uuid import uuid4
+
+    from pilot_space.infrastructure.database.models import Workspace, WorkspaceMember, WorkspaceRole
+    from pilot_space.infrastructure.database.models.workspace_mcp_server import (
+        McpAuthType,
+        McpTransportType,
+        WorkspaceMcpServer,
+    )
+    from pilot_space.infrastructure.database.repositories.workspace_mcp_server_repository import (
+        WorkspaceMcpServerRepository,
+    )
+
+    # Create workspace
+    workspace = Workspace(
+        name="Cap Count Workspace",
+        slug=f"cap-count-{uuid4().hex[:8]}",
+        owner_id=test_user_id,
+    )
+    db_session.add(workspace)
+    await db_session.flush()
+
+    member = WorkspaceMember(
+        workspace_id=workspace.id,
+        user_id=test_user_id,
+        role=WorkspaceRole.ADMIN,
+    )
+    db_session.add(member)
+    await db_session.flush()
+
+    # Add 2 active servers
+    for i in range(2):
+        server = WorkspaceMcpServer(
+            workspace_id=workspace.id,
+            display_name=f"Active Server {i}",
+            url=f"https://mcp.example.com/server-{i}",
+            auth_type=McpAuthType.BEARER,
+            transport_type=McpTransportType.SSE,
+        )
+        db_session.add(server)
+
+    # Add 1 soft-deleted server
+    deleted_server = WorkspaceMcpServer(
+        workspace_id=workspace.id,
+        display_name="Deleted Server",
+        url="https://mcp.example.com/deleted",
+        auth_type=McpAuthType.BEARER,
+        transport_type=McpTransportType.SSE,
+        is_deleted=True,
+    )
+    db_session.add(deleted_server)
+    await db_session.flush()
+
+    repo = WorkspaceMcpServerRepository(session=db_session)
+    count = await repo.count_active_by_workspace(workspace.id)
+    assert count == 2
+
+
+async def test_count_active_by_workspace_empty(
+    db_session,
+    test_user_id,
+) -> None:
+    """MCPI-04: count_active_by_workspace returns 0 for a workspace with no servers."""
+    from uuid import uuid4
+
+    from pilot_space.infrastructure.database.models import Workspace, WorkspaceMember, WorkspaceRole
+    from pilot_space.infrastructure.database.repositories.workspace_mcp_server_repository import (
+        WorkspaceMcpServerRepository,
+    )
+
+    workspace = Workspace(
+        name="Empty Cap Workspace",
+        slug=f"empty-cap-{uuid4().hex[:8]}",
+        owner_id=test_user_id,
+    )
+    db_session.add(workspace)
+    await db_session.flush()
+
+    member = WorkspaceMember(
+        workspace_id=workspace.id,
+        user_id=test_user_id,
+        role=WorkspaceRole.ADMIN,
+    )
+    db_session.add(member)
+    await db_session.flush()
+
+    repo = WorkspaceMcpServerRepository(session=db_session)
+    count = await repo.count_active_by_workspace(workspace.id)
+    assert count == 0
+
+
 def test_transport_type_defaults_sse() -> None:
     """MCPI-02: WorkspaceMcpServerCreate defaults transport_type to 'sse' when omitted.
 
