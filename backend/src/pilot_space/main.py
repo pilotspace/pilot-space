@@ -137,6 +137,27 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     get_jwt_provider(settings)  # raises ValueError for invalid/incomplete config
     logger.info("jwt_provider_validated", auth_provider=settings.auth_provider or "supabase")
 
+    # Fail-fast: require ENCRYPTION_KEY in production (MCPI-06)
+    if settings.is_production:
+        from pilot_space.infrastructure.encryption import EncryptionError, get_encryption_service
+
+        enc_key_val = settings.encryption_key.get_secret_value()
+        if not enc_key_val:
+            raise RuntimeError(
+                "ENCRYPTION_KEY must be set in production. "
+                'Generate one with: python -c "from cryptography.fernet import Fernet; '
+                'print(Fernet.generate_key().decode())"'
+            )
+        try:
+            get_encryption_service()
+        except EncryptionError as exc:
+            raise RuntimeError(
+                f"ENCRYPTION_KEY is invalid: {exc}. "
+                'Generate a valid key with: python -c "from cryptography.fernet import Fernet; '
+                'print(Fernet.generate_key().decode())"'
+            ) from exc
+    logger.info("encryption_key_validated")
+
     # Connect to Redis for session management (must happen BEFORE session_manager
     # singleton resolves, since create_session_manager checks redis_client.is_connected)
     redis_client = container.redis_client()
