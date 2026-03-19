@@ -94,7 +94,7 @@ const typeConfig: Record<IssueType, { icon: React.ElementType; className: string
     bug: { icon: Bug, className: 'text-red-500', label: 'Bug' },
     feature: { icon: Lightbulb, className: 'text-purple-500', label: 'Feature' },
     improvement: { icon: Wrench, className: 'text-blue-500', label: 'Improvement' },
-    task: { icon: CheckSquare, className: 'text-gray-500', label: 'Task' },
+    task: { icon: CheckSquare, className: 'text-muted-foreground', label: 'Task' },
   };
 
 /**
