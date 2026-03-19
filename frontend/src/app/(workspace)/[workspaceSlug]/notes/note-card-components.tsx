@@ -32,12 +32,15 @@ export function NoteGridCard({ note, workspaceSlug, projectMap, onPrefetch }: No
   const wordCount = note.wordCount ?? 0;
 
   return (
-    <Link href={`/${workspaceSlug}/notes/${note.id}`} onMouseEnter={onPrefetch}>
+    <Link
+      href={`/${workspaceSlug}/notes/${note.id}`}
+      onMouseEnter={onPrefetch}
+      className="block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+    >
       <article
         className={cn(
           'group relative flex flex-col rounded-xl border border-border bg-card p-5 transition-all duration-200',
           'hover:shadow-warm-md hover:border-primary/20',
-          'focus-within:ring-2 focus-within:ring-ring',
           note.isPinned &&
             'ring-1 ring-amber-200/60 dark:ring-amber-700/30 bg-amber-50/20 dark:bg-amber-950/10'
         )}
@@ -123,12 +126,15 @@ export function NoteListRow({ note, workspaceSlug, projectMap, onPrefetch }: Not
   const project = note.projectId ? projectMap.get(note.projectId) : undefined;
 
   return (
-    <Link href={`/${workspaceSlug}/notes/${note.id}`} onMouseEnter={onPrefetch}>
+    <Link
+      href={`/${workspaceSlug}/notes/${note.id}`}
+      onMouseEnter={onPrefetch}
+      className="block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+    >
       <div
         className={cn(
           'group flex items-center gap-4 rounded-lg border border-border bg-card px-4 py-3',
           'transition-all hover:border-primary/20 hover:bg-accent/50 hover:shadow-warm-sm',
-          'focus-within:ring-2 focus-within:ring-ring',
           note.isPinned &&
             'ring-1 ring-amber-200/60 dark:ring-amber-700/30 bg-amber-50/20 dark:bg-amber-950/10'
         )}
