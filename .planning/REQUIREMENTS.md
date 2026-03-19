@@ -26,12 +26,12 @@ Requirements for milestone v1.1. Each maps to roadmap phases.
 
 ### Artifacts Management
 
-- [ ] **MGMT-01**: User can view all project artifacts on a dedicated per-project page
+- [x] **MGMT-01**: User can view all project artifacts on a dedicated per-project page
 - [ ] **MGMT-02**: User can preview artifacts inline on the management page
 - [ ] **MGMT-03**: User can download artifacts from the management page
-- [ ] **MGMT-04**: User can delete artifacts with instant optimistic UI feedback
-- [ ] **MGMT-05**: User can search artifacts by filename
-- [ ] **MGMT-06**: User can sort artifacts by type, date, or size
+- [x] **MGMT-04**: User can delete artifacts with instant optimistic UI feedback
+- [x] **MGMT-05**: User can search artifacts by filename
+- [x] **MGMT-06**: User can sort artifacts by type, date, or size
 
 ### Video Embeds
 
@@ -97,12 +97,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ARTF-04 | Phase 31 | Complete |
 | ARTF-05 | Phase 31 | Complete |
 | ARTF-06 | Phase 31 | Complete |
-| MGMT-01 | Phase 35 | Pending |
+| MGMT-01 | Phase 35 | Complete |
 | MGMT-02 | Phase 35 | Pending |
 | MGMT-03 | Phase 35 | Pending |
-| MGMT-04 | Phase 35 | Pending |
-| MGMT-05 | Phase 35 | Pending |
-| MGMT-06 | Phase 35 | Pending |
+| MGMT-04 | Phase 35 | Complete |
+| MGMT-05 | Phase 35 | Complete |
+| MGMT-06 | Phase 35 | Complete |
 | VID-01 | Phase 33 | Complete |
 | VID-02 | Phase 33 | Complete |
 | VID-03 | Phase 33 | Complete |

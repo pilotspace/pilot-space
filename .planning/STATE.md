@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Medium Editor & Artifacts
 status: planning
-stopped_at: Completed 34-file-preview-modal/34-02-PLAN.md
-last_updated: "2026-03-19T15:31:14.686Z"
+stopped_at: Completed 35-artifacts-management-page/35-01-PLAN.md
+last_updated: "2026-03-19T15:48:15.097Z"
 last_activity: 2026-03-18 — v1.1 roadmap created, 22/22 requirements mapped across 7 phases
 progress:
   total_phases: 7
   completed_phases: 4
   total_plans: 20
-  completed_plans: 15
+  completed_plans: 16
   percent: 0
 ---
 
@@ -87,6 +87,8 @@ Recent decisions affecting current work:
 - [Phase 34-file-preview-modal]: useFileContent staleTime 55 min (URLs expire at 60 min), retry:false (403 = expired not transient), isExpired flag for UI
 - [Phase 34-file-preview-modal]: LinkOff → Link2Off: lucide-react in project exports Link2Off not LinkOff
 - [Phase 34-file-preview-modal]: ImageRenderer uses native <img> not next/image: signed Supabase URLs are external, zoom requires raw dimensions
+- [Phase 35-artifacts-management-page]: getSignedUrl uses apiClient (not raw fetch) — backend proxy route /api/v1/workspaces/.../artifacts/{id}/url; raw fetch only for external Supabase storage content URLs
+- [Phase 35-artifacts-management-page]: artifactsKeys.list(ws,proj) is the precise invalidation key for useDeleteArtifact — avoids over-invalidation of other project artifact lists
 
 ### Pending Todos
 
@@ -101,7 +103,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-19T15:31:14.683Z
-Stopped at: Completed 34-file-preview-modal/34-02-PLAN.md
+Last session: 2026-03-19T15:48:15.095Z
+Stopped at: Completed 35-artifacts-management-page/35-01-PLAN.md
 Resume file: None
 Next action: `/gsd:plan-phase 30`
