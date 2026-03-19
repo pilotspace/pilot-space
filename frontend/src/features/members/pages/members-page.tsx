@@ -133,23 +133,39 @@ export const MembersPage = observer(function MembersPage() {
     return invitations.filter((inv) => inv.status === 'pending');
   }, [invitations]);
 
-  const handleRoleChange = async (userId: string, role: WorkspaceRole) => {
+  const handleRoleChange = (userId: string, role: WorkspaceRole) => {
     const member = members?.find((m) => m.userId === userId);
     if (!member) return;
 
-    setUpdatingMemberId(userId);
-    const result = await workspaceStore.updateMemberRole(workspaceId, userId, role);
-    setUpdatingMemberId(null);
+    const displayName = member.fullName || member.email;
+    const currentRole = member.role;
 
-    if (result) {
-      toast.success('Role updated', {
-        description: `${member.fullName || member.email} is now a ${role}.`,
-      });
-    } else {
-      toast.error('Failed to update role', {
-        description: workspaceStore.error ?? 'An unexpected error occurred.',
-      });
-    }
+    // Skip confirmation if role hasn't changed
+    if (currentRole === role) return;
+
+    setConfirmDialog({
+      open: true,
+      title: 'Change member role',
+      description: `Change ${displayName}'s role from ${currentRole} to ${role}?`,
+      confirmLabel: 'Change Role',
+      variant: 'default',
+      onConfirm: async () => {
+        closeConfirmDialog();
+        setUpdatingMemberId(userId);
+        const result = await workspaceStore.updateMemberRole(workspaceId, userId, role);
+        setUpdatingMemberId(null);
+
+        if (result) {
+          toast.success('Role updated', {
+            description: `${displayName} is now a ${role}.`,
+          });
+        } else {
+          toast.error('Failed to update role', {
+            description: workspaceStore.error ?? 'An unexpected error occurred.',
+          });
+        }
+      },
+    });
   };
 
   const handleRemoveMember = (userId: string) => {
