@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1.0
 milestone_name: MCP Platform Hardening
 status: planning
-stopped_at: Completed 34-02-PLAN.md — frontend MCP Tools tab in CostDashboardPage
-last_updated: "2026-03-19T21:58:31.000Z"
-last_activity: 2026-03-19 — 34-02 complete (MCP Tools tab in AI Cost Dashboard with lazy useQuery + BarChart)
+stopped_at: Completed Phase 35 planning — 35-01-PLAN.md and 35-02-PLAN.md written
+last_updated: "2026-03-20T00:00:00.000Z"
+last_activity: 2026-03-20 — Phase 35 plans created (backend catalog + frontend catalog UI)
 progress:
   total_phases: 6
   completed_phases: 2
-  total_plans: 13
+  total_plans: 15
   completed_plans: 11
-  percent: 20
+  percent: 25
 ---
 
 # Project State
@@ -21,24 +21,24 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-19)
 
 **Core value:** Enterprise teams can adopt AI-augmented SDLC workflows without sacrificing data sovereignty, compliance, or human control.
-**Current focus:** Phase 34 — MCP Observability (both plans complete)
+**Current focus:** Phase 35 — MCP Server Catalog (planned, ready to execute)
 
 ## Current Position
 
-Phase: 34 of 35 (MCP Observability)
-Plan: 34-02 complete (wave 2) — Phase 34 complete
-Status: In progress
+Phase: 35 of 35 (MCP Server Catalog)
+Plan: Planning complete — 35-01 and 35-02 created, not yet executed
+Status: Planned
 
-Next: Execute Phase 35 (next phase per ROADMAP.md).
+Next: Execute Phase 35 starting with 35-01 (wave 1 — backend data layer + API), then 35-02 (wave 2 — frontend UI).
 
-## Wave Structure for Phase 34
+## Wave Structure for Phase 35
 
 | Wave | Plans | Parallelizable | Dependencies |
 |------|-------|----------------|--------------|
-| 1 | 34-01 (backend: hooks_lifecycle extension + mcp_usage router + migration 094 + tests) | Solo | None |
-| 2 | 34-02 (frontend: aiApi.getMcpToolUsage + CostDashboardPage MCP Tools tab) | Solo | Depends on 34-01 endpoint definition |
+| 1 | 35-01 (backend: migrations 095+096 + ORM + repository + GET /mcp-catalog + schema extensions + tests) | Solo | None |
+| 2 | 35-02 (frontend: mcpCatalogApi + MCPCatalogStore + catalog card + tab content + MCPServersSettingsPage Tabs + checkpoint) | Solo | Depends on 35-01 endpoint contract |
 
-Note: 34-02 depends on 34-01 for the endpoint contract (`/ai/mcp-usage` URL, `McpToolUsageResponse` shape). Wave 2 runs after wave 1 is committed.
+Note: 35-02 depends on 35-01 for the endpoint URL (/api/v1/mcp-catalog), response shape (McpCatalogEntry), and WorkspaceMcpServerResponse new fields (catalog_entry_id, installed_catalog_version). Wave 2 runs after wave 1 is committed and tests pass.
 
 ## Milestone History
 
@@ -88,6 +88,12 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 34]: input_hash stored as full 64-char SHA-256 hex (not truncated prefix) in payload JSONB
 - [34-02]: server_name (not server_key) used as chart label — display names over raw remote_<uuid> keys
 - [34-02]: Compound label format "server_name: tool_name" used on Y-axis to distinguish tools across servers
+- [Phase 35]: mcp_catalog_entries is a global table (BaseModel, not WorkspaceScopedModel) — no workspace_id, no RLS needed
+- [Phase 35]: mcp_catalog router registered directly in main.py at /api/v1/mcp-catalog (not under ai.py) — catalog is not AI-specific
+- [Phase 35]: Use create_type=False for McpTransportType and McpAuthType enum columns in migration 095 — types already exist from migrations 091/093
+- [Phase 35]: Update badge (amber "Update Available") shown on MCPCatalogCard in Catalog tab only — not on mcp-server-card.tsx; avoids passing catalog entries into the server list component
+- [Phase 35]: Version comparison is simple string inequality (installed_catalog_version !== catalog_version) — no semver parsing for MVP
+- [Phase 35]: MCPCatalogCard is a plain component (not observer) — mirrors MCPServerCard pattern from Phase 33
 
 ### Pending Todos
 
@@ -99,7 +105,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-19T21:58:31Z
-Stopped at: Completed 34-02-PLAN.md
+Last session: 2026-03-20T00:00:00Z
+Stopped at: Completed Phase 35 planning
 Resume file: None
-Next action: /gsd:execute-phase 35 (next phase)
+Next action: /gsd:execute-phase 35 (execute 35-01 then 35-02)

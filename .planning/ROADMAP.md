@@ -154,7 +154,10 @@ Plans:
   2. Clicking "Install" on a catalog entry registers the MCP server in the workspace with connection fields pre-filled from the catalog definition
   3. When a newer catalog entry version is available for an installed server, the server list shows an update notification the admin can act on
   4. The seeded catalog includes context7 and GitHub MCP as official entries visible on first load of a new workspace
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 35-01-PLAN.md — Migrations 095+096 + McpCatalogEntry ORM + repository + GET /mcp-catalog router + schema extensions (MCPC-01, MCPC-02, MCPC-03, MCPC-04)
+- [ ] 35-02-PLAN.md — mcpCatalogApi + MCPCatalogStore + catalog card + tab UI + MCPServersSettingsPage Tabs integration (MCPC-01, MCPC-02, MCPC-03)
 
 ## Progress
 
@@ -168,9 +171,9 @@ Plans:
 | 32. OAuth Refresh Flow | v1.1.0 | 3/3 | Complete | 2026-03-19 |
 | 33. Remote MCP Approval Framework | 3/3 | Complete | 2026-03-19 | - |
 | 34. MCP Observability | 2/2 | Complete   | 2026-03-19 | - |
-| 35. MCP Server Catalog | v1.1.0 | 0/? | Not started | - |
+| 35. MCP Server Catalog | v1.1.0 | 0/2 | Planned | - |
 
-**Total to date: 35 phases, 108+ plans across 4 milestones**
+**Total to date: 35 phases, 110+ plans across 4 milestones**
 
 ---
 *v1.0 shipped: 2026-03-09 — 11 phases, 46 plans, 30/30 requirements*
