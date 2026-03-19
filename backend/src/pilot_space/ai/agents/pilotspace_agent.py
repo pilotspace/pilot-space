@@ -553,8 +553,14 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
             "approvals": False,
         }
         _workspace_obj = await _workspace_repo.get_by_id(context.workspace_id)
+        _raw_toggles = (
+            (_workspace_obj.settings or {}).get("feature_toggles") if _workspace_obj else None
+        )
+        # Validate: stored value must be a mapping; non-boolean values are coerced/dropped.
         _stored_toggles: dict[str, bool] = (
-            (_workspace_obj.settings or {}).get("feature_toggles") or {} if _workspace_obj else {}
+            {k: bool(v) for k, v in _raw_toggles.items() if isinstance(v, bool)}
+            if isinstance(_raw_toggles, dict)
+            else {}
         )
         _feature_toggles: dict[str, bool] = {**_TOGGLE_DEFAULTS, **_stored_toggles}
 

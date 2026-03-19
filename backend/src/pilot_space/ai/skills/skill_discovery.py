@@ -91,13 +91,18 @@ def _parse_skill_file(skill_file: Path) -> SkillInfo | None:
     name = str(frontmatter.get("name", "")) or skill_file.parent.name
     description = str(frontmatter.get("description", ""))
 
-    # Parse feature_module — normalize single string to list
+    # Parse feature_module — normalize single string to list.
+    # Invalid types (int, dict, bool, etc.) produce [] so the skill is gated
+    # out rather than bypassing feature checks via the None="always keep" path.
     raw_module = frontmatter.get("feature_module")
     feature_module: list[str] | None = None
     if isinstance(raw_module, str):
         feature_module = [raw_module]
     elif isinstance(raw_module, list):
         feature_module = [str(m) for m in raw_module]
+    elif raw_module is not None:
+        # Malformed value — restrict rather than bypass gating.
+        feature_module = []
 
     ui = get_skill_ui_metadata(name)
 
@@ -118,7 +123,9 @@ def filter_skills_by_features(
     """Filter skills based on workspace feature toggles.
 
     A skill is removed only when ALL of its feature_module values are
-    disabled.  Skills with no feature_module are always kept.
+    disabled.  Skills with ``feature_module=None`` (no gate declared) are
+    always kept.  Skills with ``feature_module=[]`` (malformed/unknown gate)
+    are always removed — ``any()`` over an empty iterable is False.
 
     Callers are expected to pass a fully-populated toggle dict (schema
     defaults merged with stored overrides) so that missing keys are not
