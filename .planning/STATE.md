@@ -1,15 +1,15 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
+milestone: v1.1.0
+milestone_name: MCP Platform Hardening
 status: executing
-stopped_at: Completed 31-02-PLAN.md
+stopped_at: Completed planning for Phase 32
 last_updated: "2026-03-20T00:00:00.000Z"
-last_activity: 2026-03-20 — 31-02 complete (SSRF extraction, session load hardening MCPI-02/03/05)
+last_activity: 2026-03-20 — Phase 32 plans created (32-01, 32-02, 32-03)
 progress:
   total_phases: 6
   completed_phases: 0
-  total_plans: 5
+  total_plans: 8
   completed_plans: 3
   percent: 0
 ---
@@ -21,25 +21,27 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-19)
 
 **Core value:** Enterprise teams can adopt AI-augmented SDLC workflows without sacrificing data sovereignty, compliance, or human control.
-**Current focus:** Phase 31 — MCP Infrastructure Hardening (planned, ready to execute)
+**Current focus:** Phase 32 — OAuth Refresh Flow (planned, ready to execute)
 
 ## Current Position
 
-Phase: 31 of 35 (MCP Infrastructure Hardening)
-Plan: 31-01, 31-02, 31-03, 31-04 complete; remaining: none
-Status: In progress
-Last activity: 2026-03-20 — 31-02 complete (SSRF extraction, session load hardening MCPI-02/03/05)
+Phase: 32 of 35 (OAuth Refresh Flow)
+Plan: None complete yet
+Status: Planned
+Last activity: 2026-03-20 — Phase 32 plans created (32-01, 32-02, 32-03)
 
-Progress: [░░░░░░░░░░] 0% (0/6 phases complete, 3/5 plans complete)
+Progress: [░░░░░░░░░░] 0% (0/6 phases complete, 3/8 plans complete across v1.1.0)
 
-## Wave Structure for Phase 31
+## Wave Structure for Phase 32
 
 | Wave | Plans | Parallelizable | Dependencies |
 |------|-------|----------------|--------------|
-| 1 | 31-01 (migration + model), 31-04 (encryption enforcement) | Yes | None |
-| 2 | 31-02 (stream utils hardening), 31-03 (server cap) | Yes | 31-02 needs 31-01 for McpTransportType; 31-03 is independent |
+| 1 | 32-01 (DB migration + model + OAuth callback storage) | Solo | None |
+| 2 | 32-02 (auto-refresh logic), 32-03 (frontend expiry badge + schema) | Yes | Both depend on 32-01 model columns |
 
-Execute order: Run 31-01 and 31-04 first (wave 1), then 31-02 and 31-03 (wave 2).
+Execute order: Run 32-01 first (wave 1), then 32-02 and 32-03 in parallel (wave 2).
+
+Note: 32-02 and 32-03 are independent at the file level — 32-02 touches only backend router + stream utils, 32-03 touches only backend schema + frontend. They can run in parallel after 32-01 lands.
 
 ## Milestone History
 
@@ -65,6 +67,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 31]: MCP_SERVER_CAP = 10 at module level makes constant importable by tests; cap check placed before WorkspaceMcpServer construction
 - [31-02]: Import alias `from ssrf import validate_mcp_url as _validate_mcp_url` means zero changes to existing field_validator call sites
 - [31-02]: cast("McpServerConfig", {...}) used for TypedDict union assignment — ruff TC006 requires quoted type arg
+- [Phase 32]: _refresh_oauth_token placed in workspace_mcp_servers.py (alongside _exchange_oauth_code) and lazy-imported in stream utils to avoid circular deps
+- [Phase 32]: token_expires_at uses naive-datetime guard (replace(tzinfo=UTC)) in _load_remote_mcp_servers for SQLite test compatibility
+- [Phase 32]: refresh_token_encrypted is never echoed in WorkspaceMcpServerResponse — only token_expires_at is exposed to the frontend
 
 ### Pending Todos
 
@@ -77,6 +82,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-20T00:00:00.000Z
-Stopped at: Completed 31-02-PLAN.md
+Stopped at: Completed planning for Phase 32
 Resume file: None
-Next action: /gsd:execute-phase 31 (all wave 2 plans complete)
+Next action: /gsd:execute-phase 32

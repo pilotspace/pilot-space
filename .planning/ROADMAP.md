@@ -112,7 +112,11 @@ Plans:
   1. After completing OAuth authorization for an MCP server, the refresh token is persisted alongside the access token in the database
   2. When a session loads and the stored access token is expired, it is silently refreshed using the refresh token without user intervention
   3. The MCP server status UI shows token expiry state (e.g., "expires in 2 hours" or "expired") alongside the connection badge
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 32-01-PLAN.md — DB migration 092 + ORM columns + OAuth callback refresh token storage (MCPO-01)
+- [ ] 32-02-PLAN.md — _refresh_oauth_token helper + expiry check in _load_remote_mcp_servers (MCPO-02)
+- [ ] 32-03-PLAN.md — token_expires_at in response schema + MCPServer TS type + ExpiryBadge UI (MCPO-03)
 
 ### Phase 33: Remote MCP Approval Framework
 **Goal**: Remote MCP tool invocations are subject to the same DD-003 human approval controls as built-in AI actions — workspace admins can configure per-server approval policies and users see inline approval cards in ChatView
@@ -153,13 +157,13 @@ Plans:
 | 12–23 | v1.0-alpha | 37/37 | Complete | 2026-03-12 |
 | 24–29 | v1.0.0-alpha2 | 14/14 | Complete | 2026-03-12 |
 | 30. MCP Critical Bug Fix | v1.1.0 | 0/1 | Planned | - |
-| 31. MCP Infrastructure Hardening | 2/4 | In Progress|  | - |
-| 32. OAuth Refresh Flow | v1.1.0 | 0/? | Not started | - |
+| 31. MCP Infrastructure Hardening | v1.1.0 | 2/4 | In Progress | - |
+| 32. OAuth Refresh Flow | v1.1.0 | 0/3 | Planned | - |
 | 33. Remote MCP Approval Framework | v1.1.0 | 0/? | Not started | - |
 | 34. MCP Observability | v1.1.0 | 0/? | Not started | - |
 | 35. MCP Server Catalog | v1.1.0 | 0/? | Not started | - |
 
-**Total to date: 35 phases, 102+ plans across 4 milestones**
+**Total to date: 35 phases, 105+ plans across 4 milestones**
 
 ---
 *v1.0 shipped: 2026-03-09 — 11 phases, 46 plans, 30/30 requirements*
