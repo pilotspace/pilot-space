@@ -88,10 +88,10 @@ describe('MemberCard', () => {
     expect(screen.getByText('you')).toBeInTheDocument();
   });
 
-  it('does not show "(you)" for other users', () => {
+  it('does not show "you" badge for other users', () => {
     setup({ isCurrentUser: false });
 
-    expect(screen.queryByText('(you)')).not.toBeInTheDocument();
+    expect(screen.queryByText('you')).not.toBeInTheDocument();
   });
 
   it('shows admin actions dropdown when currentUserRole is admin', async () => {

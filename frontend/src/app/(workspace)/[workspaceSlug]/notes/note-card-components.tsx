@@ -82,6 +82,7 @@ export function NoteGridCard({ note, workspaceSlug, projectMap, onPrefetch }: No
                     style={{ backgroundColor: issue.state.color }}
                     aria-hidden="true"
                   />
+                  <span className="sr-only">{issue.state.name}:</span>
                   {issue.identifier}
                 </span>
               ))}
@@ -127,6 +128,7 @@ export function NoteListRow({ note, workspaceSlug, projectMap, onPrefetch }: Not
         className={cn(
           'group flex items-center gap-4 rounded-lg border border-border bg-card px-4 py-3',
           'transition-all hover:border-primary/20 hover:bg-accent/50 hover:shadow-warm-sm',
+          'focus-within:ring-2 focus-within:ring-ring',
           note.isPinned &&
             'ring-1 ring-amber-200/60 dark:ring-amber-700/30 bg-amber-50/20 dark:bg-amber-950/10'
         )}
@@ -172,6 +174,7 @@ export function NoteListRow({ note, workspaceSlug, projectMap, onPrefetch }: Not
                     style={{ backgroundColor: issue.state.color }}
                     aria-hidden="true"
                   />
+                  <span className="sr-only">{issue.state.name}:</span>
                   {issue.identifier}
                 </span>
               ))}
