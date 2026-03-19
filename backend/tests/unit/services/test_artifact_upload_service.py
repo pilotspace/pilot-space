@@ -319,15 +319,16 @@ class TestMimeMismatch:
         self,
         service: ArtifactUploadService,
     ) -> None:
-        """filename='foo.py', content_type='image/jpeg' → raises ValueError('MIME_MISMATCH')."""
-        # .py is in allowlist, but image/jpeg is not expected for .py extension
-        # Actually the mismatch is: image extension with wrong MIME
-        # The service enforces: image extensions must have image/ MIME type
+        """Image extension with non-image MIME type raises ValueError('MIME_MISMATCH').
+
+        filename='photo.png' has an image extension but content_type='application/json'
+        is not an image/ MIME type — this triggers the MIME cross-check.
+        """
         with pytest.raises(ValueError, match="MIME_MISMATCH"):
             await service.upload(
                 file_data=b"\x89PNG fake png",
-                filename="photo.png",  # image extension
-                content_type="image/jpeg",  # wait — .png with image/jpeg is actually a mismatch for png
+                filename="photo.png",  # image extension — requires image/ MIME prefix
+                content_type="application/json",  # wrong MIME category
                 workspace_id=_WORKSPACE_ID,
                 project_id=_PROJECT_ID,
                 user_id=_USER_ID,
