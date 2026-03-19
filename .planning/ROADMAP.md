@@ -151,7 +151,10 @@ Plans:
   3. User can preview code files (Python, JS, HTML, CSS, etc.) in the modal with syntax highlighting
   4. User can preview CSV files in the modal rendered as a formatted table (capped at 500 rows with a visible truncation indicator if exceeded)
   5. User clicking a file type with no supported renderer sees a "Download" button as the fallback action
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 34-01-PLAN.md — Install papaparse, create mime-type-router utility, useFileContent hook, test scaffolds
+- [ ] 34-02-PLAN.md — Build 7 renderer components and FilePreviewModal shell; complete all tests
 
 ### Phase 35: Artifacts Management Page
 **Goal**: Users can discover, manage, and act on all project artifacts from a dedicated page — with instant optimistic feedback on deletes, client-side search by filename, and sorting by type, date, or size.
@@ -195,7 +198,7 @@ Plans:
 | 31. Storage Backend | v1.1 | 0/3 | Not started | - |
 | 32. Inline Editor Features | v1.1 | 0/5 | Planned | - |
 | 33. Video Embeds | v1.1 | 0/3 | Planned | - |
-| 34. File Preview Modal | v1.1 | 0/? | Not started | - |
+| 34. File Preview Modal | v1.1 | 0/2 | Planned | - |
 | 35. Artifacts Management Page | v1.1 | 0/2 | Not started | - |
 | 36. Editor UX Polish | v1.1 | 0/2 | Planned | - |
 
