@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.1.0
 milestone_name: MCP Platform Hardening
 status: planning
-stopped_at: Phase 30 planned — 1 plan ready for execution
-last_updated: "2026-03-19"
-last_activity: "2026-03-19 — Phase 30 plan created (30-01-PLAN.md)"
+stopped_at: Phase 31 planned — 4 plans ready for execution
+last_updated: "2026-03-20"
+last_activity: "2026-03-20 — Phase 31 plans created (31-01 through 31-04-PLAN.md)"
 progress:
   total_phases: 6
   completed_phases: 0
-  total_plans: 1
+  total_plans: 5
   completed_plans: 0
 ---
 
@@ -20,16 +20,25 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-19)
 
 **Core value:** Enterprise teams can adopt AI-augmented SDLC workflows without sacrificing data sovereignty, compliance, or human control.
-**Current focus:** Phase 30 — MCP Critical Bug Fix (planned, ready to execute)
+**Current focus:** Phase 31 — MCP Infrastructure Hardening (planned, ready to execute)
 
 ## Current Position
 
-Phase: 30 of 35 (MCP Critical Bug Fix)
-Plan: 30-01 (ready to execute)
+Phase: 31 of 35 (MCP Infrastructure Hardening)
+Plan: 31-01 (ready to execute, wave 1)
 Status: Planning complete
-Last activity: 2026-03-19 — Phase 30 plan created (30-01-PLAN.md, 1 plan, wave 1)
+Last activity: 2026-03-20 — Phase 31 plans created (4 plans, 2 waves)
 
 Progress: [░░░░░░░░░░] 0% (0/6 phases complete)
+
+## Wave Structure for Phase 31
+
+| Wave | Plans | Parallelizable | Dependencies |
+|------|-------|----------------|--------------|
+| 1 | 31-01 (migration + model), 31-04 (encryption enforcement) | Yes | None |
+| 2 | 31-02 (stream utils hardening), 31-03 (server cap) | Yes | 31-02 needs 31-01 for McpTransportType; 31-03 is independent |
+
+Execute order: Run 31-01 and 31-04 first (wave 1), then 31-02 and 31-03 (wave 2).
 
 ## Milestone History
 
@@ -49,6 +58,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase quick-04]: Remove sys.modules module-level mocks that leak across test session
 - [quick-260317-bch]: pilotspace_agent.py excluded from pre-commit 700-line check (orchestrator file)
 - [quick-260317-hms]: WorkspaceLLMConfig is frozen dataclass in provider_selector.py (colocation avoids circular imports)
+- [Phase 31]: _validate_mcp_url extracted to infrastructure/ssrf.py to avoid AI-layer → API-layer circular import
 
 ### Pending Todos
 
@@ -60,7 +70,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-19
-Stopped at: Phase 30 planned — 30-01-PLAN.md written, quality gates defined
+Last session: 2026-03-20
+Stopped at: Phase 31 planned — 4 plans written, ROADMAP and STATE updated
 Resume file: None
-Next action: /gsd:execute-phase 30
+Next action: /gsd:execute-phase 31

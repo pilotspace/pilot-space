@@ -97,7 +97,12 @@ Plans:
   3. Attempting to register an 11th MCP server in a workspace returns a clear error message stating the limit has been reached
   4. A DNS rebinding attack against a registered MCP server URL is blocked at connect time, not just at registration time
   5. Starting the application in production without ENCRYPTION_KEY set causes an immediate startup failure with a clear error message
-**Plans**: TBD
+**Plans**: 4 plans
+Plans:
+- [ ] 31-01-PLAN.md — DB migration + transport_type model/schema (MCPI-02 schema)
+- [ ] 31-02-PLAN.md — SSRF extraction + _load_remote_mcp_servers hardening (MCPI-02 logic + MCPI-03 + MCPI-05)
+- [ ] 31-03-PLAN.md — Server cap enforcement in repository + router (MCPI-04)
+- [ ] 31-04-PLAN.md — Startup encryption key enforcement in main.py lifespan (MCPI-06)
 
 ### Phase 32: OAuth Refresh Flow
 **Goal**: OAuth-authenticated MCP servers stay connected across token expiry — refresh tokens are stored, used automatically before session load, and expiry state is visible to the workspace admin
@@ -148,13 +153,13 @@ Plans:
 | 12–23 | v1.0-alpha | 37/37 | Complete | 2026-03-12 |
 | 24–29 | v1.0.0-alpha2 | 14/14 | Complete | 2026-03-12 |
 | 30. MCP Critical Bug Fix | v1.1.0 | 0/1 | Planned | - |
-| 31. MCP Infrastructure Hardening | v1.1.0 | 0/? | Not started | - |
+| 31. MCP Infrastructure Hardening | v1.1.0 | 0/4 | Planned | - |
 | 32. OAuth Refresh Flow | v1.1.0 | 0/? | Not started | - |
 | 33. Remote MCP Approval Framework | v1.1.0 | 0/? | Not started | - |
 | 34. MCP Observability | v1.1.0 | 0/? | Not started | - |
 | 35. MCP Server Catalog | v1.1.0 | 0/? | Not started | - |
 
-**Total to date: 35 phases, 98+ plans across 4 milestones**
+**Total to date: 35 phases, 102+ plans across 4 milestones**
 
 ---
 *v1.0 shipped: 2026-03-09 — 11 phases, 46 plans, 30/30 requirements*
