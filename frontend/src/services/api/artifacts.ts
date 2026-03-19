@@ -1,4 +1,6 @@
+import { apiClient } from './client';
 import { getAuthProviderSync } from '@/services/auth/providers';
+import type { Artifact, ArtifactSignedUrlResponse } from '@/types/artifact';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? '/api/v1';
 
@@ -10,12 +12,60 @@ export interface ArtifactUploadResponse {
   status: 'pending_upload' | 'ready' | 'error';
 }
 
+/**
+ * @deprecated Use ArtifactSignedUrlResponse from @/types/artifact instead.
+ * Kept for backward compatibility with existing callers.
+ */
 export interface ArtifactUrlResponse {
   url: string;
   expiresAt: string; // ISO date string
 }
 
 export const artifactsApi = {
+  /**
+   * List all artifacts for a project.
+   *
+   * GET /workspaces/{workspaceId}/projects/{projectId}/artifacts
+   * Handles both flat Artifact[] and PaginatedResponse<Artifact> shapes.
+   */
+  list(workspaceId: string, projectId: string): Promise<Artifact[]> {
+    return apiClient
+      .get<
+        Artifact[] | { items: Artifact[] }
+      >(`/workspaces/${workspaceId}/projects/${projectId}/artifacts`)
+      .then((res) => {
+        if (Array.isArray(res)) return res;
+        return (res as { items: Artifact[] }).items;
+      });
+  },
+
+  /**
+   * Delete an artifact by ID.
+   *
+   * DELETE /workspaces/{workspaceId}/projects/{projectId}/artifacts/{artifactId}
+   */
+  delete(workspaceId: string, projectId: string, artifactId: string): Promise<void> {
+    return apiClient.delete<void>(
+      `/workspaces/${workspaceId}/projects/${projectId}/artifacts/${artifactId}`
+    );
+  },
+
+  /**
+   * Fetch a short-lived signed URL for artifact download/preview via apiClient.
+   *
+   * GET /workspaces/{workspaceId}/projects/{projectId}/artifacts/{artifactId}/url
+   * Returns ArtifactSignedUrlResponse (url + expiresAt).
+   */
+  getSignedUrl(
+    workspaceId: string,
+    projectId: string,
+    artifactId: string
+  ): Promise<ArtifactSignedUrlResponse> {
+    return apiClient.get<ArtifactSignedUrlResponse>(
+      `/workspaces/${workspaceId}/projects/${projectId}/artifacts/${artifactId}/url`
+    );
+  },
+
   /**
    * Upload a file to the artifacts store via multipart POST.
    *
@@ -68,31 +118,5 @@ export const artifactsApi = {
         xhr.send(formData);
       })();
     });
-  },
-
-  /**
-   * Fetch a short-lived signed URL for a stored artifact.
-   *
-   * GET /v1/workspaces/{workspaceId}/projects/{projectId}/artifacts/{artifactId}/url
-   */
-  async getSignedUrl(
-    workspaceId: string,
-    projectId: string,
-    artifactId: string
-  ): Promise<ArtifactUrlResponse> {
-    let token: string | null = null;
-    try {
-      token = await getAuthProviderSync().getToken();
-    } catch {
-      // Proceed without auth header
-    }
-
-    const res = await fetch(
-      `${API_BASE}/workspaces/${workspaceId}/projects/${projectId}/artifacts/${artifactId}/url`,
-      { headers: token ? { Authorization: `Bearer ${token}` } : {} }
-    );
-
-    if (!res.ok) throw new Error(`Failed to get signed URL: ${res.status}`);
-    return res.json() as Promise<ArtifactUrlResponse>;
   },
 };
