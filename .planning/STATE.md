@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Medium Editor & Artifacts
 status: planning
-stopped_at: Completed 36-editor-ux-polish/36-01-PLAN.md
-last_updated: "2026-03-19T16:10:41.701Z"
+stopped_at: Completed 36-editor-ux-polish/36-02-PLAN.md
+last_updated: "2026-03-19T16:26:42.429Z"
 last_activity: 2026-03-18 — v1.1 roadmap created, 22/22 requirements mapped across 7 phases
 progress:
   total_phases: 7
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 20
-  completed_plans: 18
+  completed_plans: 19
   percent: 0
 ---
 
@@ -93,6 +93,8 @@ Recent decisions affecting current work:
 - [Phase 35-artifacts-management-page]: handleDownload uses artifactsApi.getSignedUrl directly — one-shot action, no TanStack cache needed
 - [Phase 36-editor-ux-polish]: isFocusMode is session-only — excluded from PersistedUIState and setupPersistence reaction; focus mode resets on page reload
 - [Phase 36-editor-ux-polish]: AppShell desktop sidebar uses conditional render (not width:0 animation) — removes DOM node so main content fills full viewport
+- [Phase 36-editor-ux-polish]: NoteCanvasLayout is NOT observer() — isFocusMode flows as prop from observer NoteDetailPage; prevents React 19 flushSync crash with TipTap NodeViews
+- [Phase 36-editor-ux-polish]: Escape guard in keyboard shortcut: e.key === 'Escape' && isFocusMode without e.preventDefault() — lets slash command ProseMirror-level Escape run first
 
 ### Pending Todos
 
@@ -107,7 +109,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-19T16:10:41.698Z
-Stopped at: Completed 36-editor-ux-polish/36-01-PLAN.md
+Last session: 2026-03-19T16:26:42.427Z
+Stopped at: Completed 36-editor-ux-polish/36-02-PLAN.md
 Resume file: None
 Next action: `/gsd:plan-phase 30`

@@ -72,7 +72,7 @@ Full archive: `.planning/milestones/v1.0.0-alpha2-ROADMAP.md`
 - [x] **Phase 33: Video Embeds** - YouTube/Vimeo iframe players, paste detection, CSP (completed 2026-03-19)
 - [x] **Phase 34: File Preview Modal** - Shared preview dialog with per-MIME renderers (completed 2026-03-19)
 - [x] **Phase 35: Artifacts Management Page** - Per-project artifacts page with optimistic CRUD, search, sort (completed 2026-03-19)
-- [ ] **Phase 36: Editor UX Polish** - Focus mode (Cmd+Shift+F), distraction-free writing
+- [x] **Phase 36: Editor UX Polish** - Focus mode (Cmd+Shift+F), distraction-free writing (completed 2026-03-19)
 
 ## Phase Details
 
@@ -200,7 +200,7 @@ Plans:
 | 33. Video Embeds | 3/3 | Complete   | 2026-03-19 | - |
 | 34. File Preview Modal | 2/2 | Complete   | 2026-03-19 | - |
 | 35. Artifacts Management Page | 2/2 | Complete   | 2026-03-19 | - |
-| 36. Editor UX Polish | 1/2 | In Progress|  | - |
+| 36. Editor UX Polish | 2/2 | Complete   | 2026-03-19 | - |
 
 **Total: 29 phases complete, 97 plans, 86 requirements across 3 milestones | v1.1: 7 phases, 22 requirements**
 
