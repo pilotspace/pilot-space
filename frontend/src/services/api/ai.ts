@@ -141,6 +141,27 @@ export interface ConversationMessage {
   created_at: string;
 }
 
+export interface McpToolUsageEntry {
+  server_key: string;
+  server_name: string;
+  tool_name: string;
+  invocation_count: number;
+}
+
+export interface McpServerSummary {
+  server_key: string;
+  server_name: string;
+  total_invocations: number;
+}
+
+export interface McpToolUsageResponse {
+  workspace_id: string;
+  period_start: string;
+  period_end: string;
+  by_server: McpServerSummary[];
+  by_tool: McpToolUsageEntry[];
+}
+
 /**
  * AI API client for AI-powered features.
  * Provides both SSE streaming endpoints and REST endpoints.
@@ -281,6 +302,19 @@ export const aiApi = {
         end_date: endDate,
         ...(groupBy ? { group_by: groupBy } : {}),
       },
+      headers: { 'X-Workspace-Id': workspaceId },
+    }),
+
+  /**
+   * Get MCP tool invocation counts for workspace.
+   * @param workspaceId - Workspace UUID
+   * @param startDate - Start date (YYYY-MM-DD format)
+   * @param endDate - End date (YYYY-MM-DD format)
+   * @returns MCP usage summary grouped by server and tool
+   */
+  getMcpToolUsage: (workspaceId: string, startDate: string, endDate: string) =>
+    apiClient.get<McpToolUsageResponse>('/ai/mcp-usage', {
+      params: { start_date: startDate, end_date: endDate },
       headers: { 'X-Workspace-Id': workspaceId },
     }),
 

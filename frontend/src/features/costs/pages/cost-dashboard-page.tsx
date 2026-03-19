@@ -28,7 +28,7 @@ import {
   YAxis,
 } from 'recharts';
 import { useStore } from '@/stores';
-import { aiApi } from '@/services/api/ai';
+import { aiApi, McpToolUsageEntry } from '@/services/api/ai';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -104,7 +104,7 @@ export const CostDashboardPage = observer(function CostDashboardPage({
   const { ai, workspaceStore } = useStore();
   const { cost } = ai;
 
-  const [activeTab, setActiveTab] = useState<'by_agent' | 'by_feature'>('by_agent');
+  const [activeTab, setActiveTab] = useState<'by_agent' | 'by_feature' | 'by_mcp'>('by_agent');
 
   // Resolve the actual workspace UUID from the store.
   // The page prop `workspaceId` may be the slug (see costs/page.tsx); the store
@@ -136,6 +136,20 @@ export const CostDashboardPage = observer(function CostDashboardPage({
     ? Object.entries(featureSummary.by_feature)
         .map(([name, value]) => ({ name, value: Number(value) }))
         .sort((a, b) => b.value - a.value)
+    : [];
+
+  const { data: mcpUsage, isLoading: isMcpLoading } = useQuery({
+    queryKey: ['mcp-tool-usage', resolvedWorkspaceId, startDate, endDate],
+    queryFn: () => aiApi.getMcpToolUsage(resolvedWorkspaceId, startDate, endDate),
+    enabled: activeTab === 'by_mcp' && !!resolvedWorkspaceId,
+    staleTime: 60_000,
+  });
+
+  const mcpChartData = mcpUsage?.by_tool
+    ? mcpUsage.by_tool.map((entry: McpToolUsageEntry) => ({
+        name: `${entry.server_name}: ${entry.tool_name}`,
+        value: entry.invocation_count,
+      }))
     : [];
 
   // Admin guard
@@ -260,11 +274,15 @@ export const CostDashboardPage = observer(function CostDashboardPage({
         />
       </div>
 
-      {/* Charts Grid with By Agent / By Feature tabs */}
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'by_agent' | 'by_feature')}>
+      {/* Charts Grid with By Agent / By Feature / MCP Tools tabs */}
+      <Tabs
+        value={activeTab}
+        onValueChange={(v) => setActiveTab(v as 'by_agent' | 'by_feature' | 'by_mcp')}
+      >
         <TabsList>
           <TabsTrigger value="by_agent">By Agent</TabsTrigger>
           <TabsTrigger value="by_feature">By Feature</TabsTrigger>
+          <TabsTrigger value="by_mcp">MCP Tools</TabsTrigger>
         </TabsList>
 
         <TabsContent value="by_agent" className="mt-4">
@@ -336,6 +354,62 @@ export const CostDashboardPage = observer(function CostDashboardPage({
                       {featureChartData.map((_entry, index) => (
                         <Cell
                           key={`cell-${index}`}
+                          fill={FEATURE_COLORS[index % FEATURE_COLORS.length]}
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="by_mcp" className="mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>MCP Tool Invocations</CardTitle>
+              <CardDescription>
+                Remote MCP tool call counts by server and tool for this period
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isMcpLoading ? (
+                <div className="flex items-center justify-center h-[300px]">
+                  <Skeleton className="h-full w-full" />
+                </div>
+              ) : mcpChartData.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-[300px] text-muted-foreground">
+                  <Sparkles className="h-8 w-8 text-muted-foreground/30 mb-3" />
+                  <p className="text-sm">No MCP tool invocations for this period</p>
+                  <p className="text-xs text-muted-foreground/60 mt-1">
+                    Try selecting a wider date range
+                  </p>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={Math.max(300, mcpChartData.length * 48)}>
+                  <BarChart
+                    data={mcpChartData}
+                    layout="vertical"
+                    margin={{ top: 4, right: 24, bottom: 4, left: 160 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                    <XAxis
+                      type="number"
+                      tickFormatter={(v: number) => v.toLocaleString()}
+                      tick={{ fontSize: 11 }}
+                    />
+                    <YAxis type="category" dataKey="name" width={156} tick={{ fontSize: 11 }} />
+                    <Tooltip
+                      formatter={(value: number | undefined) => {
+                        if (value == null) return '—';
+                        return `${value} calls`;
+                      }}
+                    />
+                    <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                      {mcpChartData.map((_entry, index) => (
+                        <Cell
+                          key={`mcp-cell-${index}`}
                           fill={FEATURE_COLORS[index % FEATURE_COLORS.length]}
                         />
                       ))}
