@@ -20,9 +20,9 @@ Requirements for milestone v1.1. Each maps to roadmap phases.
 - [ ] **ARTF-01**: User can upload files (up to 10MB) into notes as inline card blocks
 - [ ] **ARTF-02**: User can drag-and-drop files onto the editor canvas to create file cards
 - [ ] **ARTF-03**: User can insert file cards via /file slash command
-- [ ] **ARTF-04**: System stores uploaded files in Supabase Storage with workspace isolation
-- [ ] **ARTF-05**: System enforces 10MB file size limit at client, API, and infrastructure layers
-- [ ] **ARTF-06**: System validates file types against an extension allowlist before storage
+- [x] **ARTF-04**: System stores uploaded files in Supabase Storage with workspace isolation
+- [x] **ARTF-05**: System enforces 10MB file size limit at client, API, and infrastructure layers
+- [x] **ARTF-06**: System validates file types against an extension allowlist before storage
 
 ### Artifacts Management
 
@@ -94,9 +94,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ARTF-01 | Phase 32 | Pending |
 | ARTF-02 | Phase 32 | Pending |
 | ARTF-03 | Phase 32 | Pending |
-| ARTF-04 | Phase 31 | Pending |
-| ARTF-05 | Phase 31 | Pending |
-| ARTF-06 | Phase 31 | Pending |
+| ARTF-04 | Phase 31 | Complete |
+| ARTF-05 | Phase 31 | Complete |
+| ARTF-06 | Phase 31 | Complete |
 | MGMT-01 | Phase 35 | Pending |
 | MGMT-02 | Phase 35 | Pending |
 | MGMT-03 | Phase 35 | Pending |

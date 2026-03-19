@@ -195,7 +195,7 @@ Plans:
 | 12–23 | v1.0-alpha | 37/37 | Complete | 2026-03-12 |
 | 24–29 | v1.0.0-alpha2 | 14/14 | Complete | 2026-03-12 |
 | 30. TipTap Extension Foundation | 3/3 | Complete   | 2026-03-19 | - |
-| 31. Storage Backend | v1.1 | 0/3 | Not started | - |
+| 31. Storage Backend | 1/3 | In Progress|  | - |
 | 32. Inline Editor Features | v1.1 | 0/5 | Planned | - |
 | 33. Video Embeds | v1.1 | 0/3 | Planned | - |
 | 34. File Preview Modal | v1.1 | 0/2 | Planned | - |
