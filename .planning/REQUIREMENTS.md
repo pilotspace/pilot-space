@@ -10,10 +10,10 @@ Requirements for MCP platform hardening. Each maps to roadmap phases.
 ### MCP Infrastructure
 
 - [ ] **MCPI-01**: Remote MCP tools are added to `allowed_tools` with wildcard patterns so Claude can invoke them (critical bug — tools load but can't be called)
-- [ ] **MCPI-02**: Remote MCP servers support both SSE and HTTP transport types per Claude Agent SDK guidelines
-- [ ] **MCPI-03**: Failed MCP servers (last_status="failed") are skipped at session load to prevent timeout blocking
+- [x] **MCPI-02**: Remote MCP servers support both SSE and HTTP transport types per Claude Agent SDK guidelines
+- [x] **MCPI-03**: Failed MCP servers (last_status="failed") are skipped at session load to prevent timeout blocking
 - [x] **MCPI-04**: Per-workspace MCP server cap (max 10) enforced with clear error when limit reached
-- [ ] **MCPI-05**: DNS re-validation at connect time prevents TOCTOU/rebinding SSRF bypass
+- [x] **MCPI-05**: DNS re-validation at connect time prevents TOCTOU/rebinding SSRF bypass
 - [x] **MCPI-06**: Application refuses to start without valid ENCRYPTION_KEY in production environments
 
 ### MCP OAuth
@@ -68,10 +68,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | MCPI-01 | Phase 30 | Pending |
-| MCPI-02 | Phase 31 | Pending |
-| MCPI-03 | Phase 31 | Pending |
+| MCPI-02 | Phase 31 | Complete |
+| MCPI-03 | Phase 31 | Complete |
 | MCPI-04 | Phase 31 | Complete |
-| MCPI-05 | Phase 31 | Pending |
+| MCPI-05 | Phase 31 | Complete |
 | MCPI-06 | Phase 31 | Complete — 31-04 |
 | MCPO-01 | Phase 32 | Pending |
 | MCPO-02 | Phase 32 | Pending |

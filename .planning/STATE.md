@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 31-03-PLAN.md
-last_updated: "2026-03-19T17:22:29.764Z"
-last_activity: 2026-03-20 — 31-04 complete (encryption enforcement, MCPI-06)
+stopped_at: Completed 31-02-PLAN.md
+last_updated: "2026-03-20T00:00:00.000Z"
+last_activity: 2026-03-20 — 31-02 complete (SSRF extraction, session load hardening MCPI-02/03/05)
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 5
-  completed_plans: 2
+  completed_plans: 3
   percent: 0
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-03-19)
 ## Current Position
 
 Phase: 31 of 35 (MCP Infrastructure Hardening)
-Plan: 31-04 complete; remaining: 31-01, 31-02, 31-03
+Plan: 31-01, 31-02, 31-03, 31-04 complete; remaining: none
 Status: In progress
-Last activity: 2026-03-20 — 31-04 complete (encryption enforcement, MCPI-06)
+Last activity: 2026-03-20 — 31-02 complete (SSRF extraction, session load hardening MCPI-02/03/05)
 
-Progress: [░░░░░░░░░░] 0% (0/6 phases complete, 1/5 plans complete)
+Progress: [░░░░░░░░░░] 0% (0/6 phases complete, 3/5 plans complete)
 
 ## Wave Structure for Phase 31
 
@@ -63,6 +63,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [31-04]: Enforcement check in lifespan mirrors jwt_provider_validated pattern; non-production bypassed to preserve dev key fallback behavior
 - [31-04]: Tests use extracted helper function matching lifespan logic, patching pilot_space.config.get_settings for get_encryption_service() override
 - [Phase 31]: MCP_SERVER_CAP = 10 at module level makes constant importable by tests; cap check placed before WorkspaceMcpServer construction
+- [31-02]: Import alias `from ssrf import validate_mcp_url as _validate_mcp_url` means zero changes to existing field_validator call sites
+- [31-02]: cast("McpServerConfig", {...}) used for TypedDict union assignment — ruff TC006 requires quoted type arg
 
 ### Pending Todos
 
@@ -74,7 +76,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-19T17:22:29.762Z
-Stopped at: Completed 31-03-PLAN.md
+Last session: 2026-03-20T00:00:00.000Z
+Stopped at: Completed 31-02-PLAN.md
 Resume file: None
-Next action: /gsd:execute-phase 31 (remaining: 31-01, 31-02, 31-03)
+Next action: /gsd:execute-phase 31 (all wave 2 plans complete)
