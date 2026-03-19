@@ -554,9 +554,7 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
         }
         _workspace_obj = await _workspace_repo.get_by_id(context.workspace_id)
         _stored_toggles: dict[str, bool] = (
-            (_workspace_obj.settings or {}).get("feature_toggles") or {}
-            if _workspace_obj
-            else {}
+            (_workspace_obj.settings or {}).get("feature_toggles") or {} if _workspace_obj else {}
         )
         _feature_toggles: dict[str, bool] = {**_TOGGLE_DEFAULTS, **_stored_toggles}
 
