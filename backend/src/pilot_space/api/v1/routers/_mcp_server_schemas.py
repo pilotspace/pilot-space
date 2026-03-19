@@ -77,6 +77,7 @@ class WorkspaceMcpServerResponse(BaseModel):
     oauth_client_id: str | None = None
     oauth_auth_url: str | None = None
     oauth_scopes: str | None = None
+    token_expires_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 

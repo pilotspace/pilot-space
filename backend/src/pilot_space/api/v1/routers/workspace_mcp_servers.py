@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import secrets
 import urllib.parse
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -41,6 +41,7 @@ from pilot_space.infrastructure.database.repositories.workspace_repository impor
     WorkspaceRepository,
 )
 from pilot_space.infrastructure.database.rls import set_rls_context
+from pilot_space.infrastructure.encryption import encrypt_api_key
 from pilot_space.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
@@ -150,8 +151,6 @@ async def register_mcp_server(
                 "Delete an existing server before registering a new one."
             ),
         )
-
-    from pilot_space.infrastructure.encryption import encrypt_api_key
 
     token_encrypted: str | None = None
     if body.auth_token:
@@ -556,7 +555,6 @@ async def mcp_oauth_callback(
     from pilot_space.infrastructure.database.repositories.workspace_mcp_server_repository import (
         WorkspaceMcpServerRepository,
     )
-    from pilot_space.infrastructure.encryption import encrypt_api_key
 
     try:
         async with get_db_session() as db_session:
@@ -569,23 +567,26 @@ async def mcp_oauth_callback(
             if not server or not server.oauth_token_url:
                 return RedirectResponse(url=f"{redirect_base}?status=error&reason=server_not_found")
 
-            # Exchange code for token
+            # Exchange code for tokens
             callback_url = str(request.base_url).rstrip("/") + "/api/v1/oauth2/mcp-callback"
-            token_response = await _exchange_oauth_code(
+            result = await _exchange_oauth_code(
                 token_url=server.oauth_token_url,
                 client_id=server.oauth_client_id or "",
                 code=code,
                 redirect_uri=callback_url,
             )
 
-            if token_response is None:
+            if result is None:
                 return RedirectResponse(
                     url=f"{redirect_base}?status=error&reason=token_exchange_failed"
                 )
 
-            # Encrypt and store token
-            encrypted = encrypt_api_key(token_response)
-            server.auth_token_encrypted = encrypted
+            access_token, refresh_token, expires_in = result
+            server.auth_token_encrypted = encrypt_api_key(access_token)
+            if refresh_token:
+                server.refresh_token_encrypted = encrypt_api_key(refresh_token)
+            if expires_in is not None:
+                server.token_expires_at = datetime.now(UTC) + timedelta(seconds=expires_in)
             await repo.update(server)
 
             logger.info(
@@ -624,8 +625,8 @@ async def _exchange_oauth_code(
     client_id: str,
     code: str,
     redirect_uri: str,
-) -> str | None:
-    """Exchange authorization code for access token.
+) -> tuple[str, str | None, int | None] | None:
+    """Exchange authorization code for access token, refresh token, and expiry.
 
     Args:
         token_url: OAuth 2.0 token endpoint.
@@ -634,7 +635,8 @@ async def _exchange_oauth_code(
         redirect_uri: Redirect URI used in the authorization request.
 
     Returns:
-        Access token string, or None on failure.
+        3-tuple of (access_token, refresh_token | None, expires_in | None),
+        or None on failure.
     """
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
@@ -650,7 +652,13 @@ async def _exchange_oauth_code(
             )
             response.raise_for_status()
             data = response.json()
-            return data.get("access_token")
+            access_token: str | None = data.get("access_token")
+            if not access_token:
+                return None
+            refresh_token: str | None = data.get("refresh_token")
+            expires_in_raw = data.get("expires_in")
+            expires_in: int | None = int(expires_in_raw) if expires_in_raw is not None else None
+            return access_token, refresh_token, expires_in
     except Exception as exc:
         logger.warning("mcp_oauth_token_exchange_failed", error=str(exc))
         return None

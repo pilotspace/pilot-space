@@ -476,10 +476,10 @@ async def test_oauth_callback_redirect_includes_workspace_slug() -> None:
         ),
         patch(
             "pilot_space.api.v1.routers.workspace_mcp_servers._exchange_oauth_code",
-            return_value="test-access-token",
+            return_value=("test-access-token", None, None),
         ),
         patch(
-            "pilot_space.infrastructure.encryption.encrypt_api_key",
+            "pilot_space.api.v1.routers.workspace_mcp_servers.encrypt_api_key",
             return_value="encrypted-token",
         ),
     ):
@@ -555,10 +555,10 @@ async def test_oauth_callback_redirect_fallback_without_slug() -> None:
         ),
         patch(
             "pilot_space.api.v1.routers.workspace_mcp_servers._exchange_oauth_code",
-            return_value="test-access-token",
+            return_value=("test-access-token", None, None),
         ),
         patch(
-            "pilot_space.infrastructure.encryption.encrypt_api_key",
+            "pilot_space.api.v1.routers.workspace_mcp_servers.encrypt_api_key",
             return_value="encrypted-token",
         ),
     ):
