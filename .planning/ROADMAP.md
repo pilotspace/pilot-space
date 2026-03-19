@@ -83,7 +83,9 @@ Full archive: `.planning/milestones/v1.0.0-alpha2-ROADMAP.md`
   1. A registered remote MCP tool invoked by Claude during a chat session executes successfully rather than being silently skipped
   2. The PilotSpaceAgent session load includes remote tool identifiers in allowed_tools using wildcard patterns matching the server namespace
   3. Existing MCP server registration and connection flows are unaffected
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 30-01-PLAN.md — Fix _build_stream_config wildcard patterns + unit tests
 
 ### Phase 31: MCP Infrastructure Hardening
 **Goal**: The MCP transport layer is robust — HTTP + SSE supported, failed servers skipped on load, per-workspace server cap enforced, SSRF rebinding blocked, and production encryption key required
@@ -145,14 +147,14 @@ Full archive: `.planning/milestones/v1.0.0-alpha2-ROADMAP.md`
 | 1–11 | v1.0 | 46/46 | Complete | 2026-03-09 |
 | 12–23 | v1.0-alpha | 37/37 | Complete | 2026-03-12 |
 | 24–29 | v1.0.0-alpha2 | 14/14 | Complete | 2026-03-12 |
-| 30. MCP Critical Bug Fix | v1.1.0 | 0/? | Not started | - |
+| 30. MCP Critical Bug Fix | v1.1.0 | 0/1 | Planned | - |
 | 31. MCP Infrastructure Hardening | v1.1.0 | 0/? | Not started | - |
 | 32. OAuth Refresh Flow | v1.1.0 | 0/? | Not started | - |
 | 33. Remote MCP Approval Framework | v1.1.0 | 0/? | Not started | - |
 | 34. MCP Observability | v1.1.0 | 0/? | Not started | - |
 | 35. MCP Server Catalog | v1.1.0 | 0/? | Not started | - |
 
-**Total to date: 35 phases, 97+ plans across 4 milestones**
+**Total to date: 35 phases, 98+ plans across 4 milestones**
 
 ---
 *v1.0 shipped: 2026-03-09 — 11 phases, 46 plans, 30/30 requirements*
