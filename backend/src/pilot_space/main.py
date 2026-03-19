@@ -88,6 +88,7 @@ from pilot_space.api.v1.routers import (
     workspace_tasks_router,
     workspaces_router,
 )
+from pilot_space.api.v1.routers.mcp_catalog import router as mcp_catalog_router
 from pilot_space.api.v1.routers.skill_templates import (
     router as skill_templates_router,
 )
@@ -332,6 +333,7 @@ app.include_router(ai_extraction_router, prefix=API_V1_PREFIX)
 app.include_router(ghost_text_router, prefix=API_V1_PREFIX)
 app.include_router(ai_tasks_router, prefix=API_V1_PREFIX)
 app.include_router(mcp_tools_router, prefix=API_V1_PREFIX)
+app.include_router(mcp_catalog_router, prefix=f"{API_V1_PREFIX}/mcp-catalog")
 if ai_pr_review_router is not None:  # type: ignore[reportUnnecessaryComparison]
     app.include_router(ai_pr_review_router, prefix=API_V1_PREFIX)
 app.include_router(ai_sessions_router, prefix=API_V1_PREFIX)

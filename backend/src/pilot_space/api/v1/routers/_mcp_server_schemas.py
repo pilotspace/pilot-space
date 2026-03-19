@@ -46,6 +46,12 @@ class WorkspaceMcpServerCreate(BaseModel):
     oauth_auth_url: str | None = Field(default=None, max_length=512)
     oauth_token_url: str | None = Field(default=None, max_length=512)
     oauth_scopes: str | None = Field(default=None, max_length=512)
+    catalog_entry_id: UUID | None = Field(
+        default=None, description="Catalog entry this server was installed from"
+    )
+    installed_catalog_version: str | None = Field(
+        default=None, max_length=32, description="Catalog version at install time"
+    )
 
     @field_validator("url")
     @classmethod
@@ -80,6 +86,9 @@ class WorkspaceMcpServerResponse(BaseModel):
     oauth_auth_url: str | None = None
     oauth_scopes: str | None = None
     token_expires_at: datetime | None = None
+    # Catalog tracking fields (MCPC-02, MCPC-03)
+    catalog_entry_id: str | None = None
+    installed_catalog_version: str | None = None
 
     model_config = {"from_attributes": True}
 

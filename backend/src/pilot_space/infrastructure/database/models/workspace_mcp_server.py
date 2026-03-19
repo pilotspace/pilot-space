@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import uuid
 from datetime import datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, Enum, String
+from sqlalchemy import DateTime, Enum, ForeignKey, String
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from pilot_space.infrastructure.database.base import WorkspaceScopedModel
@@ -158,6 +160,19 @@ class WorkspaceMcpServer(WorkspaceScopedModel):
         nullable=False,
         default=McpApprovalMode.AUTO_APPROVE,
         doc="Tool-call approval mode: 'auto_approve' or 'require_approval'",
+    )
+
+    # Catalog tracking — MCPC-02, MCPC-03
+    catalog_entry_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("mcp_catalog_entries.id", ondelete="SET NULL"),
+        nullable=True,
+        doc="Catalog entry this server was installed from (nullable)",
+    )
+    installed_catalog_version: Mapped[str | None] = mapped_column(
+        String(32),
+        nullable=True,
+        doc="Catalog version string at install time for update drift detection",
     )
 
     # Relationships
