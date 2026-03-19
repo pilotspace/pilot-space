@@ -26,7 +26,7 @@ class UserSkillSchema(BaseModel):
     template_id: UUID | None
     skill_content: str
     experience_description: str | None
-    tags: list[str] = []
+    tags: list[str] = Field(default_factory=list)
     usage: str | None = None
     is_active: bool
     created_at: datetime

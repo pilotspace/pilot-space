@@ -75,12 +75,17 @@ def build_skill_generation_prompt(
         Formatted prompt string ready to send to the LLM.
     """
     name = role_name or display_name
+
+    # Escape curly braces in user-provided content to prevent format string injection.
+    safe_experience = experience_description.replace("{", "{{").replace("}", "}}")
+    safe_template = template_content.replace("{", "{{").replace("}", "}}")
+
     return SKILL_GENERATION_PROMPT_TEMPLATE.format(
         role_type=role_type,
         display_name=display_name,
         name=name,
-        experience_description=experience_description,
-        template_content=template_content,
+        experience_description=safe_experience,
+        template_content=safe_template,
     )
 
 

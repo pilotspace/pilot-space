@@ -25,6 +25,8 @@ const mockGenerateSkill = {
   mutateAsync: vi.fn().mockResolvedValue({
     skillContent: '# Generated Skill\n\nContent here',
     suggestedRoleName: 'AI Generated Name',
+    suggestedTags: ['Python', 'FastAPI'],
+    suggestedUsage: 'Use during backend code reviews.',
     wordCount: 5,
   }),
   isPending: false,
@@ -39,6 +41,8 @@ const mockGenerateWorkspaceSkill = {
   mutateAsync: vi.fn().mockResolvedValue({
     skill_content: '# Workspace Skill',
     role_name: 'Workspace Role',
+    tags: ['Architecture', 'Design'],
+    usage: 'Use for workspace-level design reviews.',
   }),
   isPending: false,
 };
@@ -316,6 +320,8 @@ describe('SkillAddModal', () => {
         resolveGenerate({
           skillContent: '# Generated Skill\n\nContent here',
           suggestedRoleName: 'AI Generated Name',
+          suggestedTags: ['Python', 'FastAPI'],
+          suggestedUsage: 'Use during backend code reviews.',
           wordCount: 5,
         });
       });

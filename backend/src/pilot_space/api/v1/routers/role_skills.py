@@ -170,6 +170,8 @@ async def create_role_skill(
                 role_name=request.role_name,
                 skill_content=request.skill_content,
                 experience_description=request.experience_description,
+                tags=request.tags if request.tags else None,
+                usage=request.usage,
                 is_primary=request.is_primary,
             )
         )
@@ -185,6 +187,8 @@ async def create_role_skill(
         role_name=skill.role_name,
         skill_content=skill.skill_content,
         experience_description=skill.experience_description,
+        tags=skill.tags if skill.tags else [],
+        usage=skill.usage,
         is_primary=skill.is_primary,
         template_version=skill.template_version,
         template_update_available=False,
@@ -222,6 +226,8 @@ async def update_role_skill(
                 workspace_id=workspace_id,
                 role_name=request.role_name,
                 skill_content=request.skill_content,
+                tags=request.tags,
+                usage=request.usage,
                 is_primary=request.is_primary,
             )
         )
@@ -248,6 +254,8 @@ async def update_role_skill(
         role_name=skill.role_name,
         skill_content=skill.skill_content,
         experience_description=skill.experience_description,
+        tags=skill.tags if skill.tags else [],
+        usage=skill.usage,
         is_primary=skill.is_primary,
         template_version=skill.template_version,
         template_update_available=False,

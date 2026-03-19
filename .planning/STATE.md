@@ -5,11 +5,7 @@ milestone_name: Notion-Style Restructure
 status: completed
 stopped_at: Milestone archived
 last_updated: "2026-03-18"
-<<<<<<< HEAD
-last_activity: "2026-03-18 — Completed quick task 260318-naw: settings modal migration investigation (756-line INVESTIGATION.md, feat/settings-modal branch)"
-=======
 last_activity: "2026-03-18 — Completed quick task 260318-wqj: Add tags+usage to skill system, redesign modal"
->>>>>>> 7f4daf04 (docs(quick-260318-wqj): complete plan — add tags+usage to skill system, redesign modal)
 progress:
   total_phases: 18
   completed_phases: 17

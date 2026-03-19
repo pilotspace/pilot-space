@@ -30,7 +30,7 @@ def upgrade() -> None:
             sa.Column(
                 "tags",
                 sa.JSON(),
-                nullable=True,
+                nullable=False,
                 server_default="'[]'",
             ),
         )
