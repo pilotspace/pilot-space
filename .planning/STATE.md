@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: Planned
-stopped_at: Completed 35-01-PLAN.md
-last_updated: "2026-03-19T22:39:38.398Z"
+stopped_at: Completed 35-02-PLAN.md (checkpoint:human-verify)
+last_updated: "2026-03-20T05:50:00.000Z"
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 15
-  completed_plans: 12
+  completed_plans: 13
 ---
 
 # Project State
@@ -24,8 +24,8 @@ See: .planning/PROJECT.md (updated 2026-03-19)
 ## Current Position
 
 Phase: 35 of 35 (MCP Server Catalog)
-Plan: Planning complete — 35-01 and 35-02 created, not yet executed
-Status: Planned
+Plan: 35-02 complete — awaiting human verification at checkpoint
+Status: In Progress
 
 Next: Execute Phase 35 starting with 35-01 (wave 1 — backend data layer + API), then 35-02 (wave 2 — frontend UI).
 
@@ -94,6 +94,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 35]: MCPCatalogCard is a plain component (not observer) — mirrors MCPServerCard pattern from Phase 33
 - [Phase 35]: Global mcp_catalog_entries table (BaseModel, no workspace_id) — catalog is identical for all workspaces, no RLS needed
 - [Phase 35]: MCP catalog seeded in migration 095 (static data — Context7 bearer/http + GitHub oauth2/http)
+- [35-02]: hasUpdate and isInstalled implemented as standalone exported utility functions alongside MCPCatalogStore class for independent testability
+- [35-02]: Update Available badge on MCPCatalogCard (Catalog tab) only — not on MCPServerCard (avoids modifying complex registered server card)
+- [35-02]: useStore() mock uses 'as unknown as ReturnType<typeof useStore>' in tests for lightweight store isolation without full shape requirement
 
 ### Pending Todos
 
@@ -105,7 +108,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-19T22:39:38.396Z
-Stopped at: Completed 35-01-PLAN.md
+Last session: 2026-03-20T05:50:00.000Z
+Stopped at: 35-02 checkpoint:human-verify — all code committed, awaiting human UI verification
 Resume file: None
-Next action: /gsd:execute-phase 35 (execute 35-01 then 35-02)
+Next action: Human verifies catalog tab at Settings > Remote MCP Servers, then resumes with "approved"

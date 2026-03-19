@@ -71,7 +71,7 @@ Full archive: `.planning/milestones/v1.0.0-alpha2-ROADMAP.md`
 - [x] **Phase 32: OAuth Refresh Flow** — Refresh token storage, auto-refresh before session load, expiry tracking in UI (completed 2026-03-19)
 - [x] **Phase 33: Remote MCP Approval Framework** — DD-003 wiring, per-server approval config, ChatView inline cards, auto-confirm policy (completed 2026-03-19)
 - [x] **Phase 34: MCP Observability** — Audit trail for tool invocations, MCP usage visible in AI dashboard (completed 2026-03-19)
-- [ ] **Phase 35: MCP Server Catalog** — Browsable catalog with one-click install, versioned entries, official seeds
+- [x] **Phase 35: MCP Server Catalog** — Browsable catalog with one-click install, versioned entries, official seeds (completed 2026-03-19)
 
 ## Phase Details
 
@@ -171,7 +171,7 @@ Plans:
 | 32. OAuth Refresh Flow | v1.1.0 | 3/3 | Complete | 2026-03-19 |
 | 33. Remote MCP Approval Framework | 3/3 | Complete | 2026-03-19 | - |
 | 34. MCP Observability | 2/2 | Complete   | 2026-03-19 | - |
-| 35. MCP Server Catalog | 1/2 | In Progress|  | - |
+| 35. MCP Server Catalog | 2/2 | Complete   | 2026-03-19 | - |
 
 **Total to date: 35 phases, 110+ plans across 4 milestones**
 
