@@ -21,6 +21,7 @@ export interface MCPServer {
   auth_type: 'bearer' | 'oauth2';
   last_status: 'connected' | 'failed' | 'unknown' | null;
   last_status_checked_at: string | null;
+  token_expires_at: string | null; // ISO8601 UTC string or null (MCPO-03)
   created_at: string;
 }
 

@@ -9,7 +9,16 @@
 
 'use client';
 
-import { RefreshCw, Trash2, CheckCircle2, XCircle, Circle, Server } from 'lucide-react';
+import {
+  RefreshCw,
+  Trash2,
+  CheckCircle2,
+  XCircle,
+  Circle,
+  Server,
+  AlertCircle,
+  Clock,
+} from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -75,6 +84,32 @@ function AuthTypeBadge({ authType }: { authType: MCPServer['auth_type'] }) {
   );
 }
 
+function ExpiryBadge({ expiresAt }: { expiresAt: string | null }) {
+  if (!expiresAt) return null;
+  const expiry = new Date(expiresAt);
+  const now = new Date();
+  const diffMs = expiry.getTime() - now.getTime();
+  if (diffMs <= 0) {
+    return (
+      <Badge
+        variant="outline"
+        className="gap-1.5 border-destructive/20 bg-destructive/10 text-destructive text-xs"
+      >
+        <AlertCircle className="h-3 w-3" />
+        Token expired
+      </Badge>
+    );
+  }
+  const diffH = Math.floor(diffMs / 3600000);
+  const label = diffH < 1 ? 'expires in <1h' : `expires in ${diffH}h`;
+  return (
+    <Badge variant="outline" className="gap-1.5 text-xs text-muted-foreground">
+      <Clock className="h-3 w-3" />
+      {label}
+    </Badge>
+  );
+}
+
 export function MCPServerCard({
   server,
   onDelete,
@@ -97,6 +132,9 @@ export function MCPServerCard({
               <div className="mt-1.5 flex items-center gap-2">
                 <AuthTypeBadge authType={server.auth_type} />
                 <StatusBadge status={server.last_status} />
+                {server.auth_type === 'oauth2' && (
+                  <ExpiryBadge expiresAt={server.token_expires_at} />
+                )}
               </div>
             </div>
           </div>

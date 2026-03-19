@@ -12,6 +12,7 @@ const makeServer = (overrides?: Partial<MCPServer>): MCPServer => ({
   auth_type: 'bearer',
   last_status: 'connected',
   last_status_checked_at: '2026-01-01T00:00:00Z',
+  token_expires_at: null,
   created_at: '2026-01-01T00:00:00Z',
   ...overrides,
 });
