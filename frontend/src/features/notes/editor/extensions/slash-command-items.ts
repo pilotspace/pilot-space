@@ -4,6 +4,9 @@
  * Extracted from SlashCommandExtension to keep files under 700 lines.
  */
 import type { Editor } from '@tiptap/core';
+import { toast } from 'sonner';
+import { isVideoUrl, extractVimeoId } from './VimeoNode';
+import { showVideoUrlPrompt } from './VideoUrlPrompt';
 
 /**
  * Slash command definition
@@ -432,6 +435,38 @@ export function getDefaultCommands(
     },
 
     // Media commands
+    {
+      name: 'video',
+      label: 'Video',
+      description: 'Embed a YouTube or Vimeo video',
+      icon: 'Play',
+      group: 'media',
+      keywords: ['youtube', 'vimeo', 'embed', 'video', 'media', 'watch'],
+      execute: (editor) => {
+        showVideoUrlPrompt(editor, (url) => {
+          const platform = isVideoUrl(url);
+          if (platform === 'youtube') {
+            editor.chain().focus().setYoutubeVideo({ src: url }).run();
+          } else if (platform === 'vimeo') {
+            const id = extractVimeoId(url);
+            if (id) {
+              editor
+                .chain()
+                .focus()
+                .insertContent({
+                  type: 'vimeo',
+                  attrs: { src: `https://player.vimeo.com/video/${id}` },
+                })
+                .run();
+            } else {
+              toast.error('Please enter a valid YouTube or Vimeo URL');
+            }
+          } else {
+            toast.error('Please enter a valid YouTube or Vimeo URL');
+          }
+        });
+      },
+    },
     {
       name: 'image',
       label: 'Image',

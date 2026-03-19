@@ -111,6 +111,9 @@ import { AIBlockProcessingExtension } from './AIBlockProcessingExtension';
 import { OwnershipExtension, type OwnershipOptions, type BlockOwner } from './OwnershipExtension';
 import { DensityExtension, type DensityOptions } from './DensityExtension';
 import Highlight from '@tiptap/extension-highlight';
+import { YoutubeExtension } from './YoutubeExtension';
+import { VimeoNode } from './VimeoNode';
+import { VideoPasteDetector } from './VideoPasteDetector';
 
 export interface EditorExtensionsOptions {
   /** Placeholder text for empty editor */
@@ -393,6 +396,12 @@ export function createEditorExtensions(options: EditorExtensionsOptions = {}): A
   extensions.push(PMBlockExtension);
   extensions.push(FileCardExtension); // Group 3 — ARTF-01, ARTF-02, ARTF-03
   extensions.push(FigureExtension); // Group 3 — EDIT-04, EDIT-05
+  // YoutubeExtension — inline YouTube iframe player (VID-01, VID-04)
+  // MUST be in Group 3 before BlockIdExtension (PRE-002)
+  extensions.push(YoutubeExtension);
+  // VimeoNode — inline Vimeo iframe player (VID-02, VID-04)
+  // MUST be in Group 3 before BlockIdExtension (PRE-002)
+  extensions.push(VimeoNode);
 
   // ── Group 4: Block IDs (MUST be after all block-type extensions) ────
   // BlockIdExtension assigns stable UUIDs to every block-level node.
@@ -482,6 +491,9 @@ export function createEditorExtensions(options: EditorExtensionsOptions = {}): A
       })
     );
   }
+
+  // Video paste detection (VID-03) — offers embed prompt on standalone YouTube/Vimeo URL paste
+  extensions.push(VideoPasteDetector);
 
   // Inline issue references (per UI Spec v3.3 / DD-013)
   if (enableInlineIssues) {
