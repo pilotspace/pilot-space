@@ -140,7 +140,10 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. After a remote MCP tool executes, an entry appears in the immutable audit log recording the tool name, server, hashed input, and duration
   2. The workspace AI cost/usage dashboard includes a MCP tools section showing per-server and per-tool invocation counts
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 34-01-PLAN.md — Audit hook extension + mcp_usage router + migration 094 (MCPOB-01, MCPOB-02 backend)
+- [ ] 34-02-PLAN.md — MCP Tools tab in CostDashboardPage + aiApi.getMcpToolUsage (MCPOB-02 frontend)
 
 ### Phase 35: MCP Server Catalog
 **Goal**: Workspace admins can browse a curated catalog of MCP servers, install one with a single click, receive update notifications when newer versions are available, and find context7 and GitHub MCP pre-seeded as official entries
@@ -163,8 +166,8 @@ Plans:
 | 30. MCP Critical Bug Fix | v1.1.0 | 0/1 | Planned | - |
 | 31. MCP Infrastructure Hardening | v1.1.0 | 2/4 | In Progress | - |
 | 32. OAuth Refresh Flow | v1.1.0 | 3/3 | Complete | 2026-03-19 |
-| 33. Remote MCP Approval Framework | 3/3 | Complete   | 2026-03-19 | - |
-| 34. MCP Observability | v1.1.0 | 0/? | Not started | - |
+| 33. Remote MCP Approval Framework | 3/3 | Complete | 2026-03-19 | - |
+| 34. MCP Observability | v1.1.0 | 0/2 | Planned | - |
 | 35. MCP Server Catalog | v1.1.0 | 0/? | Not started | - |
 
 **Total to date: 35 phases, 108+ plans across 4 milestones**

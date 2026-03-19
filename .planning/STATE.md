@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: executing
-stopped_at: Completed 33-03-PLAN.md
-last_updated: "2026-03-19T21:13:34.802Z"
-last_activity: 2026-03-19 — 33-01 executed (migration 093 + ORM + PATCH endpoint + ActionType.REMOTE_MCP_TOOL)
+milestone: v1.1.0
+milestone_name: MCP Platform Hardening
+status: planning
+stopped_at: Planned 34-01-PLAN.md and 34-02-PLAN.md
+last_updated: "2026-03-20T00:00:00.000Z"
+last_activity: 2026-03-20 — Phase 34 planned (2 plans, 2 waves)
 progress:
   total_phases: 6
   completed_phases: 2
-  total_plans: 11
+  total_plans: 13
   completed_plans: 9
-  percent: 9
+  percent: 15
 ---
 
 # Project State
@@ -21,27 +21,24 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-19)
 
 **Core value:** Enterprise teams can adopt AI-augmented SDLC workflows without sacrificing data sovereignty, compliance, or human control.
-**Current focus:** Phase 33 — Remote MCP Approval Framework (planned, ready to execute)
+**Current focus:** Phase 34 — MCP Observability (planned, ready to execute)
 
 ## Current Position
 
-Phase: 33 of 35 (Remote MCP Approval Framework)
-Plan: 01 (33-01 complete — migration 093, ORM McpApprovalMode, PATCH endpoint, ActionType.REMOTE_MCP_TOOL)
-Status: In Progress — wave 1 complete, waves 2 (33-02 + 33-03) ready to run in parallel
-Last activity: 2026-03-19 — 33-01 executed (migration 093 + ORM + PATCH endpoint + ActionType.REMOTE_MCP_TOOL)
+Phase: 34 of 35 (MCP Observability)
+Plan: Planning complete — 2 plans in 2 waves
+Status: Planned — ready to execute
 
-Progress: [░░░░░░░░░░] 9% (1/6 phases complete in v1.1.0, 7/11 plans complete)
+Execute order: Run 34-01 first (wave 1 — backend audit hook + endpoint + migration + tests), then 34-02 (wave 2 — frontend MCP Tools tab).
 
-## Wave Structure for Phase 33
+## Wave Structure for Phase 34
 
 | Wave | Plans | Parallelizable | Dependencies |
 |------|-------|----------------|--------------|
-| 1 | 33-01 (DB migration + ORM + PATCH endpoint + ActionType) | Solo | None |
-| 2 | 33-02 (backend approval wiring), 33-03 (frontend toggle) | Yes | Both depend on 33-01 ORM model |
+| 1 | 34-01 (backend: hooks_lifecycle extension + mcp_usage router + migration 094 + tests) | Solo | None |
+| 2 | 34-02 (frontend: aiApi.getMcpToolUsage + CostDashboardPage MCP Tools tab) | Solo | Depends on 34-01 endpoint definition |
 
-Execute order: Run 33-01 first (wave 1), then 33-02 and 33-03 in parallel (wave 2).
-
-Note: 33-02 and 33-03 are independent at the file level — 33-02 touches only backend AI SDK + agent, 33-03 touches only frontend stores/components. They can run in parallel after 33-01 lands.
+Note: 34-02 depends on 34-01 for the endpoint contract (`/ai/mcp-usage` URL, `McpToolUsageResponse` shape). Wave 2 runs after wave 1 is committed.
 
 ## Milestone History
 
@@ -84,6 +81,11 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 33]: MCPServerCard is NOT an observer — approval mode toggle uses onUpdateApprovalMode prop pattern, parent mcp-servers-settings-page.tsx (observer) owns the store call
 - [Phase 33]: Server key format for approval map uses UUID from _load_remote_mcp_servers (remote_{id}), not display_name normalization
 - [Phase 33]: approval_mode optional on MCPServer for backwards compat; Switch in server info column not actions column; MCPA-03 uses InlineApprovalCard GenericJSON fallback (no new component)
+- [Phase 34]: mcp_usage.py new router registered under ai.py (include_router) so endpoint is at /api/v1/ai/mcp-usage — no main.py change needed
+- [Phase 34]: display_name resolved at query time via LEFT JOIN workspace_mcp_servers (not stored at log time) — avoids async DB call in streaming hook
+- [Phase 34]: func.json_extract_path_text used for JSONB GROUP BY (portable: works with both PostgreSQL and SQLite test DB)
+- [Phase 34]: migration 094 adds partial index WHERE action='ai.mcp_tool_call' for dashboard query performance
+- [Phase 34]: input_hash stored as full 64-char SHA-256 hex (not truncated prefix) in payload JSONB
 
 ### Pending Todos
 
@@ -95,7 +97,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-19T21:13:30.657Z
-Stopped at: Completed 33-03-PLAN.md
+Last session: 2026-03-20T00:00:00.000Z
+Stopped at: Planned 34-01-PLAN.md and 34-02-PLAN.md
 Resume file: None
-Next action: /gsd:execute-phase 33 (plans 33-02 + 33-03 in parallel)
+Next action: /gsd:execute-phase 34 (plan 34-01 first, then 34-02)
