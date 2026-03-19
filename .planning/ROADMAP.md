@@ -101,7 +101,11 @@ Plans:
   3. A file with a disallowed extension is rejected with a 422 response listing the allowed types
   4. A signed URL fetched from the backend grants time-limited read access to the artifact; a direct public bucket URL does not work
   5. A failed upload mid-stream (simulated) leaves no orphaned storage object — the stale `pending_upload` DB record is cleaned up by the 24h cleanup job
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 31-01-PLAN.md — Alembic migration 090 + Artifact SQLAlchemy model + model registration
+- [ ] 31-02-PLAN.md — ArtifactRepository, ArtifactUploadService, Pydantic schemas, cleanup job + MemoryWorker dispatch
+- [ ] 31-03-PLAN.md — project_artifacts router (POST/GET/GET-url/DELETE) + DI wiring + human verify checkpoint
 
 ### Phase 32: Inline Editor Features
 **Goal**: Users can insert images and files directly into notes as rendered inline blocks — images with optional captions, files as interactive cards that upload to the backend and display metadata.
@@ -113,7 +117,13 @@ Plans:
   3. User can drag and drop an image or file onto the editor canvas and it becomes an inline block
   4. User can insert a file card via the `/file` slash command; the card shows upload progress, then displays the filename, type, and size on completion
   5. File cards and images survive a note save/reload cycle (markdown serialization round-trip verified)
-**Plans**: TBD
+**Plans**: 5 plans
+Plans:
+- [ ] 32-01-PLAN.md — Infrastructure: ArtifactStore, artifactsApi, RootStore wiring, Wave 0 test scaffolds
+- [ ] 32-02-PLAN.md — FileCardExtension: node + context bridge + FileCardNodeView (plain) + FileCardView (observer)
+- [ ] 32-03-PLAN.md — FigureExtension: node + FigureNodeView (plain) + editable caption via NodeViewContent
+- [ ] 32-04-PLAN.md — Editor wiring: slash commands + drop handler + extension registration + stale node cleanup
+- [ ] 32-05-PLAN.md — Visual verification checkpoint: full test suite + human flow verification
 
 ### Phase 33: Video Embeds
 **Goal**: Users can embed YouTube and Vimeo videos as inline players directly in notes — via slash command, URL paste, or manual URL entry — with proper iframe security controls in place.
@@ -125,7 +135,11 @@ Plans:
   3. Pasting a YouTube or Vimeo URL into the editor triggers an offer to embed; accepting replaces the plain URL with an inline player
   4. Video iframes render with `sandbox` and `allow` attributes enforced; arbitrary non-video URLs are rejected with a user-visible toast
   5. The Next.js CSP `frame-src` includes `youtube-nocookie.com` and `player.vimeo.com` — video iframes load in production without CSP errors
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 33-01-PLAN.md — Install @tiptap/extension-youtube, implement YoutubeExtension and VimeoNode with tests (TDD RED/GREEN)
+- [ ] 33-02-PLAN.md — Wire extensions into editor: Group 3 registration, /video slash command, VideoPasteDetector
+- [ ] 33-03-PLAN.md — CSP frame-src headers in next.config.ts + responsive .video-embed CSS
 
 ### Phase 34: File Preview Modal
 **Goal**: Users can preview uploaded file content directly in a modal — images render visually, text and code files render with formatting, CSV files render as tables, and unsupported types fall back to a download prompt.
@@ -178,9 +192,9 @@ Plans:
 | 12–23 | v1.0-alpha | 37/37 | Complete | 2026-03-12 |
 | 24–29 | v1.0.0-alpha2 | 14/14 | Complete | 2026-03-12 |
 | 30. TipTap Extension Foundation | v1.1 | 0/3 | Not started | - |
-| 31. Storage Backend | v1.1 | 0/? | Not started | - |
-| 32. Inline Editor Features | v1.1 | 0/? | Not started | - |
-| 33. Video Embeds | v1.1 | 0/? | Not started | - |
+| 31. Storage Backend | v1.1 | 0/3 | Not started | - |
+| 32. Inline Editor Features | v1.1 | 0/5 | Planned | - |
+| 33. Video Embeds | v1.1 | 0/3 | Planned | - |
 | 34. File Preview Modal | v1.1 | 0/? | Not started | - |
 | 35. Artifacts Management Page | v1.1 | 0/2 | Not started | - |
 | 36. Editor UX Polish | v1.1 | 0/2 | Planned | - |
