@@ -12,14 +12,14 @@ Requirements for milestone v1.1. Each maps to roadmap phases.
 - [x] **EDIT-01**: User can toggle pull quote styling on blockquotes
 - [x] **EDIT-02**: User can toggle H1/H2/H3 headings from floating toolbar on text selection
 - [ ] **EDIT-03**: User can enter focus mode (Cmd+Shift+F) to hide chrome and focus on writing
-- [ ] **EDIT-04**: User can insert images via /image slash command and drag-and-drop
-- [ ] **EDIT-05**: User can add captions to inline images (figure + figcaption)
+- [x] **EDIT-04**: User can insert images via /image slash command and drag-and-drop
+- [x] **EDIT-05**: User can add captions to inline images (figure + figcaption)
 
 ### File Artifacts
 
-- [ ] **ARTF-01**: User can upload files (up to 10MB) into notes as inline card blocks
-- [ ] **ARTF-02**: User can drag-and-drop files onto the editor canvas to create file cards
-- [ ] **ARTF-03**: User can insert file cards via /file slash command
+- [x] **ARTF-01**: User can upload files (up to 10MB) into notes as inline card blocks
+- [x] **ARTF-02**: User can drag-and-drop files onto the editor canvas to create file cards
+- [x] **ARTF-03**: User can insert file cards via /file slash command
 - [x] **ARTF-04**: System stores uploaded files in Supabase Storage with workspace isolation
 - [x] **ARTF-05**: System enforces 10MB file size limit at client, API, and infrastructure layers
 - [x] **ARTF-06**: System validates file types against an extension allowlist before storage
@@ -89,11 +89,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | EDIT-01 | Phase 30 | Complete |
 | EDIT-02 | Phase 30 | Complete |
 | EDIT-03 | Phase 36 | Pending |
-| EDIT-04 | Phase 32 | Pending |
-| EDIT-05 | Phase 32 | Pending |
-| ARTF-01 | Phase 32 | Pending |
-| ARTF-02 | Phase 32 | Pending |
-| ARTF-03 | Phase 32 | Pending |
+| EDIT-04 | Phase 32 | Complete |
+| EDIT-05 | Phase 32 | Complete |
+| ARTF-01 | Phase 32 | Complete |
+| ARTF-02 | Phase 32 | Complete |
+| ARTF-03 | Phase 32 | Complete |
 | ARTF-04 | Phase 31 | Complete |
 | ARTF-05 | Phase 31 | Complete |
 | ARTF-06 | Phase 31 | Complete |
