@@ -84,9 +84,23 @@ Enterprise teams can adopt AI-augmented SDLC workflows without sacrificing data 
 - ✓ Desktop + tablet responsive layout — v1.0.0-alpha2
 - ✓ Drag-and-drop tree reordering with depth limit enforcement — v1.0.0-alpha2
 
+## Current Milestone: v1.1.0 MCP Platform Hardening
+
+**Goal:** Make the MCP layer production-ready — fix critical allowed_tools bug, add HTTP transport, extend DD-003 approval to remote tools, deliver OAuth refresh flow, and build a browsable MCP server catalog with end-to-end ChatView integration.
+
+**Target features:**
+- Fix remote MCP allowed_tools gap (critical: tools load but Claude can't invoke them)
+- SSE + HTTP transport support per Claude Agent SDK guidelines
+- Health-check gating, per-workspace server cap, DNS re-validation (SSRF hardening)
+- OAuth refresh token flow with expiry tracking
+- Remote MCP tool approval via DD-003 framework + ChatView inline cards
+- Remote MCP tool audit trail and usage dashboard
+- Browsable MCP server catalog with one-click install and update notifications
+- Encryption key production enforcement
+
 ### Active
 
-(No active requirements — next milestone not yet defined)
+<!-- v1.1.0 MCP Platform Hardening requirements — see REQUIREMENTS.md for REQ-IDs -->
 
 ### Out of Scope
 
@@ -147,5 +161,9 @@ Shipped v1.0.0-alpha2 Notion-Style Restructure on 2026-03-12. Restructured data 
 | System font stack over DM Sans | Zero web font overhead for body text; Fraunces preserved for display headings | ✓ Good |
 | Three-mode responsive (mobile/tablet/desktop) | Tablet gets icon-rail sidebar (not overlay drawer); desktop unchanged | ✓ Good |
 
+| SSE + HTTP transport for remote MCP | Claude Agent SDK supports both; future MCP servers moving to HTTP | — Pending |
+| MCP catalog as installable registry | Mirrors plugin marketplace pattern; curated official entries | — Pending |
+| DD-003 approval extended to remote MCP tools | Enterprise requirement: no unaudited external tool execution | — Pending |
+
 ---
-*Last updated: 2026-03-12 after v1.0.0-alpha2 milestone shipped*
+*Last updated: 2026-03-19 after v1.1.0 milestone started*
