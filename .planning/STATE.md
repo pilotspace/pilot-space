@@ -60,13 +60,13 @@ None.
 ### Blockers/Concerns
 
 - [Phase 31]: Verify actual Nginx `client_max_body_size` in `infra/` before assuming 1MB default — may already be set higher
-- [Phase 31]: Decide `python-magic` (MIME validation via magic bytes) vs. extension-allowlist approach — new Python dep vs. simpler check
+- [Phase 31]: RESOLVED — extension-allowlist approach chosen over python-magic (simpler, no new dep)
 - [Phase 32]: Stale `artifactId: null` placeholder nodes from failed uploads need explicit removal strategy on editor mount
-- [Phase 34]: CSV virtual scrolling decision needed before implementation if target workflow regularly exceeds 500 rows
+- [Phase 34]: RESOLVED — 500-row truncation with download fallback chosen over virtual scrolling
 
 ## Session Continuity
 
 Last session: 2026-03-18
-Stopped at: v1.1 roadmap created — 7 phases (30–36), 22 requirements mapped
-Resume file: None
+Stopped at: Context gathered for all 7 phases (30–36) in auto mode
+Resume file: .planning/phases/30-tiptap-extension-foundation/30-CONTEXT.md
 Next action: `/gsd:plan-phase 30`

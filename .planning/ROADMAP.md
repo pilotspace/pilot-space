@@ -85,7 +85,11 @@ Full archive: `.planning/milestones/v1.0.0-alpha2-ROADMAP.md`
   2. User can toggle H1, H2, and H3 headings from the floating toolbar on a text selection
   3. New extensions appear in the correct Group 3 slot in `createEditorExtensions.ts` (before `BlockIdExtension`), verified by `editor.getJSON()` showing non-null `blockId` on new nodes
   4. NodeView wrapper pattern (plain component + context bridge, no `observer()` on the NodeView directly) is established and documented in a code comment for future nodes
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 30-01-PLAN.md — TDD: Write RED test scaffolding for PullQuoteExtension, SelectionToolbar headings, and node-view-bridge
+- [ ] 30-02-PLAN.md — Implement PullQuoteExtension (EDIT-01): attr toggle, markdown serialize, slash command, CSS, export
+- [ ] 30-03-PLAN.md — Implement heading dropdown + node-view-bridge utility (EDIT-02 + bridge pattern)
 
 ### Phase 31: Storage Backend
 **Goal**: Files can be stored and retrieved through a secure backend API — DB-first upload flow prevents orphaned storage objects, all three size enforcement layers are active, and workspace isolation is enforced at the application layer.
@@ -146,7 +150,10 @@ Full archive: `.planning/milestones/v1.0.0-alpha2-ROADMAP.md`
   4. User can delete an artifact and the row disappears immediately (optimistic UI); on server error, the row reappears with a visible error state
   5. User can type in a search box to filter artifacts by filename; results update with each keystroke
   6. User can sort artifacts by type, date, or size and the list reorders accordingly
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 35-01-PLAN.md — Artifact types, API service, and TanStack Query hooks (data layer)
+- [ ] 35-02-PLAN.md — ArtifactsPage component + ProjectSidebar nav link (UI layer)
 
 ### Phase 36: Editor UX Polish
 **Goal**: Users can enter focus mode to hide all surrounding chrome and write without distraction — triggered by keyboard shortcut or toolbar toggle — with no conflicts with slash commands or other editor overlays.
@@ -156,7 +163,10 @@ Full archive: `.planning/milestones/v1.0.0-alpha2-ROADMAP.md`
   1. User pressing Cmd+Shift+F enters focus mode — sidebar, header, and all chrome outside the editor are hidden
   2. User pressing Cmd+Shift+F again (or Escape) exits focus mode and all chrome reappears
   3. Slash command menu, floating toolbar, and file preview modal all remain functional while in focus mode (z-index hierarchy correct)
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 36-01-PLAN.md — UIStore isFocusMode observable + AppShell sidebar/hamburger hide
+- [ ] 36-02-PLAN.md — NoteCanvasProps threading + chrome hide + keyboard shortcut + focus button + exit affordance
 
 ## Progress
 
@@ -167,13 +177,13 @@ Full archive: `.planning/milestones/v1.0.0-alpha2-ROADMAP.md`
 | 1–11 | v1.0 | 46/46 | Complete | 2026-03-09 |
 | 12–23 | v1.0-alpha | 37/37 | Complete | 2026-03-12 |
 | 24–29 | v1.0.0-alpha2 | 14/14 | Complete | 2026-03-12 |
-| 30. TipTap Extension Foundation | v1.1 | 0/? | Not started | - |
+| 30. TipTap Extension Foundation | v1.1 | 0/3 | Not started | - |
 | 31. Storage Backend | v1.1 | 0/? | Not started | - |
 | 32. Inline Editor Features | v1.1 | 0/? | Not started | - |
 | 33. Video Embeds | v1.1 | 0/? | Not started | - |
 | 34. File Preview Modal | v1.1 | 0/? | Not started | - |
-| 35. Artifacts Management Page | v1.1 | 0/? | Not started | - |
-| 36. Editor UX Polish | v1.1 | 0/? | Not started | - |
+| 35. Artifacts Management Page | v1.1 | 0/2 | Not started | - |
+| 36. Editor UX Polish | v1.1 | 0/2 | Planned | - |
 
 **Total: 29 phases complete, 97 plans, 86 requirements across 3 milestones | v1.1: 7 phases, 22 requirements**
 
