@@ -67,7 +67,7 @@ Full archive: `.planning/milestones/v1.0.0-alpha2-ROADMAP.md`
 **Milestone Goal:** Transform the note editor into a polished Medium-style writing experience with file artifact uploads rendered as inline cards, a per-project artifacts management page with optimistic UI, and inline video embeds for YouTube/Vimeo.
 
 - [x] **Phase 30: TipTap Extension Foundation** - Pull quote, heading toggle, extension registration patterns established (completed 2026-03-19)
-- [ ] **Phase 31: Storage Backend** - Artifact model, upload service, project_artifacts router, size enforcement
+- [x] **Phase 31: Storage Backend** - Artifact model, upload service, project_artifacts router, size enforcement (completed 2026-03-19)
 - [ ] **Phase 32: Inline Editor Features** - FileCardNode, FigureNode, slash commands, drag-and-drop
 - [ ] **Phase 33: Video Embeds** - YouTube/Vimeo iframe players, paste detection, CSP
 - [ ] **Phase 34: File Preview Modal** - Shared preview dialog with per-MIME renderers
@@ -195,7 +195,7 @@ Plans:
 | 12–23 | v1.0-alpha | 37/37 | Complete | 2026-03-12 |
 | 24–29 | v1.0.0-alpha2 | 14/14 | Complete | 2026-03-12 |
 | 30. TipTap Extension Foundation | 3/3 | Complete   | 2026-03-19 | - |
-| 31. Storage Backend | 2/3 | In Progress|  | - |
+| 31. Storage Backend | 3/3 | Complete   | 2026-03-19 | - |
 | 32. Inline Editor Features | v1.1 | 0/5 | Planned | - |
 | 33. Video Embeds | v1.1 | 0/3 | Planned | - |
 | 34. File Preview Modal | v1.1 | 0/2 | Planned | - |

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Medium Editor & Artifacts
 status: planning
-stopped_at: Completed 31-storage-backend/31-02-PLAN.md
-last_updated: "2026-03-19T13:13:44.601Z"
+stopped_at: Completed 31-storage-backend/31-03-PLAN.md
+last_updated: "2026-03-19T13:28:12.031Z"
 last_activity: 2026-03-18 — v1.1 roadmap created, 22/22 requirements mapped across 7 phases
 progress:
   total_phases: 7
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 20
-  completed_plans: 5
+  completed_plans: 6
   percent: 0
 ---
 
@@ -63,6 +63,8 @@ Recent decisions affecting current work:
 - [Phase 31-storage-backend]: WorkspaceScopedModel tablename override requires # type: ignore[assignment] — BaseModel declared_attr.directive creates type conflict with plain string literal (pattern: note.py, issue.py)
 - [Phase 31-storage-backend]: ArtifactUploadService reads persisted.created_at (not local artifact.created_at) to avoid ValidationError when server default not populated in unit tests
 - [Phase 31-storage-backend]: MemoryWorker storage_client is optional parameter — TASK_ARTIFACT_CLEANUP logs warning and skips if not configured, enabling gradual rollout without breaking existing worker deployments
+- [Phase 31-storage-backend]: CurrentUser resolves to TokenPayload which exposes .user_id not .id — router uses current_user.user_id
+- [Phase 31-storage-backend]: ArtifactResponse.model_validate() called explicitly in list endpoint to avoid Pydantic camelCase alias confusion
 
 ### Pending Todos
 
@@ -77,7 +79,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-19T13:13:44.599Z
-Stopped at: Completed 31-storage-backend/31-02-PLAN.md
+Last session: 2026-03-19T13:28:12.030Z
+Stopped at: Completed 31-storage-backend/31-03-PLAN.md
 Resume file: None
 Next action: `/gsd:plan-phase 30`
