@@ -1,7 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import { Editor } from '@tiptap/core';
-// These imports will fail until Plan 02 creates the files — that's intentional (RED)
-// @ts-expect-error — module not yet created (Wave 0 scaffold)
 import { FileCardExtension } from '../file-card/FileCardExtension';
 
 function makeEditor() {
