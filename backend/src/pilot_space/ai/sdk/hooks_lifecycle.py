@@ -8,6 +8,7 @@ Reference: tmp/005-sdk-gap-analysis.md (G8-G11)
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import time
@@ -319,16 +320,71 @@ class AuditLogHook:
                 event = f"event: tool_audit\ndata: {json.dumps(audit_entry)}\n\n"
                 await event_queue.put(event)
 
-            # Write DB row if session_factory and workspace context available
-            if session_factory and workspace_id:
+            # Detect remote MCP tool names: mcp__remote_{uuid}__bare_tool
+            is_remote_mcp = False
+            server_key: str | None = None
+            bare_tool: str | None = None
+            server_uuid_str: str | None = None
+
+            if tool_name.startswith("mcp__"):
+                parts = tool_name.split("__", 2)
+                if len(parts) == 3 and parts[0] == "mcp" and parts[1].startswith("remote_"):
+                    is_remote_mcp = True
+                    server_key = parts[1]  # "remote_<uuid>"
+                    bare_tool = parts[2]  # "search_files" (may contain __)
+                    server_uuid_str = parts[1][len("remote_") :]  # strip "remote_" prefix
+
+            # Write DB row — remote MCP branch takes priority over generic branch
+            if is_remote_mcp and session_factory and workspace_id:
+                import contextlib
+                import uuid as _uuid
+
                 from pilot_space.infrastructure.database.models.audit_log import ActorType
                 from pilot_space.infrastructure.database.repositories.audit_log_repository import (
-                    AuditLogRepository as _Repo,
+                    AuditLogRepository,
+                )
+
+                # Hash tool input (guard on size before hashing)
+                raw = json.dumps(tool_input, sort_keys=True, default=str)
+                if len(raw) > 65536:
+                    raw = raw[:65536]
+                input_hash = hashlib.sha256(raw.encode()).hexdigest()
+
+                resource_id: _uuid.UUID | None = None
+                with contextlib.suppress(ValueError, AttributeError):
+                    resource_id = _uuid.UUID(server_uuid_str)
+
+                try:
+                    async with session_factory() as session:
+                        repo = AuditLogRepository(session)
+                        await repo.create(
+                            workspace_id=workspace_id,
+                            actor_id=actor_id,
+                            actor_type=ActorType.AI,
+                            action="ai.mcp_tool_call",
+                            resource_type="mcp_tool",
+                            resource_id=resource_id,
+                            payload={
+                                "server_key": server_key,
+                                "tool_name": bare_tool,
+                                "input_hash": input_hash,
+                                "duration_ms": duration_ms,
+                            },
+                            ai_input=_safe_truncate_json(tool_input),
+                        )
+                        await session.commit()
+                except Exception as exc:
+                    logger.warning("mcp audit_log write failed (non-fatal): %s", exc)
+
+            elif not is_remote_mcp and session_factory and workspace_id:
+                from pilot_space.infrastructure.database.models.audit_log import ActorType
+                from pilot_space.infrastructure.database.repositories.audit_log_repository import (
+                    AuditLogRepository,
                 )
 
                 try:
                     async with session_factory() as session:
-                        repo = _Repo(session)
+                        repo = AuditLogRepository(session)
                         await repo.create(
                             workspace_id=workspace_id,
                             actor_id=actor_id,
