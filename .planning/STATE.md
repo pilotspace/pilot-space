@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Medium Editor & Artifacts
 status: planning
-stopped_at: Completed 33-video-embeds/33-01-PLAN.md
-last_updated: "2026-03-19T14:32:36.676Z"
+stopped_at: Completed 33-video-embeds/33-02-PLAN.md
+last_updated: "2026-03-19T14:49:22.416Z"
 last_activity: 2026-03-18 — v1.1 roadmap created, 22/22 requirements mapped across 7 phases
 progress:
   total_phases: 7
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 20
-  completed_plans: 12
+  completed_plans: 13
   percent: 0
 ---
 
@@ -79,6 +79,9 @@ Recent decisions affecting current work:
 - [Phase 33-video-embeds]: frame-src 'self' preserves any same-origin iframes; only 1 iframe found in codebase (test file)
 - [Phase 33-video-embeds]: extractVimeoId uses URL hostname check not regex — prevents notvimeo.com false positive
 - [Phase 33-video-embeds]: addPasteRules in VimeoNode is no-op — real paste offer UI (VideoPasteDetector) lives in Plan 02
+- [Phase 33-video-embeds]: VideoPasteDetector registered in Group 5 after SlashCommandExtension — decoration/interaction layer, not a block-type node
+- [Phase 33-video-embeds]: showVideoUrlPrompt appends to document.body not editor DOM — avoids ProseMirror focus conflicts
+- [Phase 33-video-embeds]: PasteRule only fires on standalone URLs (anchored regex); empty paragraph guard prevents offer on non-empty lines
 
 ### Pending Todos
 
@@ -93,7 +96,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-19T14:32:36.674Z
-Stopped at: Completed 33-video-embeds/33-01-PLAN.md
+Last session: 2026-03-19T14:49:22.414Z
+Stopped at: Completed 33-video-embeds/33-02-PLAN.md
 Resume file: None
 Next action: `/gsd:plan-phase 30`
