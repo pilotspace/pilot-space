@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Medium Editor & Artifacts
 status: planning
-stopped_at: Completed 32-inline-editor-features/32-01-PLAN.md
-last_updated: "2026-03-19T13:39:53.397Z"
+stopped_at: Completed 32-inline-editor-features/32-02-PLAN.md
+last_updated: "2026-03-19T13:57:38.180Z"
 last_activity: 2026-03-18 — v1.1 roadmap created, 22/22 requirements mapped across 7 phases
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 20
-  completed_plans: 7
+  completed_plans: 8
   percent: 0
 ---
 
@@ -68,6 +68,8 @@ Recent decisions affecting current work:
 - [Phase 32-inline-editor-features]: ArtifactStore.reset() aborts all in-flight uploads before clearing the Map — prevents dangling XHRs on sign-out
 - [Phase 32-inline-editor-features]: Use getAuthProviderSync().getToken() in artifactsApi — consistent with apiClient.ts, supports Supabase and AuthCore providers
 - [Phase 32-inline-editor-features]: @ts-expect-error on Wave 0 test scaffold imports — allows pnpm type-check to pass while vitest fails at runtime (correct RED state)
+- [Phase 32-inline-editor-features]: FileCardExtension.addExtensions() includes StarterKit + Markdown for isolated test support — TipTap deduplicates by name in full editor
+- [Phase 32-inline-editor-features]: tiptap-markdown serialize() is ProseMirror-style: must call state.write() + state.closeBlock(), not return a string value
 
 ### Pending Todos
 
@@ -82,7 +84,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-19T13:39:53.395Z
-Stopped at: Completed 32-inline-editor-features/32-01-PLAN.md
+Last session: 2026-03-19T13:57:38.178Z
+Stopped at: Completed 32-inline-editor-features/32-02-PLAN.md
 Resume file: None
 Next action: `/gsd:plan-phase 30`
