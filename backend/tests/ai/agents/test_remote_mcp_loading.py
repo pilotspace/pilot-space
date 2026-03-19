@@ -152,3 +152,152 @@ async def test_load_remote_mcp_servers_empty_no_workspace() -> None:
 
     result_no_session = await _load_remote_mcp_servers(uuid4(), None)
     assert result_no_session == {}
+
+
+# ---------------------------------------------------------------------------
+# MCPO-02: Auto-refresh expired OAuth tokens
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.xfail(strict=False, reason="implementation pending - phase 32 plan 02")
+async def test_expired_token_no_refresh_skips_server(
+    db_session,
+    workspace_factory,
+) -> None:
+    """MCPO-02: Expired OAUTH2 server with no refresh token is silently skipped.
+
+    Given:
+      - WorkspaceMcpServer with auth_type=OAUTH2, valid auth_token_encrypted,
+        refresh_token_encrypted=None, token_expires_at in the past
+    When:
+      - _load_remote_mcp_servers(workspace_id, db_session) is called
+    Then:
+      - Server is absent from result (no refresh possible, token expired)
+    """
+    from datetime import UTC, datetime, timedelta
+
+    from pilot_space.ai.agents.pilotspace_stream_utils import _load_remote_mcp_servers
+    from pilot_space.infrastructure.database.models.workspace_mcp_server import (
+        McpAuthType,
+        WorkspaceMcpServer,
+    )
+    from pilot_space.infrastructure.encryption import encrypt_api_key
+
+    workspace = workspace_factory()
+    server = WorkspaceMcpServer(
+        workspace_id=workspace.id,
+        display_name="Expired OAuth No Refresh",
+        url="https://mcp.example.com/sse",
+        auth_type=McpAuthType.OAUTH2,
+        auth_token_encrypted=encrypt_api_key("expired-access-token"),
+        refresh_token_encrypted=None,
+        token_expires_at=datetime.now(UTC) - timedelta(hours=1),
+        oauth_token_url="https://auth.example.com/token",
+        oauth_client_id="client-id",
+    )
+    db_session.add(server)
+    await db_session.flush()
+
+    result = await _load_remote_mcp_servers(workspace.id, db_session)
+
+    assert result == {}
+
+
+@pytest.mark.xfail(strict=False, reason="implementation pending - phase 32 plan 02")
+async def test_expired_token_refresh_succeeds(
+    db_session,
+    workspace_factory,
+) -> None:
+    """MCPO-02: Expired OAUTH2 server with refresh token -> refresh called -> server loaded.
+
+    Given:
+      - WorkspaceMcpServer with auth_type=OAUTH2, both token fields set,
+        token_expires_at in the past
+      - _refresh_oauth_token is mocked to return True
+    When:
+      - _load_remote_mcp_servers(workspace_id, db_session) is called
+    Then:
+      - Server appears in result dict keyed as remote_{server.id}
+    """
+    from datetime import UTC, datetime, timedelta
+    from unittest.mock import AsyncMock, patch
+
+    from pilot_space.ai.agents.pilotspace_stream_utils import _load_remote_mcp_servers
+    from pilot_space.infrastructure.database.models.workspace_mcp_server import (
+        McpAuthType,
+        WorkspaceMcpServer,
+    )
+    from pilot_space.infrastructure.encryption import encrypt_api_key
+
+    workspace = workspace_factory()
+    server = WorkspaceMcpServer(
+        workspace_id=workspace.id,
+        display_name="Expired OAuth With Refresh",
+        url="https://mcp.example.com/sse",
+        auth_type=McpAuthType.OAUTH2,
+        auth_token_encrypted=encrypt_api_key("expired-access-token"),
+        refresh_token_encrypted=encrypt_api_key("valid-refresh-token"),
+        token_expires_at=datetime.now(UTC) - timedelta(hours=1),
+        oauth_token_url="https://auth.example.com/token",
+        oauth_client_id="client-id",
+    )
+    db_session.add(server)
+    await db_session.flush()
+
+    with patch(
+        "pilot_space.api.v1.routers.workspace_mcp_servers._refresh_oauth_token",
+        new=AsyncMock(return_value=True),
+    ):
+        result = await _load_remote_mcp_servers(workspace.id, db_session)
+
+    assert f"remote_{server.id}" in result
+
+
+@pytest.mark.xfail(strict=False, reason="implementation pending - phase 32 plan 02")
+async def test_expired_token_refresh_fails_skips(
+    db_session,
+    workspace_factory,
+) -> None:
+    """MCPO-02: Expired OAUTH2 server where refresh fails -> server silently skipped.
+
+    Given:
+      - WorkspaceMcpServer with auth_type=OAUTH2, both token fields set,
+        token_expires_at in the past
+      - _refresh_oauth_token is mocked to return False (provider rejected)
+    When:
+      - _load_remote_mcp_servers(workspace_id, db_session) is called
+    Then:
+      - Server is absent from result dict (refresh failed, cannot use expired token)
+    """
+    from datetime import UTC, datetime, timedelta
+    from unittest.mock import AsyncMock, patch
+
+    from pilot_space.ai.agents.pilotspace_stream_utils import _load_remote_mcp_servers
+    from pilot_space.infrastructure.database.models.workspace_mcp_server import (
+        McpAuthType,
+        WorkspaceMcpServer,
+    )
+    from pilot_space.infrastructure.encryption import encrypt_api_key
+
+    workspace = workspace_factory()
+    server = WorkspaceMcpServer(
+        workspace_id=workspace.id,
+        display_name="Expired OAuth Refresh Failed",
+        url="https://mcp.example.com/sse",
+        auth_type=McpAuthType.OAUTH2,
+        auth_token_encrypted=encrypt_api_key("expired-access-token"),
+        refresh_token_encrypted=encrypt_api_key("stale-refresh-token"),
+        token_expires_at=datetime.now(UTC) - timedelta(hours=1),
+        oauth_token_url="https://auth.example.com/token",
+        oauth_client_id="client-id",
+    )
+    db_session.add(server)
+    await db_session.flush()
+
+    with patch(
+        "pilot_space.api.v1.routers.workspace_mcp_servers._refresh_oauth_token",
+        new=AsyncMock(return_value=False),
+    ):
+        result = await _load_remote_mcp_servers(workspace.id, db_session)
+
+    assert result == {}
