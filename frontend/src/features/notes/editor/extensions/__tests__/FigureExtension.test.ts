@@ -1,9 +1,17 @@
 import { describe, it, expect } from 'vitest';
 import { Editor } from '@tiptap/core';
+import StarterKit from '@tiptap/starter-kit';
+import { Markdown } from 'tiptap-markdown';
 import { FigureExtension } from '../figure/FigureExtension';
 
 function makeEditor() {
-  return new Editor({ extensions: [FigureExtension] });
+  return new Editor({
+    extensions: [
+      StarterKit,
+      Markdown.configure({ html: true, tightLists: true, breaks: false, linkify: false }),
+      FigureExtension,
+    ],
+  });
 }
 
 describe('FigureExtension', () => {

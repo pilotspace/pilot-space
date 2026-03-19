@@ -62,6 +62,7 @@ from pilot_space.api.v1.routers import (
     notifications_router,
     onboarding_router,
     pm_blocks_router,
+    project_artifacts_router,
     projects_router,
     related_issues_router,
     role_skills_router,
@@ -354,6 +355,11 @@ app.include_router(knowledge_graph_projects_router, prefix=API_V1_PREFIX)
 app.include_router(memory_router, prefix=API_V1_PREFIX)
 app.include_router(pm_blocks_router, prefix=API_V1_PREFIX)
 app.include_router(dependency_graph_router, prefix=API_V1_PREFIX)
+app.include_router(
+    project_artifacts_router,
+    prefix=API_V1_PREFIX + "/workspaces/{workspace_id}/projects/{project_id}/artifacts",
+    tags=["artifacts"],
+)
 app.include_router(onboarding_router, prefix=API_V1_PREFIX)
 app.include_router(homepage_router, prefix=API_V1_PREFIX)
 app.include_router(homepage_notes_from_chat_router, prefix=API_V1_PREFIX)

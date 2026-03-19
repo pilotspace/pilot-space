@@ -28,8 +28,6 @@
 import { Node, mergeAttributes } from '@tiptap/core';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import { ReactNodeViewRenderer } from '@tiptap/react';
-import StarterKit from '@tiptap/starter-kit';
-import { Markdown } from 'tiptap-markdown';
 import { FigureNodeView } from './FigureNodeView';
 
 // MarkdownSerializerState interface — tiptap-markdown 0.9 does not re-export this type.
@@ -45,21 +43,10 @@ export const FigureExtension = Node.create({
   draggable: true,
   isolating: true,
 
-  addExtensions() {
-    // Include StarterKit + Markdown so the node works in isolation (tests + embedded contexts).
-    // When these are already registered in the parent editor, TipTap deduplicates by name — safe.
-    return [
-      StarterKit,
-      Markdown.configure({
-        html: true,
-        tightLists: true,
-        breaks: false,
-        linkify: false,
-        transformPastedText: false,
-        transformCopiedText: false,
-      }),
-    ];
-  },
+  // NOTE: Do NOT add addExtensions() with StarterKit here.
+  // ProseMirror's keyed plugins (history$) throw RangeError on duplicates
+  // when the parent editor already registers StarterKit via createEditorExtensions.
+  // Tests should explicitly include StarterKit + Markdown in their own editor setup.
 
   addAttributes() {
     return {

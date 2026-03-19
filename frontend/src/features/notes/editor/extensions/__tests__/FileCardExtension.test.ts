@@ -1,9 +1,17 @@
 import { describe, it, expect } from 'vitest';
 import { Editor } from '@tiptap/core';
+import StarterKit from '@tiptap/starter-kit';
+import { Markdown } from 'tiptap-markdown';
 import { FileCardExtension } from '../file-card/FileCardExtension';
 
 function makeEditor() {
-  return new Editor({ extensions: [FileCardExtension] });
+  return new Editor({
+    extensions: [
+      StarterKit,
+      Markdown.configure({ html: true, tightLists: true, breaks: false, linkify: false }),
+      FileCardExtension,
+    ],
+  });
 }
 
 describe('FileCardExtension', () => {
