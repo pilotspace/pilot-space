@@ -11,7 +11,7 @@ Requirements for milestone v1.1. Each maps to roadmap phases.
 
 - [x] **EDIT-01**: User can toggle pull quote styling on blockquotes
 - [x] **EDIT-02**: User can toggle H1/H2/H3 headings from floating toolbar on text selection
-- [ ] **EDIT-03**: User can enter focus mode (Cmd+Shift+F) to hide chrome and focus on writing
+- [x] **EDIT-03**: User can enter focus mode (Cmd+Shift+F) to hide chrome and focus on writing
 - [x] **EDIT-04**: User can insert images via /image slash command and drag-and-drop
 - [x] **EDIT-05**: User can add captions to inline images (figure + figcaption)
 
@@ -27,8 +27,8 @@ Requirements for milestone v1.1. Each maps to roadmap phases.
 ### Artifacts Management
 
 - [x] **MGMT-01**: User can view all project artifacts on a dedicated per-project page
-- [ ] **MGMT-02**: User can preview artifacts inline on the management page
-- [ ] **MGMT-03**: User can download artifacts from the management page
+- [x] **MGMT-02**: User can preview artifacts inline on the management page
+- [x] **MGMT-03**: User can download artifacts from the management page
 - [x] **MGMT-04**: User can delete artifacts with instant optimistic UI feedback
 - [x] **MGMT-05**: User can search artifacts by filename
 - [x] **MGMT-06**: User can sort artifacts by type, date, or size
@@ -88,7 +88,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 |-------------|-------|--------|
 | EDIT-01 | Phase 30 | Complete |
 | EDIT-02 | Phase 30 | Complete |
-| EDIT-03 | Phase 36 | Pending |
+| EDIT-03 | Phase 36 | Complete |
 | EDIT-04 | Phase 32 | Complete |
 | EDIT-05 | Phase 32 | Complete |
 | ARTF-01 | Phase 32 | Complete |
@@ -98,8 +98,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ARTF-05 | Phase 31 | Complete |
 | ARTF-06 | Phase 31 | Complete |
 | MGMT-01 | Phase 35 | Complete |
-| MGMT-02 | Phase 35 | Pending |
-| MGMT-03 | Phase 35 | Pending |
+| MGMT-02 | Phase 35 | Complete |
+| MGMT-03 | Phase 35 | Complete |
 | MGMT-04 | Phase 35 | Complete |
 | MGMT-05 | Phase 35 | Complete |
 | MGMT-06 | Phase 35 | Complete |

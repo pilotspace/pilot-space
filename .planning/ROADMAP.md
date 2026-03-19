@@ -200,7 +200,7 @@ Plans:
 | 33. Video Embeds | 3/3 | Complete   | 2026-03-19 | - |
 | 34. File Preview Modal | 2/2 | Complete   | 2026-03-19 | - |
 | 35. Artifacts Management Page | 2/2 | Complete   | 2026-03-19 | - |
-| 36. Editor UX Polish | v1.1 | 0/2 | Planned | - |
+| 36. Editor UX Polish | 1/2 | In Progress|  | - |
 
 **Total: 29 phases complete, 97 plans, 86 requirements across 3 milestones | v1.1: 7 phases, 22 requirements**
 

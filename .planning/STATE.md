@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Medium Editor & Artifacts
 status: planning
-stopped_at: Completed 35-artifacts-management-page/35-02-PLAN.md
-last_updated: "2026-03-19T15:59:23.644Z"
+stopped_at: Completed 36-editor-ux-polish/36-01-PLAN.md
+last_updated: "2026-03-19T16:10:41.701Z"
 last_activity: 2026-03-18 — v1.1 roadmap created, 22/22 requirements mapped across 7 phases
 progress:
   total_phases: 7
   completed_phases: 5
   total_plans: 20
-  completed_plans: 17
+  completed_plans: 18
   percent: 0
 ---
 
@@ -91,6 +91,8 @@ Recent decisions affecting current work:
 - [Phase 35-artifacts-management-page]: artifactsKeys.list(ws,proj) is the precise invalidation key for useDeleteArtifact — avoids over-invalidation of other project artifact lists
 - [Phase 35-artifacts-management-page]: FilePreviewModal gated by selectedArtifact + signedUrlData — avoids empty modal flash while signed URL fetches
 - [Phase 35-artifacts-management-page]: handleDownload uses artifactsApi.getSignedUrl directly — one-shot action, no TanStack cache needed
+- [Phase 36-editor-ux-polish]: isFocusMode is session-only — excluded from PersistedUIState and setupPersistence reaction; focus mode resets on page reload
+- [Phase 36-editor-ux-polish]: AppShell desktop sidebar uses conditional render (not width:0 animation) — removes DOM node so main content fills full viewport
 
 ### Pending Todos
 
@@ -105,7 +107,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-19T15:59:23.642Z
-Stopped at: Completed 35-artifacts-management-page/35-02-PLAN.md
+Last session: 2026-03-19T16:10:41.698Z
+Stopped at: Completed 36-editor-ux-polish/36-01-PLAN.md
 Resume file: None
 Next action: `/gsd:plan-phase 30`
