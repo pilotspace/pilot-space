@@ -19,7 +19,7 @@ Requirements for MCP platform hardening. Each maps to roadmap phases.
 ### MCP OAuth
 
 - [ ] **MCPO-01**: OAuth refresh token stored alongside access token (new DB column + Alembic migration)
-- [ ] **MCPO-02**: Expired OAuth tokens auto-refreshed before session load using stored refresh token
+- [x] **MCPO-02**: Expired OAuth tokens auto-refreshed before session load using stored refresh token
 - [ ] **MCPO-03**: Token expiry tracked (expires_at column) and surfaced in MCP server status UI
 
 ### MCP Approval
@@ -74,7 +74,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MCPI-05 | Phase 31 | Complete |
 | MCPI-06 | Phase 31 | Complete — 31-04 |
 | MCPO-01 | Phase 32 | Pending |
-| MCPO-02 | Phase 32 | Pending |
+| MCPO-02 | Phase 32 | Complete |
 | MCPO-03 | Phase 32 | Pending |
 | MCPA-01 | Phase 33 | Pending |
 | MCPA-02 | Phase 33 | Pending |

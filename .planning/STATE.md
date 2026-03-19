@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.1.0
-milestone_name: MCP Platform Hardening
+milestone: v1.0
+milestone_name: milestone
 status: executing
-stopped_at: Completed 32-03-PLAN.md (token_expires_at schema field + ExpiryBadge frontend component)
-last_updated: "2026-03-20T02:23:02Z"
-last_activity: 2026-03-20 — Phase 32 plan 03 executed (MCPO-03)
+stopped_at: Completed 32-02-PLAN.md (MCPO-02 auto-refresh expired OAuth tokens)
+last_updated: "2026-03-19T20:40:40.416Z"
+last_activity: 2026-03-20 — Phase 32 plan 03 executed (token_expires_at schema field + ExpiryBadge frontend UI)
 progress:
   total_phases: 6
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 8
-  completed_plans: 5
+  completed_plans: 6
   percent: 0
 ---
 
@@ -74,6 +74,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [32-01]: _exchange_oauth_code returns None (not partial tuple) when access_token absent — preserves None sentinel for the error redirect path
 - [32-03]: ExpiryBadge co-located in mcp-server-card.tsx (not a separate file) — follows existing AuthTypeBadge/StatusBadge pattern in same file
 - [32-03]: Backend token_expires_at was already present from 32-01; Task 1 became verification-only
+- [Phase 32]: _refresh_oauth_token extracted to _mcp_server_oauth_helpers.py — workspace_mcp_servers.py hit 690-line threshold
+- [Phase 32]: Lazy import of _refresh_oauth_token inside _load_remote_mcp_servers avoids circular imports
 
 ### Pending Todos
 
@@ -85,7 +87,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-20T02:23:02Z
-Stopped at: Completed 32-03-PLAN.md (token_expires_at schema field + ExpiryBadge frontend component)
+Last session: 2026-03-19T20:40:40.414Z
+Stopped at: Completed 32-02-PLAN.md (MCPO-02 auto-refresh expired OAuth tokens)
 Resume file: None
 Next action: /gsd:execute-phase 32 (remaining plans in phase 32, if any)
