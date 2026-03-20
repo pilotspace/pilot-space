@@ -79,6 +79,7 @@ None.
 | 260317-v27 | Enhance Chat AI Issue Extraction Card | 2026-03-17 | 96381ec4 | Done | [260317-v27-enhance-chat-ai-issue-extraction-card](./quick/260317-v27-enhance-chat-ai-issue-extraction-card/) |
 | 260318-naw | Settings modal migration investigation: 14 pages catalogued, 4-phase 9-plan migration plan, feat/settings-modal branch | 2026-03-18 | 74dac5cc | Verified | [260318-naw-checkout-new-branch-then-investigate-to-](./quick/260318-naw-checkout-new-branch-then-investigate-to-/) |
 | 260318-wqj | Add tags+usage to skill system, extract prompt module, redesign modal with chip tags+usage textarea | 2026-03-18 | d854919c | Needs Review | [260318-wqj-improve-generate-skill-modal-redesign-fo](./quick/260318-wqj-improve-generate-skill-modal-redesign-fo/) |
+| 260320-bmd | Voice input with ElevenLabs API — STT transcription, record button, transcript caching | 2026-03-20 | b4e1d42d | Verified | [260320-bmd-voice-input-with-elevenlabs-api-voice-to](./quick/260320-bmd-voice-input-with-elevenlabs-api-voice-to/) |
 
 ## Session Continuity
 
