@@ -379,3 +379,53 @@ export async function closeTerminal(sessionId: string): Promise<void> {
   const { invoke } = await import('@tauri-apps/api/core');
   await invoke('close_terminal', { sessionId });
 }
+
+// --- Sidecar commands (Phase 35) ---
+
+export interface SidecarOutput {
+  id: string;
+  /** "stdout" or "stderr" */
+  stream: string;
+  data: string;
+}
+
+export interface SidecarResult {
+  id: string;
+  exit_code: number;
+}
+
+/**
+ * Spawn the pilot-cli sidecar binary with the given arguments.
+ * Streams stdout and stderr via the onOutput callback.
+ * Returns a SidecarResult with the process exit code when the sidecar exits.
+ *
+ * @param args - CLI arguments (e.g., ["implement", "PS-42", "--oneshot"])
+ * @param cwd - Optional working directory for the sidecar process
+ * @param onOutput - Callback invoked with each stdout/stderr line
+ */
+export async function runSidecar(
+  args: string[],
+  cwd: string | undefined,
+  onOutput: (output: SidecarOutput) => void
+): Promise<SidecarResult> {
+  if (!isTauri()) throw new Error('Not in Tauri mode');
+  const { invoke, Channel } = await import('@tauri-apps/api/core');
+  const channel = new Channel<SidecarOutput>();
+  channel.onmessage = onOutput;
+  return invoke<SidecarResult>('run_sidecar', {
+    args,
+    cwd: cwd ?? null,
+    on_output: channel,
+  });
+}
+
+/**
+ * Cancel a running sidecar process by its ID.
+ * Idempotent — safe to call even if the process has already exited.
+ * @param id - The process ID from SidecarResult or SidecarOutput
+ */
+export async function cancelSidecar(id: string): Promise<void> {
+  if (!isTauri()) return;
+  const { invoke } = await import('@tauri-apps/api/core');
+  await invoke('cancel_sidecar', { id });
+}
