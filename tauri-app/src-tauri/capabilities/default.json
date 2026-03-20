@@ -12,6 +12,8 @@
     "store:allow-save",
     "deep-link:default",
     "dialog:allow-open",
-    "fs:default"
+    "fs:default",
+    "shell:allow-execute",
+    "shell:allow-spawn"
   ]
 }
