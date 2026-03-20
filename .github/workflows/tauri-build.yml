@@ -3,6 +3,7 @@ name: Tauri Build
 on:
   push:
     branches: [main, develop, 'feat/tauri-*']
+    tags: ['v*']
   pull_request:
     branches: [main, develop]
 
@@ -32,7 +33,7 @@ jobs:
 
     runs-on: ${{ matrix.platform }}
     name: Build ${{ matrix.artifact-name }}
-    timeout-minutes: 60
+    timeout-minutes: 90
 
     steps:
       - name: Checkout repository
@@ -76,20 +77,37 @@ jobs:
         working-directory: tauri-app
         run: pnpm install --frozen-lockfile
 
+      - name: Sign sidecar binary (macOS)
+        if: runner.os == 'macOS' && env.APPLE_SIGNING_IDENTITY != ''
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          SIDECAR="tauri-app/src-tauri/binaries/pilot-cli-${TARGET}"
+          if [ -f "$SIDECAR" ]; then
+            codesign --force --options runtime \
+              --sign "$APPLE_SIGNING_IDENTITY" \
+              --entitlements tauri-app/src-tauri/Entitlements.plist \
+              "$SIDECAR"
+            echo "Signed sidecar: $SIDECAR"
+            codesign -dv "$SIDECAR"
+          else
+            echo "No sidecar binary found at $SIDECAR — skipping signing"
+          fi
+
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NEXT_TAURI: 'true'
           NEXT_PUBLIC_API_URL: 'https://api.pilotspace.io/api/v1'
-          # Signing secrets — empty for Phase 30 (unsigned builds)
-          # Phase 38 will populate these:
-          # APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          # APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          # APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          # APPLE_ID: ${{ secrets.APPLE_ID }}
-          # APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # macOS signing (set in GitHub repo secrets)
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           projectPath: './tauri-app'
           tauriScript: 'pnpm tauri'
