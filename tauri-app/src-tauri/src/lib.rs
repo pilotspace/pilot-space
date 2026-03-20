@@ -21,6 +21,13 @@ pub fn run() {
             commands::git::cancel_clone,
             commands::git::set_git_credentials,
             commands::git::get_git_credentials,
+            commands::git::git_pull,
+            commands::git::git_push,
+            commands::git::git_status,
+            commands::git::git_branch_list,
+            commands::git::git_branch_create,
+            commands::git::git_branch_switch,
+            commands::git::git_branch_delete,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
