@@ -9,6 +9,7 @@
     "store:allow-set",
     "store:allow-get",
     "store:allow-delete",
-    "store:allow-save"
+    "store:allow-save",
+    "deep-link:default"
   ]
 }
