@@ -185,8 +185,8 @@ const ProviderTabs = observer(function ProviderTabs({ onSaved }: { onSaved: () =
   const embeddingConnected = embeddingProviders.some((p) => p.isValid === true);
   const llmConnected = llmProviders.some((p) => p.isValid === true);
 
-  // Default to LLM tab (primary service), fall back to unconfigured tab
-  const defaultTab = !llmConnected && llmProviders.length > 0 ? 'llm' : 'llm';
+  // Default to LLM tab (primary service)
+  const defaultTab = 'llm';
 
   return (
     <Tabs defaultValue={defaultTab} className="w-full">

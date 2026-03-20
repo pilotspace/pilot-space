@@ -74,6 +74,7 @@ const mockSettings = {
     costLimitUsd: null,
   } as Record<string, unknown> | null,
   anthropicKeySet: true,
+  llmConfigured: true,
   embeddingConfigured: true,
   ghostTextEnabled: true,
   marginAnnotationsEnabled: false,

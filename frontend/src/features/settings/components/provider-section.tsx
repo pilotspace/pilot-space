@@ -97,7 +97,7 @@ export const ProviderSection = observer(function ProviderSection({
     if (resolvedDefault && selectedProvider !== resolvedDefault) {
       setSelectedProvider(resolvedDefault);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally omit selectedProvider to avoid infinite loop
   }, [resolvedDefault]);
 
   const handleProviderChange = (provider: string) => {
