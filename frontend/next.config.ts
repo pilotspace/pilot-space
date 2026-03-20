@@ -38,7 +38,17 @@ const nextConfig: NextConfig = {
             // 'self' preserves any same-origin iframe usage.
             // youtube-nocookie.com: used by YoutubeExtension (nocookie: true config).
             // player.vimeo.com: used by VimeoNode embed URLs.
-            value: "frame-src 'self' https://www.youtube-nocookie.com https://player.vimeo.com",
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
+              "style-src 'self' 'unsafe-inline'",
+              "img-src 'self' data: blob: https://*.supabase.co",
+              "font-src 'self'",
+              "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
+              "frame-src 'self' https://www.youtube-nocookie.com https://player.vimeo.com",
+              "object-src 'none'",
+              "base-uri 'self'",
+            ].join('; '),
           },
         ],
       },

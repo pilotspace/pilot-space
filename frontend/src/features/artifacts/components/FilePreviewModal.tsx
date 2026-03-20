@@ -117,18 +117,20 @@ export function FilePreviewModal({
               {mimeType.split('/')[1]?.toUpperCase() ?? 'FILE'}
             </span>
 
-            {/* Download button — always available */}
-            <Button variant="ghost" size="icon" className="size-8" asChild>
-              <a
-                href={signedUrl}
-                download={filename}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="Download file"
-              >
-                <Download className="size-4" />
-              </a>
-            </Button>
+            {/* Download button — always available, validates https scheme */}
+            {signedUrl.startsWith('https://') && (
+              <Button variant="ghost" size="icon" className="size-8" asChild>
+                <a
+                  href={signedUrl}
+                  download={filename}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Download file"
+                >
+                  <Download className="size-4" />
+                </a>
+              </Button>
+            )}
 
             {/* Maximize toggle */}
             <Button

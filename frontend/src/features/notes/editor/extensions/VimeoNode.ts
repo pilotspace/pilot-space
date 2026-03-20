@@ -65,7 +65,7 @@ export const VimeoNode = Node.create({
       'iframe',
       mergeAttributes(HTMLAttributes, {
         class: 'video-embed video-embed--vimeo',
-        sandbox: 'allow-scripts allow-same-origin allow-presentation allow-fullscreen',
+        sandbox: 'allow-scripts allow-presentation allow-fullscreen',
         allow: 'autoplay; fullscreen',
       }),
     ];

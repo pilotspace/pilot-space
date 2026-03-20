@@ -37,7 +37,7 @@ export class ArtifactStore {
    */
   setProgress(uploadKey: string, progress: number): void {
     const state = this.uploads.get(uploadKey);
-    if (state) state.progress = progress;
+    if (state) state.progress = Math.max(0, Math.min(100, progress));
   }
 
   /**

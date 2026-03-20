@@ -22,7 +22,7 @@ export const YoutubeExtension = Youtube.extend({
   nocookie: true,
   HTMLAttributes: {
     class: 'video-embed video-embed--youtube',
-    sandbox: 'allow-scripts allow-same-origin allow-presentation allow-fullscreen',
+    sandbox: 'allow-scripts allow-presentation allow-fullscreen',
     allow: 'autoplay; fullscreen',
   },
 });

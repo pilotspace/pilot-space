@@ -30,9 +30,19 @@ export function FigureNodeView({ node, editor }: NodeViewProps) {
         data-figure-artifact-id={artifactId ?? ''}
         onClick={() => {
           if (!artifactId || status !== 'ready') return;
-          const imgMime = src?.match(/\.(png|jpg|jpeg|gif|webp|svg|bmp|ico)/i)
-            ? `image/${(src.match(/\.(\w+)$/)?.[1] ?? 'png').toLowerCase()}`
-            : 'image/png';
+          const extMatch = src ? /\.(\w+)(?:[?#]|$)/i.exec(src) : null;
+          const extKey = extMatch?.[1]?.toLowerCase() ?? 'png';
+          const mimeMap: Record<string, string> = {
+            png: 'image/png',
+            jpg: 'image/jpeg',
+            jpeg: 'image/jpeg',
+            gif: 'image/gif',
+            webp: 'image/webp',
+            svg: 'image/svg+xml',
+            bmp: 'image/bmp',
+            ico: 'image/x-icon',
+          };
+          const imgMime = mimeMap[extKey] ?? 'image/png';
           window.dispatchEvent(
             new CustomEvent('pilot:preview-artifact', {
               detail: {

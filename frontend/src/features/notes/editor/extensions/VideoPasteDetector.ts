@@ -57,6 +57,13 @@ function showEmbedOffer(
   dismissBtn.style.cssText =
     'cursor:pointer;padding:2px 8px;border:1px solid var(--border,#e2e8f0);border-radius:4px;background:transparent;font-size:12px;';
 
+  // Define outsideClick before cleanup so cleanup can reference it
+  const outsideClick = (e: MouseEvent) => {
+    if (!offer.contains(e.target as Node)) {
+      cleanup();
+    }
+  };
+
   const cleanup = () => {
     if (offer.parentNode) offer.parentNode.removeChild(offer);
     document.removeEventListener('mousedown', outsideClick);
@@ -103,13 +110,8 @@ function showEmbedOffer(
   document.body.appendChild(offer);
   activeOfferCleanup = cleanup;
 
-  // Auto-dismiss on outside click
-  const outsideClick = (e: MouseEvent) => {
-    if (!offer.contains(e.target as Node)) {
-      cleanup();
-    }
-  };
-  setTimeout(() => document.addEventListener('mousedown', outsideClick), 100);
+  // Register outside-click listener immediately (no setTimeout race condition)
+  document.addEventListener('mousedown', outsideClick);
 }
 
 export const VideoPasteDetector = Extension.create({
