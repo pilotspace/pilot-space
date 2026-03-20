@@ -71,7 +71,7 @@ Full archive: `.planning/milestones/v1.0.0-alpha2-ROADMAP.md`
 - [x] **Phase 32: Workspace Management + Git Clone** — App-managed project directory, configure base path, link repos, clone with progress (completed 2026-03-20)
 - [x] **Phase 33: Full Git Operations** — Pull, push, branch management, status, conflict detection (completed 2026-03-20)
 - [x] **Phase 34: Embedded Terminal** — xterm.js panel with full PTY, batched IPC output, arbitrary shell commands (completed 2026-03-20)
-- [ ] **Phase 35: Pilot CLI Sidecar** — Compile pilot binary per platform, wire into app, CI matrix artifacts
+- [x] **Phase 35: Pilot CLI Sidecar** — Compile pilot binary per platform, wire into app, CI matrix artifacts (completed 2026-03-20)
 - [ ] **Phase 36: Diff Viewer + Commit UI** — File diff view, stage/unstage, commit message, push
 - [ ] **Phase 37: One-Click Implement Flow + Tray** — End-to-end issue→implement→commit loop; system tray with notifications
 - [ ] **Phase 38: Packaging + Signing + Auto-Update** — Signed .dmg/.deb/.AppImage/.msi per platform, notarization, auto-update
@@ -168,7 +168,7 @@ Plans:
   1. The app bundles a compiled pilot CLI binary that requires no Python installation on the user's machine
   2. CI matrix produces platform-specific pilot binaries for all 4 targets (macOS ARM, macOS x86, Linux x64, Windows x64) as build artifacts
   3. The Rust backend can spawn the sidecar binary and receive streaming output
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 
 Plans:
 - [ ] 35-01-PLAN.md — PyInstaller build pipeline — pyinstaller.spec, --onedir mode, per-platform CI matrix jobs producing tauri-app/binaries/ artifacts
@@ -238,7 +238,7 @@ Note: Phase 34 and Phase 35 depend only on Phase 30, so they can run in parallel
 | 32. Workspace + Git Clone | 4/4 | Complete    | 2026-03-20 | - |
 | 33. Full Git Operations | 3/3 | Complete    | 2026-03-20 | - |
 | 34. Embedded Terminal | 2/2 | Complete    | 2026-03-20 | - |
-| 35. Pilot CLI Sidecar | 1/2 | In Progress|  | - |
+| 35. Pilot CLI Sidecar | 2/2 | Complete   | 2026-03-20 | - |
 | 36. Diff Viewer + Commit UI | v1.1 | 0/3 | Not started | - |
 | 37. One-Click Implement + Tray | v1.1 | 0/3 | Not started | - |
 | 38. Packaging + Signing + Auto-Update | v1.1 | 0/3 | Not started | - |

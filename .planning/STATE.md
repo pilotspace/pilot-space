@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Tauri Desktop Client
 status: completed
-stopped_at: Completed 35-01-PLAN.md
-last_updated: "2026-03-20T07:51:48.546Z"
+stopped_at: Completed 35-02-PLAN.md
+last_updated: "2026-03-20T07:59:34.261Z"
 last_activity: "2026-03-20 — Phase 31 Plan 03 complete — pilotspace:// deep link OAuth PKCE flow for Google/GitHub social login"
 progress:
   total_phases: 9
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 17
-  completed_plans: 16
+  completed_plans: 17
   percent: 100
 ---
 
@@ -92,6 +92,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 35]: onedir mode chosen: --onefile incompatible with Tauri sidecar on Windows (DLL extraction failures)
 - [Phase 35]: pilot_cli.backup.* subpackage explicitly listed in hiddenimports — PyInstaller static analysis misses conditional imports
 - [Phase 35]: CI workflow uses env: vars in run: steps for matrix values — project security policy prevents inline ${{ matrix.* }} in shell commands
+- [Phase 35]: Stub binary (empty file) in binaries/ for local cargo check — gitignored, real binary from CI (35-01)
+- [Phase 35]: shell:allow-execute + shell:allow-spawn both required in capabilities for sidecar spawn to work
+- [Phase 35]: on_output param passed as snake_case in invoke() payload; cwd passed as null (not undefined) for Option<String> None mapping
 
 ### Pending Todos
 
@@ -104,7 +107,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-20T07:51:48.543Z
-Stopped at: Completed 35-01-PLAN.md
+Last session: 2026-03-20T07:59:34.259Z
+Stopped at: Completed 35-02-PLAN.md
 Resume file: None
 Next action: /gsd:execute-phase 31
