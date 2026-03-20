@@ -45,7 +45,11 @@ export class ProjectStore {
       const { gitClone, getProjectsDir } = await import('@/lib/tauri');
       const baseDir = await getProjectsDir();
       // Derive target dir from URL: https://github.com/user/repo.git -> repo
-      const repoName = url.split('/').pop()?.replace(/\.git$/, '') || 'repo';
+      const repoName =
+        url
+          .split('/')
+          .pop()
+          ?.replace(/\.git$/, '') || 'repo';
       const targetDir = `${baseDir}/${repoName}`;
       await gitClone(url, targetDir, (progress) => {
         runInAction(() => {
