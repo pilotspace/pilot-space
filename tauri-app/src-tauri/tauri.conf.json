@@ -30,7 +30,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["dmg", "deb", "appimage", "msi"],
     "externalBin": [
       "binaries/pilot-cli"
     ],
@@ -46,6 +46,14 @@
       "entitlements": "Entitlements.plist",
       "signingIdentity": null,
       "minimumSystemVersion": "10.15"
+    },
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": "http://timestamp.digicert.com",
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      }
     }
   },
   "plugins": {
