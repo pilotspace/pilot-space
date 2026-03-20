@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed quick task 260320-hx7 (Merge feat/note-design-review + audio storage)
-last_updated: "2026-03-20T06:53:50Z"
+stopped_at: Completed quick task 260320-mi8 (Voice input UX polish — amplitude bars, recording pill, AudioPlaybackPill)
+last_updated: "2026-03-20T09:26:45Z"
 progress:
   total_phases: 25
   completed_phases: 14
@@ -50,6 +50,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [quick-260320-hx7]: voice-recordings bucket separate from note-artifacts — chat recordings have no project scope
 - [quick-260320-hx7]: audio_url=None for cache hits — TranscriptCache model has no storage_key column; future task can add it
 - [quick-260320-hx7]: audioUrl exposed as separate hook state (not merged into onTranscript) for backward compatibility
+- [quick-260320-mi8]: AudioPlaybackPill placed in ChatInput/ (co-location) rather than shared components/ — it is a chat input concern
+- [quick-260320-mi8]: amplitudeLevel uses requestAnimationFrame (not setInterval) for smooth 60fps updates matching browser repaint cycle
+- [quick-260320-mi8]: onTranscript extended to (text, audioUrl) rather than object wrapper — minimal API surface change
 
 ### Pending Todos
 
@@ -84,10 +87,11 @@ None.
 | 260318-wqj | Add tags+usage to skill system, extract prompt module, redesign modal with chip tags+usage textarea | 2026-03-18 | d854919c | Needs Review | [260318-wqj-improve-generate-skill-modal-redesign-fo](./quick/260318-wqj-improve-generate-skill-modal-redesign-fo/) |
 | 260320-bmd | Voice input with ElevenLabs API — STT transcription, record button, transcript caching | 2026-03-20 | b4e1d42d | Verified | [260320-bmd-voice-input-with-elevenlabs-api-voice-to](./quick/260320-bmd-voice-input-with-elevenlabs-api-voice-to/) |
 | 260320-hx7 | Merge feat/note-design-review (artifact system) + audio storage for voice recordings | 2026-03-20 | 5858043e | Verified | [260320-hx7-merge-feat-note-design-review-into-this-](./quick/260320-hx7-merge-feat-note-design-review-into-this-/) |
+| 260320-mi8 | Voice input UX polish — amplitude visualization, recording pill, AudioPlaybackPill for pre-send + in-message playback | 2026-03-20 | 5005ec84 | Done | [260320-mi8-review-validate-and-enhance-voice-input-](./quick/260320-mi8-review-validate-and-enhance-voice-input-/) |
 
 ## Session Continuity
 
-Last session: 2026-03-20T06:53:50Z
-Stopped at: Completed quick task 260320-hx7 (Merge feat/note-design-review + audio storage)
+Last session: 2026-03-20T09:26:45Z
+Stopped at: Completed quick task 260320-mi8 (Voice input UX polish — amplitude bars, recording pill, AudioPlaybackPill)
 Resume file: None
 Next action: `/gsd:new-milestone`
