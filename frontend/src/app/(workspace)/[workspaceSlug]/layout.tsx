@@ -1,43 +1,30 @@
-'use client';
-
 /**
- * Workspace-slug-scoped layout.
+ * Workspace-slug-scoped layout — Server Component wrapper.
  *
- * Mounts the AiNotConfiguredBanner at the top of every workspace page (AIGOV-05).
- * Banner is only visible to Owners when BYOK is not configured.
+ * This Server Component exports generateStaticParams so that the static export
+ * (NEXT_TAURI=true) build succeeds. The actual client-side layout logic lives
+ * in workspace-slug-layout.tsx (a Client Component).
+ *
+ * generateStaticParams returns [] because workspace slugs are runtime user data
+ * (not known at build time). All navigation is client-side via router.push();
+ * useParams() resolves the slug after hydration.
  */
 
 import type { ReactNode } from 'react';
-import { useEffect } from 'react';
-import { observer } from 'mobx-react-lite';
-import { usePathname } from 'next/navigation';
-import { useWorkspace } from '@/components/workspace-guard';
-import { useWorkspaceStore } from '@/stores';
-import { saveLastWorkspacePath } from '@/lib/workspace-nav';
-import { AiNotConfiguredBanner } from '@/components/workspace/ai-not-configured-banner';
+import { WorkspaceSlugLayout } from './workspace-slug-layout';
 
-interface WorkspaceSlugLayoutProps {
+export function generateStaticParams() {
+  // Returns a minimal placeholder so that static export builds succeed.
+  // This placeholder page is never served — all actual navigation is client-side
+  // via router.push(), and useParams() resolves the real slug after hydration.
+  // The Tauri WebView always starts at / and navigates client-side to the workspace.
+  return [{ workspaceSlug: '_' }];
+}
+
+interface LayoutProps {
   children: ReactNode;
 }
 
-const WorkspaceSlugLayout = observer(function WorkspaceSlugLayout({
-  children,
-}: WorkspaceSlugLayoutProps) {
-  const { workspaceSlug } = useWorkspace();
-  const workspaceStore = useWorkspaceStore();
-  const isOwner = workspaceStore.isOwner;
-  const pathname = usePathname();
-
-  useEffect(() => {
-    saveLastWorkspacePath(workspaceSlug, pathname);
-  }, [pathname, workspaceSlug]);
-
-  return (
-    <>
-      <AiNotConfiguredBanner workspaceSlug={workspaceSlug} isOwner={isOwner} />
-      {children}
-    </>
-  );
-});
-
-export default WorkspaceSlugLayout;
+export default function Layout({ children }: LayoutProps) {
+  return <WorkspaceSlugLayout>{children}</WorkspaceSlugLayout>;
+}

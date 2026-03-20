@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * Profile settings route page.
  *

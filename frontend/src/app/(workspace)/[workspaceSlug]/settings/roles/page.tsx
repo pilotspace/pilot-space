@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * Custom roles settings page — App Router entry point.
  *

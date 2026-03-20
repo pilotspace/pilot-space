@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * Skills settings route — delegates to the feature page component.
  */

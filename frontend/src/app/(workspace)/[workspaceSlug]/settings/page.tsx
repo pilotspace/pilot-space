@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * Settings index page.
  *

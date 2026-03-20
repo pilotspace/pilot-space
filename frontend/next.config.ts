@@ -67,6 +67,22 @@ const nextConfig: NextConfig = {
   // Strict mode for better React debugging
   reactStrictMode: true,
 
+  // Allow importing .md files as raw strings (used by docs-manifest.ts).
+  // Turbopack (Next.js 16 default) rule and webpack rule both configured.
+  turbopack: {
+    rules: {
+      '*.md': {
+        loaders: ['raw-loader'],
+        as: '*.js',
+      },
+    },
+  },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  webpack(config: any) {
+    config.module.rules.push({ test: /\.md$/, type: 'asset/source' });
+    return config;
+  },
+
   // Experimental features
   experimental: {
     // Optimize package imports for faster builds

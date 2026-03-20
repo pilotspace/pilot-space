@@ -1,18 +1,24 @@
+'use client';
+
 /**
  * Settings members redirect — migrated to top-level /members route.
+ *
+ * Converted from server redirect to client redirect for static export
+ * (NEXT_TAURI=true) compatibility.
  */
 
-import { redirect } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 
-interface PageParams {
-  workspaceSlug: string;
-}
+export default function MembersSettingsRedirect() {
+  const params = useParams<{ workspaceSlug: string }>();
+  const router = useRouter();
 
-interface PageProps {
-  params: Promise<PageParams>;
-}
+  useEffect(() => {
+    if (params.workspaceSlug) {
+      router.replace(`/${params.workspaceSlug}/members`);
+    }
+  }, [params.workspaceSlug, router]);
 
-export default async function MembersSettingsRedirect({ params }: PageProps) {
-  const { workspaceSlug } = await params;
-  redirect(`/${workspaceSlug}/members`);
+  return null;
 }

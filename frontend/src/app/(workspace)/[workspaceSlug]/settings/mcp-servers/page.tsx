@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * MCP Servers settings route page.
  *

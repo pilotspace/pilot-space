@@ -1,17 +1,27 @@
+'use client';
+
 /**
  * Docs Index Route — redirects to the default documentation page.
  *
  * Route: /[workspaceSlug]/docs
+ *
+ * Converted from Server Component (which used server-only `redirect()`) to
+ * client component for static export compatibility (NEXT_TAURI=true build mode).
  */
 
-import { redirect } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 import { defaultDocSlug } from '@/features/docs';
 
-interface PageProps {
-  params: Promise<{ workspaceSlug: string }>;
-}
+export default function DocsIndexPage() {
+  const params = useParams<{ workspaceSlug: string }>();
+  const router = useRouter();
 
-export default async function DocsIndexPage({ params }: PageProps) {
-  const { workspaceSlug } = await params;
-  redirect(`/${workspaceSlug}/docs/${defaultDocSlug}`);
+  useEffect(() => {
+    if (params.workspaceSlug) {
+      router.replace(`/${params.workspaceSlug}/docs/${defaultDocSlug}`);
+    }
+  }, [params.workspaceSlug, router]);
+
+  return null;
 }

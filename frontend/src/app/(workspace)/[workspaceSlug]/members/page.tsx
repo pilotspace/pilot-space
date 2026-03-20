@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * Members route page — workspace member management at top level.
  * Route: /[workspaceSlug]/members

@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * Roles route page - SDLC role skills management at workspace level.
  *

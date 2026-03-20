@@ -1,35 +1,27 @@
+'use client';
+
 /**
  * Member profile page — /[workspaceSlug]/members/[userId]
  *
- * Thin server component that passes workspace/user context to the client MemberProfilePage.
+ * Passes workspace/user context to the client MemberProfilePage.
  * workspaceId is resolved client-side from WorkspaceStore using the slug.
+ *
+ * Converted from server component to client component for static export
+ * (NEXT_TAURI=true) compatibility. generateMetadata removed (not applicable
+ * in static export; web mode uses client-side title updates instead).
  */
 
+import { useParams } from 'next/navigation';
 import { notFound } from 'next/navigation';
 import { MemberProfilePage } from '@/features/members';
 
-interface PageParams {
-  workspaceSlug: string;
-  userId: string;
-}
-
-interface MemberProfileRouteProps {
-  params: Promise<PageParams>;
-}
-
-export default async function MemberProfileRoute({ params }: MemberProfileRouteProps) {
-  const { workspaceSlug, userId } = await params;
+export default function MemberProfileRoute() {
+  const params = useParams<{ workspaceSlug: string; userId: string }>();
+  const { workspaceSlug, userId } = params;
 
   if (!workspaceSlug || !userId) {
     notFound();
   }
 
   return <MemberProfilePage workspaceSlug={workspaceSlug} userId={userId} />;
-}
-
-export async function generateMetadata({ params }: MemberProfileRouteProps) {
-  const { workspaceSlug } = await params;
-  return {
-    title: `Member Profile — ${workspaceSlug}`,
-  };
 }

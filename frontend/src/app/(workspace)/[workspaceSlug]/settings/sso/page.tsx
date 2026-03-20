@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * SSO settings page — App Router entry point.
  *

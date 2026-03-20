@@ -18,5 +18,6 @@ export async function GET() {
   );
 }
 
-// Disable caching for health checks
-export const dynamic = 'force-dynamic';
+// force-static allows this route to be included in static export builds (NEXT_TAURI=true).
+// In standalone (web) mode, route handlers always execute per-request regardless of this value.
+export const dynamic = 'force-static';

@@ -2,18 +2,26 @@
  * Docs Detail Route — renders a single documentation page from markdown.
  *
  * Route: /[workspaceSlug]/docs/[slug]
- * Content is loaded server-side from features/docs/content/{slug}.md.
- * Headings are extracted server-side to avoid double-parsing on the client.
+ * Content is loaded from the build-time manifest (no server-side file I/O).
+ * Headings are extracted for table of contents.
+ *
+ * generateStaticParams enumerates all 6 valid doc slugs so that static export
+ * (NEXT_TAURI=true) can pre-generate HTML shells for each docs page.
  */
 
 import { notFound } from 'next/navigation';
-import path from 'node:path';
-import fs from 'node:fs';
 import { DocsPage, docsBySlug } from '@/features/docs';
 import { extractHeadings } from '@/features/docs/lib/markdown-headings';
+import { docsManifest } from '@/features/docs/lib/docs-manifest';
 
 interface PageProps {
   params: Promise<{ workspaceSlug: string; slug: string }>;
+}
+
+export function generateStaticParams() {
+  // Return all known doc slugs. The workspaceSlug segment is provided by the
+  // parent [workspaceSlug] layout's generateStaticParams (placeholder '_').
+  return Array.from(docsBySlug.keys()).map((slug) => ({ slug }));
 }
 
 export async function generateMetadata({ params }: PageProps) {
@@ -27,17 +35,6 @@ export async function generateMetadata({ params }: PageProps) {
   };
 }
 
-function loadMarkdownContent(file: string): string | null {
-  const contentDir = path.join(process.cwd(), 'src', 'features', 'docs', 'content');
-  const filePath = path.join(contentDir, `${file}.md`);
-
-  try {
-    return fs.readFileSync(filePath, 'utf-8');
-  } catch {
-    return null;
-  }
-}
-
 export default async function DocsDetailPage({ params }: PageProps) {
   const { slug } = await params;
 
@@ -46,7 +43,7 @@ export default async function DocsDetailPage({ params }: PageProps) {
     notFound();
   }
 
-  const content = loadMarkdownContent(doc.file);
+  const content = docsManifest[doc.file];
   if (!content) {
     notFound();
   }

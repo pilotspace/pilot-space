@@ -8,7 +8,11 @@
 
 const BACKEND_URL = process.env.BACKEND_URL ?? 'http://localhost:8000';
 
-export const dynamic = 'force-dynamic';
+// force-static allows this route to be included in static export builds (NEXT_TAURI=true).
+// In standalone (web) mode, route handlers always execute per-request regardless of this value.
+// In Tauri (static export) mode, the frontend calls NEXT_PUBLIC_BACKEND_URL directly;
+// this SSE proxy route is excluded from the output/ directory automatically.
+export const dynamic = 'force-static';
 
 export async function POST(request: Request): Promise<Response> {
   const body = await request.text();

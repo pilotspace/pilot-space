@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * AI Providers settings route page.
  *

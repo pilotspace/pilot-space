@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * Approvals route — /[workspaceSlug]/approvals
  *

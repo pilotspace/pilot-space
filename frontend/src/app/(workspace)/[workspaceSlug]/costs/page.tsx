@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * AI Costs Route - Cost dashboard for workspace AI usage.
  *
@@ -9,27 +11,19 @@
  * - Cost by agent chart
  * - Cost trends over time
  * - User cost breakdown table
+ *
+ * Converted from server component to client component for static export
+ * (NEXT_TAURI=true) compatibility. Metadata removed (not applicable in
+ * static export; workspaceSlug resolved via useParams at runtime).
  */
 
+import { useParams } from 'next/navigation';
 import { CostDashboardPage } from '@/features/costs/pages/cost-dashboard-page';
 
-export const metadata = {
-  title: 'AI Costs | Pilot Space',
-  description: 'Monitor AI usage and costs across your workspace',
-};
-
-interface PageProps {
-  params: {
-    workspaceSlug: string;
-  };
-}
-
-export default async function CostsPage({ params }: PageProps) {
-  const { workspaceSlug } = params;
-
-  // TODO: Fetch workspace ID from slug via API or server component
-  // For now, using slug as ID (will be replaced with actual workspace lookup)
-  const workspaceId = workspaceSlug;
+export default function CostsPage() {
+  const params = useParams<{ workspaceSlug: string }>();
+  // TODO: Resolve workspaceId from slug via workspace store
+  const workspaceId = params.workspaceSlug;
 
   return <CostDashboardPage workspaceId={workspaceId} />;
 }

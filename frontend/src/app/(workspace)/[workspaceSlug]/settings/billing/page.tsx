@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * Billing settings page — placeholder for future billing integration.
  * Shows usage summary and plan information (US-11).

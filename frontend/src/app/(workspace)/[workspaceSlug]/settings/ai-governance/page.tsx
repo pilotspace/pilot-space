@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * AI Governance settings route — /[workspaceSlug]/settings/ai-governance
  *
