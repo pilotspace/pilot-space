@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Medium Editor & Artifacts
 status: planning
-stopped_at: Completed 36-editor-ux-polish/36-02-PLAN.md
-last_updated: "2026-03-19T16:26:42.429Z"
+stopped_at: Completed 37-artifact-preview-rendering-engine/37-01-PLAN.md
+last_updated: "2026-03-20T03:03:01.031Z"
 last_activity: 2026-03-18 — v1.1 roadmap created, 22/22 requirements mapped across 7 phases
 progress:
-  total_phases: 7
-  completed_phases: 6
-  total_plans: 20
-  completed_plans: 19
+  total_phases: 8
+  completed_phases: 3
+  total_plans: 9
+  completed_plans: 20
   percent: 0
 ---
 
@@ -41,6 +41,10 @@ Progress: [░░░░░░░░░░] 0% (0/7 phases complete)
 | v1.0.0-alpha2 Notion-Style Restructure | 24–29 | 14 | 17/17 | 2026-03-12 |
 
 ## Accumulated Context
+
+### Roadmap Evolution
+
+- Phase 37 added: Artifact Preview Rendering Engine — HTML live preview, code highlighting, markdown rendering in notes and ChatView
 
 ### Decisions
 
@@ -95,6 +99,7 @@ Recent decisions affecting current work:
 - [Phase 36-editor-ux-polish]: AppShell desktop sidebar uses conditional render (not width:0 animation) — removes DOM node so main content fills full viewport
 - [Phase 36-editor-ux-polish]: NoteCanvasLayout is NOT observer() — isFocusMode flows as prop from observer NoteDetailPage; prevents React 19 flushSync crash with TipTap NodeViews
 - [Phase 36-editor-ux-polish]: Escape guard in keyboard shortcut: e.key === 'Escape' && isFocusMode without e.preventDefault() — lets slash command ProseMirror-level Escape run first
+- [Phase 37]: HtmlRenderer defaults to source mode with opt-in sandboxed iframe preview; sandbox='allow-same-origin' only, never allow-scripts
 
 ### Pending Todos
 
@@ -109,7 +114,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-19T16:26:42.427Z
-Stopped at: Completed 36-editor-ux-polish/36-02-PLAN.md
+Last session: 2026-03-20T03:03:01.028Z
+Stopped at: Completed 37-artifact-preview-rendering-engine/37-01-PLAN.md
 Resume file: None
 Next action: `/gsd:plan-phase 30`
