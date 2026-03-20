@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-03-18)
 Phase: 30 of 36 (TipTap Extension Foundation)
 Plan: — (not yet planned)
 Status: Ready to plan
-Last activity: 2026-03-18 — v1.1 roadmap created, 22/22 requirements mapped across 7 phases
+Last activity: 2026-03-20 — Completed quick task 260320-x2l: Live STT WebSocket proxy
 
 Progress: [░░░░░░░░░░] 0% (0/7 phases complete)
 
@@ -136,7 +136,7 @@ None.
 | 260317-v27 | Enhance Chat AI Issue Extraction Card | 2026-03-17 | 96381ec4 | Done | [260317-v27-enhance-chat-ai-issue-extraction-card](./quick/260317-v27-enhance-chat-ai-issue-extraction-card/) |
 | 260318-naw | Settings modal migration investigation: 14 pages catalogued, 4-phase 9-plan migration plan, feat/settings-modal branch | 2026-03-18 | 74dac5cc | Verified | [260318-naw-checkout-new-branch-then-investigate-to-](./quick/260318-naw-checkout-new-branch-then-investigate-to-/) |
 | 260318-wqj | Add tags+usage to skill system, extract prompt module, redesign modal with chip tags+usage textarea | 2026-03-18 | d854919c | Needs Review | [260318-wqj-improve-generate-skill-modal-redesign-fo](./quick/260318-wqj-improve-generate-skill-modal-redesign-fo/) |
-| 260320-x2l | Live STT WebSocket proxy: FastAPI WS -> ElevenLabs Scribe v2 Realtime, AudioWorklet PCM capture, useLiveTranscription hook, partial transcripts in RecordButton pill | 2026-03-21 | 3bccd4ce | Done | [260320-x2l-live-stt-websocket-proxy-server-side-str](./quick/260320-x2l-live-stt-websocket-proxy-server-side-str/) |
+| 260320-x2l | Live STT WebSocket proxy: FastAPI WS -> ElevenLabs Scribe v2 Realtime, AudioWorklet PCM capture, useLiveTranscription hook, partial transcripts in RecordButton pill | 2026-03-20 | dbd9a306 | Verified | [260320-x2l-live-stt-websocket-proxy-server-side-str](./quick/260320-x2l-live-stt-websocket-proxy-server-side-str/) |
 
 ## Session Continuity
 
