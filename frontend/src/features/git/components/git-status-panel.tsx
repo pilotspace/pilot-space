@@ -4,8 +4,10 @@ import { observer } from 'mobx-react-lite';
 import { useEffect } from 'react';
 import { ArrowDown, ArrowUp, RefreshCw, GitBranch } from 'lucide-react';
 import { useGitStore } from '@/stores/RootStore';
+import type { FileStatus } from '@/lib/tauri';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
@@ -143,7 +145,16 @@ export const GitStatusPanel = observer(function GitStatusPanel({ repoPath }: Git
                 <FileGroup
                   label="Staged"
                   dotClass="bg-green-500"
-                  files={stagedFiles.map((f) => f.path)}
+                  files={stagedFiles}
+                  staged
+                  selectedPath={gitStore.selectedFilePath}
+                  onFileClick={(path) => gitStore.selectFile(path)}
+                  onToggleStage={(path) => void gitStore.unstageFiles([path])}
+                  bulkAction={{
+                    label: 'Unstage All',
+                    onClick: () => void gitStore.unstageAll(),
+                    disabled: gitStore.isStaging,
+                  }}
                 />
               )}
 
@@ -152,7 +163,16 @@ export const GitStatusPanel = observer(function GitStatusPanel({ repoPath }: Git
                 <FileGroup
                   label="Modified"
                   dotClass="bg-yellow-500"
-                  files={modifiedFiles.map((f) => f.path)}
+                  files={modifiedFiles}
+                  staged={false}
+                  selectedPath={gitStore.selectedFilePath}
+                  onFileClick={(path) => gitStore.selectFile(path)}
+                  onToggleStage={(path) => void gitStore.stageFiles([path])}
+                  bulkAction={{
+                    label: 'Stage All',
+                    onClick: () => void gitStore.stageAll(),
+                    disabled: gitStore.isStaging,
+                  }}
                 />
               )}
 
@@ -161,7 +181,16 @@ export const GitStatusPanel = observer(function GitStatusPanel({ repoPath }: Git
                 <FileGroup
                   label="Untracked"
                   dotClass="bg-muted-foreground"
-                  files={untrackedFiles.map((f) => f.path)}
+                  files={untrackedFiles}
+                  staged={false}
+                  selectedPath={gitStore.selectedFilePath}
+                  onFileClick={(path) => gitStore.selectFile(path)}
+                  onToggleStage={(path) => void gitStore.stageFiles([path])}
+                  bulkAction={{
+                    label: 'Stage All',
+                    onClick: () => void gitStore.stageAll(),
+                    disabled: gitStore.isStaging,
+                  }}
                 />
               )}
             </div>
@@ -172,25 +201,75 @@ export const GitStatusPanel = observer(function GitStatusPanel({ repoPath }: Git
   );
 });
 
+// ---------------------------------------------------------------------------
+// FileGroup sub-component
+// ---------------------------------------------------------------------------
+
 interface FileGroupProps {
   label: string;
   dotClass: string;
-  files: string[];
+  files: FileStatus[];
+  staged: boolean;
+  selectedPath: string | null;
+  onFileClick: (path: string) => void;
+  onToggleStage: (path: string, stage: boolean) => void;
+  bulkAction?: { label: string; onClick: () => void; disabled: boolean };
 }
 
-function FileGroup({ label, dotClass, files }: FileGroupProps) {
+function FileGroup({
+  label,
+  dotClass,
+  files,
+  staged,
+  selectedPath,
+  onFileClick,
+  onToggleStage,
+  bulkAction,
+}: FileGroupProps) {
   return (
     <div className="flex flex-col gap-0.5">
+      {/* Section header with bulk action */}
       <div className="flex items-center gap-1.5 py-0.5">
         <span className={`rounded-full size-2 shrink-0 ${dotClass}`} />
         <span className="text-muted-foreground text-xs font-medium">{label}</span>
         <span className="text-muted-foreground text-xs">({files.length})</span>
+        {bulkAction && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="ml-auto h-auto px-1.5 py-0.5 text-xs"
+            onClick={bulkAction.onClick}
+            disabled={bulkAction.disabled}
+          >
+            {bulkAction.label}
+          </Button>
+        )}
       </div>
-      {files.map((path) => (
-        <div key={path} className="flex items-center gap-1.5 pl-3.5 py-0.5">
-          <span className="font-mono text-xs truncate">{path}</span>
-        </div>
-      ))}
+
+      {/* File rows */}
+      {files.map((file) => {
+        const isSelected = selectedPath === file.path;
+        return (
+          <div
+            key={file.path}
+            className={`flex items-center gap-1.5 pl-1 py-0.5 cursor-pointer rounded transition-colors ${
+              isSelected ? 'bg-muted' : 'hover:bg-muted/50'
+            }`}
+            onClick={() => onFileClick(file.path)}
+          >
+            {/* Checkbox — prevents triggering file select */}
+            <div onClick={(e) => e.stopPropagation()} className="flex items-center">
+              <Checkbox
+                checked={staged}
+                onCheckedChange={() => onToggleStage(file.path, !staged)}
+                className="size-3.5"
+                aria-label={staged ? `Unstage ${file.path}` : `Stage ${file.path}`}
+              />
+            </div>
+            <span className="font-mono text-xs truncate">{file.path}</span>
+          </div>
+        );
+      })}
     </div>
   );
 }
