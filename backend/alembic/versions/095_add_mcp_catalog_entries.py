@@ -42,12 +42,12 @@ def upgrade() -> None:
         sa.Column("url_template", sa.String(512), nullable=False),
         sa.Column(
             "transport_type",
-            sa.Enum(name="mcp_transport_type", create_type=False),
+            sa.VARCHAR(8),
             nullable=False,
         ),
         sa.Column(
             "auth_type",
-            sa.Enum(name="mcp_auth_type", create_type=False),
+            sa.VARCHAR(8),
             nullable=False,
         ),
         sa.Column(

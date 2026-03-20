@@ -1,6 +1,6 @@
 """Add catalog_entry_id and installed_catalog_version to workspace_mcp_servers.
 
-Revision ID: 096_add_catalog_fk_to_mcp_servers
+Revision ID: 096_add_catalog_fk
 Revises: 095_add_mcp_catalog_entries
 Create Date: 2026-03-20
 
@@ -23,7 +23,7 @@ import sqlalchemy as sa
 
 from alembic import op
 
-revision: str = "096_add_catalog_fk_to_mcp_servers"
+revision: str = "096_add_catalog_fk"
 down_revision: str = "095_add_mcp_catalog_entries"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
