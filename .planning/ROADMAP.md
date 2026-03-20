@@ -184,12 +184,12 @@ Plans:
   3. User can type a commit message and click Commit to create a commit from staged files
   4. User can push the committed changes to remote directly from the commit UI
   5. Large diffs (hundreds of files, thousands of lines) render without the UI freezing
-**Plans**: TBD
+**Plans:** 3 plans
 
 Plans:
-- [ ] 36-01: git_diff Rust command — git2-rs unified diff output, per-file and working-tree diff, git_stage/git_unstage commands
-- [ ] 36-02: DiffViewer.tsx — react-diff-view (or @git-diff-view/react), syntax highlighting, virtualized rendering for large diffs, DIFF-05
-- [x] 36-03: CommitPanel.tsx — file checklist (stage/unstage), commit message input, commit + push button wired to Phase 33 git commands (completed 2026-03-20)
+- [ ] 36-01-PLAN.md — Rust git_diff/git_stage/git_unstage/git_commit commands + TypeScript IPC wrappers + GitStore extensions
+- [ ] 36-02-PLAN.md — DiffViewer component with unified diff parsing, syntax-highlighted lines, react-virtuoso virtualization
+- [ ] 36-03-PLAN.md — CommitPanel with stage/unstage checkboxes, commit message, commit+push; GitStatusPanel interactive files; ProjectDashboard integration
 
 ### Phase 37: One-Click Implement Flow + Tray
 **Goal**: Users can trigger the full implement loop from inside the app — select issue, auto-branch, run pilot implement with live terminal output, then commit and push — and receive background notifications via the system tray
