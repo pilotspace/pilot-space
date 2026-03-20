@@ -40,6 +40,16 @@ const TrayNotificationListener = dynamic(
   { ssr: false }
 );
 
+// Dynamic import with ssr: false — checks for app updates on launch and shows a
+// non-blocking banner when a new version is available. Tauri-only.
+const UpdateNotification = dynamic(
+  () =>
+    import('@/components/desktop/update-notification').then((m) => ({
+      default: m.UpdateNotification,
+    })),
+  { ssr: false }
+);
+
 interface WorkspaceSlugLayoutProps {
   children: ReactNode;
 }
@@ -58,6 +68,7 @@ export const WorkspaceSlugLayout = observer(function WorkspaceSlugLayout({
 
   return (
     <>
+      {isTauri() && <UpdateNotification />}
       <AiNotConfiguredBanner workspaceSlug={workspaceSlug} isOwner={isOwner} />
       {children}
       {isTauri() && <TerminalPanel />}

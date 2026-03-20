@@ -521,3 +521,53 @@ export async function sendNotification(title: string, body: string): Promise<voi
   const { invoke } = await import('@tauri-apps/api/core');
   await invoke('send_notification', { title, body });
 }
+
+// --- Update commands (Phase 38) ---
+
+export interface UpdateInfo {
+  available: boolean;
+  currentVersion: string;
+  version: string;
+  date: string | null;
+  body: string | null;
+}
+
+/**
+ * Check for app updates via tauri-plugin-updater.
+ * Returns update info if available, or null if up to date / not in Tauri mode.
+ * Non-blocking — safe to call on app launch.
+ */
+export async function checkForUpdates(): Promise<UpdateInfo | null> {
+  if (!isTauri()) return null;
+  try {
+    const { check } = await import('@tauri-apps/plugin-updater');
+    const update = await check();
+    if (update) {
+      return {
+        available: true,
+        currentVersion: update.currentVersion,
+        version: update.version,
+        date: update.date ?? null,
+        body: update.body ?? null,
+      };
+    }
+    return null;
+  } catch (e) {
+    console.warn('[tauri] Update check failed:', e);
+    return null;
+  }
+}
+
+/**
+ * Download and install the available update.
+ * Downloads in background, then installs on next restart.
+ * Caller should prompt user before calling this.
+ */
+export async function downloadAndInstallUpdate(): Promise<void> {
+  if (!isTauri()) return;
+  const { check } = await import('@tauri-apps/plugin-updater');
+  const update = await check();
+  if (update) {
+    await update.downloadAndInstall();
+  }
+}
