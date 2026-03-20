@@ -126,7 +126,10 @@ function ProjectDirectorySection() {
 
         <div className="flex items-center gap-4">
           {saved && (
-            <span className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400" role="status">
+            <span
+              className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400"
+              role="status"
+            >
               <Check className="h-3.5 w-3.5" aria-hidden="true" />
               Saved
             </span>
@@ -231,14 +234,20 @@ function GitCredentialsSection() {
           ) : hasCredentials ? (
             <div className="space-y-1">
               <div className="flex items-center gap-1.5">
-                <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+                <Check
+                  className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400"
+                  aria-hidden="true"
+                />
                 <span className="text-xs text-foreground">
                   Username: <span className="font-mono">{credentials.username}</span>
                 </span>
               </div>
               {credentials.has_pat && (
                 <div className="flex items-center gap-1.5">
-                  <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+                  <Check
+                    className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400"
+                    aria-hidden="true"
+                  />
                   <span className="text-xs text-foreground">PAT: Configured</span>
                 </div>
               )}
@@ -278,7 +287,9 @@ function GitCredentialsSection() {
                 value={pat}
                 onChange={(e) => setPat(e.target.value)}
                 disabled={isSaving}
-                placeholder={hasCredentials ? 'Enter new PAT to update' : 'Enter your Personal Access Token'}
+                placeholder={
+                  hasCredentials ? 'Enter new PAT to update' : 'Enter your Personal Access Token'
+                }
                 className="pr-10"
                 aria-describedby="git-pat-hint"
               />
