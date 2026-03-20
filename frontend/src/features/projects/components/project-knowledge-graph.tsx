@@ -6,45 +6,26 @@
  * Layout:
  *   1. Toolbar (40px): filter chips, depth slider, node count
  *   2. ReactFlow canvas (flex-1): interactive, minimap, zoom 0.3–3x
- *   3. Node detail panel (≤200px): shown when a node is selected
+ *   3. Node detail panel (<=200px): shown when a node is selected
  *
  * State: local useState only (no MobX, NOT observer).
  */
 
-import { useCallback, useEffect, startTransition, useState, useMemo } from 'react';
-import {
-  ReactFlow,
-  MiniMap,
-  Controls,
-  Background,
-  BackgroundVariant,
-  type Node,
-  type Edge,
-  useReactFlow,
-  ReactFlowProvider,
-} from '@xyflow/react';
+import { useCallback, useEffect, useState, useMemo } from 'react';
+import { ReactFlowProvider } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { toast } from 'sonner';
 
-import { GraphDetailPanel } from '@/features/issues/components/graph-detail-panel';
-import { GraphEmptyState, isForbiddenError } from '@/features/issues/components/graph-empty-state';
-import { nodeTypes, type GraphNodeData } from '@/features/issues/components/graph-node-renderer';
-import { ErrorBoundary } from '@/components/error-boundary';
-import { computeForceLayout } from '@/features/issues/utils/graph-styles';
+import { GraphCanvasShell } from '@/features/issues/components/graph-canvas-shell';
+import { useGraphCanvas } from '@/features/issues/hooks/use-graph-canvas';
 import { useProjectKnowledgeGraph } from '@/features/projects/hooks/useProjectKnowledgeGraph';
-import { knowledgeGraphApi } from '@/services/api/knowledge-graph';
-import type { GraphNodeDTO, GraphEdgeDTO, GraphNodeType } from '@/types/knowledge-graph';
+import type { FilterChip } from '@/features/issues/utils/graph-shared';
+import type { GraphNodeType } from '@/types/knowledge-graph';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
 export interface ProjectKnowledgeGraphProps {
   workspaceId: string;
   projectId: string;
-}
-
-interface FilterChip {
-  label: string;
-  nodeType: GraphNodeType | 'all';
 }
 
 const FILTER_CHIPS: FilterChip[] = [
@@ -56,12 +37,6 @@ const FILTER_CHIPS: FilterChip[] = [
   { label: 'Code', nodeType: 'code_reference' },
   { label: 'All', nodeType: 'all' },
 ];
-
-const minimapNodeColor = (n: Node) => {
-  const d = n.data as GraphNodeData | undefined;
-  if (d?.isCurrent) return '#2563eb';
-  return '#94a3b8';
-};
 
 // ── Inner component (needs ReactFlowProvider context) ─────────────────────
 
@@ -80,21 +55,6 @@ function ProjectGraphCanvas({
   activeFilter,
   onNodeCountChange,
 }: ProjectGraphCanvasProps) {
-  const { fitView } = useReactFlow();
-
-  const [selectedNode, setSelectedNode] = useState<GraphNodeDTO | null>(null);
-  const [extraNodes, setExtraNodes] = useState<GraphNodeDTO[]>([]);
-  const [extraEdges, setExtraEdges] = useState<GraphEdgeDTO[]>([]);
-  const [flowNodes, setFlowNodes] = useState<Node[]>([]);
-  const [flowEdges, setFlowEdges] = useState<Edge[]>([]);
-
-  // Reset expanded nodes when filter or depth changes
-  useEffect(() => {
-    setExtraNodes([]);
-    setExtraEdges([]);
-    setSelectedNode(null);
-  }, [activeFilter, depth]);
-
   const nodeTypes_ = useMemo<GraphNodeType[] | undefined>(
     () => (activeFilter === 'all' ? undefined : [activeFilter]),
     [activeFilter]
@@ -109,197 +69,36 @@ function ProjectGraphCanvas({
     }
   );
 
-  // Report node count to parent for toolbar display (guard against no-op updates)
+  // Report node count to parent for toolbar display
   useEffect(() => {
     const count = data?.nodes.length ?? 0;
     onNodeCountChange(count);
   }, [data?.nodes.length, onNodeCountChange]);
 
-  // Merge base + expanded neighbor nodes
-  const mergedNodes = useMemo(() => {
-    if (!data) return [];
-    const baseIds = new Set(data.nodes.map((n) => n.id));
-    return [...data.nodes, ...extraNodes.filter((n) => !baseIds.has(n.id))];
-  }, [data, extraNodes]);
+  const resetKey = `${activeFilter}-${depth}`;
 
-  const mergedEdges = useMemo(() => {
-    if (!data) return [];
-    const baseIds = new Set(data.edges.map((e) => e.id));
-    return [...data.edges, ...extraEdges.filter((e) => !baseIds.has(e.id))];
-  }, [data, extraEdges]);
-
-  const effectiveCenterNodeId = useMemo(() => {
-    if (!data) return '';
-    const center = data.centerNodeId;
-    if (!center) return data.nodes[0]?.id ?? '';
-    const exists = data.nodes.some((n) => n.id === center);
-    return exists ? center : (data.nodes[0]?.id ?? '');
-  }, [data]);
-
-  // Layout computation via useEffect + startTransition
-  useEffect(() => {
-    startTransition(() => {
-      if (mergedNodes.length === 0) {
-        setFlowNodes([]);
-        setFlowEdges([]);
-        return;
-      }
-      const [nodes, edges] = computeForceLayout(mergedNodes, mergedEdges, {
-        width: 1000,
-        height: 600,
-        centerNodeId: effectiveCenterNodeId,
-        linkDistance: 100,
-        chargeStrength: -150,
-        collisionRadius: 40,
-        edgeStrokeWidth: 1.5,
-      });
-      setFlowNodes(nodes);
-      setFlowEdges(edges);
-    });
-  }, [mergedNodes, mergedEdges, effectiveCenterNodeId]);
-
-  // Auto-fit when data loads
-  useEffect(() => {
-    if (flowNodes.length > 0) {
-      requestAnimationFrame(() => {
-        void fitView({ padding: 0.15, duration: 400 });
-      });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [effectiveCenterNodeId]);
-
-  const handleNodeDoubleClick = useCallback(
-    async (nodeId: string) => {
-      const remaining = 200 - mergedNodes.length;
-      if (remaining <= 0) {
-        toast.warning('Graph limit reached (200 nodes). Clear filters to reset the view.');
-        return;
-      }
-      try {
-        const neighbors = await knowledgeGraphApi.getNodeNeighbors(
-          workspaceId,
-          nodeId,
-          Math.min(depth + 1, 4)
-        );
-        setExtraNodes((prev) => {
-          const ids = new Set(prev.map((n) => n.id));
-          const newNodes = neighbors.nodes.filter((n) => !ids.has(n.id));
-          // Cap total nodes at 200: only add as many as the remaining capacity allows.
-          const nodesToAdd = newNodes.slice(0, remaining);
-          if (newNodes.length > nodesToAdd.length) {
-            toast.warning(
-              `Graph limit reached (200 nodes). ${newNodes.length - nodesToAdd.length} nodes were not added.`
-            );
-          }
-          return [...prev, ...nodesToAdd];
-        });
-        setExtraEdges((prev) => {
-          const ids = new Set(prev.map((e) => e.id));
-          return [...prev, ...neighbors.edges.filter((e) => !ids.has(e.id))];
-        });
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Unknown error';
-        console.error('Failed to expand node:', err);
-        toast.error(`Failed to expand node: ${message}`);
-      }
+  const canvas = useGraphCanvas({
+    data,
+    isLoading,
+    isError,
+    error,
+    refetch,
+    workspaceId,
+    layoutConfig: {
+      width: 1000,
+      height: 600,
+      linkDistance: 100,
+      chargeStrength: -150,
+      collisionRadius: 40,
+      edgeStrokeWidth: 1.5,
     },
-    [mergedNodes.length, depth, workspaceId]
-  );
-
-  const handleNodeClick = useCallback((node: GraphNodeDTO) => {
-    setSelectedNode(node);
-  }, []);
-
-  const handleCloseDetail = useCallback(() => {
-    setSelectedNode(null);
-  }, []);
-
-  const nodeTypedNodes = useMemo(
-    () =>
-      flowNodes.map((n) => ({
-        ...n,
-        data: {
-          ...(n.data as GraphNodeData),
-          onNodeClick: handleNodeClick,
-        },
-      })),
-    [flowNodes, handleNodeClick]
-  );
-
-  const isLayoutComputing =
-    !isLoading && !isError && !!data && data.nodes.length > 0 && flowNodes.length === 0;
-
-  if (isLoading || isLayoutComputing) {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <GraphEmptyState variant="loading" height={400} />
-      </div>
-    );
-  }
-
-  if (isError) {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <GraphEmptyState
-          variant={isForbiddenError(error) ? 'forbidden' : 'error'}
-          height={400}
-          onRetry={isForbiddenError(error) ? undefined : () => void refetch()}
-        />
-      </div>
-    );
-  }
-
-  if (!data || data.nodes.length === 0) {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <GraphEmptyState variant="empty" height={400} />
-      </div>
-    );
-  }
+    maxNodeCap: 200,
+    expandDepth: depth,
+    resetKey,
+  });
 
   return (
-    <>
-      {/* Graph canvas */}
-      <div className="flex-1 min-h-0">
-        <ErrorBoundary
-          fallback={<GraphEmptyState variant="error" height={400} onRetry={() => void refetch()} />}
-        >
-          <ReactFlow
-            nodes={nodeTypedNodes}
-            edges={flowEdges}
-            nodeTypes={nodeTypes}
-            minZoom={0.3}
-            maxZoom={3}
-            fitView
-            fitViewOptions={{ padding: 0.15 }}
-            // React Flow MIT — attribution hidden per internal product decision (non-commercial/early-stage)
-            proOptions={{ hideAttribution: true }}
-            onNodeDoubleClick={(_evt, node) => void handleNodeDoubleClick(node.id)}
-          >
-            <Background
-              variant={BackgroundVariant.Dots}
-              gap={20}
-              size={0.8}
-              className="opacity-20"
-            />
-            <MiniMap
-              position="bottom-right"
-              className="!bottom-4 !right-4"
-              nodeColor={minimapNodeColor}
-            />
-            <Controls position="bottom-left" className="!bottom-4 !left-4" />
-          </ReactFlow>
-        </ErrorBoundary>
-      </div>
-
-      {selectedNode && (
-        <GraphDetailPanel
-          node={selectedNode}
-          onClose={handleCloseDetail}
-          onExpand={handleNodeDoubleClick}
-        />
-      )}
-    </>
+    <GraphCanvasShell canvas={canvas} isLoading={isLoading} isError={isError} onRefetch={refetch} />
   );
 }
 

@@ -135,7 +135,7 @@ export function GraphNodeComponent({ data }: NodeProps<GraphFlowNode>) {
             className="font-medium leading-none truncate"
             style={{
               fontSize,
-              color: '#37352f',
+              color: 'var(--foreground)',
               maxWidth: maxLabelWidth,
             }}
           >

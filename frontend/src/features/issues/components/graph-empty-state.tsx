@@ -14,9 +14,12 @@ import { ShieldX } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ApiError } from '@/services/api/client';
 
-/** Check if a TanStack Query error is a 403 Forbidden. */
+/**
+ * Check if a TanStack Query error is a 403 Forbidden.
+ * @deprecated Use `ApiError.isForbidden(error)` instead.
+ */
 export function isForbiddenError(error: unknown): boolean {
-  return error instanceof ApiError && error.status === 403;
+  return ApiError.isForbidden(error);
 }
 
 export interface GraphEmptyStateProps {

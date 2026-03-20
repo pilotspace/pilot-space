@@ -14,7 +14,8 @@ import { ReactFlow, type Node, type Edge, Background, BackgroundVariant } from '
 import '@xyflow/react/dist/style.css';
 
 import { CollapsibleSection } from './collapsible-section';
-import { GraphEmptyState, isForbiddenError } from './graph-empty-state';
+import { GraphEmptyState } from './graph-empty-state';
+import { ApiError } from '@/services/api/client';
 import { nodeTypes } from './graph-node-renderer';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { computeForceLayout } from '@/features/issues/utils/graph-styles';
@@ -97,9 +98,9 @@ export function IssueKnowledgeGraphMini({
 
       {!isLoading && isError && (
         <GraphEmptyState
-          variant={isForbiddenError(error) ? 'forbidden' : 'error'}
+          variant={ApiError.isForbidden(error) ? 'forbidden' : 'error'}
           height={GRAPH_HEIGHT}
-          onRetry={isForbiddenError(error) ? undefined : () => void refetch()}
+          onRetry={ApiError.isForbidden(error) ? undefined : () => void refetch()}
         />
       )}
 

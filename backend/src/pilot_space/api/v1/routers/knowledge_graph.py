@@ -46,6 +46,8 @@ from pilot_space.infrastructure.database.repositories.knowledge_graph_repository
 )
 from pilot_space.infrastructure.database.rls import set_rls_context
 from pilot_space.infrastructure.logging import get_logger
+from pilot_space.infrastructure.queue.handlers.kg_populate_handler import TASK_KG_POPULATE
+from pilot_space.infrastructure.queue.models import QueueName
 
 _EnumT = TypeVar("_EnumT", bound=StrEnum)
 
@@ -491,6 +493,27 @@ _regen_logger = get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------
+# KG populate payload helper
+# ---------------------------------------------------------------------------
+
+
+def _build_kg_payload(
+    entity_type: str,
+    entity_id: UUID,
+    workspace_id: UUID,
+    project_id: UUID,
+) -> dict[str, str]:
+    """Build a kg_populate queue message payload."""
+    return {
+        "task_type": TASK_KG_POPULATE,
+        "entity_type": entity_type,
+        "entity_id": str(entity_id),
+        "workspace_id": str(workspace_id),
+        "project_id": str(project_id),
+    }
+
+
+# ---------------------------------------------------------------------------
 # Regeneration response
 # ---------------------------------------------------------------------------
 
@@ -541,17 +564,9 @@ async def regenerate_issue_knowledge_graph(
     if issue.workspace_id != workspace_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
 
-    from pilot_space.infrastructure.queue.models import QueueName
-
     await queue_client.enqueue(
         QueueName.AI_NORMAL,
-        {
-            "task_type": "kg_populate",
-            "entity_type": "issue",
-            "entity_id": str(issue.id),
-            "workspace_id": str(issue.workspace_id),
-            "project_id": str(issue.project_id),
-        },
+        _build_kg_payload("issue", issue.id, issue.workspace_id, issue.project_id),
     )
     _regen_logger.info(
         "kg_regenerate_issue",
@@ -595,20 +610,12 @@ async def regenerate_project_knowledge_graph(
     if project.workspace_id != workspace_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
 
-    from pilot_space.infrastructure.queue.models import QueueName
-
     enqueued = 0
 
     # 1. Enqueue the project itself
     await queue_client.enqueue(
         QueueName.AI_NORMAL,
-        {
-            "task_type": "kg_populate",
-            "entity_type": "project",
-            "entity_id": str(project_id),
-            "workspace_id": str(project.workspace_id),
-            "project_id": str(project_id),
-        },
+        _build_kg_payload("project", project_id, project.workspace_id, project_id),
     )
     enqueued += 1
 
@@ -622,13 +629,7 @@ async def regenerate_project_knowledge_graph(
     for (issue_id,) in issue_rows.all():
         await queue_client.enqueue(
             QueueName.AI_NORMAL,
-            {
-                "task_type": "kg_populate",
-                "entity_type": "issue",
-                "entity_id": str(issue_id),
-                "workspace_id": str(project.workspace_id),
-                "project_id": str(project_id),
-            },
+            _build_kg_payload("issue", issue_id, project.workspace_id, project_id),
         )
         enqueued += 1
 
@@ -642,13 +643,7 @@ async def regenerate_project_knowledge_graph(
     for (note_id,) in note_rows.all():
         await queue_client.enqueue(
             QueueName.AI_NORMAL,
-            {
-                "task_type": "kg_populate",
-                "entity_type": "note",
-                "entity_id": str(note_id),
-                "workspace_id": str(project.workspace_id),
-                "project_id": str(project_id),
-            },
+            _build_kg_payload("note", note_id, project.workspace_id, project_id),
         )
         enqueued += 1
 
@@ -662,13 +657,7 @@ async def regenerate_project_knowledge_graph(
     for (cycle_id,) in cycle_rows.all():
         await queue_client.enqueue(
             QueueName.AI_NORMAL,
-            {
-                "task_type": "kg_populate",
-                "entity_type": "cycle",
-                "entity_id": str(cycle_id),
-                "workspace_id": str(project.workspace_id),
-                "project_id": str(project_id),
-            },
+            _build_kg_payload("cycle", cycle_id, project.workspace_id, project_id),
         )
         enqueued += 1
 
