@@ -141,12 +141,12 @@ export interface WorkspaceFeatureToggles {
 }
 
 export const DEFAULT_FEATURE_TOGGLES: WorkspaceFeatureToggles = {
-  notes: false,
-  issues: false,
-  projects: false,
-  members: false,
-  docs: false,
-  skills: false,
-  costs: false,
-  approvals: false,
+  notes: true,
+  issues: true,
+  projects: true,
+  members: true,
+  docs: true,
+  skills: true,
+  costs: true,
+  approvals: true,
 };

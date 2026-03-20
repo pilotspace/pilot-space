@@ -342,13 +342,13 @@ class WorkspaceFeatureToggles(BaseSchema):
     """
 
     notes: bool = Field(default=True, description="Notes module enabled")
-    issues: bool = Field(default=False, description="Issue tracker module enabled")
-    projects: bool = Field(default=False, description="Project management module enabled")
+    issues: bool = Field(default=True, description="Issue tracker module enabled")
+    projects: bool = Field(default=True, description="Project management module enabled")
     members: bool = Field(default=True, description="Member directory module enabled")
-    docs: bool = Field(default=False, description="Documentation module enabled")
+    docs: bool = Field(default=True, description="Documentation module enabled")
     skills: bool = Field(default=True, description="AI Skills module enabled")
-    costs: bool = Field(default=False, description="AI cost tracking module enabled")
-    approvals: bool = Field(default=False, description="AI approval workflow module enabled")
+    costs: bool = Field(default=True, description="AI cost tracking module enabled")
+    approvals: bool = Field(default=True, description="AI approval workflow module enabled")
 
 
 class WorkspaceFeatureTogglesUpdate(BaseSchema):
