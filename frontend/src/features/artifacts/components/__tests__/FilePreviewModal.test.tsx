@@ -27,6 +27,15 @@ vi.mock('@/features/ai/ChatView/MessageList/MarkdownContent', () => ({
   ),
 }));
 
+// Mock HtmlRenderer for isolation — prevents real iframe/DOMPurify from running in tests
+vi.mock('../renderers/HtmlRenderer', () => ({
+  HtmlRenderer: ({ content, filename }: { content: string; filename: string }) => (
+    <div data-testid="html-renderer" data-filename={filename}>
+      {content}
+    </div>
+  ),
+}));
+
 function makeClient() {
   return new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -171,11 +180,12 @@ describe('FilePreviewModal', () => {
       expect(screen.getByRole('link', { name: /download binary\.bin/i })).toBeDefined();
     });
 
-    it('renders CodeRenderer (not DownloadFallback) for text/html — XSS prevention', () => {
+    it('renders HtmlRenderer for text/html with sandboxed preview', () => {
       renderModal({ mimeType: 'text/html', filename: 'page.html' });
-      // Should render CodeRenderer (which uses MarkdownContent), not DownloadFallback
-      const mdContent = screen.getByTestId('markdown-content');
-      expect(mdContent).toBeDefined();
+      // Should render HtmlRenderer (sandboxed iframe + source toggle), not DownloadFallback
+      const htmlRenderer = screen.getByTestId('html-renderer');
+      expect(htmlRenderer).toBeDefined();
+      expect(htmlRenderer.getAttribute('data-filename')).toBe('page.html');
       // Should NOT show DownloadFallback's link text pattern
       expect(screen.queryByRole('link', { name: /download page\.html/i })).toBeNull();
     });
