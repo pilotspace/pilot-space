@@ -309,3 +309,73 @@ export async function gitBranchDelete(repoPath: string, name: string): Promise<v
   const { invoke } = await import('@tauri-apps/api/core');
   await invoke('git_branch_delete', { repoPath, name });
 }
+
+// --- Terminal commands (Phase 34) ---
+
+export interface TerminalOutput {
+  session_id: string;
+  data: string;
+}
+
+export interface TerminalSessionInfo {
+  session_id: string;
+}
+
+/**
+ * Create a new PTY terminal session.
+ * Returns session info with a unique session_id.
+ * Output is streamed via the onOutput callback (batched at 16ms by Rust).
+ * @param rows - Initial terminal height in rows
+ * @param cols - Initial terminal width in columns
+ * @param onOutput - Callback invoked with batched terminal output chunks
+ */
+export async function createTerminal(
+  rows: number,
+  cols: number,
+  onOutput: (output: TerminalOutput) => void
+): Promise<TerminalSessionInfo> {
+  if (!isTauri()) throw new Error('Not in Tauri mode');
+  const { invoke, Channel } = await import('@tauri-apps/api/core');
+  const channel = new Channel<TerminalOutput>();
+  channel.onmessage = onOutput;
+  return invoke<TerminalSessionInfo>('create_terminal', {
+    rows,
+    cols,
+    onOutput: channel,
+  });
+}
+
+/**
+ * Write data (keystrokes) to a terminal session's stdin.
+ * @param sessionId - The session ID returned by createTerminal
+ * @param data - Raw character data to write to the PTY
+ */
+export async function writeTerminal(sessionId: string, data: string): Promise<void> {
+  if (!isTauri()) return;
+  const { invoke } = await import('@tauri-apps/api/core');
+  await invoke('write_terminal', { sessionId, data });
+}
+
+/**
+ * Resize a terminal session's PTY dimensions.
+ * Sends SIGWINCH to the child process so programs like vim/htop re-render.
+ * @param sessionId - The session ID returned by createTerminal
+ * @param rows - New height in rows
+ * @param cols - New width in columns
+ */
+export async function resizeTerminal(sessionId: string, rows: number, cols: number): Promise<void> {
+  if (!isTauri()) return;
+  const { invoke } = await import('@tauri-apps/api/core');
+  await invoke('resize_terminal', { sessionId, rows, cols });
+}
+
+/**
+ * Close a terminal session, killing the child process and freeing resources.
+ * Idempotent — safe to call even if the session is already closed.
+ * @param sessionId - The session ID returned by createTerminal
+ */
+export async function closeTerminal(sessionId: string): Promise<void> {
+  if (!isTauri()) return;
+  const { invoke } = await import('@tauri-apps/api/core');
+  await invoke('close_terminal', { sessionId });
+}
