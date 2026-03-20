@@ -1,58 +1,71 @@
 import type { NextConfig } from 'next';
 
 const BACKEND_URL = process.env.BACKEND_URL ?? 'http://localhost:8000';
+const isTauriBuild = process.env.NEXT_TAURI === 'true';
 
 const nextConfig: NextConfig = {
-  async rewrites() {
-    return [
-      {
-        source: '/api/v1/:path*',
-        destination: `${BACKEND_URL}/api/v1/:path*`,
-      },
-    ];
-  },
+  // Static export for Tauri desktop; standalone for Docker/web
+  output: isTauriBuild ? 'export' : 'standalone',
 
-  async redirects() {
-    return [
-      {
-        source: '/:slug/settings/skills',
-        destination: '/:slug/roles',
-        permanent: true,
-      },
-      {
-        source: '/:slug/settings/members',
-        destination: '/:slug/members',
-        permanent: true,
-      },
-    ];
-  },
+  // Static export requires trailing slash to generate [slug]/index.html
+  // instead of [slug].html — needed for Tauri WebView file serving
+  ...(isTauriBuild ? { trailingSlash: true } : {}),
 
-  // Enable standalone output for Docker deployment
-  // This creates a self-contained build with minimal node_modules
-  output: 'standalone',
+  // Required for static export — server cannot optimize images at request time
+  images: isTauriBuild
+    ? { unoptimized: true }
+    : {
+        remotePatterns: [
+          {
+            protocol: 'https',
+            hostname: '*.supabase.co',
+            pathname: '/storage/v1/object/public/**',
+          },
+        ],
+      },
 
-  // Include docs markdown content in standalone output so fs.readFileSync works in production
-  outputFileTracingIncludes: {
-    '/[workspaceSlug]/docs/[slug]': ['./src/features/docs/content/*.md'],
-  },
+  // outputFileTracingIncludes only applies to standalone builds
+  ...(isTauriBuild
+    ? {}
+    : {
+        outputFileTracingIncludes: {
+          '/[workspaceSlug]/docs/[slug]': ['./src/features/docs/content/*.md'],
+        },
+      }),
+
+  // rewrites() and redirects() require a running Node.js server — unavailable in static export
+  ...(isTauriBuild
+    ? {}
+    : {
+        async rewrites() {
+          return [
+            {
+              source: '/api/v1/:path*',
+              destination: `${BACKEND_URL}/api/v1/:path*`,
+            },
+          ];
+        },
+        async redirects() {
+          return [
+            {
+              source: '/:slug/settings/skills',
+              destination: '/:slug/roles',
+              permanent: true,
+            },
+            {
+              source: '/:slug/settings/members',
+              destination: '/:slug/members',
+              permanent: true,
+            },
+          ];
+        },
+      }),
 
   // Performance optimizations
   poweredByHeader: false,
 
   // Strict mode for better React debugging
   reactStrictMode: true,
-
-  // Image optimization configuration
-  images: {
-    // Allow images from Supabase storage
-    remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: '*.supabase.co',
-        pathname: '/storage/v1/object/public/**',
-      },
-    ],
-  },
 
   // Experimental features
   experimental: {
