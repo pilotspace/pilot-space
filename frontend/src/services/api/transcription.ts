@@ -13,6 +13,10 @@ export interface TranscribeResponse {
   languageCode: string | null;
   durationSeconds: number | null;
   cached: boolean;
+  /** Signed URL for audio playback (1h expiry). Null if storage upload failed or for cache hits. */
+  audioUrl: string | null;
+  /** Raw storage key in the voice-recordings bucket. Null if storage upload failed or for cache hits. */
+  audioStorageKey: string | null;
 }
 
 export const transcriptionApi = {

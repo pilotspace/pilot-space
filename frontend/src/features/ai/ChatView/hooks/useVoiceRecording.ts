@@ -30,6 +30,8 @@ export interface UseVoiceRecordingResult {
   error: string | null;
   /** Elapsed recording time in milliseconds */
   durationMs: number;
+  /** Signed URL for audio playback (1h expiry). Available after successful transcription with storage. */
+  audioUrl: string | null;
   startRecording: () => Promise<void>;
   stopRecording: () => void;
   cancelRecording: () => void;
@@ -72,6 +74,7 @@ export function useVoiceRecording({
   const [transcript, setTranscript] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [durationMs, setDurationMs] = useState(0);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
 
   const isSupported = useMemo(() => checkBrowserSupport(), []);
 
@@ -179,6 +182,7 @@ export function useVoiceRecording({
         try {
           const result = await transcriptionApi.transcribe(blob, workspaceId, language);
           setTranscript(result.text);
+          setAudioUrl(result.audioUrl);
           setStatus('idle');
           onTranscript(result.text);
         } catch (err) {
@@ -266,6 +270,7 @@ export function useVoiceRecording({
     transcript,
     error,
     durationMs,
+    audioUrl,
     startRecording,
     stopRecording,
     cancelRecording,
