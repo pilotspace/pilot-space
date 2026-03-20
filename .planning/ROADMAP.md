@@ -238,7 +238,7 @@ Note: Phase 34 and Phase 35 depend only on Phase 30, so they can run in parallel
 | 32. Workspace + Git Clone | 4/4 | Complete    | 2026-03-20 | - |
 | 33. Full Git Operations | 3/3 | Complete    | 2026-03-20 | - |
 | 34. Embedded Terminal | 2/2 | Complete    | 2026-03-20 | - |
-| 35. Pilot CLI Sidecar | 2/2 | Complete   | 2026-03-20 | - |
+| 35. Pilot CLI Sidecar | 2/2 | Complete    | 2026-03-20 | - |
 | 36. Diff Viewer + Commit UI | v1.1 | 0/3 | Not started | - |
 | 37. One-Click Implement + Tray | v1.1 | 0/3 | Not started | - |
 | 38. Packaging + Signing + Auto-Update | v1.1 | 0/3 | Not started | - |
