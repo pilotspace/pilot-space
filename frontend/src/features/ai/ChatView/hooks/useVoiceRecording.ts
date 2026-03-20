@@ -5,7 +5,7 @@
  * Transcription is proxied through the backend to ElevenLabs STT with result caching.
  */
 
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
 import { transcriptionApi } from '@/services/api/transcription';
 
@@ -73,7 +73,7 @@ export function useVoiceRecording({
   const [error, setError] = useState<string | null>(null);
   const [durationMs, setDurationMs] = useState(0);
 
-  const isSupported = checkBrowserSupport();
+  const isSupported = useMemo(() => checkBrowserSupport(), []);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -85,17 +85,26 @@ export function useVoiceRecording({
   // Check microphone permission state on mount (non-blocking)
   useEffect(() => {
     if (!isSupported) return;
+
+    let permStatus: PermissionStatus | null = null;
+    const onChange = () => {
+      if (permStatus) setIsPermissionDenied(permStatus.state === 'denied');
+    };
+
     navigator.permissions
       ?.query({ name: 'microphone' as PermissionName })
       .then((result) => {
+        permStatus = result;
         setIsPermissionDenied(result.state === 'denied');
-        result.addEventListener('change', () => {
-          setIsPermissionDenied(result.state === 'denied');
-        });
+        result.addEventListener('change', onChange);
       })
       .catch(() => {
         // permissions API not supported — we'll find out on getUserMedia
       });
+
+    return () => {
+      permStatus?.removeEventListener('change', onChange);
+    };
   }, [isSupported]);
 
   /** Stop all media tracks and clear timers. */

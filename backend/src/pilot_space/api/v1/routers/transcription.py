@@ -236,7 +236,7 @@ async def transcribe_audio(
     detected_language: str | None = el_data.get("language_code") or el_data.get("language")
     audio_duration: float | None = el_data.get("audio_duration") or el_data.get("duration")
 
-    # Persist to transcript cache
+    # Persist to transcript cache (upsert — no-op on conflict, RETURNING id)
     cache_insert = insert(TranscriptCache).values(
         workspace_id=workspace_id,
         audio_hash=audio_hash,
@@ -246,31 +246,25 @@ async def transcribe_audio(
         provider="elevenlabs",
         metadata_json={"model_id": "scribe_v1"},
     )
-    cache_insert = cache_insert.on_conflict_do_nothing(
+    cache_insert = cache_insert.on_conflict_do_update(
         index_elements=["workspace_id", "audio_hash"],
-    )
-    await session.execute(cache_insert)
+        set_={"text": transcript_text},  # touch existing row so RETURNING works
+    ).returning(TranscriptCache.id)
+    result = await session.execute(cache_insert)
+    record_id = result.scalar_one()
     await session.commit()
-
-    # Fetch the inserted/existing record to get its ID
-    fetch_stmt = select(TranscriptCache).where(
-        TranscriptCache.workspace_id == workspace_id,
-        TranscriptCache.audio_hash == audio_hash,
-    )
-    fetch_result = await session.execute(fetch_stmt)
-    record = fetch_result.scalar_one()
 
     logger.info(
         "transcription_complete",
         workspace_id=str(workspace_id),
-        transcript_id=str(record.id),
+        transcript_id=str(record_id),
         audio_hash=audio_hash[:8],
         text_length=len(transcript_text),
         user_id=str(user_id),
     )
 
     return TranscribeResponse(
-        transcript_id=record.id,
+        transcript_id=record_id,
         text=transcript_text,
         language_code=detected_language,
         duration_seconds=audio_duration,
