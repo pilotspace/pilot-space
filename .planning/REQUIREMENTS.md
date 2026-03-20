@@ -15,8 +15,8 @@ Requirements for Tauri Desktop Client milestone. Each maps to roadmap phases.
 
 ### Authentication
 
-- [ ] **AUTH-01**: Supabase JWT token syncs from WebView to Tauri Rust backend via Tauri Store
-- [ ] **AUTH-02**: User session persists across app restarts (Windows useHttpsScheme enabled)
+- [x] **AUTH-01**: Supabase JWT token syncs from WebView to Tauri Rust backend via Tauri Store
+- [x] **AUTH-02**: User session persists across app restarts (Windows useHttpsScheme enabled)
 - [ ] **AUTH-03**: Auth tokens stored in OS keychain (macOS Keychain, Windows Credential Manager, Linux Secret Service)
 - [ ] **AUTH-04**: User can sign in via Supabase OAuth (Google, GitHub) using deep link redirect
 
@@ -96,8 +96,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SHELL-01 | Phase 30 | Complete |
 | SHELL-02 | Phase 30 | Complete |
 | SHELL-03 | Phase 37 | Pending |
-| AUTH-01 | Phase 31 | Pending |
-| AUTH-02 | Phase 31 | Pending |
+| AUTH-01 | Phase 31 | Complete |
+| AUTH-02 | Phase 31 | Complete |
 | AUTH-03 | Phase 31 | Pending |
 | AUTH-04 | Phase 31 | Pending |
 | GIT-01 | Phase 32 | Pending |

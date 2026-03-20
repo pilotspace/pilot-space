@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Tauri Desktop Client
 status: planning
-stopped_at: Completed 030-03-PLAN.md
-last_updated: "2026-03-20T04:21:37.497Z"
-last_activity: 2026-03-20 — Roadmap created, 9 phases, 30/30 requirements mapped
+stopped_at: Completed 31-01-PLAN.md
+last_updated: "2026-03-20T04:57:00Z"
+last_activity: 2026-03-20 — Phase 31 Plan 01 complete — Supabase JWT token sync bridge via Tauri Store
 progress:
   total_phases: 9
   completed_phases: 1
-  total_plans: 3
-  completed_plans: 3
-  percent: 0
+  total_plans: 4
+  completed_plans: 4
+  percent: 16
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-20)
 
 **Core value:** Enterprise teams can adopt AI-augmented SDLC workflows without sacrificing data sovereignty, compliance, or human control.
-**Current focus:** v1.1 Tauri Desktop Client — Phase 30: Tauri Shell + Static Export
+**Current focus:** v1.1 Tauri Desktop Client — Phase 31: Auth Bridge
 
 ## Current Position
 
-Phase: 30 of 38 (Tauri Shell + Static Export)
-Plan: 0 of 3 in current phase
-Status: Ready to plan
-Last activity: 2026-03-20 — Roadmap created, 9 phases, 30/30 requirements mapped
+Phase: 31 of 38 (Auth Bridge)
+Plan: 1 of 3 in current phase
+Status: In progress
+Last activity: 2026-03-20 — Phase 31 Plan 01 complete — Supabase JWT token sync bridge via Tauri Store
 
-Progress: [░░░░░░░░░░] 0% (v1.1: 0/25 plans)
+Progress: [█░░░░░░░░░] 16% (v1.1: 4/25 plans)
 
 ## Milestone History
 
@@ -62,6 +62,10 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 030]: macos-13 runner for x86_64 CI target — macos-latest now resolves to Apple Silicon (ARM64) runners
 - [Phase 030]: fail-fast: false in Tauri CI matrix — all 4 platform builds run to completion to expose platform-specific failures independently
 - [Phase 030]: Signing secrets commented out for Phase 30 unsigned builds — Phase 38 will populate APPLE_CERTIFICATE and Windows EV certificate secrets
+- [Phase 031-01]: pilot-auth.json store file name consistent between Rust StoreExt and JS @tauri-apps/plugin-store
+- [Phase 031-01]: StoreOptions.defaults is required in plugin-store 2.4.2 — pass { defaults: {} } when no defaults needed
+- [Phase 031-01]: syncTokenToTauriStore idempotent via initialized flag — safe in React StrictMode double-mount
+- [Phase 031-01]: Dynamic import of @tauri-apps/plugin-store inside syncTokenToTauriStore prevents SSG build errors
 
 ### Pending Todos
 
@@ -74,7 +78,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-20T04:17:02.956Z
-Stopped at: Completed 030-03-PLAN.md
+Last session: 2026-03-20T04:57:00Z
+Stopped at: Completed 31-01-PLAN.md
 Resume file: None
-Next action: /gsd:plan-phase 30
+Next action: /gsd:execute-phase 31
