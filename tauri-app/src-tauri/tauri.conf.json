@@ -42,7 +42,10 @@
       "icons/icon.ico"
     ],
     "macOS": {
-      "frameworks": []
+      "frameworks": [],
+      "entitlements": "Entitlements.plist",
+      "signingIdentity": null,
+      "minimumSystemVersion": "10.15"
     }
   },
   "plugins": {
