@@ -9,7 +9,14 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { CloneRepoDialog } from './clone-repo-dialog';
 import { LinkRepoDialog } from './link-repo-dialog';
-import { GitStatusPanel, BranchSelector, ConflictBanner } from '@/features/git';
+import {
+  GitStatusPanel,
+  BranchSelector,
+  ConflictBanner,
+  DiffViewer,
+  CommitPanel,
+} from '@/features/git';
+import { Separator } from '@/components/ui/separator';
 
 function formatDate(iso: string): string {
   try {
@@ -151,7 +158,18 @@ export const ProjectDashboard = observer(function ProjectDashboard() {
                     <BranchSelector repoPath={project.path} />
                   </div>
                   <ConflictBanner />
-                  <GitStatusPanel repoPath={project.path} />
+                  <div className="flex gap-4">
+                    {/* Left sidebar: file list + commit */}
+                    <div className="w-[280px] shrink-0 flex flex-col gap-3">
+                      <GitStatusPanel repoPath={project.path} />
+                      <Separator />
+                      <CommitPanel />
+                    </div>
+                    {/* Right: diff viewer */}
+                    <div className="flex-1 min-w-0">
+                      <DiffViewer maxHeight="400px" />
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
