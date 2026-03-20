@@ -143,6 +143,25 @@ async def http_exception_handler(
     )
 
 
+def _sanitize_pydantic_errors(errors: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Make Pydantic validation error dicts JSON-serializable.
+
+    The ``ctx`` field may contain raw ``Exception`` objects (e.g. ``ValueError``)
+    which are not JSON-serializable.  This helper converts them to strings.
+    """
+    sanitized: list[dict[str, Any]] = []
+    for err in errors:
+        clean = dict(err)
+        ctx = clean.get("ctx")
+        if isinstance(ctx, dict):
+            clean["ctx"] = {
+                k: str(v) if isinstance(v, Exception) else v
+                for k, v in ctx.items()
+            }
+        sanitized.append(clean)
+    return sanitized
+
+
 async def validation_exception_handler(
     request: Request,
     exc: Exception,
@@ -157,7 +176,7 @@ async def validation_exception_handler(
         Problem Details JSON response.
     """
     if isinstance(exc, RequestValidationError):
-        errors = exc.errors()
+        errors = _sanitize_pydantic_errors(exc.errors())
         detail = "Validation failed"
         extensions = {"errors": errors}
     else:

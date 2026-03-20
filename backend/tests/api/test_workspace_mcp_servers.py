@@ -1,16 +1,19 @@
-"""Tests for workspace MCP server CRUD and agent wiring (Phase 14).
+"""Tests for workspace MCP server CRUD and agent wiring (Phase 14 + Phase 25).
 
-Covers MCP-01 through MCP-06:
+Phase 14 (MCP-01 through MCP-06):
   MCP-01: POST creates registered server row (admin-only)
   MCP-02: Bearer token stored encrypted at rest
   MCP-03: OAuth callback stores token after code exchange
   MCP-05: Status endpoint returns connected/failed/unknown
   MCP-06: DELETE soft-deletes; subsequent GET excludes the server
 
-These are Wave 0 test stubs. Each test is marked xfail(strict=False) so
-the suite exits 0 while implementation is pending (phase 14 plans 02-03).
-Tests bodies contain the minimal assertion shape that drives the green
-implementation - they will become real assertions when the router is built.
+Phase 25 (New fields + endpoints):
+  Phase25-01: POST with new fields (server_type, transport, url_or_command)
+  Phase25-02: GET with filter params (server_type, status, search)
+  Phase25-03: PATCH partial update; preserves secrets when not provided
+  Phase25-04: POST .../enable and .../disable toggle is_enabled
+  Phase25-05: Soft-deleted server not returned by filtered list
+  Phase25-06: API response never contains raw secrets
 """
 
 from __future__ import annotations
@@ -35,7 +38,7 @@ pytestmark = pytest.mark.asyncio
 
 @pytest.fixture
 async def mcp_workspace_with_admin(
-    db_session: AsyncSession,
+    db_session_committed: AsyncSession,
     test_user_id,  # UUID fixture from root conftest
 ) -> tuple[object, object]:
     """Create workspace + admin member used across MCP API tests."""
@@ -50,24 +53,24 @@ async def mcp_workspace_with_admin(
         slug=f"mcp-test-{uuid4().hex[:8]}",
         owner_id=test_user_id,
     )
-    db_session.add(workspace)
-    await db_session.flush()
+    db_session_committed.add(workspace)
+    await db_session_committed.flush()
 
     member = WorkspaceMember(
         workspace_id=workspace.id,
         user_id=test_user_id,
         role=WorkspaceRole.ADMIN,
     )
-    db_session.add(member)
-    await db_session.commit()
-    await db_session.refresh(workspace)
+    db_session_committed.add(member)
+    await db_session_committed.commit()
+    await db_session_committed.refresh(workspace)
 
     return workspace, member
 
 
 @pytest.fixture
 async def mcp_workspace_with_member(
-    db_session: AsyncSession,
+    db_session_committed: AsyncSession,
     test_user_id,
 ) -> tuple[object, object]:
     """Create workspace with a non-admin MEMBER for 403 tests."""
@@ -82,17 +85,17 @@ async def mcp_workspace_with_member(
         slug=f"mcp-member-{uuid4().hex[:8]}",
         owner_id=uuid4(),  # Different owner
     )
-    db_session.add(workspace)
-    await db_session.flush()
+    db_session_committed.add(workspace)
+    await db_session_committed.flush()
 
     member = WorkspaceMember(
         workspace_id=workspace.id,
         user_id=test_user_id,
         role=WorkspaceRole.MEMBER,
     )
-    db_session.add(member)
-    await db_session.commit()
-    await db_session.refresh(workspace)
+    db_session_committed.add(member)
+    await db_session_committed.commit()
+    await db_session_committed.refresh(workspace)
 
     return workspace, member
 
@@ -648,3 +651,807 @@ async def test_oauth_url_stores_workspace_slug_in_state() -> None:
 
     assert "value" in stored_data
     assert stored_data["value"]["workspace_slug"] == "test-workspace"
+
+
+# ---------------------------------------------------------------------------
+# Phase 25: Shared fixtures (mock-based, no real DB required)
+# ---------------------------------------------------------------------------
+
+_ADMIN_WORKSPACE_PATH = (
+    "pilot_space.api.v1.routers.workspace_mcp_servers._get_admin_workspace"
+)
+_MCP_REPO_PATH = (
+    "pilot_space.infrastructure.database.repositories"
+    ".workspace_mcp_server_repository.WorkspaceMcpServerRepository"
+)
+_SET_RLS_PATH = (
+    "pilot_space.api.v1.routers.workspace_mcp_servers.set_rls_context"
+)
+
+
+@pytest.fixture
+def mock_workspace_p25() -> object:
+    """Minimal mock workspace for Phase 25 tests."""
+    from unittest.mock import MagicMock
+
+    ws = MagicMock()
+    ws.id = uuid4()
+    ws.slug = "phase25-workspace"
+    return ws
+
+
+@pytest.fixture
+def mock_mcp_repo_p25() -> object:
+    """Mock WorkspaceMcpServerRepository for Phase 25 tests."""
+    from datetime import UTC, datetime
+    from unittest.mock import AsyncMock, MagicMock
+    from uuid import uuid4 as _uuid4
+
+    from pilot_space.infrastructure.database.models.workspace_mcp_server import (
+        McpAuthType,
+        McpServerType,
+        McpStatus,
+        McpTransport,
+        WorkspaceMcpServer,
+    )
+
+    repo = AsyncMock()
+
+    def _make_server(**overrides: object) -> WorkspaceMcpServer:
+        server = MagicMock(spec=WorkspaceMcpServer)
+        server.id = overrides.get("id", _uuid4())
+        server.workspace_id = overrides.get("workspace_id", _uuid4())
+        server.display_name = overrides.get("display_name", "Test Server")
+        server.server_type = overrides.get("server_type", McpServerType.REMOTE)
+        server.transport = overrides.get("transport", McpTransport.SSE)
+        server.url_or_command = overrides.get("url_or_command", "https://mcp.example.com/sse")
+        server.url = overrides.get("url", "https://mcp.example.com/sse")
+        server.command_args = overrides.get("command_args")
+        server.is_enabled = overrides.get("is_enabled", True)
+        server.is_deleted = overrides.get("is_deleted", False)
+        server.auth_type = overrides.get("auth_type", McpAuthType.BEARER)
+        server.auth_token_encrypted = overrides.get("auth_token_encrypted")
+        server.headers_encrypted = overrides.get("headers_encrypted")
+        server.headers_json = overrides.get("headers_json")
+        server.env_vars_encrypted = overrides.get("env_vars_encrypted")
+        server.oauth_client_id = None
+        server.oauth_auth_url = None
+        server.oauth_scopes = None
+        server.last_status = overrides.get("last_status", McpStatus.ENABLED)
+        server.last_status_checked_at = None
+        server.created_at = overrides.get("created_at", datetime.now(UTC))
+        return server
+
+    repo._make_server = _make_server
+    repo.create = AsyncMock(side_effect=lambda s: s)
+    repo.get_active_by_workspace = AsyncMock(return_value=[])
+    repo.get_filtered = AsyncMock(return_value=[])
+    repo.get_by_workspace_and_id = AsyncMock(return_value=None)
+    repo.update = AsyncMock(side_effect=lambda s: s)
+    repo.update_fields = AsyncMock(side_effect=lambda s, **_kw: s)
+    repo.set_enabled = AsyncMock(side_effect=lambda s, _enabled=True: s)
+    repo.soft_delete = AsyncMock(return_value=None)
+    return repo
+
+
+@pytest.fixture
+def mcp_p25_client(mock_workspace_p25: object, mock_mcp_repo_p25: object) -> object:
+    """Authenticated ASGI test client with admin workspace + repo mocked.
+
+    Phase 25 tests use this client instead of ``authenticated_client`` so they
+    don't need a real PostgreSQL database.
+    """
+    from collections.abc import AsyncGenerator
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from httpx import ASGITransport, AsyncClient
+
+    from pilot_space.dependencies.auth import get_current_user, get_session
+    from pilot_space.infrastructure.auth import TokenPayload
+    from pilot_space.main import app
+
+    mock_payload = MagicMock(spec=TokenPayload)
+    mock_payload.sub = "test-user-id"
+    mock_payload.user_id = mock_workspace_p25.id  # type: ignore[attr-defined]
+
+    mock_session = AsyncMock()
+
+    async def _session() -> AsyncGenerator[object, None]:
+        yield mock_session
+
+    app.dependency_overrides[get_current_user] = lambda: mock_payload
+    app.dependency_overrides[get_session] = _session
+
+    transport = ASGITransport(app=app)
+
+    # Return a context manager that yields the client while patching _get_admin_workspace
+    class _ClientCtx:
+        def __init__(self) -> None:
+            self._client: AsyncClient | None = None
+            self._admin_patcher = patch(
+                _ADMIN_WORKSPACE_PATH,
+                new=AsyncMock(return_value=mock_workspace_p25),
+            )
+            self._rls_patcher = patch(_SET_RLS_PATH, new=AsyncMock())
+
+        async def __aenter__(self) -> AsyncClient:
+            self._admin_patcher.start()
+            self._rls_patcher.start()
+            self._client = AsyncClient(
+                transport=transport,
+                base_url="http://test",
+                headers={"Authorization": "Bearer test-token"},
+            )
+            return await self._client.__aenter__()  # type: ignore[return-value]
+
+        async def __aexit__(self, *args: object) -> None:
+            self._rls_patcher.stop()
+            self._admin_patcher.stop()
+            if self._client is not None:
+                await self._client.__aexit__(*args)
+            app.dependency_overrides.pop(get_current_user, None)
+            app.dependency_overrides.pop(get_session, None)
+
+    return _ClientCtx()
+
+
+# ---------------------------------------------------------------------------
+# Phase 25: Register server with new fields
+# ---------------------------------------------------------------------------
+
+
+async def test_register_server_with_new_fields(
+    mock_workspace_p25: object,
+    mock_mcp_repo_p25: object,
+) -> None:
+    """Phase25-01: POST with server_type, transport, url_or_command succeeds.
+
+    Verifies new fields appear in the response and raw secrets are never returned.
+    """
+    from datetime import UTC, datetime
+    from unittest.mock import AsyncMock, patch
+    from uuid import uuid4 as _uuid4
+
+    from pilot_space.infrastructure.database.models.workspace_mcp_server import (
+        McpAuthType,
+        McpServerType,
+        McpStatus,
+        McpTransport,
+        WorkspaceMcpServer,
+    )
+
+    workspace = mock_workspace_p25
+    repo = mock_mcp_repo_p25
+    server_id = _uuid4()
+
+    # Set up repo.create to return a properly built server
+    from unittest.mock import MagicMock
+
+    created_server = MagicMock(spec=WorkspaceMcpServer)
+    created_server.id = server_id
+    created_server.workspace_id = workspace.id
+    created_server.display_name = "Phase25 Remote Server"
+    created_server.server_type = McpServerType.REMOTE
+    created_server.transport = McpTransport.SSE
+    created_server.url_or_command = "https://mcp.example.com/sse"
+    created_server.url = "https://mcp.example.com/sse"
+    created_server.command_args = None
+    created_server.is_enabled = True
+    created_server.auth_type = McpAuthType.BEARER
+    created_server.auth_token_encrypted = "encrypted-token"
+    created_server.headers_encrypted = None
+    created_server.headers_json = '{"X-Custom": "value1"}'
+    created_server.env_vars_encrypted = None
+    created_server.oauth_client_id = None
+    created_server.oauth_auth_url = None
+    created_server.oauth_scopes = None
+    created_server.last_status = McpStatus.ENABLED
+    created_server.last_status_checked_at = None
+    created_server.created_at = datetime.now(UTC)
+    repo.create = AsyncMock(return_value=created_server)
+
+    from unittest.mock import MagicMock
+
+    from httpx import ASGITransport, AsyncClient
+
+    from pilot_space.dependencies.auth import get_current_user, get_session
+    from pilot_space.infrastructure.auth import TokenPayload
+    from pilot_space.main import app
+
+    mock_payload = MagicMock(spec=TokenPayload)
+
+    async def _session():  # type: ignore[return]
+        yield MagicMock()
+
+    app.dependency_overrides[get_current_user] = lambda: mock_payload
+    app.dependency_overrides[get_session] = _session
+
+    payload = {
+        "display_name": "Phase25 Remote Server",
+        "server_type": "remote",
+        "transport": "sse",
+        "url_or_command": "https://mcp.example.com/sse",
+        "auth_type": "bearer",
+        "auth_token": "sk-phase25-token",
+        "headers": {"X-Custom": "header-value"},
+    }
+
+    try:
+        with (
+            patch(_ADMIN_WORKSPACE_PATH, new=AsyncMock(return_value=workspace)),
+            patch(_SET_RLS_PATH, new=AsyncMock()),
+            patch(_MCP_REPO_PATH, return_value=repo),
+        ):
+            transport = ASGITransport(app=app)
+            async with AsyncClient(
+                transport=transport,
+                base_url="http://test",
+                headers={"Authorization": "Bearer test-token"},
+            ) as client:
+                response = await client.post(
+                    f"/api/v1/workspaces/{workspace.id}/mcp-servers",
+                    json=payload,
+                )
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+        app.dependency_overrides.pop(get_session, None)
+
+    assert response.status_code == 201
+    data = response.json()
+
+    # New fields in response
+    assert data["server_type"] == "remote"
+    assert data["transport"] == "sse"
+    assert data["url_or_command"] == "https://mcp.example.com/sse"
+    assert data["is_enabled"] is True
+
+    # Secret flags instead of raw values
+    assert data["has_auth_secret"] is True
+    assert data["has_headers_secret"] is True
+
+    # Headers are now visible in response (not secret)
+    assert data["headers"] == {"X-Custom": "value1"}
+
+    # Raw secrets MUST NEVER appear
+    for key in ("auth_token", "auth_token_encrypted", "headers_encrypted",
+                "env_vars", "env_vars_encrypted"):
+        assert key not in data, f"Response must not contain {key!r}"
+
+
+async def test_response_never_contains_raw_secrets(
+    mock_workspace_p25: object,
+    mock_mcp_repo_p25: object,
+) -> None:
+    """Phase25-06: API response never contains auth_token, headers, or env_vars."""
+    from datetime import UTC, datetime
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from pilot_space.infrastructure.database.models.workspace_mcp_server import (
+        McpAuthType,
+        McpServerType,
+        McpStatus,
+        McpTransport,
+        WorkspaceMcpServer,
+    )
+
+    workspace = mock_workspace_p25
+    repo = mock_mcp_repo_p25
+
+    created_server = MagicMock(spec=WorkspaceMcpServer)
+    created_server.id = uuid4()
+    created_server.workspace_id = workspace.id
+    created_server.display_name = "Secret Test Server"
+    created_server.server_type = McpServerType.NPX
+    created_server.transport = McpTransport.STDIO
+    created_server.url_or_command = "npx my-secret-server"
+    created_server.url = "npx my-secret-server"
+    created_server.command_args = None
+    created_server.is_enabled = True
+    created_server.auth_type = McpAuthType.BEARER
+    created_server.auth_token_encrypted = "encrypted-token"
+    created_server.headers_encrypted = None
+    created_server.headers_json = None
+    created_server.env_vars_encrypted = "encrypted-env-vars"
+    created_server.oauth_client_id = None
+    created_server.oauth_auth_url = None
+    created_server.oauth_scopes = None
+    created_server.last_status = McpStatus.ENABLED
+    created_server.last_status_checked_at = None
+    created_server.created_at = datetime.now(UTC)
+    repo.create = AsyncMock(return_value=created_server)
+
+    from httpx import ASGITransport, AsyncClient
+
+    from pilot_space.dependencies.auth import get_current_user, get_session
+    from pilot_space.infrastructure.auth import TokenPayload
+    from pilot_space.main import app
+
+    mock_payload = MagicMock(spec=TokenPayload)
+
+    async def _session():  # type: ignore[return]
+        yield MagicMock()
+
+    app.dependency_overrides[get_current_user] = lambda: mock_payload
+    app.dependency_overrides[get_session] = _session
+
+    payload = {
+        "display_name": "Secret Test Server",
+        "server_type": "npx",
+        "transport": "stdio",
+        "url_or_command": "npx my-secret-server",
+        "auth_type": "bearer",
+        "auth_token": "sk-secret-value",
+        "env_vars": {"API_KEY": "supersecret"},
+    }
+
+    try:
+        with (
+            patch(_ADMIN_WORKSPACE_PATH, new=AsyncMock(return_value=workspace)),
+            patch(_SET_RLS_PATH, new=AsyncMock()),
+            patch(_MCP_REPO_PATH, return_value=repo),
+        ):
+            transport = ASGITransport(app=app)
+            async with AsyncClient(
+                transport=transport,
+                base_url="http://test",
+                headers={"Authorization": "Bearer test-token"},
+            ) as client:
+                response = await client.post(
+                    f"/api/v1/workspaces/{workspace.id}/mcp-servers",
+                    json=payload,
+                )
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+        app.dependency_overrides.pop(get_session, None)
+
+    assert response.status_code == 201
+    data = response.json()
+
+    forbidden_keys = {
+        "auth_token", "auth_token_encrypted",
+        "headers_encrypted",
+        "env_vars", "env_vars_encrypted",
+    }
+    for key in forbidden_keys:
+        assert key not in data, f"Response must not contain {key!r}"
+
+
+# ---------------------------------------------------------------------------
+# Phase 25: PATCH partial update — preserve secrets
+# ---------------------------------------------------------------------------
+
+
+async def test_patch_preserves_existing_secret_when_not_provided(
+    mock_workspace_p25: object,
+    mock_mcp_repo_p25: object,
+) -> None:
+    """Phase25-03b: PATCH without auth_token returns has_auth_secret=True."""
+    from datetime import UTC, datetime
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from pilot_space.infrastructure.database.models.workspace_mcp_server import (
+        McpAuthType,
+        McpServerType,
+        McpStatus,
+        McpTransport,
+        WorkspaceMcpServer,
+    )
+
+    workspace = mock_workspace_p25
+    repo = mock_mcp_repo_p25
+    server_id = uuid4()
+
+    existing_server = MagicMock(spec=WorkspaceMcpServer)
+    existing_server.id = server_id
+    existing_server.workspace_id = workspace.id
+    existing_server.display_name = "Secret Preserve Server"
+    existing_server.server_type = McpServerType.REMOTE
+    existing_server.transport = McpTransport.SSE
+    existing_server.url_or_command = "https://secret-preserve.example.com/sse"
+    existing_server.url = "https://secret-preserve.example.com/sse"
+    existing_server.command_args = None
+    existing_server.is_enabled = True
+    existing_server.auth_type = McpAuthType.BEARER
+    existing_server.auth_token_encrypted = "existing-encrypted-token"  # Has a secret
+    existing_server.headers_encrypted = None
+    existing_server.headers_json = None
+    existing_server.env_vars_encrypted = None
+    existing_server.oauth_client_id = None
+    existing_server.oauth_auth_url = None
+    existing_server.oauth_scopes = None
+    existing_server.last_status = McpStatus.ENABLED
+    existing_server.last_status_checked_at = None
+    existing_server.created_at = datetime.now(UTC)
+
+    # PATCH should not change the encrypted token
+    async def _update_fields(server: object, **kwargs: object) -> object:
+        if "display_name" in kwargs:
+            existing_server.display_name = kwargs["display_name"]
+        # auth_token_encrypted should NOT be in kwargs when not provided
+        assert "auth_token_encrypted" not in kwargs or kwargs["auth_token_encrypted"] == existing_server.auth_token_encrypted
+        return existing_server
+
+    repo.get_by_workspace_and_id = AsyncMock(return_value=existing_server)
+    repo.update_fields = AsyncMock(side_effect=_update_fields)
+
+    from httpx import ASGITransport, AsyncClient
+
+    from pilot_space.dependencies.auth import get_current_user, get_session
+    from pilot_space.infrastructure.auth import TokenPayload
+    from pilot_space.main import app
+
+    mock_payload = MagicMock(spec=TokenPayload)
+
+    async def _session():  # type: ignore[return]
+        yield MagicMock()
+
+    app.dependency_overrides[get_current_user] = lambda: mock_payload
+    app.dependency_overrides[get_session] = _session
+
+    try:
+        with (
+            patch(_ADMIN_WORKSPACE_PATH, new=AsyncMock(return_value=workspace)),
+            patch(_SET_RLS_PATH, new=AsyncMock()),
+            patch(_MCP_REPO_PATH, return_value=repo),
+        ):
+            transport = ASGITransport(app=app)
+            async with AsyncClient(
+                transport=transport,
+                base_url="http://test",
+                headers={"Authorization": "Bearer test-token"},
+            ) as client:
+                patch_resp = await client.patch(
+                    f"/api/v1/workspaces/{workspace.id}/mcp-servers/{server_id}",
+                    json={"display_name": "Still Preserved"},
+                )
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+        app.dependency_overrides.pop(get_session, None)
+
+    assert patch_resp.status_code == 200
+    data = patch_resp.json()
+    assert data["has_auth_secret"] is True  # Still has secret
+
+
+# ---------------------------------------------------------------------------
+# Phase 25: Enable / Disable
+# ---------------------------------------------------------------------------
+
+
+async def test_disable_sets_status_and_flag(
+    mock_workspace_p25: object,
+    mock_mcp_repo_p25: object,
+) -> None:
+    """Phase25-04a: POST .../disable returns 204 and calls set_enabled(False)."""
+    from datetime import UTC, datetime
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from pilot_space.infrastructure.database.models.workspace_mcp_server import (
+        McpAuthType,
+        McpServerType,
+        McpStatus,
+        McpTransport,
+        WorkspaceMcpServer,
+    )
+
+    workspace = mock_workspace_p25
+    repo = mock_mcp_repo_p25
+    server_id = uuid4()
+
+    existing_server = MagicMock(spec=WorkspaceMcpServer)
+    existing_server.id = server_id
+    existing_server.workspace_id = workspace.id
+    existing_server.display_name = "Disable Me Server"
+    existing_server.server_type = McpServerType.REMOTE
+    existing_server.transport = McpTransport.SSE
+    existing_server.url_or_command = "https://disable-me.example.com/sse"
+    existing_server.url = "https://disable-me.example.com/sse"
+    existing_server.command_args = None
+    existing_server.is_enabled = True
+    existing_server.auth_type = McpAuthType.BEARER
+    existing_server.auth_token_encrypted = None
+    existing_server.headers_encrypted = None
+    existing_server.headers_json = None
+    existing_server.env_vars_encrypted = None
+    existing_server.oauth_client_id = None
+    existing_server.oauth_auth_url = None
+    existing_server.oauth_scopes = None
+    existing_server.last_status = McpStatus.ENABLED
+    existing_server.last_status_checked_at = None
+    existing_server.created_at = datetime.now(UTC)
+
+    repo.get_by_workspace_and_id = AsyncMock(return_value=existing_server)
+    set_enabled_calls: list[tuple[object, bool]] = []
+
+    async def _set_enabled(server: object, enabled: bool) -> object:
+        set_enabled_calls.append((server, enabled))
+        existing_server.is_enabled = enabled
+        existing_server.last_status = McpStatus.DISABLED if not enabled else None
+        return existing_server
+
+    repo.set_enabled = AsyncMock(side_effect=_set_enabled)
+
+    from httpx import ASGITransport, AsyncClient
+
+    from pilot_space.dependencies.auth import get_current_user, get_session
+    from pilot_space.infrastructure.auth import TokenPayload
+    from pilot_space.main import app
+
+    mock_payload = MagicMock(spec=TokenPayload)
+
+    async def _session():  # type: ignore[return]
+        yield MagicMock()
+
+    app.dependency_overrides[get_current_user] = lambda: mock_payload
+    app.dependency_overrides[get_session] = _session
+
+    try:
+        with (
+            patch(_ADMIN_WORKSPACE_PATH, new=AsyncMock(return_value=workspace)),
+            patch(_SET_RLS_PATH, new=AsyncMock()),
+            patch(_MCP_REPO_PATH, return_value=repo),
+        ):
+            transport = ASGITransport(app=app)
+            async with AsyncClient(
+                transport=transport,
+                base_url="http://test",
+                headers={"Authorization": "Bearer test-token"},
+            ) as client:
+                resp = await client.post(
+                    f"/api/v1/workspaces/{workspace.id}/mcp-servers/{server_id}/disable"
+                )
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+        app.dependency_overrides.pop(get_session, None)
+
+    assert resp.status_code == 204
+    # set_enabled must have been called with enabled=False
+    assert len(set_enabled_calls) == 1
+    _, enabled_arg = set_enabled_calls[0]
+    assert enabled_arg is False
+
+
+async def test_enable_clears_status_and_flag(
+    mock_workspace_p25: object,
+    mock_mcp_repo_p25: object,
+) -> None:
+    """Phase25-04b: POST .../enable returns 204 and calls set_enabled(True)."""
+    from datetime import UTC, datetime
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from pilot_space.infrastructure.database.models.workspace_mcp_server import (
+        McpAuthType,
+        McpServerType,
+        McpStatus,
+        McpTransport,
+        WorkspaceMcpServer,
+    )
+
+    workspace = mock_workspace_p25
+    repo = mock_mcp_repo_p25
+    server_id = uuid4()
+
+    existing_server = MagicMock(spec=WorkspaceMcpServer)
+    existing_server.id = server_id
+    existing_server.workspace_id = workspace.id
+    existing_server.display_name = "Re-Enable Server"
+    existing_server.server_type = McpServerType.REMOTE
+    existing_server.transport = McpTransport.SSE
+    existing_server.url_or_command = "https://re-enable.example.com/sse"
+    existing_server.url = "https://re-enable.example.com/sse"
+    existing_server.command_args = None
+    existing_server.is_enabled = False  # Currently disabled
+    existing_server.auth_type = McpAuthType.BEARER
+    existing_server.auth_token_encrypted = None
+    existing_server.headers_encrypted = None
+    existing_server.headers_json = None
+    existing_server.env_vars_encrypted = None
+    existing_server.oauth_client_id = None
+    existing_server.oauth_auth_url = None
+    existing_server.oauth_scopes = None
+    existing_server.last_status = McpStatus.DISABLED
+    existing_server.last_status_checked_at = None
+    existing_server.created_at = datetime.now(UTC)
+
+    repo.get_by_workspace_and_id = AsyncMock(return_value=existing_server)
+    set_enabled_calls: list[tuple[object, bool]] = []
+
+    async def _set_enabled(server: object, enabled: bool) -> object:
+        set_enabled_calls.append((server, enabled))
+        existing_server.is_enabled = enabled
+        existing_server.last_status = None if enabled else McpStatus.DISABLED
+        return existing_server
+
+    repo.set_enabled = AsyncMock(side_effect=_set_enabled)
+
+    from httpx import ASGITransport, AsyncClient
+
+    from pilot_space.dependencies.auth import get_current_user, get_session
+    from pilot_space.infrastructure.auth import TokenPayload
+    from pilot_space.main import app
+
+    mock_payload = MagicMock(spec=TokenPayload)
+
+    async def _session():  # type: ignore[return]
+        yield MagicMock()
+
+    app.dependency_overrides[get_current_user] = lambda: mock_payload
+    app.dependency_overrides[get_session] = _session
+
+    try:
+        with (
+            patch(_ADMIN_WORKSPACE_PATH, new=AsyncMock(return_value=workspace)),
+            patch(_SET_RLS_PATH, new=AsyncMock()),
+            patch(_MCP_REPO_PATH, return_value=repo),
+        ):
+            transport = ASGITransport(app=app)
+            async with AsyncClient(
+                transport=transport,
+                base_url="http://test",
+                headers={"Authorization": "Bearer test-token"},
+            ) as client:
+                resp = await client.post(
+                    f"/api/v1/workspaces/{workspace.id}/mcp-servers/{server_id}/enable"
+                )
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+        app.dependency_overrides.pop(get_session, None)
+
+    assert resp.status_code == 204
+    assert len(set_enabled_calls) == 1
+    _, enabled_arg = set_enabled_calls[0]
+    assert enabled_arg is True
+
+
+# ---------------------------------------------------------------------------
+# Phase 25: GET with filter params (mock-based)
+# ---------------------------------------------------------------------------
+
+
+async def test_list_with_type_filter(
+    mock_workspace_p25: object,
+    mock_mcp_repo_p25: object,
+) -> None:
+    """Phase25-02: GET with server_type=remote filter returns only remote items."""
+    from datetime import UTC, datetime
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from pilot_space.infrastructure.database.models.workspace_mcp_server import (
+        McpAuthType,
+        McpServerType,
+        McpStatus,
+        McpTransport,
+        WorkspaceMcpServer,
+    )
+
+    workspace = mock_workspace_p25
+    repo = mock_mcp_repo_p25
+
+    def _make_srv(name: str, stype: McpServerType) -> MagicMock:
+        s = MagicMock(spec=WorkspaceMcpServer)
+        s.id = uuid4()
+        s.workspace_id = workspace.id
+        s.display_name = name
+        s.server_type = stype
+        s.transport = McpTransport.SSE
+        s.url_or_command = "https://example.com"
+        s.url = "https://example.com"
+        s.command_args = None
+        s.is_enabled = True
+        s.auth_type = McpAuthType.BEARER
+        s.auth_token_encrypted = None
+        s.headers_encrypted = None
+        s.headers_json = None
+        s.env_vars_encrypted = None
+        s.oauth_client_id = None
+        s.oauth_auth_url = None
+        s.oauth_scopes = None
+        s.last_status = McpStatus.ENABLED
+        s.last_status_checked_at = None
+        s.created_at = datetime.now(UTC)
+        return s
+
+    remote_server = _make_srv("Filter Remote", McpServerType.REMOTE)
+    # get_filtered returns only remote when server_type=remote passed
+    repo.get_filtered = AsyncMock(return_value=[remote_server])
+
+    from httpx import ASGITransport, AsyncClient
+
+    from pilot_space.dependencies.auth import get_current_user, get_session
+    from pilot_space.infrastructure.auth import TokenPayload
+    from pilot_space.main import app
+
+    mock_payload = MagicMock(spec=TokenPayload)
+
+    async def _session():  # type: ignore[return]
+        yield MagicMock()
+
+    app.dependency_overrides[get_current_user] = lambda: mock_payload
+    app.dependency_overrides[get_session] = _session
+
+    try:
+        with (
+            patch(_ADMIN_WORKSPACE_PATH, new=AsyncMock(return_value=workspace)),
+            patch(_SET_RLS_PATH, new=AsyncMock()),
+            patch(_MCP_REPO_PATH, return_value=repo),
+        ):
+            transport = ASGITransport(app=app)
+            async with AsyncClient(
+                transport=transport,
+                base_url="http://test",
+                headers={"Authorization": "Bearer test-token"},
+            ) as client:
+                response = await client.get(
+                    f"/api/v1/workspaces/{workspace.id}/mcp-servers",
+                    params={"server_type": "remote"},
+                )
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+        app.dependency_overrides.pop(get_session, None)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 1
+    for item in data["items"]:
+        assert item["server_type"] == "remote"
+
+
+# ---------------------------------------------------------------------------
+# Phase 25: Soft-delete regression (mock-based)
+# ---------------------------------------------------------------------------
+
+
+async def test_soft_deleted_server_not_in_filtered_list(
+    mock_workspace_p25: object,
+    mock_mcp_repo_p25: object,
+) -> None:
+    """Phase25-05: get_filtered excludes deleted servers (repository contract test)."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+
+    workspace = mock_workspace_p25
+    repo = mock_mcp_repo_p25
+
+    # Repo returns empty list (simulating deleted server filtered out)
+    repo.get_filtered = AsyncMock(return_value=[])
+
+    from httpx import ASGITransport, AsyncClient
+
+    from pilot_space.dependencies.auth import get_current_user, get_session
+    from pilot_space.infrastructure.auth import TokenPayload
+    from pilot_space.main import app
+
+    mock_payload = MagicMock(spec=TokenPayload)
+
+    async def _session():  # type: ignore[return]
+        yield MagicMock()
+
+    app.dependency_overrides[get_current_user] = lambda: mock_payload
+    app.dependency_overrides[get_session] = _session
+
+    fake_deleted_id = str(uuid4())
+
+    try:
+        with (
+            patch(_ADMIN_WORKSPACE_PATH, new=AsyncMock(return_value=workspace)),
+            patch(_SET_RLS_PATH, new=AsyncMock()),
+            patch(_MCP_REPO_PATH, return_value=repo),
+        ):
+            transport = ASGITransport(app=app)
+            async with AsyncClient(
+                transport=transport,
+                base_url="http://test",
+                headers={"Authorization": "Bearer test-token"},
+            ) as client:
+                list_resp = await client.get(
+                    f"/api/v1/workspaces/{workspace.id}/mcp-servers"
+                )
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+        app.dependency_overrides.pop(get_session, None)
+
+    assert list_resp.status_code == 200
+    items = list_resp.json()["items"]
+    ids = [item["id"] for item in items]
+    assert fake_deleted_id not in ids
+

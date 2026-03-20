@@ -1,0 +1,364 @@
+"""ImportMcpServersService — bulk MCP server import from JSON config.
+
+Supports Claude Desktop, Cursor, and VS Code MCP config formats:
+  { "mcpServers": { "<name>": { "url": "...", "command": "...", ... } } }
+
+Each parsed server is validated for SSRF / command injection before import.
+Duplicate display_names within the workspace are skipped (not overwritten).
+"""
+
+from __future__ import annotations
+
+import json
+import re
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+from uuid import UUID
+
+from pilot_space.infrastructure.database.models.workspace_mcp_server import (
+    McpAuthType,
+    McpServerType,
+    McpStatus,
+    McpTransport,
+    WorkspaceMcpServer,
+)
+from pilot_space.infrastructure.logging import get_logger
+
+if TYPE_CHECKING:
+    from pilot_space.infrastructure.database.repositories.workspace_mcp_server_repository import (
+        WorkspaceMcpServerRepository,
+    )
+
+logger = get_logger(__name__)
+
+# Shell metacharacter denylist (same as _mcp_server_schemas.py)
+_SHELL_METACHAR_RE = re.compile(r"[;&|$`(){}<>]")
+
+
+# ---------------------------------------------------------------------------
+# Parsed intermediate type
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class ParsedMcpServer:
+    """Intermediate representation of a parsed MCP server config entry."""
+
+    name: str
+    server_type: McpServerType
+    transport: McpTransport
+    url_or_command: str
+    command_args: str | None = None
+    env_vars: dict[str, str] | None = None
+    headers: dict[str, str] | None = None
+
+
+# ---------------------------------------------------------------------------
+# Import result
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class ImportedEntry:
+    """A successfully imported server."""
+
+    name: str
+    id: UUID
+
+
+@dataclass
+class SkippedEntry:
+    """A server entry skipped during import."""
+
+    name: str
+    reason: str
+
+
+@dataclass
+class ErrorEntry:
+    """A server entry that failed validation during import."""
+
+    name: str
+    reason: str
+
+
+@dataclass
+class ImportResult:
+    """Aggregated result of an import_servers call."""
+
+    imported: list[ImportedEntry] = field(default_factory=list)
+    skipped: list[SkippedEntry] = field(default_factory=list)
+    errors: list[ErrorEntry] = field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Service
+# ---------------------------------------------------------------------------
+
+
+class ImportMcpServersService:
+    """Parse a JSON MCP config and bulk-import servers into a workspace."""
+
+    @staticmethod
+    def parse_config_json(raw: str) -> list[ParsedMcpServer]:
+        """Parse a Claude / Cursor / VS Code MCP config JSON string.
+
+        Expected shape:
+            { "mcpServers": { "<name>": { ... } } }
+
+        Each server entry may contain:
+            - ``url`` or ``httpUrl``: remote HTTPS endpoint → McpServerType.REMOTE
+            - ``command``: executable string → inferred as NPX or UVX
+            - ``args``: list of CLI arguments (joined to command_args)
+            - ``env``: environment variable dict
+            - ``transport``: "sse" | "stdio" | "streamable_http" (optional, inferred)
+
+        Args:
+            raw: Raw JSON string.
+
+        Returns:
+            List of ParsedMcpServer instances.
+
+        Raises:
+            ValueError: If the JSON is malformed or missing the 'mcpServers' key.
+        """
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Invalid JSON: {exc}") from exc
+
+        if not isinstance(data, dict):
+            raise TypeError("Config JSON must be a JSON object")
+
+        mcp_servers = data.get("mcpServers") or data.get("mcp_servers") or {}
+        if not isinstance(mcp_servers, dict):
+            raise TypeError("'mcpServers' must be a JSON object mapping names to server configs")
+
+        parsed: list[ParsedMcpServer] = []
+        for name, config in mcp_servers.items():
+            if not isinstance(config, dict):
+                continue
+
+            entry = ImportMcpServersService._parse_server_entry(name, config)
+            if entry is not None:
+                parsed.append(entry)
+
+        return parsed
+
+    @staticmethod
+    def _parse_server_entry(name: str, config: dict[str, object]) -> ParsedMcpServer | None:
+        """Parse a single server config entry.
+
+        Returns None if the entry cannot be mapped to a valid server type.
+        """
+        # Determine server type and url_or_command
+        url = config.get("url") or config.get("httpUrl")
+        command = config.get("command")
+
+        if url and isinstance(url, str):
+            server_type = McpServerType.REMOTE
+            url_or_command = url
+
+            # Infer transport
+            transport_str = str(config.get("transport", "sse")).lower()
+            if transport_str == "stdio":
+                transport = McpTransport.STDIO
+            elif transport_str in ("streamable_http", "streamablehttp"):
+                transport = McpTransport.STREAMABLE_HTTP
+            else:
+                transport = McpTransport.SSE
+
+            return ParsedMcpServer(
+                name=name,
+                server_type=server_type,
+                transport=transport,
+                url_or_command=url_or_command,
+                env_vars=_extract_env_vars(config),
+                headers=_extract_headers(config),
+            )
+
+        if command and isinstance(command, str):
+            # Infer NPX vs UVX vs other
+            if command == "npx" or command.startswith("npx "):
+                server_type = McpServerType.NPX
+            elif command == "uvx" or command.startswith("uvx "):
+                server_type = McpServerType.UVX
+            else:
+                # Generic command — wrap with the command itself as NPX-style
+                # Treat as NPX with the full command path
+                server_type = McpServerType.NPX
+
+            # Build url_or_command: if command is bare ("npx"), append args
+            args_list = config.get("args")
+            if isinstance(args_list, list):
+                str_args = " ".join(str(a) for a in args_list if a)
+            else:
+                str_args = ""
+
+            if not command.startswith(("npx ", "uvx ")):
+                # Prefix with npx for bare 'npx' or arbitrary executables
+                if command == "npx":
+                    full_command = f"npx {str_args}".strip()
+                elif command == "uvx":
+                    full_command = f"uvx {str_args}".strip()
+                    server_type = McpServerType.UVX
+                else:
+                    full_command = f"npx {command} {str_args}".strip()
+            else:
+                full_command = f"{command} {str_args}".strip()
+
+            return ParsedMcpServer(
+                name=name,
+                server_type=server_type,
+                transport=McpTransport.STDIO,
+                url_or_command=full_command,
+                env_vars=_extract_env_vars(config),
+            )
+
+        return None
+
+    @staticmethod
+    async def import_servers(
+        workspace_id: UUID,
+        parsed: list[ParsedMcpServer],
+        repo: WorkspaceMcpServerRepository,
+    ) -> ImportResult:
+        """Bulk-import parsed servers into a workspace.
+
+        For each parsed server:
+        - Validates SSRF / command injection rules.
+        - Checks for existing display_name in workspace (application-level dedup).
+        - Creates the server row if no conflicts.
+
+        Args:
+            workspace_id: Target workspace UUID.
+            parsed: List of ParsedMcpServer instances from parse_config_json.
+            repo: WorkspaceMcpServerRepository instance.
+
+        Returns:
+            ImportResult with imported, skipped, and errors lists.
+        """
+        result = ImportResult()
+
+        # Load existing server names for this workspace
+        existing = await repo.get_active_by_workspace(workspace_id)
+        existing_names = {s.display_name.lower() for s in existing}
+
+        for entry in parsed:
+            # Validate url_or_command
+            validation_error = _validate_entry(entry)
+            if validation_error:
+                result.errors.append(ErrorEntry(name=entry.name, reason=validation_error))
+                logger.info(
+                    "mcp_import_validation_error",
+                    name=entry.name,
+                    reason=validation_error,
+                )
+                continue
+
+            # Check for duplicate name
+            if entry.name.lower() in existing_names:
+                result.skipped.append(
+                    SkippedEntry(name=entry.name, reason="name_conflict")
+                )
+                logger.info("mcp_import_skipped_duplicate", name=entry.name)
+                continue
+
+            # Encrypt env_vars and headers if provided
+            from contextlib import suppress
+
+            from pilot_space.infrastructure.encryption_kv import encrypt_kv
+
+            headers_encrypted: str | None = None
+            headers_json: str | None = None
+            if entry.headers:
+                import json as _json
+
+                headers_json = _json.dumps(entry.headers)
+
+            env_vars_encrypted: str | None = None
+            if entry.env_vars:
+                with suppress(Exception):
+                    env_vars_encrypted = encrypt_kv(entry.env_vars)
+
+            # Truncate url to 512 chars for legacy column
+            url_val = entry.url_or_command[:512]
+
+            server = WorkspaceMcpServer(
+                workspace_id=workspace_id,
+                display_name=entry.name,
+                url=url_val,
+                url_or_command=entry.url_or_command,
+                server_type=entry.server_type,
+                transport=entry.transport,
+                command_args=entry.command_args,
+                auth_type=McpAuthType.NONE,
+                headers_json=headers_json,
+                headers_encrypted=headers_encrypted,
+                env_vars_encrypted=env_vars_encrypted,
+                is_enabled=True,
+                last_status=McpStatus.ENABLED,
+            )
+            server = await repo.create(server)
+            existing_names.add(entry.name.lower())
+            result.imported.append(ImportedEntry(name=entry.name, id=server.id))
+            logger.info(
+                "mcp_import_server_created",
+                workspace_id=str(workspace_id),
+                name=entry.name,
+                server_id=str(server.id),
+            )
+
+        return result
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _extract_env_vars(config: dict[str, object]) -> dict[str, str] | None:
+    """Extract environment variables from a server config entry."""
+    env = config.get("env")
+    if isinstance(env, dict):
+        return {str(k): str(v) for k, v in env.items() if k and v is not None}
+    return None
+
+
+def _extract_headers(config: dict[str, object]) -> dict[str, str] | None:
+    """Extract headers from a server config entry."""
+    headers = config.get("headers")
+    if isinstance(headers, dict):
+        return {str(k): str(v) for k, v in headers.items() if k and v is not None}
+    return None
+
+
+def _validate_entry(entry: ParsedMcpServer) -> str | None:
+    """Validate a parsed server entry for SSRF and command injection.
+
+    Returns:
+        An error message string if invalid, or None if valid.
+    """
+    import urllib.parse
+
+    if entry.server_type == McpServerType.REMOTE:
+        parsed_url = urllib.parse.urlparse(entry.url_or_command)
+        if parsed_url.scheme != "https":
+            return "invalid_url: MCP server URL must use HTTPS"
+    elif entry.server_type in (McpServerType.NPX, McpServerType.UVX):
+        if not entry.url_or_command.strip():
+            return "invalid_command: command must not be empty"
+        if _SHELL_METACHAR_RE.search(entry.url_or_command):
+            return "invalid_command: contains disallowed shell metacharacters"
+
+    return None
+
+
+__all__ = [
+    "ErrorEntry",
+    "ImportMcpServersService",
+    "ImportResult",
+    "ImportedEntry",
+    "ParsedMcpServer",
+    "SkippedEntry",
+]

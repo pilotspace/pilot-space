@@ -1,4 +1,8 @@
-"""WorkspaceMcpServer SQLAlchemy model (Phase 14 — MCP-01, MCP-02, MCP-06)."""
+"""WorkspaceMcpServer SQLAlchemy model (Phase 14 — MCP-01, MCP-02, MCP-06).
+
+Extended in Phase 25 to support NPX/UVX server types, 5-state status enum,
+encrypted headers/env-vars, and enable/disable toggling.
+"""
 
 from __future__ import annotations
 
@@ -6,7 +10,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, Enum, String
+from sqlalchemy import Boolean, DateTime, Enum, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from pilot_space.infrastructure.database.base import WorkspaceScopedModel
@@ -18,29 +22,71 @@ if TYPE_CHECKING:
 class McpAuthType(StrEnum):
     """Authentication type for remote MCP server connections."""
 
+    NONE = "none"
     BEARER = "bearer"
     OAUTH2 = "oauth2"
 
 
-class WorkspaceMcpServer(WorkspaceScopedModel):
-    """Workspace-registered remote MCP server.
+class McpServerType(StrEnum):
+    """Server type — remote HTTP endpoint or locally-launched process."""
 
-    Stores connection details and encrypted credentials for a remote
-    Model Context Protocol server. Supports both Bearer token and
-    OAuth 2.0 authentication flows.
+    REMOTE = "remote"
+    NPX = "npx"
+    UVX = "uvx"
+
+
+class McpTransport(StrEnum):
+    """Transport protocol for MCP server communication."""
+
+    SSE = "sse"
+    STDIO = "stdio"
+    STREAMABLE_HTTP = "streamable_http"
+
+
+class McpStatus(StrEnum):
+    """5-state connectivity/admin status for an MCP server.
+
+    Lifecycle:
+        ENABLED: polling healthy; admin has not disabled.
+        DISABLED: admin explicitly disabled; poller skips this server.
+        UNHEALTHY: reachable but returning error responses.
+        UNREACHABLE: connection timeout or network failure.
+        CONFIG_ERROR: configuration invalid (e.g. bad URL, missing required field).
+    """
+
+    ENABLED = "enabled"
+    DISABLED = "disabled"
+    UNHEALTHY = "unhealthy"
+    UNREACHABLE = "unreachable"
+    CONFIG_ERROR = "config_error"
+
+
+class WorkspaceMcpServer(WorkspaceScopedModel):
+    """Workspace-registered MCP server (remote, NPX, or UVX).
+
+    Stores connection details and encrypted credentials for Model Context
+    Protocol servers. Supports Bearer token and OAuth 2.0 authentication,
+    plus encrypted headers and environment variable blobs for NPX/UVX.
 
     Attributes:
         workspace_id: Reference to parent workspace.
         display_name: Human-readable label shown in UI.
-        url: Remote MCP server endpoint (SSE or HTTP transport).
+        url: Remote MCP server endpoint (backward-compat alias for url_or_command).
         auth_type: Authentication mechanism (bearer or oauth2).
         auth_token_encrypted: Fernet-encrypted Bearer token or OAuth access token.
         oauth_client_id: OAuth 2.0 client ID (auth_type=oauth2 only).
         oauth_auth_url: OAuth 2.0 authorization endpoint URL.
         oauth_token_url: OAuth 2.0 token exchange endpoint URL.
         oauth_scopes: Space-separated OAuth 2.0 scope list.
-        last_status: Cached connectivity status ('connected', 'failed', 'unknown').
+        last_status: 5-state McpStatus enum (previously String(16)).
         last_status_checked_at: Timestamp of last connectivity probe.
+        server_type: Remote, NPX, or UVX.
+        transport: SSE, stdio, or streamable_http.
+        url_or_command: Primary URL (remote) or launch command (NPX/UVX).
+        command_args: Extra CLI arguments for NPX/UVX launch.
+        headers_encrypted: Fernet-encrypted JSON blob of HTTP headers.
+        env_vars_encrypted: Fernet-encrypted JSON blob of env var key-value pairs.
+        is_enabled: Admin toggle; disabled servers are excluded from polling.
     """
 
     __tablename__ = "workspace_mcp_servers"  # type: ignore[assignment]
@@ -54,7 +100,7 @@ class WorkspaceMcpServer(WorkspaceScopedModel):
     url: Mapped[str] = mapped_column(
         String(512),
         nullable=False,
-        doc="Remote MCP server endpoint URL (SSE or HTTP transport)",
+        doc="Remote MCP server endpoint URL — kept for backward compat with AI agent hot-loader",
     )
     auth_type: Mapped[McpAuthType] = mapped_column(
         Enum(
@@ -64,8 +110,8 @@ class WorkspaceMcpServer(WorkspaceScopedModel):
             values_callable=lambda x: [e.value for e in x],
         ),
         nullable=False,
-        default=McpAuthType.BEARER,
-        doc="Authentication type: bearer token or OAuth 2.0",
+        default=McpAuthType.NONE,
+        doc="Authentication type: none, bearer token, or OAuth 2.0",
     )
 
     # Encrypted credential storage — Fernet symmetric encryption
@@ -97,16 +143,77 @@ class WorkspaceMcpServer(WorkspaceScopedModel):
         doc="Space-separated OAuth 2.0 scope list",
     )
 
-    # Cached connectivity status
-    last_status: Mapped[str | None] = mapped_column(
-        String(16),
+    # Cached connectivity status (Phase 25: replaces String(16) with McpStatus enum)
+    last_status: Mapped[McpStatus | None] = mapped_column(
+        Enum(
+            McpStatus,
+            name="mcp_status",
+            create_type=False,
+            values_callable=lambda x: [e.value for e in x],
+        ),
         nullable=True,
-        doc="Last known connectivity status: 'connected', 'failed', or 'unknown'",
+        doc="5-state connectivity/admin status enum",
     )
     last_status_checked_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         doc="Timestamp of last connectivity probe",
+    )
+
+    # --- Phase 25 new fields ---
+
+    server_type: Mapped[McpServerType] = mapped_column(
+        Enum(
+            McpServerType,
+            name="mcp_server_type",
+            create_type=False,
+            values_callable=lambda x: [e.value for e in x],
+        ),
+        nullable=False,
+        default=McpServerType.REMOTE,
+        doc="Server type: remote HTTP endpoint, NPX, or UVX",
+    )
+    transport: Mapped[McpTransport] = mapped_column(
+        Enum(
+            McpTransport,
+            name="mcp_transport",
+            create_type=False,
+            values_callable=lambda x: [e.value for e in x],
+        ),
+        nullable=False,
+        default=McpTransport.SSE,
+        doc="Transport protocol: sse, stdio, or streamable_http",
+    )
+    url_or_command: Mapped[str | None] = mapped_column(
+        String(1024),
+        nullable=True,
+        doc="Primary URL (remote) or launch command (NPX/UVX) — authoritative field",
+    )
+    command_args: Mapped[str | None] = mapped_column(
+        String(512),
+        nullable=True,
+        doc="Extra CLI arguments appended to NPX/UVX launch command",
+    )
+    headers_encrypted: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        doc="Fernet-encrypted JSON blob of HTTP header key-value pairs (legacy — prefer headers_json)",
+    )
+    headers_json: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        doc="Plaintext JSON blob of HTTP header key-value pairs (not sensitive — visible in API response)",
+    )
+    env_vars_encrypted: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        doc="Fernet-encrypted JSON blob of environment variable key-value pairs",
+    )
+    is_enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+        doc="Admin toggle: disabled servers are excluded from polling and MCP routing",
     )
 
     # Relationships
@@ -120,8 +227,15 @@ class WorkspaceMcpServer(WorkspaceScopedModel):
         return (
             f"<WorkspaceMcpServer(id={self.id}, "
             f"workspace_id={self.workspace_id}, "
-            f"display_name={self.display_name!r})>"
+            f"display_name={self.display_name!r}, "
+            f"server_type={self.server_type!r})>"
         )
 
 
-__all__ = ["McpAuthType", "WorkspaceMcpServer"]
+__all__ = [
+    "McpAuthType",
+    "McpServerType",
+    "McpStatus",
+    "McpTransport",
+    "WorkspaceMcpServer",
+]

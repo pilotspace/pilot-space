@@ -1,0 +1,209 @@
+/**
+ * Tests for FormConfigTab - Phase 25 form configuration component.
+ *
+ * Verifies: required field validation, transport auto-sets on type change,
+ * command args visibility, secret masking, submit payload, header/env visibility.
+ */
+
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { FormConfigTab } from '../form-config-tab';
+import type { MCPServer } from '@/stores/ai/MCPServersStore';
+
+const makeServer = (overrides?: Partial<MCPServer>): MCPServer => ({
+  id: 'srv-1',
+  workspace_id: 'ws-1',
+  display_name: 'Edit Server',
+  url: 'https://mcp.example.com',
+  server_type: 'remote',
+  transport: 'sse',
+  url_or_command: 'https://mcp.example.com',
+  command_args: null,
+  auth_type: 'bearer',
+  has_auth_secret: true,
+  has_headers_secret: false,
+  has_env_secret: false,
+  is_enabled: true,
+  last_status: 'enabled',
+  last_status_checked_at: '2026-01-01T00:00:00Z',
+  created_at: '2026-01-01T00:00:00Z',
+  ...overrides,
+});
+
+describe('FormConfigTab', () => {
+  it('renders Server Name and Server Type fields', () => {
+    render(<FormConfigTab onSave={vi.fn()} isSaving={false} />);
+
+    expect(screen.getByLabelText('Server Name')).toBeInTheDocument();
+    expect(screen.getByLabelText('Server Type')).toBeInTheDocument();
+  });
+
+  it('renders URL label as "Server URL" for remote type', () => {
+    render(<FormConfigTab onSave={vi.fn()} isSaving={false} />);
+    expect(screen.getByLabelText('Server URL')).toBeInTheDocument();
+  });
+
+  it('renders Headers and Environment Variables sections', () => {
+    render(<FormConfigTab onSave={vi.fn()} isSaving={false} />);
+    expect(screen.getByText('Headers')).toBeInTheDocument();
+    expect(screen.getByText('Environment Variables')).toBeInTheDocument();
+  });
+
+  it('does NOT show Command Arguments for remote type', () => {
+    render(<FormConfigTab onSave={vi.fn()} isSaving={false} />);
+    expect(screen.queryByLabelText('Command Arguments')).not.toBeInTheDocument();
+  });
+
+  it('shows secret mask text when editing server with has_auth_secret=true', () => {
+    render(
+      <FormConfigTab
+        initialData={makeServer({ has_auth_secret: true })}
+        onSave={vi.fn()}
+        isSaving={false}
+      />
+    );
+    expect(screen.getByText(/Leave blank to keep existing token/)).toBeInTheDocument();
+  });
+
+  it('pre-populates headers when editing server with existing headers', () => {
+    render(
+      <FormConfigTab
+        initialData={makeServer({
+          headers: { 'X-Custom': 'value1', 'Authorization': 'Bearer xyz' },
+          has_headers_secret: true,
+        })}
+        onSave={vi.fn()}
+        isSaving={false}
+      />
+    );
+    expect(screen.getByDisplayValue('X-Custom')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('value1')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Authorization')).toBeInTheDocument();
+  });
+
+  it('pre-populates env var keys with masked values when editing', () => {
+    render(
+      <FormConfigTab
+        initialData={makeServer({
+          env_var_keys: ['API_KEY', 'SECRET_TOKEN'],
+          has_env_secret: true,
+        })}
+        onSave={vi.fn()}
+        isSaving={false}
+      />
+    );
+    expect(screen.getByDisplayValue('API_KEY')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('SECRET_TOKEN')).toBeInTheDocument();
+    expect(screen.getByText(/Existing variables shown with hidden values/)).toBeInTheDocument();
+  });
+
+  it('shows Authentication section for remote type', () => {
+    render(<FormConfigTab onSave={vi.fn()} isSaving={false} />);
+    expect(screen.getByText('Authentication')).toBeInTheDocument();
+    expect(screen.getByText('None')).toBeInTheDocument();
+    expect(screen.getByText('Bearer Token')).toBeInTheDocument();
+    expect(screen.getByText('OAuth 2.0')).toBeInTheDocument();
+  });
+
+  it('renders Add Header and Add Variable buttons', () => {
+    render(<FormConfigTab onSave={vi.fn()} isSaving={false} />);
+    expect(screen.getByText('Add Header')).toBeInTheDocument();
+    expect(screen.getByText('Add Variable')).toBeInTheDocument();
+  });
+
+  it('calls onSave with correct payload when form is submitted', async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn();
+    render(<FormConfigTab onSave={onSave} isSaving={false} />);
+
+    await user.type(screen.getByLabelText('Server Name'), 'My Server');
+    await user.type(screen.getByLabelText('Server URL'), 'https://example.com/sse');
+
+    // Submit the form
+    const form = screen.getByLabelText('Server Name').closest('form')!;
+    form.dispatchEvent(new Event('submit', { bubbles: true }));
+
+    expect(onSave).toHaveBeenCalledTimes(1);
+    const payload = onSave.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(payload.display_name).toBe('My Server');
+    expect(payload.url_or_command).toBe('https://example.com/sse');
+    expect(payload.server_type).toBe('remote');
+    expect(payload.transport).toBe('sse');
+  });
+
+  it('populates form fields from initialData in edit mode', () => {
+    render(
+      <FormConfigTab
+        initialData={makeServer({ display_name: 'Pre-filled', url_or_command: 'https://pre.com' })}
+        onSave={vi.fn()}
+        isSaving={false}
+      />
+    );
+
+    expect(screen.getByDisplayValue('Pre-filled')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('https://pre.com')).toBeInTheDocument();
+  });
+
+  it('disables all inputs when isSaving is true', () => {
+    render(<FormConfigTab onSave={vi.fn()} isSaving={true} />);
+    expect(screen.getByLabelText('Server Name')).toBeDisabled();
+  });
+
+  it('renders None radio option in Authentication section', () => {
+    render(<FormConfigTab onSave={vi.fn()} isSaving={false} />);
+    expect(screen.getByText('None')).toBeInTheDocument();
+  });
+
+  it('defaults to None auth type for new servers', () => {
+    render(<FormConfigTab onSave={vi.fn()} isSaving={false} />);
+    const noneRadio = screen.getByDisplayValue('none') as HTMLInputElement;
+    expect(noneRadio.checked).toBe(true);
+  });
+
+  it('hides Bearer Token input field when None auth is selected', () => {
+    render(<FormConfigTab onSave={vi.fn()} isSaving={false} />);
+    // Default is none, so the password input for the token should not be visible
+    expect(screen.queryByPlaceholderText('Token (encrypted server-side)')).not.toBeInTheDocument();
+  });
+
+  it('submits auth_type as none when None is selected', async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn();
+    render(<FormConfigTab onSave={onSave} isSaving={false} />);
+
+    await user.type(screen.getByLabelText('Server Name'), 'No Auth Server');
+    await user.type(screen.getByLabelText('Server URL'), 'https://example.com/sse');
+
+    const form = screen.getByLabelText('Server Name').closest('form')!;
+    form.dispatchEvent(new Event('submit', { bubbles: true }));
+
+    expect(onSave).toHaveBeenCalledTimes(1);
+    const payload = onSave.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(payload.auth_type).toBe('none');
+  });
+
+  it('does not include unchanged env vars in submit payload', async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn();
+    render(
+      <FormConfigTab
+        initialData={makeServer({
+          env_var_keys: ['API_KEY'],
+          has_env_secret: true,
+        })}
+        onSave={onSave}
+        isSaving={false}
+      />
+    );
+
+    // Submit without changing the env var value (which is empty/masked)
+    const form = screen.getByLabelText('Server Name').closest('form')!;
+    form.dispatchEvent(new Event('submit', { bubbles: true }));
+
+    expect(onSave).toHaveBeenCalledTimes(1);
+    const payload = onSave.mock.calls[0]?.[0] as Record<string, unknown>;
+    // Empty-valued env vars should not be sent (preserves existing encrypted values)
+    expect(payload.env_vars).toBeUndefined();
+  });
+});

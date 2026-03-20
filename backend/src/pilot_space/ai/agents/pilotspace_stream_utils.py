@@ -13,11 +13,12 @@ import asyncio
 import contextlib
 import json
 import re
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from typing import TYPE_CHECKING, Any
 
 from claude_agent_sdk import McpServerConfig
 from claude_agent_sdk._internal import message_parser as _sdk_parser
+from claude_agent_sdk.types import McpHttpServerConfig, McpSSEServerConfig, McpStdioServerConfig
 
 from pilot_space.ai.mcp.comment_server import (
     SERVER_NAME as COMMENT_SERVER_NAME,
@@ -62,6 +63,7 @@ if TYPE_CHECKING:
     from pilot_space.ai.agents.pilotspace_agent import ChatInput
     from pilot_space.ai.mcp.block_ref_map import BlockRefMap
     from pilot_space.ai.tools.mcp_server import ToolContext
+    from pilot_space.infrastructure.database.models.workspace_mcp_server import WorkspaceMcpServer
 
 logger = get_logger(__name__)
 
@@ -626,15 +628,17 @@ async def get_workspace_embedding_key(db_session: Any, workspace_id: Any) -> str
 get_workspace_openai_key = get_workspace_embedding_key
 
 
-async def _load_remote_mcp_servers(  # pyright: ignore[reportUnusedFunction]
+async def load_workspace_mcp_servers(
     workspace_id: UUID | None,
     db_session: AsyncSession | None,
 ) -> dict[str, McpServerConfig]:
-    """Load registered remote MCP servers for workspace (MCP-04).
+    """Load registered workspace MCP servers and build SDK-compatible configs.
 
     Called from PilotSpaceAgent.stream() before build_mcp_servers() to fetch
-    workspace-registered remote servers and construct McpSSEServerConfig entries.
-    Uses lazy imports to avoid circular dependencies.
+    workspace-registered servers and construct the correct SDK config type:
+      - Remote + SSE  →  McpSSEServerConfig  (type="sse")
+      - Remote + StreamableHTTP  →  McpHttpServerConfig  (type="http")
+      - NPX/UVX + STDIO  →  McpStdioServerConfig  (type="stdio")
 
     Returns empty dict if workspace_id or db_session is None.
     Silently skips servers with corrupt/undecodable tokens (logs WARNING).
@@ -644,7 +648,9 @@ async def _load_remote_mcp_servers(  # pyright: ignore[reportUnusedFunction]
         db_session: Active async DB session, or None if not available.
 
     Returns:
-        Dict keyed by "remote_{server.id}" with McpSSEServerConfig values.
+        Dict keyed by "WORKSPACE_{NORMALIZED_NAME}" where NORMALIZED_NAME =
+        re.sub(r"[^A-Z0-9]", "_", display_name.upper()) — non-alphanumeric chars
+        replaced with underscores (e.g. "my-server" → "WORKSPACE_MY_SERVER").
     """
     if workspace_id is None or db_session is None:
         return {}
@@ -655,31 +661,119 @@ async def _load_remote_mcp_servers(  # pyright: ignore[reportUnusedFunction]
     from pilot_space.infrastructure.encryption import decrypt_api_key
 
     repo = WorkspaceMcpServerRepository(session=db_session)
-    registered = await repo.get_active_by_workspace(workspace_id)
-    remote: dict[str, McpServerConfig] = {}
+    registered = await repo.get_active_by_workspace(workspace_id, enabled_only=True)
+    servers: dict[str, McpServerConfig] = {}
 
     for server in registered:
-        token: str | None = None
+        try:
+            config = _build_server_config(server, decrypt_api_key)
+        except Exception:
+            logger.warning(
+                "mcp_server_config_build_failed",
+                server_id=str(server.id),
+                workspace_id=str(workspace_id),
+            )
+            continue
+
+        if config is not None:
+            key = "WORKSPACE_" + re.sub(r"[^A-Z0-9]", "_", server.display_name.upper())
+            servers[key] = config
+
+    return servers
+
+
+def _build_server_config(
+    server: WorkspaceMcpServer,
+    decrypt_fn: Callable[[str], str],
+) -> McpServerConfig | None:
+    """Build the correct SDK config for a single workspace MCP server.
+
+    Args:
+        server: WorkspaceMcpServer ORM instance.
+        decrypt_fn: Callable that decrypts a Fernet-encrypted string, e.g. decrypt_api_key.
+
+    Returns:
+        McpServerConfig or None if the server config is invalid.
+    """
+    from pilot_space.infrastructure.database.models.workspace_mcp_server import (
+        McpServerType,
+        McpTransport,
+    )
+
+    if server.server_type == McpServerType.REMOTE:
+        url = server.url_or_command or server.url
+        if not url:
+            return None
+
+        headers: dict[str, str] = {}
+
+        # Decrypt bearer token
         if server.auth_token_encrypted:
             try:
-                token = decrypt_api_key(server.auth_token_encrypted)
+                token = decrypt_fn(server.auth_token_encrypted)
+                headers["Authorization"] = f"Bearer {token}"
             except Exception:
                 logger.warning(
                     "mcp_token_decrypt_failed",
                     server_id=str(server.id),
-                    workspace_id=str(workspace_id),
                 )
-                continue
+                return None
 
-        if token:
-            config: McpServerConfig = {  # type: ignore[typeddict-item]
-                "type": "sse",
-                "url": server.url,
-                "headers": {"Authorization": f"Bearer {token}"},
-            }
-        else:
-            config = {"type": "sse", "url": server.url}  # type: ignore[typeddict-item]
+        # Load custom headers — prefer plaintext headers_json, fallback to encrypted
+        if server.headers_json:
+            try:
+                custom_headers = json.loads(server.headers_json)
+                headers.update(custom_headers)
+            except (ValueError, TypeError):
+                logger.warning(
+                    "mcp_headers_json_parse_failed",
+                    server_id=str(server.id),
+                )
+        elif server.headers_encrypted:
+            try:
+                from pilot_space.infrastructure.encryption_kv import decrypt_kv
 
-        remote[f"remote_{server.id}"] = config
+                custom_headers = decrypt_kv(server.headers_encrypted)
+                headers.update(custom_headers)
+            except Exception:
+                logger.warning(
+                    "mcp_headers_decrypt_failed",
+                    server_id=str(server.id),
+                )
 
-    return remote
+        if server.transport == McpTransport.STREAMABLE_HTTP:
+            return McpHttpServerConfig(type="http", url=url, headers=headers) if headers else McpHttpServerConfig(type="http", url=url)
+        return McpSSEServerConfig(type="sse", url=url, headers=headers) if headers else McpSSEServerConfig(type="sse", url=url)
+
+    # NPX/UVX — build McpStdioServerConfig
+    command_str = server.url_or_command
+    if not command_str:
+        return None
+
+    parts = command_str.split()
+    command = parts[0]
+    args = parts[1:] if len(parts) > 1 else []
+
+    # Append command_args if present
+    if server.command_args:
+        args.extend(server.command_args.split())
+
+    # Decrypt env vars
+    env: dict[str, str] | None = None
+    if server.env_vars_encrypted:
+        try:
+            from pilot_space.infrastructure.encryption_kv import decrypt_kv
+
+            env = decrypt_kv(server.env_vars_encrypted)
+        except Exception:
+            logger.warning(
+                "mcp_env_decrypt_failed",
+                server_id=str(server.id),
+            )
+
+    stdio_config = McpStdioServerConfig(type="stdio", command=command)
+    if args:
+        stdio_config["args"] = args
+    if env:
+        stdio_config["env"] = env
+    return stdio_config

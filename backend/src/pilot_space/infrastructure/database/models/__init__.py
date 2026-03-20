@@ -136,6 +136,13 @@ from pilot_space.infrastructure.database.models.workspace_invitation import (
     InvitationStatus,
     WorkspaceInvitation,
 )
+from pilot_space.infrastructure.database.models.workspace_mcp_server import (
+    McpAuthType,
+    McpServerType,
+    McpStatus,
+    McpTransport,
+    WorkspaceMcpServer,
+)
 from pilot_space.infrastructure.database.models.workspace_member import (
     WorkspaceMember,
     WorkspaceRole,
@@ -190,6 +197,10 @@ __all__ = [
     "IssuePriority",
     "LLMProvider",
     "Label",
+    "McpAuthType",
+    "McpServerType",
+    "McpStatus",
+    "McpTransport",
     "MemoryDLQ",
     "MemoryEntry",
     "MessageRole",
@@ -236,6 +247,7 @@ __all__ = [
     "WorkspaceEncryptionKey",
     "WorkspaceGithubCredential",
     "WorkspaceInvitation",
+    "WorkspaceMcpServer",
     "WorkspaceMember",
     "WorkspaceOnboarding",
     "WorkspacePlugin",

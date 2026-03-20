@@ -22,6 +22,11 @@ vi.mock('@/services/api/mcp-servers', () => ({
     checkStatus: vi.fn(),
     remove: vi.fn(),
     getOAuthUrl: vi.fn(),
+    update: vi.fn(),
+    testConnection: vi.fn(),
+    enable: vi.fn(),
+    disable: vi.fn(),
+    importServers: vi.fn(),
   },
 }));
 
@@ -34,7 +39,15 @@ const makeMockServer = (overrides?: Partial<MCPServer>): MCPServer => ({
   workspace_id: WORKSPACE_ID,
   display_name: 'Test MCP',
   url: 'https://example.com/sse',
+  server_type: 'remote',
+  transport: 'sse',
+  url_or_command: 'https://example.com/sse',
+  command_args: null,
   auth_type: 'bearer',
+  has_auth_secret: false,
+  has_headers_secret: false,
+  has_env_secret: false,
+  is_enabled: true,
   last_status: null,
   last_status_checked_at: null,
   created_at: '2026-01-01T00:00:00Z',
@@ -137,14 +150,14 @@ describe('MCPServersStore', () => {
 
     vi.mocked(mcpServersApi.checkStatus).mockResolvedValueOnce({
       server_id: 'server-1',
-      status: 'connected',
+      status: 'enabled',
       checked_at: '2026-01-01T01:00:00Z',
     });
 
     await store.refreshStatus(WORKSPACE_ID, 'server-1');
 
     expect(mcpServersApi.checkStatus).toHaveBeenCalledWith(WORKSPACE_ID, 'server-1');
-    expect(store.servers[0]?.last_status).toBe('connected');
+    expect(store.servers[0]?.last_status).toBe('enabled');
     expect(store.servers[0]?.last_status_checked_at).toBe('2026-01-01T01:00:00Z');
   });
 });
