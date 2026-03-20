@@ -36,14 +36,19 @@ export const transcriptionApi = {
     if (language) {
       formData.append('language', language);
     }
-    const headers: Record<string, string> = {};
-    // Only set workspace header when workspaceId is a non-empty valid value;
-    // otherwise let the apiClient interceptor inject the stored workspace ID.
-    if (workspaceId) {
-      headers['X-Workspace-Id'] = workspaceId;
-    }
-    return apiClient.post<TranscribeResponse>('/ai/transcribe', formData, {
-      headers,
-    });
+    // Use the raw axios instance so we can properly override headers.
+    // The apiClient defaults Content-Type to 'application/json', which prevents
+    // axios from auto-detecting multipart/form-data from the FormData body.
+    // Setting Content-Type to undefined tells axios to auto-set it with the
+    // correct multipart boundary from FormData.
+    const config = {
+      headers: {
+        'Content-Type': undefined as unknown as string,
+        ...(workspaceId ? { 'X-Workspace-Id': workspaceId } : {}),
+      },
+    };
+    return apiClient.instance
+      .post<TranscribeResponse>('/ai/transcribe', formData, config)
+      .then((res) => res.data);
   },
 };
