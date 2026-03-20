@@ -141,8 +141,8 @@ Plans:
 **Plans**: TBD
 
 Plans:
-- [ ] 33-01: git_pull, git_push Rust commands — progress streaming via Channel, credential reuse from Phase 32
-- [ ] 33-02: git_status, git_branch_list/create/switch/delete Rust commands — GitState managed struct
+- [x] 33-01: git_pull, git_push Rust commands — progress streaming via Channel, credential reuse from Phase 32
+- [ ] 33-02: git_status, git_branch_list/create/switch/delete Rust commands — GitState managed struct (completed 2026-03-20)
 - [ ] 33-03: GitStore MobX + status/branch UI components — GitStatusBar.tsx, branch selector dropdown, conflict notification
 
 ### Phase 34: Embedded Terminal

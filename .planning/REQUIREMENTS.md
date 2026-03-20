@@ -55,9 +55,9 @@ Requirements for Tauri Desktop Client milestone. Each maps to roadmap phases.
 ### Workspace
 
 - [x] **WKSP-01**: App manages default project directory (~/ PilotSpace/projects/) for cloned repos
-- [ ] **WKSP-02**: User can configure base project directory path in settings
-- [ ] **WKSP-03**: User can link existing local repositories to Pilot Space projects
-- [ ] **WKSP-04**: User can see project status dashboard (cloned repos, sync status, last activity)
+- [x] **WKSP-02**: User can configure base project directory path in settings
+- [x] **WKSP-03**: User can link existing local repositories to Pilot Space projects
+- [x] **WKSP-04**: User can see project status dashboard (cloned repos, sync status, last activity)
 
 ### Packaging
 
@@ -121,9 +121,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DIFF-04 | Phase 36 | Pending |
 | DIFF-05 | Phase 36 | Pending |
 | WKSP-01 | Phase 32 | Complete |
-| WKSP-02 | Phase 32 | Pending |
-| WKSP-03 | Phase 32 | Pending |
-| WKSP-04 | Phase 32 | Pending |
+| WKSP-02 | Phase 32 | Complete |
+| WKSP-03 | Phase 32 | Complete |
+| WKSP-04 | Phase 32 | Complete |
 | PKG-01 | Phase 38 | Pending |
 | PKG-02 | Phase 38 | Pending |
 | PKG-03 | Phase 38 | Pending |

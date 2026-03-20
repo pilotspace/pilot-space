@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Tauri Desktop Client
 status: completed
-stopped_at: Completed 32-03-PLAN.md
-last_updated: "2026-03-20T05:50:54.717Z"
+stopped_at: Completed 32-02-PLAN.md
+last_updated: "2026-03-20T05:51:16.801Z"
 last_activity: "2026-03-20 — Phase 31 Plan 03 complete — pilotspace:// deep link OAuth PKCE flow for Google/GitHub social login"
 progress:
   total_phases: 9
@@ -75,6 +75,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 32]: PAT stored under git_pat keychain account, never returned to frontend — get_git_credentials returns has_pat:bool only
 - [Phase 32]: DesktopSettingsPage is NOT wrapped in observer() — no MobX observables consumed; plain React state via useState/useCallback is sufficient
 - [Phase 32]: settingsNavSections computed at module level via isTauri() — Tauri-only Desktop nav group appended conditionally without React state/effect
+- [Phase 32]: gitClone wrapper creates Channel<GitProgress> and wires onmessage to callback — Tauri v2 streaming pattern for progress
+- [Phase 32]: CloneRepoDialog prevents dialog close during active clone via onOpenChange guard — UX safety for long-running operations
 
 ### Pending Todos
 
@@ -87,7 +89,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-20T05:50:22.882Z
-Stopped at: Completed 32-03-PLAN.md
+Last session: 2026-03-20T05:51:16.798Z
+Stopped at: Completed 32-02-PLAN.md
 Resume file: None
 Next action: /gsd:execute-phase 31
