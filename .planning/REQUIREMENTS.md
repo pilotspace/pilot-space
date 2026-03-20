@@ -1,0 +1,141 @@
+# Requirements: Pilot Space
+
+**Defined:** 2026-03-20
+**Core Value:** Enterprise teams can adopt AI-augmented SDLC workflows without sacrificing data sovereignty, compliance, or human control — AI accelerates without replacing human judgment.
+
+## v1.1 Requirements
+
+Requirements for Tauri Desktop Client milestone. Each maps to roadmap phases.
+
+### Tauri Shell
+
+- [ ] **SHELL-01**: User can launch native desktop app with embedded Pilot Space web UI
+- [ ] **SHELL-02**: Existing Next.js frontend builds in both web (standalone) and desktop (static export) modes via NEXT_TAURI flag
+- [ ] **SHELL-03**: User can minimize app to system tray and receive background notifications
+
+### Authentication
+
+- [ ] **AUTH-01**: Supabase JWT token syncs from WebView to Tauri Rust backend via Tauri Store
+- [ ] **AUTH-02**: User session persists across app restarts (Windows useHttpsScheme enabled)
+- [ ] **AUTH-03**: Auth tokens stored in OS keychain (macOS Keychain, Windows Credential Manager, Linux Secret Service)
+- [ ] **AUTH-04**: User can sign in via Supabase OAuth (Google, GitHub) using deep link redirect
+
+### Git Operations
+
+- [ ] **GIT-01**: User can clone a repository with progress indicator and cancellation
+- [ ] **GIT-02**: User can pull latest changes from remote with progress UI
+- [ ] **GIT-03**: User can push commits to remote with progress UI
+- [ ] **GIT-04**: User can view repository status (changed/staged/untracked files)
+- [ ] **GIT-05**: User can list, create, switch, and delete branches
+- [ ] **GIT-06**: App detects merge conflicts during pull and notifies user
+- [ ] **GIT-07**: User can configure HTTPS + Personal Access Token credentials for git operations
+
+### Pilot CLI
+
+- [ ] **CLI-01**: pilot CLI compiled as standalone sidecar binary (PyInstaller) shipped with app
+- [ ] **CLI-02**: User can run `pilot implement` on an issue with streaming output in terminal
+- [ ] **CLI-03**: One-click "Implement Issue" flow: select issue → auto-branch → implement → stage/commit → push
+- [ ] **CLI-04**: Sidecar binary built for all 4 platform targets in CI
+
+### Terminal
+
+- [ ] **TERM-01**: User can open an embedded terminal panel (xterm.js) inside the app
+- [ ] **TERM-02**: Terminal supports full PTY (interactive programs, arrow keys, tab completion, ANSI colors)
+- [ ] **TERM-03**: User can run arbitrary shell commands with streaming output
+- [ ] **TERM-04**: Terminal output uses batched IPC Channel to prevent memory leaks
+
+### Diff & Commit
+
+- [ ] **DIFF-01**: User can view file diffs for working directory changes
+- [ ] **DIFF-02**: User can stage and unstage individual files
+- [ ] **DIFF-03**: User can write a commit message and commit staged changes
+- [ ] **DIFF-04**: User can push commits to remote after committing
+- [ ] **DIFF-05**: Diff viewer shows inline annotations with syntax highlighting
+
+### Workspace
+
+- [ ] **WKSP-01**: App manages default project directory (~/ PilotSpace/projects/) for cloned repos
+- [ ] **WKSP-02**: User can configure base project directory path in settings
+- [ ] **WKSP-03**: User can link existing local repositories to Pilot Space projects
+- [ ] **WKSP-04**: User can see project status dashboard (cloned repos, sync status, last activity)
+
+### Packaging
+
+- [ ] **PKG-01**: App packaged as .dmg for macOS (ARM64 + Intel)
+- [ ] **PKG-02**: App packaged as .deb and .AppImage for Linux (x64)
+- [ ] **PKG-03**: App packaged as .msi for Windows (x64)
+- [ ] **PKG-04**: macOS build includes code signing and Apple notarization
+- [ ] **PKG-05**: Windows build includes code signing
+- [ ] **PKG-06**: App supports auto-update with in-app notification and background download
+
+## Future Requirements
+
+### Enhanced Desktop Experience
+
+- **DESK-01**: Offline mode with local cache and sync-on-reconnect
+- **DESK-02**: Native file watcher for automatic git status refresh
+- **DESK-03**: Multiple terminal tabs/splits
+- **DESK-04**: Built-in code editor (Monaco/CodeMirror) for quick edits
+
+## Out of Scope
+
+| Feature | Reason |
+|---------|--------|
+| Bundled local FastAPI server | Massive complexity (DB, auth, migrations); remote server sufficient |
+| SSH key management for git | git2-rs SSH broken on Windows; HTTPS+PAT is universal |
+| Mobile/tablet Tauri builds | Tauri mobile is beta; desktop-first for developer workflows |
+| Offline-first architecture | Requires local DB, conflict resolution; deferred to future milestone |
+| Built-in code editor | Scope creep; users have VS Code/editors; focus on git+terminal+implement |
+
+## Traceability
+
+Which phases cover which requirements. Updated during roadmap creation.
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| SHELL-01 | — | Pending |
+| SHELL-02 | — | Pending |
+| SHELL-03 | — | Pending |
+| AUTH-01 | — | Pending |
+| AUTH-02 | — | Pending |
+| AUTH-03 | — | Pending |
+| AUTH-04 | — | Pending |
+| GIT-01 | — | Pending |
+| GIT-02 | — | Pending |
+| GIT-03 | — | Pending |
+| GIT-04 | — | Pending |
+| GIT-05 | — | Pending |
+| GIT-06 | — | Pending |
+| GIT-07 | — | Pending |
+| CLI-01 | — | Pending |
+| CLI-02 | — | Pending |
+| CLI-03 | — | Pending |
+| CLI-04 | — | Pending |
+| TERM-01 | — | Pending |
+| TERM-02 | — | Pending |
+| TERM-03 | — | Pending |
+| TERM-04 | — | Pending |
+| DIFF-01 | — | Pending |
+| DIFF-02 | — | Pending |
+| DIFF-03 | — | Pending |
+| DIFF-04 | — | Pending |
+| DIFF-05 | — | Pending |
+| WKSP-01 | — | Pending |
+| WKSP-02 | — | Pending |
+| WKSP-03 | — | Pending |
+| WKSP-04 | — | Pending |
+| PKG-01 | — | Pending |
+| PKG-02 | — | Pending |
+| PKG-03 | — | Pending |
+| PKG-04 | — | Pending |
+| PKG-05 | — | Pending |
+| PKG-06 | — | Pending |
+
+**Coverage:**
+- v1.1 requirements: 30 total
+- Mapped to phases: 0
+- Unmapped: 30 ⚠️
+
+---
+*Requirements defined: 2026-03-20*
+*Last updated: 2026-03-20 after initial definition*
