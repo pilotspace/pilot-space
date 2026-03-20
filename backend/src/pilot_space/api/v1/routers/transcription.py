@@ -214,7 +214,7 @@ async def transcribe_audio(
 
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
-            form_fields: dict[str, str] = {"model_id": "scribe_v1"}
+            form_fields: dict[str, str] = {"model_id": "scribe_v2"}
             if language:
                 form_fields["language_code"] = language
 
@@ -284,7 +284,7 @@ async def transcribe_audio(
         language_code=detected_language,
         duration_seconds=audio_duration,
         provider="elevenlabs",
-        metadata_json={"model_id": "scribe_v1"},
+        metadata_json={"model_id": "scribe_v2"},
         expires_at=expires_at,
     )
     cache_insert = cache_insert.on_conflict_do_update(
