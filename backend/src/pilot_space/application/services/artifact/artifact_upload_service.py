@@ -259,7 +259,6 @@ class ArtifactUploadService:
             filename=filename,
             mime_type=content_type,
             size_bytes=len(file_data),
-            storage_key=storage_key,
             status="ready",
             created_at=persisted.created_at,
         )

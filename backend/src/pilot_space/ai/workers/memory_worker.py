@@ -54,6 +54,8 @@ _SLEEP_ERROR_S = 5.0
 _MAX_NACK_ATTEMPTS = 2
 # Enqueue a graph_expiration task at most once per day per worker process.
 _EXPIRATION_INTERVAL_S = 24 * 3600
+# Enqueue artifact_cleanup once per hour per worker process.
+_ARTIFACT_CLEANUP_INTERVAL_S = 3600
 
 
 class MemoryWorker:
@@ -97,6 +99,7 @@ class MemoryWorker:
         # float('-inf') guarantees the first call always enqueues regardless of system uptime.
         # Resets on worker restart, which is acceptable — daily cleanup is best-effort.
         self._last_expiration_enqueue: float = float("-inf")
+        self._last_artifact_cleanup_enqueue: float = float("-inf")
 
     async def start(self) -> None:
         """Poll loop: dequeue → process → ack/nack."""
@@ -113,6 +116,7 @@ class MemoryWorker:
                     await self._process(messages[0])
                 else:
                     await self._maybe_enqueue_expiration()
+                    await self._maybe_enqueue_artifact_cleanup()
                     await asyncio.sleep(_SLEEP_EMPTY_S)
             except asyncio.CancelledError:
                 logger.info("MemoryWorker cancelled")
@@ -139,6 +143,21 @@ class MemoryWorker:
             logger.info("MemoryWorker: enqueued graph_expiration task")
         except Exception:
             logger.exception("MemoryWorker: failed to enqueue graph_expiration")
+
+    async def _maybe_enqueue_artifact_cleanup(self) -> None:
+        """Enqueue an artifact_cleanup task once per hour per process lifetime."""
+        now = time.monotonic()
+        if now - self._last_artifact_cleanup_enqueue < _ARTIFACT_CLEANUP_INTERVAL_S:
+            return
+        try:
+            await self.queue.enqueue(
+                QueueName.AI_NORMAL,
+                {"task_type": TASK_ARTIFACT_CLEANUP},
+            )
+            self._last_artifact_cleanup_enqueue = now
+            logger.info("MemoryWorker: enqueued artifact_cleanup task")
+        except Exception:
+            logger.exception("MemoryWorker: failed to enqueue artifact_cleanup")
 
     async def _process(self, message: object) -> None:
         """Process a single queue message by routing to the correct handler.

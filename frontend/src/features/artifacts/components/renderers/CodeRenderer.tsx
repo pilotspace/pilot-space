@@ -12,9 +12,13 @@ export function CodeRenderer({ content, language }: CodeRendererProps) {
   const [copied, setCopied] = React.useState(false);
 
   async function handleCopy() {
-    await navigator.clipboard.writeText(content);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard API may be unavailable in insecure contexts
+    }
   }
 
   const wrappedContent = '```' + language + '\n' + content + '\n```';
@@ -24,6 +28,7 @@ export function CodeRenderer({ content, language }: CodeRendererProps) {
       <div className="absolute top-3 right-3 z-10">
         <button
           onClick={handleCopy}
+          aria-label={copied ? 'Copied to clipboard' : 'Copy code'}
           className="text-xs px-2 py-1 rounded border border-border bg-background text-muted-foreground hover:text-foreground transition-colors"
         >
           {copied ? 'Copied!' : 'Copy'}

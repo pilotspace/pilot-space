@@ -28,7 +28,6 @@ const mockArtifacts: Artifact[] = [
     filename: 'spec.pdf',
     mimeType: 'application/pdf',
     sizeBytes: 102400,
-    storageKey: 'ws-1/proj-1/artifact-1/spec.pdf',
     status: 'ready',
     uploaderId: 'user-1',
     projectId: 'proj-1',

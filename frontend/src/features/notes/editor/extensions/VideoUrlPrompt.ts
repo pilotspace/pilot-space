@@ -14,6 +14,7 @@ export function showVideoUrlPrompt(editor: Editor, onConfirm: (url: string) => v
   input.type = 'text';
   input.placeholder = 'Paste YouTube or Vimeo URL...';
   input.className = 'video-url-prompt';
+  input.setAttribute('aria-label', 'Enter video URL to embed');
 
   Object.assign(input.style, {
     position: 'fixed',

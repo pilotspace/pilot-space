@@ -15,6 +15,7 @@ Feature: v1.1 — Artifacts (ARTF-04, ARTF-05, ARTF-06)
 
 from __future__ import annotations
 
+from typing import Annotated
 from uuid import UUID
 
 from dependency_injector.wiring import Provide, inject
@@ -30,10 +31,11 @@ from pilot_space.application.services.artifact.artifact_upload_service import (
 )
 from pilot_space.container._base import InfraContainer
 from pilot_space.container.container import Container
-from pilot_space.dependencies.auth import CurrentUser, SessionDep
+from pilot_space.dependencies.auth import CurrentUser, SessionDep, require_workspace_member
 from pilot_space.infrastructure.database.repositories.artifact_repository import (
     ArtifactRepository,
 )
+from pilot_space.infrastructure.database.rls import set_rls_context
 from pilot_space.infrastructure.logging import get_logger
 from pilot_space.infrastructure.storage.client import SupabaseStorageClient
 
@@ -146,6 +148,7 @@ async def upload_artifact(
     file: UploadFile,
     session: SessionDep,
     current_user: CurrentUser,
+    _member: Annotated[UUID, Depends(require_workspace_member)],
     artifact_service: ArtifactUploadService = Depends(Provide[Container.artifact_upload_service]),
 ) -> ArtifactResponse:
     """Upload a file as a project artifact.
@@ -194,6 +197,8 @@ async def upload_artifact(
             },
         )
 
+    await set_rls_context(session, current_user.user_id, workspace_id)
+
     try:
         return await artifact_service.upload(
             file_data=file_data,
@@ -214,6 +219,7 @@ async def list_artifacts(
     project_id: UUID,
     session: SessionDep,
     current_user: CurrentUser,
+    _member: Annotated[UUID, Depends(require_workspace_member)],
     artifact_repo: ArtifactRepository = Depends(Provide[InfraContainer.artifact_repository]),
 ) -> ArtifactListResponse:
     """List ready artifacts for a project, newest first.
@@ -228,6 +234,8 @@ async def list_artifacts(
     Returns:
         ArtifactListResponse with artifacts and total count.
     """
+    await set_rls_context(session, current_user.user_id, workspace_id)
+
     orm_artifacts = await artifact_repo.list_by_project(workspace_id, project_id)
     artifacts = [ArtifactResponse.model_validate(a) for a in orm_artifacts]
     return ArtifactListResponse(artifacts=artifacts, total=len(artifacts))
@@ -241,6 +249,7 @@ async def get_artifact_url(
     artifact_id: UUID,
     session: SessionDep,
     current_user: CurrentUser,
+    _member: Annotated[UUID, Depends(require_workspace_member)],
     artifact_repo: ArtifactRepository = Depends(Provide[InfraContainer.artifact_repository]),
     storage_client: SupabaseStorageClient = Depends(Provide[InfraContainer.storage_client]),
 ) -> ArtifactUrlResponse:
@@ -264,8 +273,14 @@ async def get_artifact_url(
     Raises:
         HTTPException 404: Artifact not found or belongs to different workspace.
     """
+    await set_rls_context(session, current_user.user_id, workspace_id)
+
     artifact = await artifact_repo.get_by_id(artifact_id)
-    if artifact is None or artifact.workspace_id != workspace_id:
+    if (
+        artifact is None
+        or artifact.workspace_id != workspace_id
+        or artifact.project_id != project_id
+    ):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Artifact not found",
@@ -287,6 +302,7 @@ async def delete_artifact(
     artifact_id: UUID,
     session: SessionDep,
     current_user: CurrentUser,
+    _member: Annotated[UUID, Depends(require_workspace_member)],
     artifact_service: ArtifactUploadService = Depends(Provide[Container.artifact_upload_service]),
 ) -> None:
     """Delete an artifact and its storage object.
@@ -306,6 +322,8 @@ async def delete_artifact(
         HTTPException 403: User does not own the artifact.
         HTTPException 404: Artifact not found or belongs to different workspace.
     """
+    await set_rls_context(session, current_user.user_id, workspace_id)
+
     try:
         await artifact_service.delete(
             artifact_id=artifact_id,

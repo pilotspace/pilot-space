@@ -24,7 +24,7 @@ Feature: v1.1 — Artifacts (ARTF-04, ARTF-05, ARTF-06)
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID, uuid4
 
 import pytest
@@ -38,6 +38,17 @@ from pilot_space.api.v1.routers.project_artifacts import (
 )
 
 pytestmark = pytest.mark.asyncio
+
+
+@pytest.fixture(autouse=True)
+def _mock_rls():
+    """Mock set_rls_context globally — unit tests use SQLite (no RLS support)."""
+    with patch(
+        "pilot_space.api.v1.routers.project_artifacts.set_rls_context",
+        new_callable=AsyncMock,
+    ):
+        yield
+
 
 # ---------------------------------------------------------------------------
 # Fixed test IDs
@@ -98,7 +109,6 @@ def _make_artifact_response(
         filename="script.py",
         mime_type="text/x-python",
         size_bytes=20,
-        storage_key=f"{workspace_id}/{project_id}/{artifact_id}/script.py",
         status="ready",
         created_at=datetime(2026, 1, 1, tzinfo=UTC),
     )
@@ -188,6 +198,7 @@ class TestUploadEndpoint:
             file=file,
             session=session,
             current_user=current_user,
+            _member=TEST_USER_ID,
             artifact_service=svc,
         )
 
@@ -214,6 +225,7 @@ class TestUploadEndpoint:
                 file=file,
                 session=session,
                 current_user=current_user,
+                _member=TEST_USER_ID,
                 artifact_service=svc,
             )
 
@@ -244,6 +256,7 @@ class TestUploadEndpoint:
                 file=file,
                 session=session,
                 current_user=current_user,
+                _member=TEST_USER_ID,
                 artifact_service=svc,
             )
 
@@ -268,6 +281,7 @@ class TestUploadEndpoint:
                 file=file,
                 session=session,
                 current_user=current_user,
+                _member=TEST_USER_ID,
                 artifact_service=svc,
             )
 
@@ -298,6 +312,7 @@ class TestUploadEndpoint:
                 file=file,
                 session=session,
                 current_user=current_user,
+                _member=TEST_USER_ID,
                 artifact_service=svc,
             )
 
@@ -325,6 +340,7 @@ class TestListArtifacts:
             project_id=TEST_PROJECT_ID,
             session=session,
             current_user=current_user,
+            _member=TEST_USER_ID,
             artifact_repo=repo,
         )
 
@@ -343,6 +359,7 @@ class TestListArtifacts:
             project_id=TEST_PROJECT_ID,
             session=session,
             current_user=current_user,
+            _member=TEST_USER_ID,
             artifact_repo=repo,
         )
 
@@ -372,6 +389,7 @@ class TestGetArtifactUrl:
             artifact_id=TEST_ARTIFACT_ID,
             session=session,
             current_user=current_user,
+            _member=TEST_USER_ID,
             artifact_repo=repo,
             storage_client=storage,
         )
@@ -395,6 +413,7 @@ class TestGetArtifactUrl:
                 artifact_id=TEST_ARTIFACT_ID,
                 session=session,
                 current_user=current_user,
+                _member=TEST_USER_ID,
                 artifact_repo=repo,
                 storage_client=storage,
             )
@@ -415,6 +434,7 @@ class TestGetArtifactUrl:
                 artifact_id=uuid4(),
                 session=session,
                 current_user=current_user,
+                _member=TEST_USER_ID,
                 artifact_repo=repo,
                 storage_client=storage,
             )
@@ -442,6 +462,7 @@ class TestDeleteArtifact:
             artifact_id=TEST_ARTIFACT_ID,
             session=session,
             current_user=current_user,
+            _member=TEST_USER_ID,
             artifact_service=svc,
         )
 
@@ -465,6 +486,7 @@ class TestDeleteArtifact:
                 artifact_id=TEST_ARTIFACT_ID,
                 session=session,
                 current_user=current_user,
+                _member=TEST_USER_ID,
                 artifact_service=svc,
             )
 
@@ -483,6 +505,7 @@ class TestDeleteArtifact:
                 artifact_id=TEST_ARTIFACT_ID,
                 session=session,
                 current_user=current_user,
+                _member=TEST_USER_ID,
                 artifact_service=svc,
             )
 

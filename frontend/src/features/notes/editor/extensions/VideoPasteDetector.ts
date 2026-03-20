@@ -14,6 +14,9 @@ import { isVideoUrl, extractVimeoId } from './VimeoNode';
 const VIDEO_URL_REGEX =
   /^(https?:\/\/(www\.)?(youtube\.com\/watch|youtu\.be\/|vimeo\.com\/\d+)[^\s]*)$/;
 
+/** Tracks the cleanup function for the currently visible offer, if any. */
+let activeOfferCleanup: (() => void) | null = null;
+
 function showEmbedOffer(
   editor: Editor,
   url: string,
@@ -21,6 +24,8 @@ function showEmbedOffer(
 ): void {
   const offer = document.createElement('div');
   offer.className = 'video-embed-offer';
+  offer.setAttribute('role', 'dialog');
+  offer.setAttribute('aria-label', 'Embed video');
   Object.assign(offer.style, {
     position: 'fixed',
     left: `${coords.left}px`,
@@ -42,20 +47,23 @@ function showEmbedOffer(
 
   const acceptBtn = document.createElement('button');
   acceptBtn.textContent = 'Embed';
+  acceptBtn.tabIndex = 0;
   acceptBtn.style.cssText =
     'cursor:pointer;padding:2px 8px;border:1px solid var(--border,#e2e8f0);border-radius:4px;background:var(--primary,#0f172a);color:var(--primary-foreground,#fff);font-size:12px;';
 
   const dismissBtn = document.createElement('button');
   dismissBtn.textContent = 'Dismiss';
+  dismissBtn.tabIndex = 0;
   dismissBtn.style.cssText =
     'cursor:pointer;padding:2px 8px;border:1px solid var(--border,#e2e8f0);border-radius:4px;background:transparent;font-size:12px;';
 
   const cleanup = () => {
     if (offer.parentNode) offer.parentNode.removeChild(offer);
     document.removeEventListener('mousedown', outsideClick);
+    activeOfferCleanup = null;
   };
 
-  acceptBtn.addEventListener('mousedown', (e) => {
+  const handleAccept = (e: Event) => {
     e.preventDefault();
     cleanup();
     const platform = isVideoUrl(url);
@@ -74,15 +82,26 @@ function showEmbedOffer(
           .run();
       }
     }
-  });
+  };
 
-  dismissBtn.addEventListener('mousedown', (e) => {
+  const handleDismiss = (e: Event) => {
     e.preventDefault();
     cleanup();
+  };
+
+  acceptBtn.addEventListener('mousedown', handleAccept);
+  acceptBtn.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') handleAccept(e);
+  });
+
+  dismissBtn.addEventListener('mousedown', handleDismiss);
+  dismissBtn.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') handleDismiss(e);
   });
 
   offer.append(label, acceptBtn, dismissBtn);
   document.body.appendChild(offer);
+  activeOfferCleanup = cleanup;
 
   // Auto-dismiss on outside click
   const outsideClick = (e: MouseEvent) => {
@@ -95,6 +114,12 @@ function showEmbedOffer(
 
 export const VideoPasteDetector = Extension.create({
   name: 'videoPasteDetector',
+
+  onDestroy() {
+    if (activeOfferCleanup) {
+      activeOfferCleanup();
+    }
+  },
 
   addPasteRules() {
     return [

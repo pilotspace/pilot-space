@@ -10,7 +10,6 @@ export interface Artifact {
   filename: string;
   mimeType: string;
   sizeBytes: number;
-  storageKey: string;
   status: 'ready' | 'pending_upload';
   uploaderId: string;
   uploader?: {

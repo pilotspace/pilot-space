@@ -61,13 +61,13 @@ describe('HtmlRenderer', () => {
     expect(sandbox).not.toContain('allow-scripts');
   });
 
-  it('HTML-02: iframe has sandbox="allow-same-origin"', () => {
+  it('HTML-02: iframe has empty sandbox (maximum isolation, no allow-same-origin)', () => {
     render(<HtmlRenderer {...defaultProps} />);
     const previewTab = screen.getByRole('tab', { name: /preview/i });
     fireEvent.click(previewTab);
     const iframe = document.querySelector('iframe');
     expect(iframe).not.toBeNull();
-    expect(iframe!.getAttribute('sandbox')).toBe('allow-same-origin');
+    expect(iframe!.getAttribute('sandbox')).toBe('');
   });
 
   it('HTML-04: clicking "Preview" tab switches from source to preview mode (iframe appears)', () => {

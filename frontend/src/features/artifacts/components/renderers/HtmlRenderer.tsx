@@ -6,10 +6,10 @@ import { CodeRenderer } from './CodeRenderer';
 
 /**
  * Sandbox attributes for the HTML preview iframe.
- * NEVER include 'allow-scripts' — prevents XSS via JavaScript execution.
- * 'allow-same-origin' is required for CSS to resolve relative URLs.
+ * Empty sandbox = maximum isolation. No allow-same-origin prevents XSS
+ * escalation if DOMPurify is bypassed.
  */
-const SANDBOX_ATTRS = 'allow-same-origin';
+const SANDBOX_ATTRS = '';
 
 /**
  * DOMPurify config for HTML preview sanitization.
@@ -36,9 +36,10 @@ export function HtmlRenderer({ content, filename }: HtmlRendererProps) {
   const [viewMode, setViewMode] = React.useState<'preview' | 'source'>('source');
 
   const sanitizedHtml = React.useMemo(() => {
+    if (viewMode !== 'preview') return '';
     if (typeof window === 'undefined') return '';
     return DOMPurify.sanitize(content, PURIFY_CONFIG) as string;
-  }, [content]);
+  }, [content, viewMode]);
 
   return (
     <div className="flex flex-col h-full">
@@ -51,7 +52,10 @@ export function HtmlRenderer({ content, filename }: HtmlRendererProps) {
         <button
           type="button"
           role="tab"
+          id="html-tab-source"
           aria-selected={viewMode === 'source'}
+          aria-controls="html-panel-source"
+          tabIndex={viewMode === 'source' ? 0 : -1}
           onClick={() => setViewMode('source')}
           className={
             'px-3 py-1.5 text-xs rounded-md transition-colors ' +
@@ -65,7 +69,10 @@ export function HtmlRenderer({ content, filename }: HtmlRendererProps) {
         <button
           type="button"
           role="tab"
+          id="html-tab-preview"
           aria-selected={viewMode === 'preview'}
+          aria-controls="html-panel-preview"
+          tabIndex={viewMode === 'preview' ? 0 : -1}
           onClick={() => setViewMode('preview')}
           className={
             'px-3 py-1.5 text-xs rounded-md transition-colors ' +
@@ -81,14 +88,18 @@ export function HtmlRenderer({ content, filename }: HtmlRendererProps) {
       {/* Content area */}
       <div className="flex-1 overflow-auto min-h-0">
         {viewMode === 'preview' ? (
-          <iframe
-            srcDoc={sanitizedHtml}
-            sandbox={SANDBOX_ATTRS}
-            title={`HTML preview: ${filename}`}
-            className="w-full h-full border-0 min-h-[400px]"
-          />
+          <div role="tabpanel" id="html-panel-preview" aria-labelledby="html-tab-preview">
+            <iframe
+              srcDoc={sanitizedHtml}
+              sandbox={SANDBOX_ATTRS}
+              title={`HTML preview: ${filename}`}
+              className="w-full h-full border-0 min-h-[400px]"
+            />
+          </div>
         ) : (
-          <CodeRenderer content={content} language="html" />
+          <div role="tabpanel" id="html-panel-source" aria-labelledby="html-tab-source">
+            <CodeRenderer content={content} language="html" />
+          </div>
         )}
       </div>
     </div>

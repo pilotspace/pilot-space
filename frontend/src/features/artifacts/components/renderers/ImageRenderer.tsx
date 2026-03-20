@@ -19,11 +19,20 @@ export function ImageRenderer({ signedUrl, filename }: ImageRendererProps) {
 
   return (
     <div
+      role="button"
+      tabIndex={0}
+      aria-label={isZoomed ? 'Zoom out' : 'Zoom in'}
       className={cn(
         'flex items-center justify-center cursor-zoom-in overflow-auto p-4',
         isZoomed && 'cursor-zoom-out'
       )}
       onClick={() => setIsZoomed((z) => !z)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          setIsZoomed((z) => !z);
+        }
+      }}
     >
       <img
         src={signedUrl}

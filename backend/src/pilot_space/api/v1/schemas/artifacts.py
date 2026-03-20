@@ -19,8 +19,8 @@ from pilot_space.api.v1.schemas.base import BaseSchema
 class ArtifactResponse(BaseSchema):
     """Response schema for a single artifact record.
 
-    Returned by upload and get endpoints. Storage key is included so clients
-    can construct paths without an additional API call if needed.
+    Returned by upload and get endpoints. Clients use the /url endpoint
+    to get signed download URLs — storage_key is intentionally excluded.
     """
 
     id: UUID = Field(description="Unique identifier for the artifact")
@@ -29,7 +29,6 @@ class ArtifactResponse(BaseSchema):
     filename: str = Field(description="Original filename including extension")
     mime_type: str = Field(description="MIME type of the uploaded file")
     size_bytes: int = Field(ge=1, description="File size in bytes")
-    storage_key: str = Field(description="Supabase Storage object path without bucket prefix")
     status: str = Field(description="Upload lifecycle state: pending_upload or ready")
     created_at: datetime = Field(description="UTC timestamp when the record was created")
 

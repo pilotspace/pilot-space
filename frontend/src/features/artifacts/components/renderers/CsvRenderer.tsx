@@ -27,10 +27,7 @@ interface ParsedCSV {
 const MAX_ROWS = 500;
 
 export function CsvRenderer({ content }: CsvRendererProps) {
-  const [parsed, setParsed] = React.useState<ParsedCSV | null>(null);
-  const [parseError, setParseError] = React.useState(false);
-
-  React.useEffect(() => {
+  const parseResult = React.useMemo<{ parsed: ParsedCSV } | { error: true }>(() => {
     try {
       const result = Papa.parse<string[]>(content, {
         header: false,
@@ -39,31 +36,24 @@ export function CsvRenderer({ content }: CsvRendererProps) {
       const allRows = result.data as string[][];
       const [headerRow, ...dataRows] = allRows;
       const truncated = dataRows.length > MAX_ROWS;
-      setParsed({
-        headers: headerRow ?? [],
-        rows: dataRows.slice(0, MAX_ROWS),
-        totalRows: dataRows.length,
-        truncated,
-      });
+      return {
+        parsed: {
+          headers: headerRow ?? [],
+          rows: dataRows.slice(0, MAX_ROWS),
+          totalRows: dataRows.length,
+          truncated,
+        },
+      };
     } catch {
-      setParseError(true);
+      return { error: true as const };
     }
   }, [content]);
 
-  if (parseError) {
-    return <DownloadFallback filename="file.csv" signedUrl="" reason="error" />;
+  if ('error' in parseResult) {
+    return <DownloadFallback filename="data.csv" signedUrl="" reason="error" />;
   }
 
-  if (!parsed) {
-    return (
-      <div className="p-6 animate-pulse">
-        <div className="h-4 bg-muted rounded w-1/3 mb-3" />
-        <div className="h-4 bg-muted rounded w-full mb-2" />
-        <div className="h-4 bg-muted rounded w-5/6 mb-2" />
-        <div className="h-4 bg-muted rounded w-full" />
-      </div>
-    );
-  }
+  const { parsed } = parseResult;
 
   return (
     <div className="flex flex-col h-full">
