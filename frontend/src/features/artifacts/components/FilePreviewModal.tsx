@@ -19,6 +19,7 @@ import { TextRenderer } from './renderers/TextRenderer';
 import { JsonRenderer } from './renderers/JsonRenderer';
 import { CodeRenderer } from './renderers/CodeRenderer';
 import { CsvRenderer } from './renderers/CsvRenderer';
+import { HtmlRenderer } from './renderers/HtmlRenderer';
 import { DownloadFallback } from './renderers/DownloadFallback';
 
 export interface FilePreviewModalProps {
@@ -85,6 +86,8 @@ export function FilePreviewModal({
         return <JsonRenderer content={content} />;
       case 'code':
         return <CodeRenderer content={content} language={getLanguageForFile(filename)} />;
+      case 'html-preview':
+        return <HtmlRenderer content={content} filename={filename} />;
       case 'csv':
         return <CsvRenderer content={content} />;
       default:

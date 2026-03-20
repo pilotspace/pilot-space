@@ -3,9 +3,10 @@
  *
  * Pure utility for determining which renderer component to use for a given file.
  *
- * CRITICAL ROUTING RULES:
- * - HTML files (text/html or .html/.htm extension) MUST route to 'code' renderer.
- *   Never render live HTML — XSS risk. Show escaped source instead.
+ * ROUTING RULES:
+ * - HTML files (text/html or .html/.htm extension) route to 'html-preview' renderer.
+ *   Preview uses a sandboxed iframe with DOMPurify sanitization; source mode shows
+ *   syntax-highlighted code. No JavaScript execution is permitted in preview mode.
  * - CSV files route to 'csv' (dedicated table renderer with papaparse).
  * - All other non-text types fall through to 'download' fallback.
  *
@@ -13,7 +14,15 @@
  * safe to import in any context (tests, server components, hooks, etc.).
  */
 
-export type RendererType = 'image' | 'markdown' | 'text' | 'json' | 'code' | 'csv' | 'download';
+export type RendererType =
+  | 'image'
+  | 'markdown'
+  | 'text'
+  | 'json'
+  | 'code'
+  | 'csv'
+  | 'download'
+  | 'html-preview';
 
 /**
  * Extension to lowlight language name mapping.
@@ -54,7 +63,7 @@ const EXT_TO_LANG: Record<string, string> = {
 
 /**
  * File extensions that render as syntax-highlighted code (not plain text).
- * HTML is included here because it routes to code renderer (escaped source).
+ * HTML/HTM are NOT here — they route to 'html-preview' renderer instead.
  */
 const CODE_EXTENSIONS = new Set([
   'js',
@@ -83,8 +92,6 @@ const CODE_EXTENSIONS = new Set([
   'graphql',
   'gql',
   'dockerfile',
-  'html',
-  'htm',
   'css',
   'scss',
 ]);
@@ -131,7 +138,7 @@ function resolveCodeOrText(filename: string): RendererType {
  * 2. CSV (MIME or extension) → 'csv'
  * 3. Markdown (MIME or .md extension) → 'markdown'
  * 4. JSON (MIME or .json extension) → 'json'
- * 5. HTML (MIME or .html/.htm extension) → 'code' (CRITICAL: escaped source, not live render)
+ * 5. HTML (MIME or .html/.htm extension) → 'html-preview' (sandboxed iframe + source toggle)
  * 6. text/* MIME → resolve by extension (code or text)
  * 7. Everything else → 'download'
  *
@@ -155,9 +162,9 @@ export function resolveRenderer(mimeType: string, filename: string): RendererTyp
   // 4. JSON — extension wins for ambiguous text/* MIME
   if (lowerMime === 'application/json' || ext === 'json') return 'json';
 
-  // 5. HTML — CRITICAL: route to code renderer (escaped source), NEVER live HTML
-  //    This prevents XSS. text/html, .html, and .htm all go to 'code'.
-  if (lowerMime === 'text/html' || ext === 'html' || ext === 'htm') return 'code';
+  // 5. HTML — route to html-preview renderer (sandboxed iframe + source toggle)
+  //    DOMPurify sanitization + sandbox="allow-same-origin" prevents XSS.
+  if (lowerMime === 'text/html' || ext === 'html' || ext === 'htm') return 'html-preview';
 
   // 6. text/* types — resolve to code or plain text by extension
   if (lowerMime.startsWith('text/')) return resolveCodeOrText(filename);
