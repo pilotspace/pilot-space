@@ -214,7 +214,7 @@ Plans:
   2. Linux users receive .deb and .AppImage packages that install and run without configuration
   3. Windows users receive a .msi installer that installs without SmartScreen blocking (EV code signed)
   4. When a new version is available, the app shows an in-app notification and downloads the update in the background
-**Plans:** 1/3 plans executed
+**Plans:** 2/3 plans executed
 
 Plans:
 - [ ] 38-01-PLAN.md — macOS .dmg with Apple code signing, notarization, hardened runtime entitlements, sidecar signing (PKG-01, PKG-04)
@@ -240,7 +240,7 @@ Note: Phase 34 and Phase 35 depend only on Phase 30, so they can run in parallel
 | 35. Pilot CLI Sidecar | 2/2 | Complete    | 2026-03-20 | - |
 | 36. Diff Viewer + Commit UI | 3/3 | Complete    | 2026-03-20 | - |
 | 37. One-Click Implement + Tray | 2/2 | Complete    | 2026-03-20 | - |
-| 38. Packaging + Signing + Auto-Update | 1/3 | In Progress|  | - |
+| 38. Packaging + Signing + Auto-Update | 2/3 | In Progress|  | - |
 
 **v1.1 total: 9 phases, ~25 plans, 30 requirements**
 

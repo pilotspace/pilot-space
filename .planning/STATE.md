@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Tauri Desktop Client
-status: in-progress
-stopped_at: Completed 38-01-PLAN.md
-last_updated: "2026-03-20T09:38:00.000Z"
-last_activity: "2026-03-20 — Phase 38 Plan 01 complete — macOS code signing, hardened runtime entitlements, sidecar pre-signing, Apple secrets wired in CI"
+status: executing
+stopped_at: Completed 38-02-PLAN.md
+last_updated: "2026-03-20T09:43:20.974Z"
+last_activity: 2026-03-20 — Phase 38 Plan 01 complete — macOS code signing, hardened runtime entitlements, sidecar pre-signing, Apple secrets wired in CI
 progress:
   total_phases: 9
   completed_phases: 8
   total_plans: 25
-  completed_plans: 23
+  completed_plans: 24
   percent: 92
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-03-20)
 ## Current Position
 
 Phase: 38 of 38 (Packaging, Signing & Auto-update)
-Plan: 1 of 3 in current phase
+Plan: 2 of 3 in current phase
 Status: In progress
-Last activity: 2026-03-20 — Phase 38 Plan 01 complete — macOS code signing, hardened runtime entitlements, sidecar pre-signing, Apple secrets wired in CI
+Last activity: 2026-03-20 — Phase 38 Plan 02 complete — Linux .deb/.AppImage + Windows .msi targets, Azure Key Vault EV signing, AzureSignTool sidecar pre-signing
 
-Progress: [█████████░] 92% (v1.1: 23/25 plans)
+Progress: [██████████] 96% (v1.1: 24/25 plans)
 
 ## Milestone History
 
@@ -106,6 +106,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 38]: signingIdentity null in tauri.conf.json: tauri-action reads APPLE_SIGNING_IDENTITY from env; null avoids hardcoding team ID in source
 - [Phase 38]: Sidecar pre-signing: sign pilot-cli binary individually before tauri-action bundles app to satisfy notarization
 - [Phase 38]: PyInstaller entitlements: allow-unsigned-executable-memory + disable-library-validation required for onedir sidecar notarization
+- [Phase 38]: bundle.targets changed from 'all' to explicit array ['dmg','deb','appimage','msi'] — avoids building unnecessary formats and documents platform intent
+- [Phase 38]: certificateThumbprint: null in tauri.conf.json mirrors signingIdentity: null pattern — Azure Key Vault env vars injected at CI build time, never hardcoded in source
+- [Phase 38]: AzureSignTool sidecar pre-signing on Windows: sign pilot-cli-.exe before tauri-action bundles .msi to maintain signing chain; mirrors macOS codesign pre-signing from Plan 01
 
 ### Pending Todos
 
@@ -118,7 +121,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-20T09:35:31.850Z
-Stopped at: Completed 38-01-PLAN.md
+Last session: 2026-03-20T09:43:20.972Z
+Stopped at: Completed 38-02-PLAN.md
 Resume file: None
 Next action: /gsd:execute-phase 38
