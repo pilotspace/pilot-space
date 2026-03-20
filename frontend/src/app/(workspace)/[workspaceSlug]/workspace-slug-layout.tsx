@@ -6,11 +6,15 @@
  * Mounts the AiNotConfiguredBanner at the top of every workspace page (AIGOV-05).
  * Banner is only visible to Owners when BYOK is not configured.
  *
+ * Also mounts the TerminalPanel (Tauri desktop only) at the bottom of the layout.
+ * The panel is toggled via terminalStore.isOpen or the Ctrl+` keyboard shortcut.
+ *
  * Extracted from layout.tsx so that layout.tsx can be a Server Component
  * and export generateStaticParams() for static export (NEXT_TAURI=true) compatibility.
  */
 
 import type { ReactNode } from 'react';
+import dynamic from 'next/dynamic';
 import { useEffect } from 'react';
 import { observer } from 'mobx-react-lite';
 import { usePathname } from 'next/navigation';
@@ -18,6 +22,13 @@ import { useWorkspace } from '@/components/workspace-guard';
 import { useWorkspaceStore } from '@/stores';
 import { saveLastWorkspacePath } from '@/lib/workspace-nav';
 import { AiNotConfiguredBanner } from '@/components/workspace/ai-not-configured-banner';
+import { isTauri } from '@/lib/tauri';
+
+// Dynamic import with ssr: false — xterm.js requires DOM APIs unavailable during SSG
+const TerminalPanel = dynamic(
+  () => import('@/features/terminal/components/TerminalPanel').then((m) => m.TerminalPanel),
+  { ssr: false }
+);
 
 interface WorkspaceSlugLayoutProps {
   children: ReactNode;
@@ -39,6 +50,7 @@ export const WorkspaceSlugLayout = observer(function WorkspaceSlugLayout({
     <>
       <AiNotConfiguredBanner workspaceSlug={workspaceSlug} isOwner={isOwner} />
       {children}
+      {isTauri() && <TerminalPanel />}
     </>
   );
 });
