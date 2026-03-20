@@ -52,6 +52,17 @@ pub async fn set_projects_dir(app: tauri::AppHandle, path: String) -> Result<(),
     Ok(())
 }
 
+/// Resets the projects directory to the default ~/PilotSpace/projects/ by
+/// deleting the persisted "projects_dir" key from the Store.
+/// The next call to get_projects_dir will fall through to the default path.
+#[tauri::command]
+pub async fn reset_projects_dir(app: tauri::AppHandle) -> Result<(), String> {
+    let store = app.store(WORKSPACE_STORE).map_err(|e| e.to_string())?;
+    store.delete("projects_dir");
+    store.save().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// Opens a native folder picker dialog and returns the selected path, or None if cancelled.
 ///
 /// Uses `spawn_blocking` to avoid blocking the async Tokio runtime since the

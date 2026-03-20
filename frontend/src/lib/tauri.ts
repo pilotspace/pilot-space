@@ -102,6 +102,16 @@ export async function setProjectsDir(path: string): Promise<void> {
 }
 
 /**
+ * Reset the projects directory to default ~/PilotSpace/projects/.
+ * Deletes the persisted override — next getProjectsDir() returns the default.
+ */
+export async function resetProjectsDir(): Promise<void> {
+  if (!isTauri()) return;
+  const { invoke } = await import('@tauri-apps/api/core');
+  await invoke('reset_projects_dir');
+}
+
+/**
  * Open a native folder picker dialog. Returns the selected path or null.
  */
 export async function openFolderDialog(): Promise<string | null> {

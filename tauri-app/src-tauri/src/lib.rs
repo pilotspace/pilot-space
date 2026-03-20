@@ -13,6 +13,7 @@ pub fn run() {
             commands::auth::migrate_tokens_to_keychain,
             commands::workspace::get_projects_dir,
             commands::workspace::set_projects_dir,
+            commands::workspace::reset_projects_dir,
             commands::workspace::open_folder_dialog,
             commands::workspace::link_repo,
             commands::workspace::list_projects,

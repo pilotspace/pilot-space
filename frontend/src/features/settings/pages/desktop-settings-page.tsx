@@ -20,6 +20,7 @@ import { Separator } from '@/components/ui/separator';
 import {
   getProjectsDir,
   setProjectsDir,
+  resetProjectsDir,
   openFolderDialog,
   getGitCredentials,
   setGitCredentials,
@@ -75,8 +76,9 @@ function ProjectDirectorySection() {
     setSaved(false);
     setIsSaving(true);
     try {
-      // Empty string signals reset to default ~/PilotSpace/projects/
-      await setProjectsDir('');
+      // Dedicated reset command — deletes the persisted key so get_projects_dir
+      // falls through to the default ~/PilotSpace/projects/ path.
+      await resetProjectsDir();
       // Reload the resolved default path
       await loadPath();
       setSaved(true);
