@@ -83,7 +83,7 @@ export class AISettingsStore {
 
   getProviderStatus(
     provider: string,
-    serviceType: 'embedding' | 'llm'
+    serviceType: 'embedding' | 'llm' | 'stt'
   ): WorkspaceAISettingsProvider | undefined {
     return this.settings?.providers?.find(
       (p) => p.provider === provider && p.serviceType === serviceType

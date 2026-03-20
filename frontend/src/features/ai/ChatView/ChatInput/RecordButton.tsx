@@ -28,7 +28,7 @@ function formatDuration(ms: number): string {
 }
 
 export function RecordButton({ workspaceId, onTranscript, disabled = false }: RecordButtonProps) {
-  const { status, durationMs, startRecording, stopRecording } = useVoiceRecording({
+  const { status, durationMs, startRecording, stopRecording, cancelRecording } = useVoiceRecording({
     workspaceId,
     onTranscript,
   });
@@ -45,11 +45,27 @@ export function RecordButton({ workspaceId, onTranscript, disabled = false }: Re
     }
   };
 
-  const tooltipLabel = isTranscribing
-    ? 'Transcribing...'
-    : isRecording
-      ? `Stop recording (${formatDuration(durationMs)})`
-      : 'Voice input';
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape' && isRecording) {
+      e.preventDefault();
+      cancelRecording();
+    }
+  };
+
+  let tooltipLabel = 'Voice input';
+  if (isTranscribing) {
+    tooltipLabel = 'Transcribing...';
+  } else if (isRecording) {
+    tooltipLabel = `Stop recording (${formatDuration(durationMs)})`;
+  }
+
+  // Screen reader announcement for status transitions
+  let liveAnnouncement = '';
+  if (isRecording) {
+    liveAnnouncement = 'Recording started. Press Escape to cancel.';
+  } else if (isTranscribing) {
+    liveAnnouncement = 'Transcribing audio...';
+  }
 
   return (
     <TooltipProvider>
@@ -64,10 +80,16 @@ export function RecordButton({ workspaceId, onTranscript, disabled = false }: Re
               />
             )}
 
+            {/* Screen reader live announcements */}
+            <span aria-live="assertive" className="sr-only">
+              {liveAnnouncement}
+            </span>
+
             <Button
               type="button"
               variant="ghost"
               size="icon"
+              data-testid="record-button"
               className={[
                 'h-6 w-6 relative',
                 isRecording
@@ -75,16 +97,13 @@ export function RecordButton({ workspaceId, onTranscript, disabled = false }: Re
                   : 'text-muted-foreground/60 hover:text-foreground',
               ].join(' ')}
               onClick={handleClick}
+              onKeyDown={handleKeyDown}
               disabled={disabled || isTranscribing}
               aria-label={tooltipLabel}
             >
-              {isTranscribing ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : isRecording ? (
-                <Square className="h-3.5 w-3.5 fill-current" />
-              ) : (
-                <Mic className="h-3.5 w-3.5" />
-              )}
+              {isTranscribing && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              {isRecording && <Square className="h-3.5 w-3.5 fill-current" />}
+              {!isTranscribing && !isRecording && <Mic className="h-3.5 w-3.5" />}
             </Button>
           </div>
         </TooltipTrigger>

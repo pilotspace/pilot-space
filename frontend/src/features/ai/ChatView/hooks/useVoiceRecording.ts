@@ -74,12 +74,18 @@ export function useVoiceRecording({
     chunksRef.current = [];
   }, []);
 
+  /** Auto-reset error state to idle after a delay. */
+  const setErrorWithAutoReset = useCallback((msg: string) => {
+    setError(msg);
+    setStatus('error');
+    setTimeout(() => {
+      setStatus('idle');
+      setError(null);
+    }, 3000);
+  }, []);
+
   /** Cleanup on unmount. */
-  useEffect(() => {
-    return () => {
-      cleanupMedia();
-    };
-  }, [cleanupMedia]);
+  useEffect(() => cleanupMedia, [cleanupMedia]);
 
   const startRecording = useCallback(async () => {
     if (status !== 'idle') return;
@@ -120,14 +126,8 @@ export function useVoiceRecording({
         } catch (err) {
           const msg =
             err instanceof Error ? err.message : 'Transcription failed — please try again';
-          setError(msg);
-          setStatus('error');
           toast.error('Voice transcription failed', { description: msg });
-          // Auto-reset to idle after showing error
-          setTimeout(() => {
-            setStatus('idle');
-            setError(null);
-          }, 3000);
+          setErrorWithAutoReset(msg);
         }
       };
 
@@ -153,14 +153,9 @@ export function useVoiceRecording({
       } else {
         toast.error('Could not start recording', { description: msg });
       }
-      setError(msg);
-      setStatus('error');
-      setTimeout(() => {
-        setStatus('idle');
-        setError(null);
-      }, 3000);
+      setErrorWithAutoReset(msg);
     }
-  }, [status, workspaceId, language, onTranscript, cleanupMedia]);
+  }, [status, workspaceId, language, onTranscript, cleanupMedia, setErrorWithAutoReset]);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {

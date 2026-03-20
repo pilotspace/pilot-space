@@ -37,8 +37,7 @@ export const transcriptionApi = {
     return apiClient.post<TranscribeResponse>('/ai/transcribe', formData, {
       headers: {
         'X-Workspace-Id': workspaceId,
-        // Let browser set Content-Type with boundary for multipart
-        'Content-Type': 'multipart/form-data',
+        // Omit Content-Type so axios auto-sets multipart boundary from FormData
       },
     });
   },

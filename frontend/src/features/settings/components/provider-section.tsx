@@ -89,10 +89,10 @@ export const ProviderSection = observer(function ProviderSection({
 }: ProviderSectionProps) {
   const { ai } = useStore();
   const { settings } = ai;
-  const providers = settings.getProvidersByService(serviceType as 'embedding' | 'llm' | 'stt');
+  const providers = settings.getProvidersByService(serviceType);
 
   // Use persisted default provider for this service type
-  const storedDefault = settings.getDefaultProvider(serviceType as 'embedding' | 'llm' | 'stt');
+  const storedDefault = settings.getDefaultProvider(serviceType);
   const fallback = providers[0]?.provider ?? '';
   const resolvedDefault = providers.some((p) => p.provider === storedDefault)
     ? storedDefault

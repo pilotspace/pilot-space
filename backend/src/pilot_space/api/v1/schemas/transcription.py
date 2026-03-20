@@ -1,4 +1,4 @@
-"""Transcription schemas for API requests/responses.
+"""Transcription schemas for API responses.
 
 Pydantic models for voice-to-text transcription via ElevenLabs STT.
 """
@@ -10,20 +10,6 @@ from uuid import UUID
 from pydantic import Field
 
 from pilot_space.api.v1.schemas.base import BaseSchema
-
-
-class TranscribeRequest(BaseSchema):
-    """Metadata for transcription — audio file sent as multipart.
-
-    Attributes:
-        language: Optional ISO 639-1 language code hint (e.g. 'en', 'fr').
-    """
-
-    language: str | None = Field(
-        default=None,
-        description="ISO 639-1 language code hint (e.g. 'en', 'fr')",
-        max_length=10,
-    )
 
 
 class TranscribeResponse(BaseSchema):
@@ -47,4 +33,4 @@ class TranscribeResponse(BaseSchema):
     )
 
 
-__all__ = ["TranscribeRequest", "TranscribeResponse"]
+__all__ = ["TranscribeResponse"]

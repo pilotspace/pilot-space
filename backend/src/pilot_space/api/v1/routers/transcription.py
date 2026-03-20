@@ -175,18 +175,16 @@ async def transcribe_audio(
 
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
-            form_data: dict[str, tuple[None, str]] = {
-                "model_id": (None, "scribe_v1"),
-            }
+            form_fields: dict[str, str] = {"model_id": "scribe_v1"}
             if language:
-                form_data["language_code"] = (None, language)
+                form_fields["language_code"] = language
 
             files = {"file": (file.filename or "recording.webm", audio_bytes, content_type)}
 
             resp = await client.post(
                 _ELEVENLABS_STT_URL,
                 headers={"xi-api-key": api_key},
-                data={k: v[1] for k, v in form_data.items()},
+                data=form_fields,
                 files=files,
             )
     except httpx.TimeoutException as exc:
