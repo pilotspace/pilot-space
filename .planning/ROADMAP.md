@@ -90,9 +90,9 @@ Full archive: `.planning/milestones/v1.0.0-alpha2-ROADMAP.md`
 **Plans:** 3/3 plans complete
 
 Plans:
-- [ ] 030-01-PLAN.md — Scaffold tauri-app/ directory, Cargo.toml, tauri.conf.json, capabilities, isTauri() utility
-- [ ] 030-02-PLAN.md — Next.js static export mode toggle, docs page client-side conversion, dual-mode build verification
-- [ ] 030-03-PLAN.md — GitHub Actions CI 4-runner build matrix, artifact upload, Rust caching
+- [x] 030-01-PLAN.md — Scaffold tauri-app/ directory, Cargo.toml, tauri.conf.json, capabilities, isTauri() utility
+- [x] 030-02-PLAN.md — Next.js static export mode toggle, docs page client-side conversion, dual-mode build verification
+- [x] 030-03-PLAN.md — GitHub Actions CI 4-runner build matrix, artifact upload, Rust caching
 
 ### Phase 31: Auth Bridge
 **Goal**: Users can sign in and their Supabase session persists securely across app restarts, with tokens stored in the OS keychain rather than browser localStorage
@@ -103,12 +103,12 @@ Plans:
   2. User session survives an app restart — user is still logged in when reopening the app
   3. Auth tokens are stored in the OS keychain (macOS Keychain / Windows Credential Manager / Linux Secret Service), not in localStorage
   4. User can sign in via Google or GitHub OAuth and be redirected back into the app via deep link (pilotspace://auth/callback)
-**Plans**: TBD
+**Plans:** 3 plans
 
 Plans:
-- [ ] 31-01: tauri-plugin-store token sync — syncTokenToTauriStore() in root layout, auth.rs Tauri command, Tauri Store read from Rust
-- [ ] 31-02: OS keychain storage — tauri-plugin-keyring integration, migrate token from Store to keychain, Windows useHttpsScheme: true
-- [ ] 31-03: Deep link OAuth callback — tauri-plugin-deep-link, pilotspace:// custom URL scheme, replace next/api/auth/callback route handler
+- [ ] 31-01-PLAN.md — Tauri Store token sync: syncTokenToTauriStore() in Providers, auth.rs Rust commands, typed IPC wrappers
+- [ ] 31-02-PLAN.md — OS keychain storage: tauri-plugin-keyring, keychain read/write, Store-to-keychain migration
+- [ ] 31-03-PLAN.md — Deep link OAuth callback: tauri-plugin-deep-link, pilotspace:// scheme, exchangeCodeForSession
 
 ### Phase 32: Workspace Management + Git Clone
 **Goal**: The app manages a default project directory and users can clone a repository into it with visual progress feedback
