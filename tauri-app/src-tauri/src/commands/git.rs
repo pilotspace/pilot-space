@@ -1,12 +1,13 @@
 use std::cell::Cell;
-use std::path::PathBuf;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use git2::{
     build::{CheckoutBuilder, RepoBuilder},
-    BranchType, Cred, CredentialType, FetchOptions, MergeOptions, PushOptions, RemoteCallbacks,
-    Repository, StatusOptions,
+    BranchType, Cred, CredentialType, DiffFormat, DiffOptions, FetchOptions, MergeOptions,
+    ObjectType, PushOptions, RemoteCallbacks, Repository, Signature, StatusOptions,
 };
 use tauri::ipc::Channel;
 use tauri_plugin_store::StoreExt;
@@ -71,6 +72,16 @@ pub struct BranchInfo {
     pub is_remote: bool,
     /// Upstream tracking branch name, e.g. `"origin/main"`.
     pub upstream: Option<String>,
+}
+
+/// Unified diff output for a single file.
+#[derive(serde::Serialize, Clone)]
+pub struct FileDiff {
+    pub path: String,
+    /// The unified diff text (includes --- +++ @@ lines). Empty string if binary.
+    pub diff: String,
+    /// `true` if the file is binary (no text diff available).
+    pub is_binary: bool,
 }
 
 /// Module-level cancel flag; reset to `false` at the start of each new clone.
@@ -891,6 +902,214 @@ pub async fn git_branch_delete(repo_path: String, name: String) -> Result<(), St
 
         branch.delete().map_err(|e| e.to_string())?;
         Ok(())
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
+}
+
+/// Returns unified diff text for changed files in the repository at `repo_path`.
+///
+/// - If `file_path` is `Some(path)`: returns the diff for that single file only.
+/// - If `file_path` is `None`: returns diffs for all changed files (both staged and unstaged).
+///
+/// Binary files produce a `FileDiff` with `is_binary: true` and an empty `diff` string.
+///
+/// IMPORTANT: All git2 operations run in `spawn_blocking` because `Repository` is NOT `Send`.
+#[tauri::command]
+pub async fn git_diff(
+    repo_path: String,
+    file_path: Option<String>,
+) -> Result<Vec<FileDiff>, String> {
+    tauri::async_runtime::spawn_blocking(move || -> Result<Vec<FileDiff>, String> {
+        let repo = Repository::open(&repo_path).map_err(|e| e.to_string())?;
+
+        let mut diff_opts = DiffOptions::new();
+        diff_opts.include_untracked(false);
+
+        if let Some(ref fp) = file_path {
+            diff_opts.pathspec(fp);
+        }
+
+        // Collect unstaged changes (working tree vs index)
+        let unstaged_diff = repo
+            .diff_index_to_workdir(None, Some(&mut diff_opts))
+            .map_err(|e| e.to_string())?;
+
+        // Collect staged changes (index vs HEAD tree)
+        let staged_diff = {
+            let head_tree = repo
+                .head()
+                .ok()
+                .and_then(|h| h.peel_to_tree().ok());
+            repo.diff_tree_to_index(
+                head_tree.as_ref(),
+                None,
+                Some(&mut diff_opts),
+            )
+            .map_err(|e| e.to_string())?
+        };
+
+        // Accumulate per-file diff text from both diffs
+        let mut file_diffs: HashMap<String, FileDiff> = HashMap::new();
+
+        for diff in &[&unstaged_diff, &staged_diff] {
+            // Identify binary files from delta flags
+            diff.foreach(
+                &mut |delta, _progress| {
+                    let path = delta
+                        .new_file()
+                        .path()
+                        .or_else(|| delta.old_file().path())
+                        .map(|p| p.to_string_lossy().into_owned())
+                        .unwrap_or_default();
+
+                    if delta.flags().is_binary() {
+                        file_diffs.entry(path.clone()).or_insert(FileDiff {
+                            path,
+                            diff: String::new(),
+                            is_binary: true,
+                        });
+                    } else {
+                        file_diffs.entry(path.clone()).or_insert(FileDiff {
+                            path,
+                            diff: String::new(),
+                            is_binary: false,
+                        });
+                    }
+                    true
+                },
+                None,
+                None,
+                None,
+            )
+            .map_err(|e| e.to_string())?;
+
+            // Accumulate patch text for text files
+            diff.print(DiffFormat::Patch, |delta, _hunk, line| {
+                let path = delta
+                    .new_file()
+                    .path()
+                    .or_else(|| delta.old_file().path())
+                    .map(|p| p.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+
+                if let Some(entry) = file_diffs.get_mut(&path) {
+                    if !entry.is_binary {
+                        if let Ok(s) = std::str::from_utf8(line.content()) {
+                            entry.diff.push_str(s);
+                        }
+                    }
+                }
+                true
+            })
+            .map_err(|e| e.to_string())?;
+        }
+
+        // Filter to the requested file if specified
+        if let Some(fp) = file_path {
+            let result: Vec<FileDiff> = file_diffs
+                .into_values()
+                .filter(|d| d.path == fp)
+                .collect();
+            return Ok(result);
+        }
+
+        Ok(file_diffs.into_values().collect())
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
+}
+
+/// Adds the specified files to the git index (stages them).
+///
+/// After staging, call `git_status` to get the updated file list.
+///
+/// IMPORTANT: All git2 operations run in `spawn_blocking` because `Repository` is NOT `Send`.
+#[tauri::command]
+pub async fn git_stage(repo_path: String, paths: Vec<String>) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
+        let repo = Repository::open(&repo_path).map_err(|e| e.to_string())?;
+        let mut index = repo.index().map_err(|e| e.to_string())?;
+
+        for path in &paths {
+            index
+                .add_path(Path::new(path))
+                .map_err(|e| format!("Failed to stage '{}': {}", path, e))?;
+        }
+
+        index.write().map_err(|e| e.to_string())?;
+        Ok(())
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
+}
+
+/// Removes the specified files from the git index (unstages them), resetting them to HEAD.
+///
+/// Does not touch the working tree — local file changes are preserved.
+/// After unstaging, call `git_status` to get the updated file list.
+///
+/// IMPORTANT: All git2 operations run in `spawn_blocking` because `Repository` is NOT `Send`.
+#[tauri::command]
+pub async fn git_unstage(repo_path: String, paths: Vec<String>) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
+        let repo = Repository::open(&repo_path).map_err(|e| e.to_string())?;
+
+        // Get HEAD as a generic Object to pass to reset_default
+        let head_obj = repo
+            .head()
+            .map_err(|e| e.to_string())?
+            .peel(ObjectType::Tree)
+            .map_err(|e| e.to_string())?;
+
+        let path_refs: Vec<&Path> = paths.iter().map(|p| Path::new(p.as_str())).collect();
+
+        repo.reset_default(Some(&head_obj), path_refs.into_iter())
+            .map_err(|e| e.to_string())?;
+
+        Ok(())
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
+}
+
+/// Creates a commit from the currently staged files with the given message.
+///
+/// - Returns the new commit OID as a hex string.
+/// - Handles the initial commit case (unborn HEAD) by passing an empty parents slice.
+/// - Falls back to a default author/email if no git config is set.
+///
+/// IMPORTANT: All git2 operations run in `spawn_blocking` because `Repository` is NOT `Send`.
+#[tauri::command]
+pub async fn git_commit(repo_path: String, message: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || -> Result<String, String> {
+        let repo = Repository::open(&repo_path).map_err(|e| e.to_string())?;
+        let mut index = repo.index().map_err(|e| e.to_string())?;
+        let tree_oid = index.write_tree().map_err(|e| e.to_string())?;
+        let tree = repo.find_tree(tree_oid).map_err(|e| e.to_string())?;
+
+        // Get signature — fall back to a default if no git config is present
+        let sig = repo.signature().unwrap_or_else(|_| {
+            Signature::now("Pilot Space", "noreply@pilotspace.dev")
+                .expect("Failed to create fallback signature")
+        });
+
+        // Determine parent commits — empty for initial (unborn) commit
+        let is_unborn = repo.head().is_err();
+        let oid = if is_unborn {
+            repo.commit(Some("HEAD"), &sig, &sig, &message, &tree, &[])
+                .map_err(|e| e.to_string())?
+        } else {
+            let parent = repo
+                .head()
+                .map_err(|e| e.to_string())?
+                .peel_to_commit()
+                .map_err(|e| e.to_string())?;
+            repo.commit(Some("HEAD"), &sig, &sig, &message, &tree, &[&parent])
+                .map_err(|e| e.to_string())?
+        };
+
+        Ok(oid.to_string())
     })
     .await
     .map_err(|e| format!("Task join error: {e}"))?
