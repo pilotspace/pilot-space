@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Tauri Desktop Client
-status: completed
-stopped_at: Completed 37-02-PLAN.md
-last_updated: "2026-03-20T09:20:51.434Z"
-last_activity: "2026-03-20 — Phase 31 Plan 03 complete — pilotspace:// deep link OAuth PKCE flow for Google/GitHub social login"
+status: in-progress
+stopped_at: Completed 38-01-PLAN.md
+last_updated: "2026-03-20T09:38:00.000Z"
+last_activity: "2026-03-20 — Phase 38 Plan 01 complete — macOS code signing, hardened runtime entitlements, sidecar pre-signing, Apple secrets wired in CI"
 progress:
   total_phases: 9
   completed_phases: 8
-  total_plans: 22
-  completed_plans: 22
-  percent: 100
+  total_plans: 25
+  completed_plans: 23
+  percent: 92
 ---
 
 # Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-03-20)
 
 ## Current Position
 
-Phase: 31 of 38 (Auth Bridge)
-Plan: 3 of 3 in current phase
-Status: Phase complete
-Last activity: 2026-03-20 — Phase 31 Plan 03 complete — pilotspace:// deep link OAuth PKCE flow for Google/GitHub social login
+Phase: 38 of 38 (Packaging, Signing & Auto-update)
+Plan: 1 of 3 in current phase
+Status: In progress
+Last activity: 2026-03-20 — Phase 38 Plan 01 complete — macOS code signing, hardened runtime entitlements, sidecar pre-signing, Apple secrets wired in CI
 
-Progress: [██████████] 100% (v1.1: 6/6 plans)
+Progress: [█████████░] 92% (v1.1: 23/25 plans)
 
 ## Milestone History
 
@@ -103,6 +103,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 37]: [Phase 37-02]: show_menu_on_left_click(false) used — left click shows window, right click shows context menu
 - [Phase 37]: [Phase 37-02]: TrayNotificationListener is plain component (not observer) — no MobX state consumed; mounted in workspace-slug-layout via dynamic import ssr:false
 - [Phase 37]: sidecarId captured from first SidecarOutput event (id field) — enables mid-flight cancel before process exits
+- [Phase 38]: signingIdentity null in tauri.conf.json: tauri-action reads APPLE_SIGNING_IDENTITY from env; null avoids hardcoding team ID in source
+- [Phase 38]: Sidecar pre-signing: sign pilot-cli binary individually before tauri-action bundles app to satisfy notarization
+- [Phase 38]: PyInstaller entitlements: allow-unsigned-executable-memory + disable-library-validation required for onedir sidecar notarization
 
 ### Pending Todos
 
@@ -115,7 +118,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-20T09:26:17.000Z
-Stopped at: Completed 37-02-PLAN.md
+Last session: 2026-03-20T09:35:31.850Z
+Stopped at: Completed 38-01-PLAN.md
 Resume file: None
 Next action: /gsd:execute-phase 38

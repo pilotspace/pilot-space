@@ -61,10 +61,10 @@ Requirements for Tauri Desktop Client milestone. Each maps to roadmap phases.
 
 ### Packaging
 
-- [ ] **PKG-01**: App packaged as .dmg for macOS (ARM64 + Intel)
+- [x] **PKG-01**: App packaged as .dmg for macOS (ARM64 + Intel)
 - [ ] **PKG-02**: App packaged as .deb and .AppImage for Linux (x64)
 - [ ] **PKG-03**: App packaged as .msi for Windows (x64)
-- [ ] **PKG-04**: macOS build includes code signing and Apple notarization
+- [x] **PKG-04**: macOS build includes code signing and Apple notarization
 - [ ] **PKG-05**: Windows build includes code signing
 - [ ] **PKG-06**: App supports auto-update with in-app notification and background download
 
@@ -124,10 +124,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | WKSP-02 | Phase 32 | Complete |
 | WKSP-03 | Phase 32 | Complete |
 | WKSP-04 | Phase 32 | Complete |
-| PKG-01 | Phase 38 | Pending |
+| PKG-01 | Phase 38 | Complete |
 | PKG-02 | Phase 38 | Pending |
 | PKG-03 | Phase 38 | Pending |
-| PKG-04 | Phase 38 | Pending |
+| PKG-04 | Phase 38 | Complete |
 | PKG-05 | Phase 38 | Pending |
 | PKG-06 | Phase 38 | Pending |
 
