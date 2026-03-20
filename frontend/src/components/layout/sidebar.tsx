@@ -30,6 +30,7 @@ import {
   Monitor,
   CheckCircle2,
   BookOpen,
+  HardDrive,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useUIStore, useNotificationStore, useAuthStore, useWorkspaceStore } from '@/stores';
@@ -64,6 +65,7 @@ import { WorkspaceSwitcher } from '@/components/layout/workspace-switcher';
 import { usePendingApprovalCount } from '@/features/approvals/hooks/use-approvals';
 import { usePinnedNotes } from '@/hooks/usePinnedNotes';
 import { useSettingsModal } from '@/features/settings/settings-modal-context';
+import { isTauri } from '@/lib/tauri';
 
 interface NavItem {
   name: string;
@@ -112,6 +114,18 @@ const navigationSections: NavSection[] = [
     ],
   },
 ];
+
+// Desktop-only navigation section — only shown inside Tauri shell.
+// isTauri() reads window.__TAURI_INTERNALS__ at module level — safe for static evaluation.
+const desktopNavSection: NavSection | null = isTauri()
+  ? {
+      label: 'Desktop',
+      icon: HardDrive,
+      items: [
+        { name: 'Local Repos', path: 'local-repos', icon: HardDrive, testId: 'nav-local-repos' },
+      ],
+    }
+  : null;
 
 /**
  * Claude iOS-inspired user card: single trigger with unified dropdown.
@@ -355,7 +369,8 @@ export const Sidebar = observer(function Sidebar() {
   });
 
   const navigation = useMemo(() => {
-    return navigationSections.map((section) => ({
+    const allSections = [...navigationSections, ...(desktopNavSection ? [desktopNavSection] : [])];
+    return allSections.map((section) => ({
       label: section.label,
       icon: section.icon,
       items: section.items.map((item) => ({
