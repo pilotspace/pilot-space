@@ -112,6 +112,7 @@ from pilot_space.infrastructure.database.models.threaded_discussion import (
     DiscussionStatus,
     ThreadedDiscussion,
 )
+from pilot_space.infrastructure.database.models.transcript_cache import TranscriptCache
 from pilot_space.infrastructure.database.models.user import User
 from pilot_space.infrastructure.database.models.user_role_skill import (
     RoleTemplate,
@@ -224,6 +225,7 @@ __all__ = [
     "ThreadedDiscussion",
     "TimestampMixin",
     "ToolCallStatus",
+    "TranscriptCache",
     "User",
     "UserRoleSkill",
     "UserSkill",

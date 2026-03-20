@@ -1,0 +1,283 @@
+"""Speech-to-text transcription router using ElevenLabs STT.
+
+Proxies audio uploads to ElevenLabs Speech-to-Text API and caches
+results by SHA-256 audio hash to avoid reprocessing identical audio.
+
+Routes:
+    POST /ai/transcribe  — Transcribe audio to text via ElevenLabs STT
+
+Feature: Voice-to-text input for AI Chat (VOICE-01, VOICE-02, VOICE-03)
+BYOK: Workspace admins configure ElevenLabs API key in AI settings.
+"""
+
+from __future__ import annotations
+
+import hashlib
+from typing import Annotated
+from uuid import UUID
+
+import httpx
+from fastapi import APIRouter, File, Form, Header, HTTPException, UploadFile, status
+from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
+
+from pilot_space.api.v1.schemas.transcription import TranscribeResponse
+from pilot_space.dependencies.auth import CurrentUserId, DbSession
+from pilot_space.infrastructure.database.models.transcript_cache import TranscriptCache
+from pilot_space.infrastructure.logging import get_logger
+
+logger = get_logger(__name__)
+
+router = APIRouter(tags=["ai", "transcription"])
+
+# Allowed audio MIME types
+_ALLOWED_MIME_TYPES = frozenset(
+    {
+        "audio/webm",
+        "audio/ogg",
+        "audio/wav",
+        "audio/mp4",
+        "audio/mpeg",
+        "audio/x-m4a",
+        "audio/aac",
+    }
+)
+
+# Maximum file size: 25 MB
+_MAX_FILE_BYTES = 25 * 1024 * 1024
+
+# ElevenLabs STT endpoint
+_ELEVENLABS_STT_URL = "https://api.elevenlabs.io/v1/speech-to-text"
+
+
+@router.post(
+    "/transcribe",
+    response_model=TranscribeResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def transcribe_audio(
+    user_id: CurrentUserId,
+    session: DbSession,
+    file: Annotated[UploadFile, File(description="Audio file to transcribe")],
+    x_workspace_id: Annotated[UUID, Header(description="Workspace UUID")],
+    language: Annotated[str | None, Form()] = None,
+) -> TranscribeResponse:
+    """Transcribe audio to text using ElevenLabs STT.
+
+    Accepts a multipart audio upload, checks the transcript cache for a
+    previous result with the same audio content, and if not found, proxies
+    the audio to ElevenLabs Speech-to-Text API and caches the result.
+
+    Args:
+        user_id: Authenticated user ID (injected by FastAPI).
+        session: Database session (injected by FastAPI).
+        file: Audio file to transcribe (audio/webm, audio/ogg, etc.).
+        x_workspace_id: Workspace UUID from X-Workspace-Id header.
+        language: Optional ISO 639-1 language code hint (e.g. 'en').
+
+    Returns:
+        TranscribeResponse with transcript text and optional metadata.
+
+    Raises:
+        HTTPException 400: Invalid file type or file too large.
+        HTTPException 422: ElevenLabs API key not configured.
+        HTTPException 502: ElevenLabs API error.
+    """
+    workspace_id = x_workspace_id
+
+    # Validate MIME type
+    content_type = (file.content_type or "application/octet-stream").split(";")[0].strip()
+    if content_type not in _ALLOWED_MIME_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "UNSUPPORTED_AUDIO_TYPE",
+                "message": (
+                    f"Unsupported audio type '{content_type}'. "
+                    f"Allowed: {', '.join(sorted(_ALLOWED_MIME_TYPES))}"
+                ),
+            },
+        )
+
+    # Read file bytes
+    audio_bytes = await file.read()
+
+    if not audio_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "EMPTY_FILE", "message": "Audio file is empty"},
+        )
+
+    if len(audio_bytes) > _MAX_FILE_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "FILE_TOO_LARGE",
+                "message": f"Audio file exceeds maximum size of {_MAX_FILE_BYTES // (1024 * 1024)} MB",
+            },
+        )
+
+    # Compute SHA-256 hash for cache lookup
+    audio_hash = hashlib.sha256(audio_bytes).hexdigest()
+
+    # Check transcript cache
+    cache_stmt = select(TranscriptCache).where(
+        TranscriptCache.workspace_id == workspace_id,
+        TranscriptCache.audio_hash == audio_hash,
+    )
+    cache_result = await session.execute(cache_stmt)
+    cached = cache_result.scalar_one_or_none()
+
+    if cached is not None:
+        logger.info(
+            "transcription_cache_hit",
+            workspace_id=str(workspace_id),
+            audio_hash=audio_hash[:8],
+            user_id=str(user_id),
+        )
+        return TranscribeResponse(
+            transcript_id=cached.id,
+            text=cached.text,
+            language_code=cached.language_code,
+            duration_seconds=cached.duration_seconds,
+            cached=True,
+        )
+
+    # Cache miss — retrieve ElevenLabs API key
+    from pilot_space.ai.infrastructure.key_storage import SecureKeyStorage
+    from pilot_space.config import get_settings
+
+    settings = get_settings()
+    key_storage = SecureKeyStorage(
+        db=session,
+        master_secret=settings.encryption_key.get_secret_value(),
+    )
+    api_key = await key_storage.get_api_key(workspace_id, "elevenlabs", "stt")
+
+    if not api_key:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "code": "PROVIDER_NOT_CONFIGURED",
+                "message": "ElevenLabs API key not configured for this workspace",
+            },
+        )
+
+    # Call ElevenLabs STT API
+    logger.info(
+        "transcription_elevenlabs_request",
+        workspace_id=str(workspace_id),
+        audio_hash=audio_hash[:8],
+        content_type=content_type,
+        size_bytes=len(audio_bytes),
+        user_id=str(user_id),
+    )
+
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            form_data: dict[str, tuple[None, str]] = {
+                "model_id": (None, "scribe_v1"),
+            }
+            if language:
+                form_data["language_code"] = (None, language)
+
+            files = {"file": (file.filename or "recording.webm", audio_bytes, content_type)}
+
+            resp = await client.post(
+                _ELEVENLABS_STT_URL,
+                headers={"xi-api-key": api_key},
+                data={k: v[1] for k, v in form_data.items()},
+                files=files,
+            )
+    except httpx.TimeoutException as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail={
+                "code": "PROVIDER_TIMEOUT",
+                "message": "ElevenLabs API timed out",
+            },
+        ) from exc
+    except httpx.RequestError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail={
+                "code": "PROVIDER_ERROR",
+                "message": f"Failed to reach ElevenLabs API: {exc}",
+            },
+        ) from exc
+
+    if resp.status_code in (401, 403):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "code": "PROVIDER_AUTH_FAILED",
+                "message": "ElevenLabs API key is invalid or expired",
+            },
+        )
+    if resp.status_code != 200:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail={
+                "code": "PROVIDER_ERROR",
+                "message": f"ElevenLabs API returned HTTP {resp.status_code}",
+            },
+        )
+
+    try:
+        el_data = resp.json()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail={
+                "code": "PROVIDER_INVALID_RESPONSE",
+                "message": "ElevenLabs returned non-JSON response",
+            },
+        ) from exc
+
+    transcript_text: str = el_data.get("text", "")
+    detected_language: str | None = el_data.get("language_code") or el_data.get("language")
+    audio_duration: float | None = el_data.get("audio_duration") or el_data.get("duration")
+
+    # Persist to transcript cache
+    cache_insert = insert(TranscriptCache).values(
+        workspace_id=workspace_id,
+        audio_hash=audio_hash,
+        text=transcript_text,
+        language_code=detected_language,
+        duration_seconds=audio_duration,
+        provider="elevenlabs",
+        metadata_json={"model_id": "scribe_v1"},
+    )
+    cache_insert = cache_insert.on_conflict_do_nothing(
+        index_elements=["workspace_id", "audio_hash"],
+    )
+    await session.execute(cache_insert)
+    await session.commit()
+
+    # Fetch the inserted/existing record to get its ID
+    fetch_stmt = select(TranscriptCache).where(
+        TranscriptCache.workspace_id == workspace_id,
+        TranscriptCache.audio_hash == audio_hash,
+    )
+    fetch_result = await session.execute(fetch_stmt)
+    record = fetch_result.scalar_one()
+
+    logger.info(
+        "transcription_complete",
+        workspace_id=str(workspace_id),
+        transcript_id=str(record.id),
+        audio_hash=audio_hash[:8],
+        text_length=len(transcript_text),
+        user_id=str(user_id),
+    )
+
+    return TranscribeResponse(
+        transcript_id=record.id,
+        text=transcript_text,
+        language_code=detected_language,
+        duration_seconds=audio_duration,
+        cached=False,
+    )
+
+
+__all__ = ["router"]

@@ -382,11 +382,11 @@ class APIKeyUpdate(BaseSchema):
 
     provider: str = Field(
         description="Provider name",
-        pattern="^(google|anthropic|ollama)$",
+        pattern="^(google|anthropic|ollama|elevenlabs)$",
     )
     service_type: str = Field(
         description="Service category",
-        pattern="^(embedding|llm)$",
+        pattern="^(embedding|llm|stt)$",
     )
     api_key: str | None = Field(
         default=None,

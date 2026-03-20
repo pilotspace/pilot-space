@@ -91,6 +91,7 @@ from pilot_space.api.v1.routers import (
 from pilot_space.api.v1.routers.skill_templates import (
     router as skill_templates_router,
 )
+from pilot_space.api.v1.routers.transcription import router as transcription_router
 from pilot_space.api.v1.routers.user_skills import router as user_skills_router
 from pilot_space.api.v1.routers.workspace_action_buttons import (
     router as workspace_action_buttons_router,
@@ -303,6 +304,7 @@ if ai_annotations_router is not None:  # type: ignore[reportUnnecessaryCompariso
     app.include_router(ai_annotations_router, prefix=API_V1_PREFIX)
 app.include_router(ai_approvals_router, prefix=f"{API_V1_PREFIX}/ai")
 app.include_router(ai_attachments_router, prefix=f"{API_V1_PREFIX}/ai")
+app.include_router(transcription_router, prefix=f"{API_V1_PREFIX}/ai")
 app.include_router(ai_drive_router, prefix=f"{API_V1_PREFIX}/ai")
 app.include_router(ai_chat_router, prefix=f"{API_V1_PREFIX}/ai")
 app.include_router(ai_configuration_router, prefix=API_V1_PREFIX)
