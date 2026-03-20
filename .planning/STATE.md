@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Tauri Desktop Client
 status: completed
-stopped_at: Completed 33-03-PLAN.md
-last_updated: "2026-03-20T07:17:04.903Z"
+stopped_at: Completed 34-01-PLAN.md
+last_updated: "2026-03-20T07:31:13.061Z"
 last_activity: "2026-03-20 — Phase 31 Plan 03 complete — pilotspace:// deep link OAuth PKCE flow for Google/GitHub social login"
 progress:
   total_phases: 9
   completed_phases: 4
-  total_plans: 13
-  completed_plans: 13
+  total_plans: 15
+  completed_plans: 14
   percent: 100
 ---
 
@@ -87,6 +87,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 33]: GitStatusPanel calls gitStore.setRepoPath() via useEffect to auto-trigger refreshAll() on mount
 - [Phase 33]: BranchSelector uses Popover+Command (cmdk) pattern — consistent with other selector components in the codebase
 - [Phase 33]: ProjectDashboard uses stopPropagation on expanded git panel to prevent card collapse when interacting with git controls
+- [Phase 34]: portable-pty@0.9 used for PTY backend — tauri-pty crate does not exist; std::thread::spawn for blocking PTY reader; 16ms batch flush via Channel prevents IPC memory leak (Pitfall 7)
 
 ### Pending Todos
 
@@ -99,7 +100,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-20T07:12:47.141Z
-Stopped at: Completed 33-03-PLAN.md
+Last session: 2026-03-20T07:31:13.059Z
+Stopped at: Completed 34-01-PLAN.md
 Resume file: None
 Next action: /gsd:execute-phase 31

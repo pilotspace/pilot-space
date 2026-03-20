@@ -154,7 +154,7 @@ Plans:
   2. Interactive programs (vim, less, htop) work correctly with arrow keys, tab completion, and ANSI colors
   3. User can run any shell command and see streaming output in real time
   4. Terminal runs for extended periods and under high output volume without memory leaks or app slowdown
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 
 Plans:
 - [ ] 34-01-PLAN.md — PTY Rust backend — tauri-plugin-pty (or tauri-plugin-shell fallback), terminal.rs module, TerminalState managed struct, batched output at 16ms intervals via Channel API
@@ -237,7 +237,7 @@ Note: Phase 34 and Phase 35 depend only on Phase 30, so they can run in parallel
 | 31. Auth Bridge | 3/3 | Complete    | 2026-03-20 | - |
 | 32. Workspace + Git Clone | 4/4 | Complete    | 2026-03-20 | - |
 | 33. Full Git Operations | 3/3 | Complete    | 2026-03-20 | - |
-| 34. Embedded Terminal | v1.1 | 0/2 | Not started | - |
+| 34. Embedded Terminal | 1/2 | In Progress|  | - |
 | 35. Pilot CLI Sidecar | v1.1 | 0/2 | Not started | - |
 | 36. Diff Viewer + Commit UI | v1.1 | 0/3 | Not started | - |
 | 37. One-Click Implement + Tray | v1.1 | 0/3 | Not started | - |
