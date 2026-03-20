@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Medium Editor & Artifacts
 status: planning
-stopped_at: Completed 37-artifact-preview-rendering-engine/37-01-PLAN.md
-last_updated: "2026-03-20T03:03:01.031Z"
+stopped_at: Completed 37-artifact-preview-rendering-engine/37-02-PLAN.md
+last_updated: "2026-03-20T03:07:18.796Z"
 last_activity: 2026-03-18 — v1.1 roadmap created, 22/22 requirements mapped across 7 phases
 progress:
   total_phases: 8
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 9
-  completed_plans: 20
+  completed_plans: 21
   percent: 0
 ---
 
@@ -100,6 +100,7 @@ Recent decisions affecting current work:
 - [Phase 36-editor-ux-polish]: NoteCanvasLayout is NOT observer() — isFocusMode flows as prop from observer NoteDetailPage; prevents React 19 flushSync crash with TipTap NodeViews
 - [Phase 36-editor-ux-polish]: Escape guard in keyboard shortcut: e.key === 'Escape' && isFocusMode without e.preventDefault() — lets slash command ProseMirror-level Escape run first
 - [Phase 37]: HtmlRenderer defaults to source mode with opt-in sandboxed iframe preview; sandbox='allow-same-origin' only, never allow-scripts
+- [Phase 37-artifact-preview-rendering-engine]: FilePreviewModal html-preview case was already wired in Plan 01; Plan 02 only updated test assertions from markdown-content to html-renderer testid
 
 ### Pending Todos
 
@@ -114,7 +115,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-20T03:03:01.028Z
-Stopped at: Completed 37-artifact-preview-rendering-engine/37-01-PLAN.md
+Last session: 2026-03-20T03:07:18.794Z
+Stopped at: Completed 37-artifact-preview-rendering-engine/37-02-PLAN.md
 Resume file: None
 Next action: `/gsd:plan-phase 30`
