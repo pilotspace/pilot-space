@@ -7,6 +7,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::auth::get_auth_token,
             commands::auth::set_auth_token,
+            commands::auth::migrate_tokens_to_keychain,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
