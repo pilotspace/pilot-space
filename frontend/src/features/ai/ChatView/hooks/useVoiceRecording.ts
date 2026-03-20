@@ -1,13 +1,18 @@
 /**
- * useVoiceRecording - Hook for MediaRecorder-based voice input with ElevenLabs transcription.
+ * useVoiceRecording - Hook for voice input with ElevenLabs transcription.
  *
- * Manages microphone permission, audio recording lifecycle, and transcription flow.
- * Transcription is proxied through the backend to ElevenLabs STT with result caching.
+ * Supports two modes:
+ * - 'live' (default): Streams PCM audio via AudioWorklet + WebSocket to the backend
+ *   live STT proxy (ElevenLabs Scribe v2 Realtime). Partial transcripts appear as
+ *   the user speaks; committed transcript is returned on stop.
+ * - 'batch': Records audio via MediaRecorder, uploads to backend on stop, receives
+ *   full transcript. Legacy mode kept for fallback/compatibility.
  */
 
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
 import { transcriptionApi } from '@/services/api/transcription';
+import { useLiveTranscription } from './useLiveTranscription';
 
 export type VoiceRecordingStatus = 'idle' | 'recording' | 'transcribing' | 'error';
 
@@ -16,8 +21,16 @@ export interface UseVoiceRecordingOptions {
   workspaceId: string;
   /** Called with transcript text and audio URL when transcription succeeds */
   onTranscript: (text: string, audioUrl: string | null) => void;
-  /** Optional ISO 639-1 language hint */
+  /** Optional ISO 639-1 language hint (batch mode only) */
   language?: string;
+  /**
+   * Recording mode:
+   * - 'live' (default): WebSocket streaming with real-time partial transcripts.
+   * - 'batch': MediaRecorder upload; full transcript on stop.
+   */
+  mode?: 'live' | 'batch';
+  /** Called with each partial transcript in live mode (visual feedback only) */
+  onPartialTranscript?: (text: string) => void;
 }
 
 export interface UseVoiceRecordingResult {
@@ -67,6 +80,8 @@ export function useVoiceRecording({
   workspaceId,
   onTranscript,
   language,
+  mode = 'live',
+  onPartialTranscript,
 }: UseVoiceRecordingOptions): UseVoiceRecordingResult {
   const [status, setStatus] = useState<VoiceRecordingStatus>('idle');
   const [isPermissionDenied, setIsPermissionDenied] = useState(false);
@@ -88,6 +103,22 @@ export function useVoiceRecording({
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+
+  // Live transcription hook (only used when mode === 'live')
+  const liveTranscription = useLiveTranscription({
+    workspaceId,
+    onPartialTranscript: (text) => {
+      onPartialTranscript?.(text);
+    },
+    onCommittedTranscript: (text) => {
+      setStatus('idle');
+      setDurationMs(0);
+      onTranscript(text, null);
+    },
+    onError: (msg) => {
+      setErrorWithAutoReset(msg);
+    },
+  });
 
   // Check microphone permission state on mount (non-blocking)
   useEffect(() => {
@@ -213,6 +244,23 @@ export function useVoiceRecording({
     }
   }, []);
 
+  /** Start recording timer (shared between live and batch modes). */
+  const startDurationTimer = useCallback(() => {
+    startTimeRef.current = Date.now();
+    setDurationMs(0);
+    timerRef.current = setInterval(() => {
+      setDurationMs(Date.now() - startTimeRef.current);
+    }, 1000);
+  }, []);
+
+  /** Stop and clear recording timer. */
+  const stopDurationTimer = useCallback(() => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  }, []);
+
   const startRecording = useCallback(async () => {
     if (status !== 'idle') return;
 
@@ -223,6 +271,47 @@ export function useVoiceRecording({
       return;
     }
 
+    // ---------------------------------------------------------------- LIVE MODE
+    if (mode === 'live') {
+      try {
+        const stream = await liveTranscription.startStreaming();
+        if (!stream) return; // startStreaming already called onError
+
+        // Run amplitude analysis on the live mic stream
+        startAmplitudeAnalysis(stream);
+        startDurationTimer();
+        setStatus('recording');
+
+        // Auto-stop at max duration
+        maxDurationTimerRef.current = setTimeout(() => {
+          toast.info('Recording stopped', { description: 'Maximum 5 minutes reached.' });
+          liveTranscription.stopStreaming();
+          stopDurationTimer();
+          stopAmplitudeAnalysis();
+          setStatus('idle');
+        }, MAX_RECORDING_MS);
+      } catch (err) {
+        const isDenied =
+          (err instanceof DOMException &&
+            (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError')) ||
+          (err instanceof Error && err.name === 'NotAllowedError');
+
+        if (isDenied) {
+          setIsPermissionDenied(true);
+          toast.error('Microphone access denied', {
+            description: 'Please allow microphone access in your browser settings.',
+          });
+          setErrorWithAutoReset('Microphone access denied');
+        } else {
+          const msg = err instanceof Error ? err.message : 'Could not start recording';
+          toast.error('Could not start recording', { description: msg });
+          setErrorWithAutoReset(msg);
+        }
+      }
+      return;
+    }
+
+    // --------------------------------------------------------------- BATCH MODE
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
@@ -265,15 +354,11 @@ export function useVoiceRecording({
 
       // Start amplitude analysis
       startAmplitudeAnalysis(stream);
-
-      // Start recording and duration timer
-      recorder.start(250); // collect chunks every 250ms
-      startTimeRef.current = Date.now();
-      setDurationMs(0);
-      timerRef.current = setInterval(() => {
-        setDurationMs(Date.now() - startTimeRef.current);
-      }, 1000);
+      startDurationTimer();
       setStatus('recording');
+
+      // Start recording in 250ms chunks
+      recorder.start(250);
 
       // Auto-stop at max duration to prevent oversized uploads
       maxDurationTimerRef.current = setTimeout(() => {
@@ -304,26 +389,49 @@ export function useVoiceRecording({
   }, [
     status,
     isSupported,
+    mode,
     workspaceId,
     language,
     onTranscript,
     cleanupMedia,
     setErrorWithAutoReset,
     startAmplitudeAnalysis,
+    stopAmplitudeAnalysis,
+    startDurationTimer,
+    stopDurationTimer,
+    liveTranscription,
   ]);
 
   const stopRecording = useCallback(() => {
+    stopDurationTimer();
+
+    if (mode === 'live') {
+      liveTranscription.stopStreaming();
+      stopAmplitudeAnalysis();
+      // Status transitions to 'idle' when onCommittedTranscript fires
+      return;
+    }
+
+    // Batch mode
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
       mediaRecorderRef.current.stop();
       // onstop handler continues the flow
     }
-  }, []);
+  }, [mode, stopDurationTimer, stopAmplitudeAnalysis, liveTranscription]);
 
   const cancelRecording = useCallback(() => {
+    stopDurationTimer();
+
+    if (mode === 'live') {
+      liveTranscription.cancelStreaming();
+      stopAmplitudeAnalysis();
+      setStatus('idle');
+      setError(null);
+      setDurationMs(0);
+      return;
+    }
+
+    // Batch mode
     if (mediaRecorderRef.current) {
       // Override onstop to discard chunks
       mediaRecorderRef.current.onstop = null;
@@ -335,7 +443,7 @@ export function useVoiceRecording({
     setStatus('idle');
     setError(null);
     setDurationMs(0);
-  }, [cleanupMedia]);
+  }, [mode, stopDurationTimer, stopAmplitudeAnalysis, liveTranscription, cleanupMedia]);
 
   return {
     status,
