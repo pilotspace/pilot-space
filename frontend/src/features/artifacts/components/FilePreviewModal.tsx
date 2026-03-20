@@ -11,16 +11,32 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import dynamic from 'next/dynamic';
 import { resolveRenderer, getLanguageForFile } from '../utils/mime-type-router';
 import { useFileContent } from '../hooks/useFileContent';
 import { ImageRenderer } from './renderers/ImageRenderer';
-import { MarkdownRenderer } from './renderers/MarkdownRenderer';
-import { TextRenderer } from './renderers/TextRenderer';
-import { JsonRenderer } from './renderers/JsonRenderer';
-import { CodeRenderer } from './renderers/CodeRenderer';
-import { CsvRenderer } from './renderers/CsvRenderer';
-import { HtmlRenderer } from './renderers/HtmlRenderer';
 import { DownloadFallback } from './renderers/DownloadFallback';
+
+// Lazy-load heavy renderers — papaparse (~50KB), DOMPurify (~30KB), react-markdown
+// are only loaded when the user actually opens a file preview of that type.
+const MarkdownRenderer = dynamic(() =>
+  import('./renderers/MarkdownRenderer').then((m) => ({ default: m.MarkdownRenderer }))
+);
+const TextRenderer = dynamic(() =>
+  import('./renderers/TextRenderer').then((m) => ({ default: m.TextRenderer }))
+);
+const JsonRenderer = dynamic(() =>
+  import('./renderers/JsonRenderer').then((m) => ({ default: m.JsonRenderer }))
+);
+const CodeRenderer = dynamic(() =>
+  import('./renderers/CodeRenderer').then((m) => ({ default: m.CodeRenderer }))
+);
+const CsvRenderer = dynamic(() =>
+  import('./renderers/CsvRenderer').then((m) => ({ default: m.CsvRenderer }))
+);
+const HtmlRenderer = dynamic(() =>
+  import('./renderers/HtmlRenderer').then((m) => ({ default: m.HtmlRenderer }))
+);
 
 export interface FilePreviewModalProps {
   open: boolean;
