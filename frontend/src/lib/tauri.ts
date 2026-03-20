@@ -490,3 +490,20 @@ export async function cancelSidecar(id: string): Promise<void> {
   const { invoke } = await import('@tauri-apps/api/core');
   await invoke('cancel_sidecar', { id });
 }
+
+/**
+ * Convenience wrapper: run `pilot implement <issueId> --oneshot` via the sidecar.
+ * Streams stdout and stderr via the onOutput callback.
+ * Returns a SidecarResult with the process exit code when the sidecar exits.
+ *
+ * @param issueId - The issue identifier (e.g., "PS-42")
+ * @param cwd - Absolute path to the repository working directory
+ * @param onOutput - Callback invoked with each stdout/stderr line
+ */
+export async function runPilotImplement(
+  issueId: string,
+  cwd: string,
+  onOutput: (output: SidecarOutput) => void
+): Promise<SidecarResult> {
+  return runSidecar(['implement', issueId, '--oneshot'], cwd, onOutput);
+}
