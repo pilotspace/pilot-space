@@ -168,11 +168,11 @@ Plans:
   1. The app bundles a compiled pilot CLI binary that requires no Python installation on the user's machine
   2. CI matrix produces platform-specific pilot binaries for all 4 targets (macOS ARM, macOS x86, Linux x64, Windows x64) as build artifacts
   3. The Rust backend can spawn the sidecar binary and receive streaming output
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 35-01: PyInstaller build pipeline — pyinstaller.spec, --onedir mode, per-platform CI matrix jobs producing tauri-app/binaries/ artifacts
-- [ ] 35-02: Tauri externalBin config + sidecar.rs Rust module — tauri-plugin-shell, spawn with Channel streaming, SidecarState managed struct
+- [ ] 35-01-PLAN.md — PyInstaller build pipeline — pyinstaller.spec, --onedir mode, per-platform CI matrix jobs producing tauri-app/binaries/ artifacts
+- [ ] 35-02-PLAN.md — Tauri externalBin config + sidecar.rs Rust module — tauri-plugin-shell, spawn with Channel streaming, SidecarState managed struct
 
 ### Phase 36: Diff Viewer + Commit UI
 **Goal**: Users can review file diffs, stage changes, write a commit message, and push — a lightweight git client UI on top of the git layer
