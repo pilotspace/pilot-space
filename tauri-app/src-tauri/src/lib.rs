@@ -7,8 +7,14 @@ pub fn run() {
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_notification::init())
         .manage(commands::terminal::TerminalSessions::new())
         .manage(commands::sidecar::SidecarProcesses::new())
+        .setup(|app| {
+            commands::tray::setup_tray(app.handle())?;
+            commands::tray::setup_close_to_tray(app.handle());
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             commands::auth::get_auth_token,
             commands::auth::set_auth_token,
@@ -40,6 +46,7 @@ pub fn run() {
             commands::terminal::close_terminal,
             commands::sidecar::run_sidecar,
             commands::sidecar::cancel_sidecar,
+            commands::tray::send_notification,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
