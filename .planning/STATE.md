@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Tauri Desktop Client
 status: completed
-stopped_at: Completed 31-03-PLAN.md
-last_updated: "2026-03-20T05:20:57.563Z"
+stopped_at: Completed 32-01-PLAN.md
+last_updated: "2026-03-20T05:41:12.847Z"
 last_activity: "2026-03-20 — Phase 31 Plan 03 complete — pilotspace:// deep link OAuth PKCE flow for Google/GitHub social login"
 progress:
   total_phases: 9
   completed_phases: 2
-  total_plans: 6
-  completed_plans: 6
+  total_plans: 9
+  completed_plans: 7
   percent: 100
 ---
 
@@ -70,6 +70,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 31]: Tauri Store retained post-migration as WebView sync channel — keychain is Rust source of truth only
 - [Phase 31]: Dynamic import of @tauri-apps/plugin-deep-link inside initDeepLinkListener prevents SSG build errors — same pattern as other Tauri plugin imports
 - [Phase 31]: isTauri() static import in AuthStore.ts is safe — reads window.__TAURI_INTERNALS__ only, no @tauri-apps/* API imported at module level
+- [Phase 32]: spawn_blocking used for all git2 operations — Repository is not Send
+- [Phase 32]: OnceLock<Arc<AtomicBool>> for cancel flag — safe static initialization shared across cancel_clone and git_clone
+- [Phase 32]: PAT stored under git_pat keychain account, never returned to frontend — get_git_credentials returns has_pat:bool only
 
 ### Pending Todos
 
@@ -82,7 +85,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-20T05:15:48.523Z
-Stopped at: Completed 31-03-PLAN.md
+Last session: 2026-03-20T05:41:12.845Z
+Stopped at: Completed 32-01-PLAN.md
 Resume file: None
 Next action: /gsd:execute-phase 31

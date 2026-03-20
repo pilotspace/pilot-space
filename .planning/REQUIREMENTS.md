@@ -22,13 +22,13 @@ Requirements for Tauri Desktop Client milestone. Each maps to roadmap phases.
 
 ### Git Operations
 
-- [ ] **GIT-01**: User can clone a repository with progress indicator and cancellation
+- [x] **GIT-01**: User can clone a repository with progress indicator and cancellation
 - [ ] **GIT-02**: User can pull latest changes from remote with progress UI
 - [ ] **GIT-03**: User can push commits to remote with progress UI
 - [ ] **GIT-04**: User can view repository status (changed/staged/untracked files)
 - [ ] **GIT-05**: User can list, create, switch, and delete branches
 - [ ] **GIT-06**: App detects merge conflicts during pull and notifies user
-- [ ] **GIT-07**: User can configure HTTPS + Personal Access Token credentials for git operations
+- [x] **GIT-07**: User can configure HTTPS + Personal Access Token credentials for git operations
 
 ### Pilot CLI
 
@@ -54,7 +54,7 @@ Requirements for Tauri Desktop Client milestone. Each maps to roadmap phases.
 
 ### Workspace
 
-- [ ] **WKSP-01**: App manages default project directory (~/ PilotSpace/projects/) for cloned repos
+- [x] **WKSP-01**: App manages default project directory (~/ PilotSpace/projects/) for cloned repos
 - [ ] **WKSP-02**: User can configure base project directory path in settings
 - [ ] **WKSP-03**: User can link existing local repositories to Pilot Space projects
 - [ ] **WKSP-04**: User can see project status dashboard (cloned repos, sync status, last activity)
@@ -100,13 +100,13 @@ Which phases cover which requirements. Updated during roadmap creation.
 | AUTH-02 | Phase 31 | Complete |
 | AUTH-03 | Phase 31 | Complete |
 | AUTH-04 | Phase 31 | Complete |
-| GIT-01 | Phase 32 | Pending |
+| GIT-01 | Phase 32 | Complete |
 | GIT-02 | Phase 33 | Pending |
 | GIT-03 | Phase 33 | Pending |
 | GIT-04 | Phase 33 | Pending |
 | GIT-05 | Phase 33 | Pending |
 | GIT-06 | Phase 33 | Pending |
-| GIT-07 | Phase 32 | Pending |
+| GIT-07 | Phase 32 | Complete |
 | CLI-01 | Phase 35 | Pending |
 | CLI-02 | Phase 37 | Pending |
 | CLI-03 | Phase 37 | Pending |
@@ -120,7 +120,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DIFF-03 | Phase 36 | Pending |
 | DIFF-04 | Phase 36 | Pending |
 | DIFF-05 | Phase 36 | Pending |
-| WKSP-01 | Phase 32 | Pending |
+| WKSP-01 | Phase 32 | Complete |
 | WKSP-02 | Phase 32 | Pending |
 | WKSP-03 | Phase 32 | Pending |
 | WKSP-04 | Phase 32 | Pending |
