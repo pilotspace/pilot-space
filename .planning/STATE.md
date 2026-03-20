@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Tauri Desktop Client
-status: executing
-stopped_at: Completed 38-02-PLAN.md
-last_updated: "2026-03-20T09:43:20.974Z"
-last_activity: 2026-03-20 — Phase 38 Plan 01 complete — macOS code signing, hardened runtime entitlements, sidecar pre-signing, Apple secrets wired in CI
+status: complete
+stopped_at: Completed 38-03-PLAN.md
+last_updated: "2026-03-20T12:52:00.000Z"
+last_activity: 2026-03-20 — Phase 38 Plan 03 complete — tauri-plugin-updater, UpdateNotification banner, GitHub Release workflow with update manifest signing
 progress:
   total_phases: 9
-  completed_phases: 8
+  completed_phases: 9
   total_plans: 25
-  completed_plans: 24
-  percent: 92
+  completed_plans: 25
+  percent: 96
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-03-20)
 ## Current Position
 
 Phase: 38 of 38 (Packaging, Signing & Auto-update)
-Plan: 2 of 3 in current phase
-Status: In progress
-Last activity: 2026-03-20 — Phase 38 Plan 02 complete — Linux .deb/.AppImage + Windows .msi targets, Azure Key Vault EV signing, AzureSignTool sidecar pre-signing
+Plan: 3 of 3 in current phase — COMPLETE
+Status: All phases complete — v1.1 Tauri Desktop Client milestone finished
+Last activity: 2026-03-20 — Phase 38 Plan 03 complete — tauri-plugin-updater, UpdateNotification banner, GitHub Release workflow with update manifest signing
 
-Progress: [██████████] 96% (v1.1: 24/25 plans)
+Progress: [██████████] 100% (v1.1: 25/25 plans)
 
 ## Milestone History
 
@@ -39,7 +39,7 @@ Progress: [██████████] 96% (v1.1: 24/25 plans)
 | v1.0 Enterprise | 1–11 | 46 | 30/30 | 2026-03-09 |
 | v1.0-alpha Pre-Production Launch | 12–23 | 37 | 39/39 + 7 gap items | 2026-03-12 |
 | v1.0.0-alpha2 Notion-Style Restructure | 24–29 | 14 | 17/17 | 2026-03-12 |
-| v1.1 Tauri Desktop Client | 30–38 | ~25 | 30/30 | — |
+| v1.1 Tauri Desktop Client | 30–38 | 25 | 30/30 | 2026-03-20 |
 
 ## Accumulated Context
 
@@ -109,6 +109,10 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 38]: bundle.targets changed from 'all' to explicit array ['dmg','deb','appimage','msi'] — avoids building unnecessary formats and documents platform intent
 - [Phase 38]: certificateThumbprint: null in tauri.conf.json mirrors signingIdentity: null pattern — Azure Key Vault env vars injected at CI build time, never hardcoded in source
 - [Phase 38]: AzureSignTool sidecar pre-signing on Windows: sign pilot-cli-.exe before tauri-action bundles .msi to maintain signing chain; mirrors macOS codesign pre-signing from Plan 01
+- [Phase 38]: tauri_plugin_updater::Builder::new().build() used (not init()) — Builder pattern allows configuring custom headers or check intervals in future without API change
+- [Phase 38]: dialog: false in tauri.conf.json updater config — UI handled by UpdateNotification component (non-blocking banner, not a blocking modal dialog)
+- [Phase 38]: releaseDraft: true in tauri-release.yml — releases require manual publish to prevent accidental production releases; cancel-in-progress: false prevents partial artifact corruption
+- [Phase 38]: 5-second mount delay on UpdateNotification — avoids competing with app init and Supabase auth token load on startup; installs on restart (not forced) to respect user autonomy
 
 ### Pending Todos
 
@@ -121,7 +125,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-20T09:43:20.972Z
-Stopped at: Completed 38-02-PLAN.md
+Last session: 2026-03-20T12:48:17.887Z
+Stopped at: Completed 38-03-PLAN.md
 Resume file: None
-Next action: /gsd:execute-phase 38
+Next action: v1.1 milestone complete — all 25 plans executed across phases 30–38
