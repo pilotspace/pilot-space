@@ -362,6 +362,7 @@ class TestOwnerSelfDemotion:
 
         mock_workspace_repo = AsyncMock()
         mock_workspace_repo.get_with_members.return_value = workspace
+        mock_workspace_repo.update_member_role = AsyncMock()
 
         from pilot_space.application.services.workspace_member import (
             UnauthorizedError,
@@ -379,6 +380,8 @@ class TestOwnerSelfDemotion:
 
         with pytest.raises(UnauthorizedError, match="Cannot change own role"):
             await service.update_member_role(payload)
+
+        mock_workspace_repo.update_member_role.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_owner_can_change_other_member_role(self) -> None:
@@ -418,6 +421,11 @@ class TestOwnerSelfDemotion:
         result = await service.update_member_role(payload)
         assert result.updated_member is updated_member
         assert result.new_role == "GUEST"
+        mock_workspace_repo.update_member_role.assert_awaited_once_with(
+            workspace.id,
+            other_user.id,
+            WorkspaceRole.GUEST,
+        )
 
 
 class TestIsAdminAuthCheck:

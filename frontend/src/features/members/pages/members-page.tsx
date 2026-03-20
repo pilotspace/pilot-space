@@ -26,9 +26,13 @@ import {
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useQueryClient } from '@tanstack/react-query';
 import { useStore } from '@/stores';
 import type { WorkspaceRole } from '@/stores/WorkspaceStore';
-import { useWorkspaceMembers } from '@/features/issues/hooks/use-workspace-members';
+import {
+  useWorkspaceMembers,
+  workspaceMembersKeys,
+} from '@/features/issues/hooks/use-workspace-members';
 import { workspacesApi } from '@/services/api/workspaces';
 import {
   useWorkspaceInvitations,
@@ -53,6 +57,7 @@ export const MembersPage = observer(function MembersPage() {
   const { authStore, workspaceStore } = useStore();
   const params = useParams();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const workspaceSlug = params?.workspaceSlug as string;
 
   const currentWorkspace = workspaceStore.getWorkspaceBySlug(workspaceSlug);
@@ -156,6 +161,7 @@ export const MembersPage = observer(function MembersPage() {
         setUpdatingMemberId(null);
 
         if (result) {
+          await queryClient.invalidateQueries({ queryKey: workspaceMembersKeys.all(workspaceId) });
           toast.success('Role updated', {
             description: `${displayName} is now a ${role}.`,
           });
@@ -196,6 +202,7 @@ export const MembersPage = observer(function MembersPage() {
         setUpdatingMemberId(null);
 
         if (success) {
+          await queryClient.invalidateQueries({ queryKey: workspaceMembersKeys.all(workspaceId) });
           toast.success('Member removed', {
             description: `${displayName} has been removed from the workspace.`,
           });
@@ -247,6 +254,7 @@ export const MembersPage = observer(function MembersPage() {
         setUpdatingMemberId(null);
 
         if (result) {
+          await queryClient.invalidateQueries({ queryKey: workspaceMembersKeys.all(workspaceId) });
           toast.success('Ownership transferred', {
             description: `${displayName} is now the workspace owner.`,
           });
