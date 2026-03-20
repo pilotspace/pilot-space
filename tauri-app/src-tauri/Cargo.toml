@@ -26,6 +26,8 @@ keyring = { version = "3", features = ["apple-native", "windows-native", "sync-s
 dirs = "6"
 chrono = { version = "0.4", features = ["serde"] }
 git2 = { version = "0.20", features = ["vendored-libgit2"] }
+portable-pty = "0.9"
+uuid = { version = "1", features = ["v4"] }
 
 [features]
 default = ["custom-protocol"]

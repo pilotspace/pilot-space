@@ -7,6 +7,7 @@ pub fn run() {
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .manage(commands::terminal::TerminalSessions::new())
         .invoke_handler(tauri::generate_handler![
             commands::auth::get_auth_token,
             commands::auth::set_auth_token,
@@ -28,6 +29,10 @@ pub fn run() {
             commands::git::git_branch_create,
             commands::git::git_branch_switch,
             commands::git::git_branch_delete,
+            commands::terminal::create_terminal,
+            commands::terminal::write_terminal,
+            commands::terminal::resize_terminal,
+            commands::terminal::close_terminal,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
