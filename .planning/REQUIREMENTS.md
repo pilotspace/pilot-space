@@ -32,10 +32,10 @@ Requirements for Tauri Desktop Client milestone. Each maps to roadmap phases.
 
 ### Pilot CLI
 
-- [ ] **CLI-01**: pilot CLI compiled as standalone sidecar binary (PyInstaller) shipped with app
+- [x] **CLI-01**: pilot CLI compiled as standalone sidecar binary (PyInstaller) shipped with app
 - [ ] **CLI-02**: User can run `pilot implement` on an issue with streaming output in terminal
 - [ ] **CLI-03**: One-click "Implement Issue" flow: select issue → auto-branch → implement → stage/commit → push
-- [ ] **CLI-04**: Sidecar binary built for all 4 platform targets in CI
+- [x] **CLI-04**: Sidecar binary built for all 4 platform targets in CI
 
 ### Terminal
 
@@ -107,10 +107,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | GIT-05 | Phase 33 | Complete |
 | GIT-06 | Phase 33 | Complete |
 | GIT-07 | Phase 32 | Complete |
-| CLI-01 | Phase 35 | Pending |
+| CLI-01 | Phase 35 | Complete |
 | CLI-02 | Phase 37 | Pending |
 | CLI-03 | Phase 37 | Pending |
-| CLI-04 | Phase 35 | Pending |
+| CLI-04 | Phase 35 | Complete |
 | TERM-01 | Phase 34 | Complete |
 | TERM-02 | Phase 34 | Complete |
 | TERM-03 | Phase 34 | Complete |

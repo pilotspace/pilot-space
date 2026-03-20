@@ -168,7 +168,7 @@ Plans:
   1. The app bundles a compiled pilot CLI binary that requires no Python installation on the user's machine
   2. CI matrix produces platform-specific pilot binaries for all 4 targets (macOS ARM, macOS x86, Linux x64, Windows x64) as build artifacts
   3. The Rust backend can spawn the sidecar binary and receive streaming output
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 
 Plans:
 - [ ] 35-01-PLAN.md — PyInstaller build pipeline — pyinstaller.spec, --onedir mode, per-platform CI matrix jobs producing tauri-app/binaries/ artifacts
@@ -238,7 +238,7 @@ Note: Phase 34 and Phase 35 depend only on Phase 30, so they can run in parallel
 | 32. Workspace + Git Clone | 4/4 | Complete    | 2026-03-20 | - |
 | 33. Full Git Operations | 3/3 | Complete    | 2026-03-20 | - |
 | 34. Embedded Terminal | 2/2 | Complete    | 2026-03-20 | - |
-| 35. Pilot CLI Sidecar | v1.1 | 0/2 | Not started | - |
+| 35. Pilot CLI Sidecar | 1/2 | In Progress|  | - |
 | 36. Diff Viewer + Commit UI | v1.1 | 0/3 | Not started | - |
 | 37. One-Click Implement + Tray | v1.1 | 0/3 | Not started | - |
 | 38. Packaging + Signing + Auto-Update | v1.1 | 0/3 | Not started | - |
