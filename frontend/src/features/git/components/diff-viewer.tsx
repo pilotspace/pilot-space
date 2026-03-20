@@ -180,7 +180,7 @@ export const DiffViewer = observer(function DiffViewer({ maxHeight = '400px' }: 
   const lines = useMemo(() => {
     if (!fileDiff || fileDiff.is_binary || !fileDiff.diff) return [];
     return parseDiffLines(fileDiff.diff);
-  }, [fileDiff?.diff, fileDiff?.is_binary]);
+  }, [fileDiff]);
 
   // --- Empty state: no file selected ---
   if (!selectedPath) {
