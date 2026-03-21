@@ -22,13 +22,6 @@ interface RecordButtonProps {
   disabled?: boolean;
 }
 
-function formatDuration(ms: number): string {
-  const seconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${minutes}:${secs.toString().padStart(2, '0')}`;
-}
-
 export const RecordButton = observer(function RecordButton({
   workspaceId,
   onTranscript,
@@ -50,7 +43,6 @@ export const RecordButton = observer(function RecordButton({
     status,
     isSupported,
     isPermissionDenied,
-    durationMs,
     startRecording,
     stopRecording,
     cancelRecording,
@@ -100,17 +92,11 @@ export const RecordButton = observer(function RecordButton({
   // Recording: show stop button with pulsing ring + timer
   if (isRecording) {
     return (
-      <div className="flex items-center gap-1" onKeyDown={handleKeyDown} tabIndex={-1}>
+      <div onKeyDown={handleKeyDown} tabIndex={-1}>
         <span aria-live="assertive" className="sr-only">
           Recording. Press Escape to cancel.
         </span>
 
-        {/* Timer */}
-        <span className="text-[11px] text-destructive/70 font-mono tabular-nums leading-none select-none">
-          {formatDuration(durationMs)}
-        </span>
-
-        {/* Stop button with pulsing ring */}
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
