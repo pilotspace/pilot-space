@@ -212,17 +212,18 @@ class DigestJobHandler:
                             content = block.text
                             break
 
-                    await track_cost(
-                        self._session,
-                        workspace_id=workspace_id,
-                        user_id=None,
-                        agent_name="digest_job",
-                        provider="anthropic",
-                        model=MODEL_SONNET,
-                        input_tokens=input_tokens,
-                        output_tokens=output_tokens,
-                        operation_type="digest",
-                    )
+                    if input_tokens or output_tokens:
+                        await track_cost(
+                            self._session,
+                            workspace_id=workspace_id,
+                            user_id=None,
+                            agent_name="digest_job",
+                            provider="anthropic",
+                            model=MODEL_SONNET,
+                            input_tokens=input_tokens,
+                            output_tokens=output_tokens,
+                            operation_type="digest",
+                        )
 
                     return self._parse_suggestions(content)
 

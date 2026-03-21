@@ -649,20 +649,30 @@ async def track_cost(
     operation_type: str | None = None,
     cost_usd_override: float | None = None,
 ) -> None:
-    """Fire-and-forget cost tracking for services without DI-injected CostTracker."""
+    """Fire-and-forget cost tracking for services without DI-injected CostTracker.
+
+    Uses an independent session so cost records survive a caller rollback.
+    """
+    from sqlalchemy.ext.asyncio import AsyncSession as _AsyncSession
+
     try:
-        tracker = CostTracker(session)
-        await tracker.track(
-            workspace_id=workspace_id,
-            user_id=user_id or _ZERO_UUID,
-            agent_name=agent_name,
-            provider=provider,
-            model=model,
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
-            operation_type=operation_type,
-            cost_usd_override=cost_usd_override,
-        )
+        # Derive the engine from the caller's session so we can open an
+        # independent transaction — cost rows must not be rolled back with the caller.
+        conn = await session.connection()
+        engine = conn.engine
+        async with _AsyncSession(engine) as independent_session, independent_session.begin():
+            tracker = CostTracker(independent_session)
+            await tracker.track(
+                workspace_id=workspace_id,
+                user_id=user_id or _ZERO_UUID,
+                agent_name=agent_name,
+                provider=provider,
+                model=model,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                operation_type=operation_type,
+                cost_usd_override=cost_usd_override,
+            )
     except Exception:
         logger.warning(
             "track_cost_failed",

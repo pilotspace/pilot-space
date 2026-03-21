@@ -52,6 +52,7 @@ class VersionDigestService:
         version_id: UUID,
         note_id: UUID,
         workspace_id: UUID,
+        user_id: UUID | None = None,
     ) -> DigestResult:
         """Return (or generate) a digest for a version.
 
@@ -59,6 +60,7 @@ class VersionDigestService:
             version_id: Target version UUID.
             note_id: Parent note UUID.
             workspace_id: Workspace UUID.
+            user_id: Caller user UUID for cost attribution (None for background jobs).
 
         Returns:
             DigestResult with the digest text and cache status.
@@ -85,7 +87,7 @@ class VersionDigestService:
         )
         previous = _find_previous_version(version_id, list(all_versions))
 
-        digest = await self._generate_digest(version.content, previous, workspace_id)
+        digest = await self._generate_digest(version.content, previous, workspace_id, user_id)
 
         # Persist digest cache in DB
         from pilot_space.infrastructure.database.models.note_version import NoteVersion as NVModel
@@ -108,6 +110,7 @@ class VersionDigestService:
         new_content: dict[str, Any],
         previous_content: dict[str, Any] | None,
         workspace_id: UUID | None = None,
+        user_id: UUID | None = None,
     ) -> str:
         """Call Claude Sonnet to generate a change summary.
 
@@ -117,6 +120,7 @@ class VersionDigestService:
             new_content: TipTap JSON for the new version.
             previous_content: TipTap JSON for the previous version (or None if first).
             workspace_id: Workspace UUID for cost tracking.
+            user_id: Caller user UUID for cost attribution.
 
         Returns:
             Human-readable change summary (1-3 sentences).
@@ -155,11 +159,11 @@ class VersionDigestService:
             )
             input_tokens, output_tokens = extract_response_usage(message)
 
-            if workspace_id is not None:
+            if workspace_id is not None and (input_tokens or output_tokens):
                 await track_cost(
                     self._session,
                     workspace_id=workspace_id,
-                    user_id=None,
+                    user_id=user_id,
                     agent_name="version_digest",
                     provider="anthropic",
                     model=_model,
