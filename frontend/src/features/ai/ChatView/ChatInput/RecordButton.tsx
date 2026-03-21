@@ -5,7 +5,7 @@
  * Transcribing: spinner. All states stay in the same button footprint.
  */
 
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import { observer } from 'mobx-react-lite';
 import { Mic, MicOff, Square, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -57,6 +57,24 @@ export const RecordButton = observer(function RecordButton({
   const isTranscribing = status === 'transcribing';
   const isUnavailable = !isSupported || isPermissionDenied;
 
+  // Global Escape key listener — the recording UI doesn't reliably hold focus
+  const handleEscape = useCallback(
+    (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        cancelRecording();
+      }
+    },
+    [cancelRecording]
+  );
+
+  useEffect(() => {
+    if (isRecording) {
+      document.addEventListener('keydown', handleEscape);
+      return () => document.removeEventListener('keydown', handleEscape);
+    }
+  }, [isRecording, handleEscape]);
+
   const handleClick = () => {
     if (disabled || isUnavailable) return;
 
@@ -75,13 +93,6 @@ export const RecordButton = observer(function RecordButton({
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape' && isRecording) {
-      e.preventDefault();
-      cancelRecording();
-    }
-  };
-
   let tooltipLabel = 'Voice input';
   if (!isSupported) tooltipLabel = 'Voice recording not supported in this browser';
   else if (isPermissionDenied) tooltipLabel = 'Microphone access denied';
@@ -92,7 +103,7 @@ export const RecordButton = observer(function RecordButton({
   // Recording: show stop button with pulsing ring + timer
   if (isRecording) {
     return (
-      <div onKeyDown={handleKeyDown} tabIndex={-1}>
+      <div>
         <span aria-live="assertive" className="sr-only">
           Recording. Press Escape to cancel.
         </span>
@@ -133,7 +144,6 @@ export const RecordButton = observer(function RecordButton({
             data-testid="record-button"
             className="h-6 w-6 text-muted-foreground/60 hover:text-foreground"
             onClick={handleClick}
-            onKeyDown={handleKeyDown}
             disabled={disabled || isTranscribing || isUnavailable}
             aria-label={tooltipLabel}
           >

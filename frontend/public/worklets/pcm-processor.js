@@ -23,6 +23,9 @@ class PcmProcessor extends AudioWorkletProcessor {
     // Accumulate int16 samples until we have a 1-second chunk
     this._buffer = new Int16Array(TARGET_SAMPLE_RATE);
     this._bufferOffset = 0;
+    // Fractional phase for downsampling — persists across process() calls
+    // to avoid drift at non-integer ratios (e.g. 44100 / 16000 = 2.75625)
+    this._downsamplePhase = 0;
   }
 
   /**
@@ -38,10 +41,11 @@ class PcmProcessor extends AudioWorkletProcessor {
     const channel = input[0];
     if (!channel || channel.length === 0) return true;
 
-    // Downsample ratio: e.g. 48000 / 16000 = 3
+    // Downsample ratio: e.g. 48000 / 16000 = 3, or 44100 / 16000 = 2.75625
     const ratio = sampleRate / TARGET_SAMPLE_RATE;
 
-    for (let i = 0; i < channel.length; i += ratio) {
+    let i = this._downsamplePhase;
+    for (; i < channel.length; i += ratio) {
       const srcIndex = Math.floor(i);
       const sample = channel[srcIndex];
 
@@ -60,6 +64,10 @@ class PcmProcessor extends AudioWorkletProcessor {
         this._bufferOffset = 0;
       }
     }
+
+    // Persist how far past the buffer end the next sample falls,
+    // so the next process() call starts at the correct fractional offset
+    this._downsamplePhase = i - channel.length;
 
     return true;
   }

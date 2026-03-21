@@ -104,6 +104,14 @@ export function useVoiceRecording({
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
 
+  /** Clear the 5-minute max-duration timer (shared by live stop/cancel/error/committed). */
+  const clearMaxDurationTimer = useCallback(() => {
+    if (maxDurationTimerRef.current) {
+      clearTimeout(maxDurationTimerRef.current);
+      maxDurationTimerRef.current = null;
+    }
+  }, []);
+
   // Live transcription hook (only used when mode === 'live')
   const liveTranscription = useLiveTranscription({
     workspaceId,
@@ -111,11 +119,13 @@ export function useVoiceRecording({
       onPartialTranscript?.(text);
     },
     onCommittedTranscript: (text) => {
+      clearMaxDurationTimer();
       setStatus('idle');
       setDurationMs(0);
       onTranscript(text, null);
     },
     onError: (msg) => {
+      clearMaxDurationTimer();
       setErrorWithAutoReset(msg);
     },
   });
@@ -404,6 +414,7 @@ export function useVoiceRecording({
 
   const stopRecording = useCallback(() => {
     stopDurationTimer();
+    clearMaxDurationTimer();
 
     if (mode === 'live') {
       liveTranscription.stopStreaming();
@@ -417,10 +428,11 @@ export function useVoiceRecording({
       mediaRecorderRef.current.stop();
       // onstop handler continues the flow
     }
-  }, [mode, stopDurationTimer, stopAmplitudeAnalysis, liveTranscription]);
+  }, [mode, stopDurationTimer, clearMaxDurationTimer, stopAmplitudeAnalysis, liveTranscription]);
 
   const cancelRecording = useCallback(() => {
     stopDurationTimer();
+    clearMaxDurationTimer();
 
     if (mode === 'live') {
       liveTranscription.cancelStreaming();
@@ -443,7 +455,14 @@ export function useVoiceRecording({
     setStatus('idle');
     setError(null);
     setDurationMs(0);
-  }, [mode, stopDurationTimer, stopAmplitudeAnalysis, liveTranscription, cleanupMedia]);
+  }, [
+    mode,
+    stopDurationTimer,
+    clearMaxDurationTimer,
+    stopAmplitudeAnalysis,
+    liveTranscription,
+    cleanupMedia,
+  ]);
 
   return {
     status,

@@ -232,16 +232,15 @@ async def run_proxy_session(
                         user_id=user_id_str,
                     )
 
-    except Exception as exc:
-        logger.warning(
+    except Exception:
+        logger.exception(
             "transcription_ws_elevenlabs_connection_error",
-            error=str(exc),
             user_id=user_id_str,
             workspace_id=ws_uuid_str,
         )
         with suppress(Exception):
             await ws_browser.send_text(
-                json.dumps({"type": "error", "message": f"ElevenLabs connection failed: {exc}"})
+                json.dumps({"type": "error", "message": "Speech service temporarily unavailable"})
             )
 
     finally:
