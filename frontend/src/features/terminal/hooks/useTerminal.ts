@@ -112,12 +112,24 @@ export function useTerminal(containerRef: React.RefObject<HTMLDivElement | null>
       });
 
       // --- Wire ResizeObserver to keep PTY dimensions in sync ---
-      // Pre-import resizeTerminal so the ResizeObserver callback (sync) can call it
+      // Debounced to avoid IPC flooding during continuous resize (e.g., dragging a divider).
+      // Also skips the IPC call if dimensions haven't actually changed.
+      let resizeTimer: ReturnType<typeof setTimeout> | null = null;
+      let lastRows = rows;
+      let lastCols = cols;
       const resizeObs = new ResizeObserver(() => {
-        if (!fitAddonRef.current || !termRef.current) return;
-        fitAddonRef.current.fit();
-        // Fire-and-forget: resize is best-effort, not critical
-        void resizeTerminal(session.session_id, termRef.current.rows, termRef.current.cols);
+        if (resizeTimer) clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+          if (!fitAddonRef.current || !termRef.current) return;
+          fitAddonRef.current.fit();
+          const newRows = termRef.current.rows;
+          const newCols = termRef.current.cols;
+          if (newRows !== lastRows || newCols !== lastCols) {
+            lastRows = newRows;
+            lastCols = newCols;
+            void resizeTerminal(session.session_id, newRows, newCols);
+          }
+        }, 150);
       });
 
       if (containerRef.current) {

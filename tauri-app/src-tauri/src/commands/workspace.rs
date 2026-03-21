@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use tauri_plugin_store::StoreExt;
 
-const WORKSPACE_STORE: &str = "workspace-config.json";
+use super::WORKSPACE_STORE;
 
 /// A project managed by Pilot Space — either cloned by the app or linked by the user.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
@@ -112,21 +112,7 @@ pub async fn link_repo(app: tauri::AppHandle, path: String) -> Result<ProjectEnt
     };
 
     // Append to the projects array in the Store
-    let store = app.store(WORKSPACE_STORE).map_err(|e| e.to_string())?;
-    let mut projects: Vec<serde_json::Value> = store
-        .get("projects")
-        .and_then(|v| serde_json::from_value(v).ok())
-        .unwrap_or_default();
-
-    let entry_json =
-        serde_json::to_value(&entry).map_err(|e| format!("Serialization error: {e}"))?;
-    projects.push(entry_json);
-
-    store.set(
-        "projects",
-        serde_json::to_value(&projects).map_err(|e| e.to_string())?,
-    );
-    store.save().map_err(|e| e.to_string())?;
+    append_project_to_store(&app, &entry)?;
 
     Ok(entry)
 }
@@ -142,9 +128,31 @@ pub async fn list_projects(app: tauri::AppHandle) -> Result<Vec<ProjectEntry>, S
     Ok(projects)
 }
 
+/// Appends a `ProjectEntry` to the "projects" array in `workspace-config.json` Store.
+pub(crate) fn append_project_to_store(
+    app: &tauri::AppHandle,
+    entry: &ProjectEntry,
+) -> Result<(), String> {
+    let store = app.store(WORKSPACE_STORE).map_err(|e| e.to_string())?;
+    let mut projects: Vec<serde_json::Value> = store
+        .get("projects")
+        .and_then(|v| serde_json::from_value(v).ok())
+        .unwrap_or_default();
+
+    let entry_json = serde_json::to_value(entry).map_err(|e| e.to_string())?;
+    projects.push(entry_json);
+
+    store.set(
+        "projects",
+        serde_json::to_value(&projects).map_err(|e| e.to_string())?,
+    );
+    store.save().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// Parse the origin remote URL from `.git/config` by reading the config file directly.
 /// Returns an empty string if no `[remote "origin"]` section is found.
-fn extract_remote_url(repo_path: &PathBuf) -> String {
+pub(crate) fn extract_remote_url(repo_path: &PathBuf) -> String {
     let config_path = repo_path.join(".git").join("config");
     let content = match std::fs::read_to_string(&config_path) {
         Ok(c) => c,

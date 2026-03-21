@@ -173,7 +173,9 @@ export class GitStore {
       const { gitPull } = await import('@/lib/tauri');
       const result = await gitPull(this.repoPath, (progress) => {
         runInAction(() => {
-          this.pullProgress = progress;
+          if (this.pullProgress?.pct !== progress.pct) {
+            this.pullProgress = progress;
+          }
         });
       });
       runInAction(() => {
@@ -204,7 +206,9 @@ export class GitStore {
       const { gitPush } = await import('@/lib/tauri');
       await gitPush(this.repoPath, (progress) => {
         runInAction(() => {
-          this.pushProgress = progress;
+          if (this.pushProgress?.pct !== progress.pct) {
+            this.pushProgress = progress;
+          }
         });
       });
       runInAction(() => {

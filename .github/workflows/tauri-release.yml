@@ -31,13 +31,13 @@ jobs:
     name: Sidecar ${{ matrix.target_triple }}
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
 
-      - uses: astral-sh/setup-uv@v4
+      - uses: astral-sh/setup-uv@e4db8464a088ece1b920f60402e813ea4de65b8f # v4
 
       - name: Build sidecar
         working-directory: cli
@@ -59,7 +59,7 @@ jobs:
           cp -r cli/dist/pilot-cli/. "$BUNDLE_DIR/"
           rm -f "$BUNDLE_DIR/pilot-cli${BINARY_EXT}"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: sidecar-${{ matrix.target_triple }}
           path: sidecar-output/
@@ -88,7 +88,7 @@ jobs:
     name: Release ${{ matrix.artifact-name }}
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Install Linux system dependencies
         if: matrix.platform == 'ubuntu-22.04'
@@ -100,24 +100,24 @@ jobs:
             librsvg2-dev \
             patchelf
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '20'
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@02f6c237bd2518259fed6c71566509edfb3f2b74 # v4
         with:
           version: 9
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable
         with:
           targets: ${{ matrix.target }}
 
-      - uses: swatinem/rust-cache@v2
+      - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
         with:
           workspaces: './tauri-app/src-tauri -> target'
 
       - name: Download sidecar artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: sidecar-${{ matrix.target }}
           path: tauri-app/src-tauri/binaries/
@@ -158,7 +158,7 @@ jobs:
               -kvs $env:AZURE_KEY_VAULT_CLIENT_SECRET `
               -kvt $env:AZURE_KEY_VAULT_TENANT_ID `
               -kvc $env:AZURE_KEY_VAULT_CERT_NAME `
-              -tr "http://timestamp.digicert.com" -td sha256 `
+              -tr "https://timestamp.digicert.com" -td sha256 `
               $sidecar
           }
 
@@ -180,7 +180,7 @@ jobs:
       #   3. Add TAURI_SIGNING_PRIVATE_KEY_PASSWORD to GitHub repo secrets
       #   4. Add the public key output to tauri.conf.json plugins.updater.pubkey
       - name: Build and release Tauri app
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@fce9c6108b31ea247710505d3aaaa893ee6768d4 # v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NEXT_TAURI: 'true'

@@ -1,6 +1,6 @@
 use tauri_plugin_store::StoreExt;
 
-const KEYCHAIN_SERVICE: &str = "io.pilotspace.app";
+use super::KEYCHAIN_SERVICE;
 const KEYCHAIN_ACCOUNT_ACCESS: &str = "access_token";
 const KEYCHAIN_ACCOUNT_REFRESH: &str = "refresh_token";
 

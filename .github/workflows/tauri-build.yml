@@ -37,7 +37,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Install Linux system dependencies
         if: matrix.platform == 'ubuntu-22.04'
@@ -50,22 +50,22 @@ jobs:
             patchelf
 
       - name: Install Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '20'
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@02f6c237bd2518259fed6c71566509edfb3f2b74 # v4
         with:
           version: 9
 
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable
         with:
           targets: ${{ matrix.target }}
 
       - name: Cache Rust build artifacts
-        uses: swatinem/rust-cache@v2
+        uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
         with:
           workspaces: './tauri-app/src-tauri -> target'
 
@@ -78,7 +78,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Download sidecar artifact (pilot-cli)
-        uses: dawidd6/action-download-artifact@v6
+        uses: dawidd6/action-download-artifact@bf251b5aa9c2f7eeb574a96ee720e24f801b7c11 # v6
         with:
           workflow: pilot-cli-build.yml
           commit: ${{ github.sha }}
@@ -126,7 +126,7 @@ jobs:
               -kvs $env:AZURE_KEY_VAULT_CLIENT_SECRET `
               -kvt $env:AZURE_KEY_VAULT_TENANT_ID `
               -kvc $env:AZURE_KEY_VAULT_CERT_NAME `
-              -tr "http://timestamp.digicert.com" `
+              -tr "https://timestamp.digicert.com" `
               -td sha256 `
               $sidecar
             Write-Host "Signed sidecar: $sidecar"
@@ -135,7 +135,7 @@ jobs:
           }
 
       - name: Build Tauri app
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@fce9c6108b31ea247710505d3aaaa893ee6768d4 # v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NEXT_TAURI: 'true'
@@ -159,7 +159,7 @@ jobs:
           args: '--target ${{ matrix.target }}'
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ matrix.artifact-name }}
           path: |

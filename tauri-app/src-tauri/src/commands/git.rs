@@ -10,14 +10,12 @@ use git2::{
     ObjectType, PushOptions, RemoteCallbacks, Repository, Signature, StatusOptions,
 };
 use tauri::ipc::Channel;
-use tauri_plugin_store::StoreExt;
 
-use crate::commands::workspace::ProjectEntry;
+use super::KEYCHAIN_SERVICE;
+use crate::commands::workspace::{self, ProjectEntry};
 
-const KEYCHAIN_SERVICE: &str = "io.pilotspace.app";
 const KEYCHAIN_GIT_ACCOUNT: &str = "git_pat";
 const KEYCHAIN_GIT_USERNAME: &str = "git_username";
-const WORKSPACE_STORE: &str = "workspace-config.json";
 
 /// Progress event sent to the frontend via Channel during a git operation.
 #[derive(serde::Serialize, Clone)]
@@ -95,10 +93,48 @@ fn get_cancel_flag() -> Arc<AtomicBool> {
 
 // ── Credential helper ────────────────────────────────────────────────────────
 
+/// Create a credential callback that reads PAT from the OS keychain.
+/// Capped at 3 attempts to avoid infinite credential loops.
+fn keychain_credentials_callback(
+) -> impl FnMut(&str, Option<&str>, CredentialType) -> Result<Cred, git2::Error> {
+    let attempt_count: Cell<u32> = Cell::new(0);
+
+    move |_url, username_from_url, allowed_types| {
+        let attempt = attempt_count.get();
+        if attempt >= 3 {
+            return Err(git2::Error::from_str(
+                "Authentication failed after 3 attempts — check credentials via set_git_credentials",
+            ));
+        }
+        attempt_count.set(attempt + 1);
+
+        if allowed_types.contains(CredentialType::USER_PASS_PLAINTEXT) {
+            let pat = keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_GIT_ACCOUNT)
+                .and_then(|e| e.get_password())
+                .ok();
+
+            let username = keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_GIT_USERNAME)
+                .and_then(|e| e.get_password())
+                .ok()
+                .or_else(|| username_from_url.map(String::from))
+                .unwrap_or_else(|| "git".to_string());
+
+            match pat {
+                Some(p) => Cred::userpass_plaintext(&username, &p),
+                None => Err(git2::Error::from_str(
+                    "No git credentials configured — use set_git_credentials first",
+                )),
+            }
+        } else {
+            Err(git2::Error::from_str(
+                "Only HTTPS PAT authentication is supported",
+            ))
+        }
+    }
+}
+
 /// Build a `RemoteCallbacks` with the keychain credential callback and an optional transfer
 /// progress handler that sends `GitProgress` events over `channel`.
-///
-/// The attempt counter is capped at 3 to avoid infinite credential loops.
 ///
 /// `progress_scale` maps the raw `received_objects/total_objects` 0–100 range into the
 /// caller-supplied `[progress_offset, progress_offset + progress_range]` range so that pull
@@ -135,40 +171,7 @@ fn build_callbacks(
         });
     }
 
-    let attempt_count: Cell<u32> = Cell::new(0);
-
-    callbacks.credentials(move |_url, username_from_url, allowed_types| {
-        let attempt = attempt_count.get();
-        if attempt >= 3 {
-            return Err(git2::Error::from_str(
-                "Authentication failed after 3 attempts — check credentials via set_git_credentials",
-            ));
-        }
-        attempt_count.set(attempt + 1);
-
-        if allowed_types.contains(CredentialType::USER_PASS_PLAINTEXT) {
-            let pat = keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_GIT_ACCOUNT)
-                .and_then(|e| e.get_password())
-                .ok();
-
-            let username = keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_GIT_USERNAME)
-                .and_then(|e| e.get_password())
-                .ok()
-                .or_else(|| username_from_url.map(String::from))
-                .unwrap_or_else(|| "git".to_string());
-
-            match pat {
-                Some(p) => Cred::userpass_plaintext(&username, &p),
-                None => Err(git2::Error::from_str(
-                    "No git credentials configured — use set_git_credentials first",
-                )),
-            }
-        } else {
-            Err(git2::Error::from_str(
-                "Only HTTPS PAT authentication is supported",
-            ))
-        }
-    });
+    callbacks.credentials(keychain_credentials_callback());
 
     callbacks
 }
@@ -199,7 +202,7 @@ pub async fn git_clone(
     let on_progress_clone = on_progress.clone();
 
     // Run all git2 operations on a blocking thread — Repository is NOT Send
-    let result = tauri::async_runtime::spawn_blocking(move || {
+    tauri::async_runtime::spawn_blocking(move || {
         let cancel = cancel_flag;
         let prog = on_progress_clone;
 
@@ -235,42 +238,7 @@ pub async fn git_clone(
             true
         });
 
-        // Credential callback with loop detection (max 3 attempts)
-        let attempt_count: Cell<u32> = Cell::new(0);
-
-        callbacks.credentials(move |_url, username_from_url, allowed_types| {
-            let attempt = attempt_count.get();
-            if attempt >= 3 {
-                return Err(git2::Error::from_str(
-                    "Authentication failed after 3 attempts — check credentials via set_git_credentials",
-                ));
-            }
-            attempt_count.set(attempt + 1);
-
-            if allowed_types.contains(CredentialType::USER_PASS_PLAINTEXT) {
-                // Read PAT from OS keychain
-                let pat = keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_GIT_ACCOUNT)
-                    .and_then(|e| e.get_password())
-                    .ok();
-
-                let username = keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_GIT_USERNAME)
-                    .and_then(|e| e.get_password())
-                    .ok()
-                    .or_else(|| username_from_url.map(String::from))
-                    .unwrap_or_else(|| "git".to_string());
-
-                match pat {
-                    Some(p) => Cred::userpass_plaintext(&username, &p),
-                    None => Err(git2::Error::from_str(
-                        "No git credentials configured — use set_git_credentials first",
-                    )),
-                }
-            } else {
-                Err(git2::Error::from_str(
-                    "Only HTTPS PAT authentication is supported",
-                ))
-            }
-        });
+        callbacks.credentials(keychain_credentials_callback());
 
         let mut fo = FetchOptions::new();
         fo.remote_callbacks(callbacks);
@@ -297,7 +265,7 @@ pub async fn git_clone(
         .unwrap_or_else(|| "unknown".to_string());
 
     // Extract remote URL from the cloned repo's .git/config
-    let remote_url = extract_remote_url_from_path(&target_path);
+    let remote_url = workspace::extract_remote_url(&target_path);
 
     let entry = ProjectEntry {
         name,
@@ -308,9 +276,7 @@ pub async fn git_clone(
     };
 
     // Append to projects array in Store (non-fatal if Store write fails)
-    let _ = append_project_to_store(&app, entry);
-
-    let _ = result; // result is () — satisfying the lint
+    let _ = workspace::append_project_to_store(&app, &entry);
 
     Ok(())
 }
@@ -571,40 +537,7 @@ pub async fn git_push(
             }
         });
 
-        // Credential callback (identical to git_clone / git_pull pattern)
-        let attempt_count: Cell<u32> = Cell::new(0);
-        callbacks.credentials(move |_url, username_from_url, allowed_types| {
-            let attempt = attempt_count.get();
-            if attempt >= 3 {
-                return Err(git2::Error::from_str(
-                    "Authentication failed after 3 attempts — check credentials via set_git_credentials",
-                ));
-            }
-            attempt_count.set(attempt + 1);
-
-            if allowed_types.contains(CredentialType::USER_PASS_PLAINTEXT) {
-                let pat = keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_GIT_ACCOUNT)
-                    .and_then(|e| e.get_password())
-                    .ok();
-
-                let username = keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_GIT_USERNAME)
-                    .and_then(|e| e.get_password())
-                    .ok()
-                    .or_else(|| username_from_url.map(String::from))
-                    .unwrap_or_else(|| "git".to_string());
-
-                match pat {
-                    Some(p) => Cred::userpass_plaintext(&username, &p),
-                    None => Err(git2::Error::from_str(
-                        "No git credentials configured — use set_git_credentials first",
-                    )),
-                }
-            } else {
-                Err(git2::Error::from_str(
-                    "Only HTTPS PAT authentication is supported",
-                ))
-            }
-        });
+        callbacks.credentials(keychain_credentials_callback());
 
         let mut push_opts = PushOptions::new();
         push_opts.remote_callbacks(callbacks);
@@ -1116,53 +1049,6 @@ pub async fn git_commit(repo_path: String, message: String) -> Result<String, St
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
-
-/// Parse the origin remote URL from `.git/config` in a cloned repository.
-fn extract_remote_url_from_path(repo_path: &PathBuf) -> String {
-    let config_path = repo_path.join(".git").join("config");
-    let content = match std::fs::read_to_string(&config_path) {
-        Ok(c) => c,
-        Err(_) => return String::new(),
-    };
-
-    let mut in_origin_remote = false;
-    for line in content.lines() {
-        let trimmed = line.trim();
-        if trimmed == r#"[remote "origin"]"# {
-            in_origin_remote = true;
-            continue;
-        }
-        if in_origin_remote && trimmed.starts_with('[') {
-            break;
-        }
-        if in_origin_remote {
-            if let Some(rest) = trimmed.strip_prefix("url = ") {
-                return rest.trim().to_string();
-            }
-        }
-    }
-    String::new()
-}
-
-/// Appends a `ProjectEntry` to the "projects" array in `workspace-config.json` Store.
-/// Non-fatal — Store write failures are silently ignored (the clone itself succeeded).
-fn append_project_to_store(app: &tauri::AppHandle, entry: ProjectEntry) -> Result<(), String> {
-    let store = app.store(WORKSPACE_STORE).map_err(|e| e.to_string())?;
-    let mut projects: Vec<serde_json::Value> = store
-        .get("projects")
-        .and_then(|v| serde_json::from_value(v).ok())
-        .unwrap_or_default();
-
-    let entry_json = serde_json::to_value(&entry).map_err(|e| e.to_string())?;
-    projects.push(entry_json);
-
-    store.set(
-        "projects",
-        serde_json::to_value(&projects).map_err(|e| e.to_string())?,
-    );
-    store.save().map_err(|e| e.to_string())?;
-    Ok(())
-}
 
 /// Compute ahead/behind counts relative to the upstream tracking branch.
 /// Returns `(0, 0)` if there is no upstream or any lookup fails.

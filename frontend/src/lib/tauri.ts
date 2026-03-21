@@ -532,6 +532,10 @@ export interface UpdateInfo {
   body: string | null;
 }
 
+// Cache the update handle to avoid a redundant network request in downloadAndInstallUpdate.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let cachedUpdateHandle: any = null;
+
 /**
  * Check for app updates via tauri-plugin-updater.
  * Returns update info if available, or null if up to date / not in Tauri mode.
@@ -542,6 +546,7 @@ export async function checkForUpdates(): Promise<UpdateInfo | null> {
   try {
     const { check } = await import('@tauri-apps/plugin-updater');
     const update = await check();
+    cachedUpdateHandle = update;
     if (update) {
       return {
         available: true,
@@ -560,14 +565,19 @@ export async function checkForUpdates(): Promise<UpdateInfo | null> {
 
 /**
  * Download and install the available update.
- * Downloads in background, then installs on next restart.
+ * Reuses the cached update handle from checkForUpdates() to avoid a second network request.
+ * Falls back to a fresh check() if no cached handle is available.
  * Caller should prompt user before calling this.
  */
 export async function downloadAndInstallUpdate(): Promise<void> {
   if (!isTauri()) return;
-  const { check } = await import('@tauri-apps/plugin-updater');
-  const update = await check();
+  let update = cachedUpdateHandle;
+  if (!update) {
+    const { check } = await import('@tauri-apps/plugin-updater');
+    update = await check();
+  }
   if (update) {
     await update.downloadAndInstall();
+    cachedUpdateHandle = null;
   }
 }
