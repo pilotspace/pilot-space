@@ -517,11 +517,11 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
                         "costUsd": getattr(message, "total_cost_usd", None),
                     }
                 )
-            if usage:
+            if input_tokens or output_tokens:
                 self._last_stream_usage = {
-                    "inputTokens": getattr(usage, "input_tokens", 0) or 0,
-                    "outputTokens": getattr(usage, "output_tokens", 0) or 0,
-                    "costUsd": getattr(usage, "total_cost_usd", None),
+                    "inputTokens": input_tokens,
+                    "outputTokens": output_tokens,
+                    "costUsd": getattr(message, "total_cost_usd", None),
                 }
 
         return transform_sdk_message_helper(
