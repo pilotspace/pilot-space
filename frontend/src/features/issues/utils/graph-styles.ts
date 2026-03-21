@@ -1,5 +1,5 @@
 /**
- * graph-styles.ts — shared node type style configuration and d3-force layout utility
+ * graph-styles.ts — shared node type style configuration and tree layout utility
  * for knowledge graph rendering.
  *
  * Colors aligned with Pilot Space design tokens (globals.css):
@@ -15,7 +15,6 @@
  */
 
 import type { Node, Edge } from '@xyflow/react';
-import * as d3Force from 'd3-force';
 import type {
   GraphNodeType,
   GraphNodeDTO,
@@ -306,11 +305,7 @@ export function truncateLabel(label: string, maxChars: number): string {
   return truncated.slice(0, -1) + '\u2026';
 }
 
-// ── Shared d3-force layout ─────────────────────────────────────────────────
-
-interface SimNode extends d3Force.SimulationNodeDatum {
-  id: string;
-}
+// ── Shared tree layout ─────────────────────────────────────────────────────
 
 export interface ForceLayoutOptions {
   width: number;
@@ -319,21 +314,23 @@ export interface ForceLayoutOptions {
   centerNodeId: string;
   /** Optional node ID to mark as highlighted */
   highlightNodeId?: string;
-  /** d3 link distance (default: 70) */
+  /** Horizontal gap between sibling nodes (default: 160) */
   linkDistance?: number;
-  /** d3 charge strength (default: -100) */
+  /** Vertical gap between parent-child tiers (default: 100) */
   chargeStrength?: number;
-  /** d3 collision radius (default: 32) */
+  /** Not used in tree layout — kept for API compat */
   collisionRadius?: number;
   /** Edge strokeWidth (default: 1.5) */
   edgeStrokeWidth?: number;
 }
 
 /**
- * Runs a synchronous d3-force simulation to compute node positions,
- * then returns ReactFlow Node and Edge arrays ready for rendering.
+ * Computes a grid-based tree layout for the knowledge graph.
  *
- * Intended to be called inside startTransition() to avoid blocking the main thread.
+ * Structure: project nodes are roots displayed as section headers.
+ * Children (issues/notes/cycles) are arranged in a grid below each
+ * project, wrapping after COLS columns. Multiple project trees are
+ * stacked vertically. Orphan nodes (no parent) appear at the bottom.
  */
 export function computeForceLayout(
   graphNodes: GraphNodeDTO[],
@@ -342,47 +339,113 @@ export function computeForceLayout(
 ): [Node[], Edge[]] {
   if (graphNodes.length === 0) return [[], []];
 
-  const {
-    width,
-    height,
-    centerNodeId,
-    highlightNodeId,
-    linkDistance = 70,
-    chargeStrength = -100,
-    collisionRadius = 32,
-    edgeStrokeWidth = 1.5,
-  } = options;
+  const { centerNodeId, highlightNodeId, edgeStrokeWidth = 1.5 } = options;
 
-  const simNodes: SimNode[] = graphNodes.map((n) => ({
-    id: n.id,
-    x: width / 2 + (Math.random() - 0.5) * 30,
-    y: height / 2 + (Math.random() - 0.5) * 30,
-  }));
-
-  // Use a Set for O(1) edge validity checks instead of O(n) .some()
   const validIds = new Set(graphNodes.map((n) => n.id));
-  // Filter once and reuse for both simulation links and ReactFlow edges.
   const validEdges = graphEdges.filter((e) => validIds.has(e.sourceId) && validIds.has(e.targetId));
-  const simLinks = validEdges.map((e) => ({ source: e.sourceId, target: e.targetId }));
 
-  const simulation = d3Force
-    .forceSimulation<SimNode>(simNodes)
-    .force(
-      'link',
-      d3Force
-        .forceLink<SimNode, d3Force.SimulationLinkDatum<SimNode>>(simLinks)
-        .id((d) => d.id)
-        .distance(linkDistance)
-    )
-    .force('charge', d3Force.forceManyBody().strength(chargeStrength))
-    .force('center', d3Force.forceCenter(width / 2, height / 2))
-    .force('collision', d3Force.forceCollide(collisionRadius));
+  // Build parent→children adjacency from edges.
+  // BELONGS_TO: source (child) → target (parent project)
+  // PARENT_OF: source (parent) → target (child chunk)
+  const childToParent = new Map<string, string>();
+  for (const e of validEdges) {
+    if (e.edgeType === 'belongs_to') {
+      childToParent.set(e.sourceId, e.targetId);
+    } else if (e.edgeType === 'parent_of') {
+      childToParent.set(e.targetId, e.sourceId);
+    }
+  }
 
-  simulation.stop();
-  for (let i = 0; i < 300; i++) simulation.tick();
+  // Group children under each parent
+  const parentChildren = new Map<string, string[]>();
+  for (const [childId, parentId] of childToParent) {
+    const list = parentChildren.get(parentId) ?? [];
+    list.push(childId);
+    parentChildren.set(parentId, list);
+  }
 
-  const posMap = new Map(simNodes.map((n) => [n.id, { x: n.x ?? 0, y: n.y ?? 0 }]));
+  // Find root nodes: nodes that are parents but not children, or project nodes
+  const rootIds: string[] = [];
+  const orphanIds: string[] = [];
+  for (const n of graphNodes) {
+    if (childToParent.has(n.id)) continue; // has a parent — not a root
+    if (parentChildren.has(n.id)) {
+      rootIds.push(n.id); // has children — is a root
+    } else {
+      orphanIds.push(n.id); // no parent, no children — orphan
+    }
+  }
 
+  // If centerNodeId is set and is in the graph, ensure it's treated as root
+  // (issue-scoped view: the issue is the center, its neighbors are children)
+  if (centerNodeId && validIds.has(centerNodeId) && !rootIds.includes(centerNodeId)) {
+    // For issue-scoped graphs, the center node is the root
+    // Move it from orphans to roots if needed
+    const idx = orphanIds.indexOf(centerNodeId);
+    if (idx >= 0) orphanIds.splice(idx, 1);
+    if (!rootIds.includes(centerNodeId)) rootIds.unshift(centerNodeId);
+  }
+
+  // Layout configuration — grid-based tree
+  const CHILD_W = 140; // horizontal space per child node
+  const CHILD_H = 56; // vertical space per child row
+  const COLS = 6; // children per row before wrapping
+  const ROOT_CHILD_GAP = 70; // vertical gap between root and first child row
+  const TREE_GAP = 60; // vertical gap between separate project trees
+
+  const posMap = new Map<string, { x: number; y: number }>();
+  const visited = new Set<string>();
+  let yOffset = 0;
+
+  for (const rootId of rootIds) {
+    visited.add(rootId);
+    const children = (parentChildren.get(rootId) ?? []).filter((c) => !visited.has(c));
+    children.forEach((c) => visited.add(c));
+
+    // Determine grid dimensions
+    const cols = Math.min(COLS, Math.max(children.length, 1));
+    const gridWidth = cols * CHILD_W;
+
+    // Place root node centered above the grid
+    posMap.set(rootId, { x: gridWidth / 2, y: yOffset });
+
+    // Place children in a grid below the root
+    children.forEach((childId, i) => {
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      posMap.set(childId, {
+        x: col * CHILD_W + CHILD_W / 2,
+        y: yOffset + ROOT_CHILD_GAP + row * CHILD_H,
+      });
+
+      // Place grandchildren (chunks) below their parent
+      const grandchildren = (parentChildren.get(childId) ?? []).filter((g) => !visited.has(g));
+      grandchildren.forEach((gcId, j) => {
+        visited.add(gcId);
+        posMap.set(gcId, {
+          x: col * CHILD_W + CHILD_W / 2 + (j - (grandchildren.length - 1) / 2) * 90,
+          y: yOffset + ROOT_CHILD_GAP + row * CHILD_H + CHILD_H,
+        });
+      });
+    });
+
+    const rows = Math.ceil(children.length / cols);
+    yOffset += ROOT_CHILD_GAP + rows * CHILD_H + TREE_GAP;
+  }
+
+  // Place orphan nodes in a row at the bottom
+  if (orphanIds.length > 0) {
+    let orphanX = 0;
+    for (const id of orphanIds) {
+      if (!visited.has(id)) {
+        posMap.set(id, { x: orphanX, y: yOffset });
+        orphanX += CHILD_W;
+        visited.add(id);
+      }
+    }
+  }
+
+  // Build ReactFlow nodes
   const nodes: Node[] = graphNodes.map((n) => ({
     id: n.id,
     type: 'graphNode',
@@ -394,8 +457,7 @@ export function computeForceLayout(
     },
   }));
 
-  // Only show labels on semantically significant edge types — the rest
-  // communicate relationship via stroke style (solid/dashed/dotted).
+  // Build ReactFlow edges — only show labels on semantically significant types
   const LABELED_EDGE_TYPES = new Set(['blocks', 'caused_by', 'duplicates']);
 
   const edges: Edge[] = validEdges.map((e) => {
