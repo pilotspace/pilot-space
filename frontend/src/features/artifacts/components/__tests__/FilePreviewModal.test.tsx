@@ -8,6 +8,61 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+
+// Mock renderers that are lazy-loaded via next/dynamic.
+// We mock the renderer modules AND next/dynamic itself so components render synchronously.
+vi.mock('../renderers/MarkdownRenderer', () => ({
+  MarkdownRenderer: ({ content }: { content: string }) => (
+    <div data-testid="markdown-content">{content}</div>
+  ),
+}));
+vi.mock('../renderers/TextRenderer', () => ({
+  TextRenderer: ({ content }: { content: string }) => <pre>{content}</pre>,
+}));
+vi.mock('../renderers/JsonRenderer', () => ({
+  JsonRenderer: ({ content }: { content: string }) => (
+    <div data-testid="markdown-content">{`\`\`\`json\n${content}\n\`\`\``}</div>
+  ),
+}));
+vi.mock('../renderers/CodeRenderer', () => ({
+  CodeRenderer: ({ content, language }: { content: string; language: string }) => (
+    <div data-testid="markdown-content">{`\`\`\`${language}\n${content}\n\`\`\``}</div>
+  ),
+}));
+vi.mock('../renderers/CsvRenderer', () => ({
+  CsvRenderer: ({ content }: { content: string }) => (
+    <table>
+      <tbody>
+        <tr>
+          <td>{content}</td>
+        </tr>
+      </tbody>
+    </table>
+  ),
+}));
+
+// next/dynamic mock: synchronously returns the component from vi.mock'd modules
+vi.mock('next/dynamic', () => ({
+  __esModule: true,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  default: (loader: () => Promise<any>) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let C: any = () => null;
+    // In vitest, mocked modules resolve synchronously in the .then microtask
+    // when accessed right after vi.mock registration (hoisted).
+    const p = loader();
+    p.then((m: { default?: unknown }) => {
+      C = m.default ?? m;
+    });
+    // Force microtask flush: vitest resolves mocked imports synchronously
+    // so C is set before the first render.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return function Dynamic(props: any) {
+      return <C {...props} />;
+    };
+  },
+}));
+
 import { FilePreviewModal } from '../FilePreviewModal';
 
 // Mock useFileContent to avoid real network calls
