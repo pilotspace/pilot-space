@@ -13,7 +13,7 @@
 import * as React from 'react';
 import { observer } from 'mobx-react-lite';
 import { useParams } from 'next/navigation';
-import { AlertCircle, Database, BrainCircuit, CheckCircle2, Circle } from 'lucide-react';
+import { AlertCircle, Database, BrainCircuit, Mic, CheckCircle2, Circle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -181,9 +181,11 @@ const ProviderTabs = observer(function ProviderTabs({ onSaved }: { onSaved: () =
 
   const embeddingProviders = settings.getProvidersByService('embedding');
   const llmProviders = settings.getProvidersByService('llm');
+  const sttProviders = settings.getProvidersByService('stt');
 
   const embeddingConnected = embeddingProviders.some((p) => p.isValid === true);
   const llmConnected = llmProviders.some((p) => p.isValid === true);
+  const sttConnected = sttProviders.some((p) => p.isValid === true);
 
   // Default to LLM tab (primary service)
   const defaultTab = 'llm';
@@ -201,6 +203,11 @@ const ProviderTabs = observer(function ProviderTabs({ onSaved }: { onSaved: () =
           Embedding
           {embeddingConnected && <CheckCircle2 className="h-3 w-3 text-primary" />}
         </TabsTrigger>
+        <TabsTrigger value="stt" className="gap-2 px-4">
+          <Mic className="h-3.5 w-3.5" />
+          Voice
+          {sttConnected && <CheckCircle2 className="h-3 w-3 text-primary" />}
+        </TabsTrigger>
       </TabsList>
 
       <TabsContent value="llm" className="mt-4">
@@ -215,6 +222,14 @@ const ProviderTabs = observer(function ProviderTabs({ onSaved }: { onSaved: () =
         <ProviderSection
           serviceType="embedding"
           description="Used for semantic search, knowledge graph, and RAG."
+          onSaved={onSaved}
+        />
+      </TabsContent>
+
+      <TabsContent value="stt" className="mt-4">
+        <ProviderSection
+          serviceType="stt"
+          description="Used for voice-to-text transcription in AI Chat."
           onSaved={onSaved}
         />
       </TabsContent>

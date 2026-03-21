@@ -5,7 +5,7 @@
  * Falls back to a generic Cpu icon from Lucide for unknown providers.
  */
 
-import { Cpu } from 'lucide-react';
+import { AudioWaveform, Cpu } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface ProviderIconProps {
@@ -83,6 +83,7 @@ const PROVIDER_ICON_COLORS: Record<string, string> = {
   anthropic: 'text-[#191919] dark:text-[#D4A574]', // Anthropic brand
   ollama: 'text-foreground',
   openai: 'text-foreground',
+  elevenlabs: 'text-foreground',
   custom: 'text-muted-foreground',
 };
 
@@ -94,6 +95,7 @@ const PROVIDER_ICON_COMPONENTS: Record<
   anthropic: AnthropicIcon,
   ollama: OllamaIcon,
   openai: OpenAIIcon,
+  elevenlabs: AudioWaveform,
 };
 
 export function ProviderIcon({ provider, className, size = 16 }: ProviderIconProps) {

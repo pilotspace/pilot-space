@@ -26,7 +26,9 @@ import type { WorkspaceAISettingsProvider } from '@/services/api/ai';
 const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
   google: 'Google Gemini',
   anthropic: 'Anthropic',
+  openai: 'OpenAI',
   ollama: 'Ollama',
+  elevenlabs: 'ElevenLabs',
 };
 
 export function StatusBadge({ status }: { status: WorkspaceAISettingsProvider | undefined }) {
@@ -69,7 +71,7 @@ export function StatusBadge({ status }: { status: WorkspaceAISettingsProvider | 
 }
 
 export interface ProviderSectionProps {
-  serviceType: 'embedding' | 'llm';
+  serviceType: 'embedding' | 'llm' | 'stt';
   description: string;
   onSaved: () => void;
 }
