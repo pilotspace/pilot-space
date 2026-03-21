@@ -9,6 +9,11 @@
  * the typed wrappers exported from this module.
  */
 
+// Type-only import — erased at compile time, does NOT cause SSG build failures.
+// The actual module is dynamically imported at runtime inside checkForUpdates()
+// and downloadAndInstallUpdate().
+import type { Update } from '@tauri-apps/plugin-updater';
+
 // --- Types matching Rust structs ---
 
 export interface ProjectEntry {
@@ -533,8 +538,7 @@ export interface UpdateInfo {
 }
 
 // Cache the update handle to avoid a redundant network request in downloadAndInstallUpdate.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let cachedUpdateHandle: any = null;
+let cachedUpdateHandle: Update | null = null;
 
 /**
  * Check for app updates via tauri-plugin-updater.
@@ -571,7 +575,7 @@ export async function checkForUpdates(): Promise<UpdateInfo | null> {
  */
 export async function downloadAndInstallUpdate(): Promise<void> {
   if (!isTauri()) return;
-  let update = cachedUpdateHandle;
+  let update: Update | null = cachedUpdateHandle;
   if (!update) {
     const { check } = await import('@tauri-apps/plugin-updater');
     update = await check();
