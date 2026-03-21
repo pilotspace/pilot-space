@@ -9,7 +9,7 @@
  * Committed transcript is passed to ChatInput via the existing onTranscript callback.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { observer } from 'mobx-react-lite';
 import { Mic, MicOff, Square, Loader2, X } from 'lucide-react';
 import { toast } from 'sonner';
@@ -51,9 +51,6 @@ export const RecordButton = observer(function RecordButton({
   const { aiStore } = useStore();
   const { openSettings } = useSettingsModal();
 
-  // Partial transcript state for live mode — shown in recording pill, not in input
-  const [partialText, setPartialText] = useState('');
-
   // Lazy-load AI settings if not yet loaded so sttConfigured reflects the real state.
   // Without this, sttConfigured defaults to false until the user visits Settings page.
   useEffect(() => {
@@ -77,12 +74,9 @@ export const RecordButton = observer(function RecordButton({
     workspaceId,
     mode: 'live',
     onTranscript: (text, audioUrl) => {
-      // Clear partial text when committed transcript arrives
-      setPartialText('');
       onTranscript(text, audioUrl);
     },
     onPartialTranscript: (text) => {
-      setPartialText(text);
       onPartialTranscript?.(text);
     },
   });
@@ -194,17 +188,6 @@ export const RecordButton = observer(function RecordButton({
               );
             })}
           </div>
-
-          {/* Live partial transcript — visual feedback while speaking */}
-          {partialText && (
-            <span
-              className="text-xs text-red-600/80 dark:text-red-400/80 max-w-[200px] truncate leading-none"
-              aria-live="polite"
-              aria-label={`Partial transcript: ${partialText}`}
-            >
-              {partialText}
-            </span>
-          )}
 
           {/* Elapsed time */}
           <span
