@@ -149,6 +149,7 @@ class GenerateRoleSkillService:
             experience_description=payload.experience_description,
             role_name=payload.role_name,
             workspace_id=payload.workspace_id,
+            user_id=payload.user_id,
         )
 
         if ai_result is not None:
@@ -196,6 +197,7 @@ class GenerateRoleSkillService:
         experience_description: str,
         role_name: str | None,
         workspace_id: UUID | None,
+        user_id: UUID | None = None,
     ) -> tuple[str, str, str, list[str], str | None] | None:
         """Attempt AI-powered generation using the workspace's configured LLM provider.
 
@@ -246,6 +248,7 @@ class GenerateRoleSkillService:
                 retry_config=retry_config,
                 timeout_sec=timeout_sec,
                 workspace_id=workspace_id,
+                user_id=user_id,
             )
         except ProviderUnavailableError as e:
             msg = f"{provider} provider unavailable: {e}"
@@ -271,6 +274,7 @@ class GenerateRoleSkillService:
         retry_config: RetryConfig,
         timeout_sec: float = 30.0,
         workspace_id: UUID | None = None,
+        user_id: UUID | None = None,
     ) -> str:
         """Call LLM via Anthropic API format with provider-specific base_url/api_key."""
         from anthropic import AsyncAnthropic
@@ -314,7 +318,7 @@ class GenerateRoleSkillService:
             await track_cost(
                 self._session,
                 workspace_id=workspace_id,
-                user_id=None,
+                user_id=user_id,
                 agent_name="role_skill_generation",
                 provider=provider,
                 model=model,
