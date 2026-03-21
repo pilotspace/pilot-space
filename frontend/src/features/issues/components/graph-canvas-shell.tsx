@@ -7,6 +7,7 @@
  * Shared by issue, project, and workspace knowledge graph components.
  */
 
+import { useState } from 'react';
 import {
   ReactFlow,
   MiniMap,
@@ -47,6 +48,9 @@ export function GraphCanvasShell({
   emptyStateAction,
   minZoom = 0.3,
 }: GraphCanvasShellProps) {
+  // Incrementing this key remounts the ErrorBoundary, resetting hasError after retry
+  const [retryKey, setRetryKey] = useState(0);
+
   const {
     nodeTypedNodes,
     flowEdges,
@@ -90,8 +94,16 @@ export function GraphCanvasShell({
       {/* Graph canvas */}
       <div className="flex-1 min-h-0">
         <ErrorBoundary
+          key={retryKey}
           fallback={
-            <GraphEmptyState variant="error" height={400} onRetry={() => void onRefetch()} />
+            <GraphEmptyState
+              variant="error"
+              height={400}
+              onRetry={() => {
+                setRetryKey((k) => k + 1);
+                void onRefetch();
+              }}
+            />
           }
         >
           <ReactFlow

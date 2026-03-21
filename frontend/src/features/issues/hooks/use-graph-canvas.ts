@@ -183,13 +183,16 @@ export function useGraphCanvas(options: UseGraphCanvasOptions): UseGraphCanvasRe
   const handleNodeDoubleClick = useCallback(
     async (nodeId: string) => {
       const currentResetKey = resetKeyRef.current;
-      const remaining = maxNodeCap - mergedNodes.length;
-      if (remaining <= 0) {
+      // Pre-flight check — avoids unnecessary API call when already at cap
+      if (maxNodeCap - mergedNodes.length <= 0) {
         toast.warning(
           `Graph limit reached (${maxNodeCap} nodes). Clear filters to reset the view.`
         );
         return;
       }
+      // Capture base node count before the async call so concurrent expansions
+      // each recompute remaining inside the functional updater against live state
+      const baseNodeCount = data?.nodes.length ?? 0;
       try {
         const neighbors = await knowledgeGraphApi.getNodeNeighbors(
           workspaceId,
@@ -201,7 +204,9 @@ export function useGraphCanvas(options: UseGraphCanvasOptions): UseGraphCanvasRe
         setExtraNodes((prev) => {
           const ids = new Set(prev.map((n) => n.id));
           const newNodes = neighbors.nodes.filter((n) => !ids.has(n.id));
-          const nodesToAdd = newNodes.slice(0, remaining);
+          // Recompute from live prev to prevent concurrent expansions exceeding cap
+          const currentRemaining = Math.max(0, maxNodeCap - baseNodeCount - prev.length);
+          const nodesToAdd = newNodes.slice(0, currentRemaining);
           if (newNodes.length > nodesToAdd.length) {
             toast.warning(
               `Graph limit reached (${maxNodeCap} nodes). ${newNodes.length - nodesToAdd.length} nodes were not added.`
@@ -219,7 +224,7 @@ export function useGraphCanvas(options: UseGraphCanvasOptions): UseGraphCanvasRe
         toast.error(`Failed to expand node: ${message}`);
       }
     },
-    [mergedNodes.length, expandDepth, workspaceId, maxNodeCap]
+    [mergedNodes.length, expandDepth, workspaceId, maxNodeCap, data]
   );
 
   // ── Node click → select ───────────────────────────────────────────────
