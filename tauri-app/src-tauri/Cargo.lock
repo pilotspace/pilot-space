@@ -3128,6 +3128,7 @@ dependencies = [
  "tauri-plugin-shell",
  "tauri-plugin-store",
  "tauri-plugin-updater",
+ "tempfile",
  "uuid",
 ]
 

@@ -965,9 +965,17 @@ pub async fn git_stage(repo_path: String, paths: Vec<String>) -> Result<(), Stri
         let mut index = repo.index().map_err(|e| e.to_string())?;
 
         for path in &paths {
-            index
-                .add_path(Path::new(path))
-                .map_err(|e| format!("Failed to stage '{}': {}", path, e))?;
+            let rel = Path::new(path);
+            let abs = Path::new(&repo_path).join(rel);
+            if abs.exists() {
+                index
+                    .add_path(rel)
+                    .map_err(|e| format!("Failed to stage '{}': {}", path, e))?;
+            } else {
+                index
+                    .remove_path(rel)
+                    .map_err(|e| format!("Failed to stage deleted '{}': {}", path, e))?;
+            }
         }
 
         index.write().map_err(|e| e.to_string())?;

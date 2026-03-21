@@ -140,7 +140,15 @@ pub(crate) fn append_project_to_store(
         .unwrap_or_default();
 
     let entry_json = serde_json::to_value(entry).map_err(|e| e.to_string())?;
-    projects.push(entry_json);
+
+    // Deduplicate: if a project with the same path already exists, update it in-place
+    if let Some(pos) = projects.iter().position(|p| {
+        p.get("path").and_then(|v| v.as_str()) == Some(&entry.path)
+    }) {
+        projects[pos] = entry_json;
+    } else {
+        projects.push(entry_json);
+    }
 
     store.set(
         "projects",
@@ -177,4 +185,50 @@ pub(crate) fn extract_remote_url(repo_path: &PathBuf) -> String {
         }
     }
     String::new()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::path::PathBuf;
+
+    fn make_git_config(dir: &PathBuf, content: &str) {
+        let git_dir = dir.join(".git");
+        fs::create_dir_all(&git_dir).unwrap();
+        fs::write(git_dir.join("config"), content).unwrap();
+    }
+
+    #[test]
+    fn test_extract_remote_url_with_origin() {
+        let dir = tempfile::tempdir().unwrap();
+        let dir_path = dir.path().to_path_buf();
+        make_git_config(
+            &dir_path,
+            "[core]\n\trepositoryformatversion = 0\n[remote \"origin\"]\n\turl = git@github.com:pilotspace/pilot-space.git\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n",
+        );
+        let url = extract_remote_url(&dir_path);
+        assert_eq!(url, "git@github.com:pilotspace/pilot-space.git");
+    }
+
+    #[test]
+    fn test_extract_remote_url_no_origin_section() {
+        let dir = tempfile::tempdir().unwrap();
+        let dir_path = dir.path().to_path_buf();
+        make_git_config(
+            &dir_path,
+            "[core]\n\trepositoryformatversion = 0\n[branch \"main\"]\n\trebase = false\n",
+        );
+        let url = extract_remote_url(&dir_path);
+        assert_eq!(url, "");
+    }
+
+    #[test]
+    fn test_extract_remote_url_missing_git_config() {
+        let dir = tempfile::tempdir().unwrap();
+        let dir_path = dir.path().to_path_buf();
+        // No .git/config created — should return empty string
+        let url = extract_remote_url(&dir_path);
+        assert_eq!(url, "");
+    }
 }

@@ -317,3 +317,44 @@ fn detect_default_shell() -> String {
         std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".to_string())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // NOTE: These tests mutate environment variables.
+    // Run with `cargo test -- --test-threads=1` to avoid interference
+    // between tests that modify the same env var.
+
+    #[test]
+    #[cfg(unix)]
+    fn test_detect_default_shell_uses_shell_env() {
+        std::env::set_var("SHELL", "/usr/bin/zsh");
+        let shell = detect_default_shell();
+        assert_eq!(shell, "/usr/bin/zsh");
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_detect_default_shell_fallback_to_bash() {
+        std::env::remove_var("SHELL");
+        let shell = detect_default_shell();
+        assert_eq!(shell, "/bin/bash");
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn test_detect_default_shell_uses_comspec_env() {
+        std::env::set_var("COMSPEC", "C:\\Windows\\System32\\PowerShell.exe");
+        let shell = detect_default_shell();
+        assert_eq!(shell, "C:\\Windows\\System32\\PowerShell.exe");
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn test_detect_default_shell_fallback_to_cmd() {
+        std::env::remove_var("COMSPEC");
+        let shell = detect_default_shell();
+        assert_eq!(shell, "cmd.exe");
+    }
+}
