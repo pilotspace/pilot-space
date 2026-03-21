@@ -15,8 +15,9 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, File, Form, UploadFile, status
 
+from pilot_space.api.utils.file_validation import read_and_validate
 from pilot_space.api.v1.dependencies import TranscriptionServiceDep
 from pilot_space.api.v1.schemas.transcription import TranscribeResponse
 from pilot_space.application.services.transcription import (
@@ -55,31 +56,13 @@ async def transcribe_audio(
     ProviderError) propagate to the global transcription_error_handler
     which returns RFC 7807 application/problem+json responses.
     """
-    # Validate MIME type
-    content_type = (file.content_type or "application/octet-stream").split(";")[0].strip()
-    if content_type not in ALLOWED_MIME_TYPES:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                f"Unsupported audio type '{content_type}'. "
-                f"Allowed: {', '.join(sorted(ALLOWED_MIME_TYPES))}"
-            ),
-        )
-
-    # Read and validate file bytes
-    audio_bytes = await file.read()
-
-    if not audio_bytes:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Audio file is empty",
-        )
-
-    if len(audio_bytes) > MAX_FILE_BYTES:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Audio file exceeds maximum size of {MAX_FILE_BYTES // (1024 * 1024)} MB",
-        )
+    # Validate MIME type, emptiness, and size in one call
+    audio_bytes, content_type = await read_and_validate(
+        file,
+        allowed_mime_types=ALLOWED_MIME_TYPES,
+        max_bytes=MAX_FILE_BYTES,
+        file_label="Audio file",
+    )
 
     # Service exceptions propagate to global handler
     return await service.transcribe(
