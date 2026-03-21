@@ -266,26 +266,33 @@ async def transcribe_stream(
             task_browser = asyncio.create_task(_browser_to_elevenlabs(websocket, ws_elevenlabs))
             task_elevenlabs = asyncio.create_task(_elevenlabs_to_browser(ws_elevenlabs, websocket))
 
-            # Wait for whichever side finishes first, then cancel the other
-            done, pending = await asyncio.wait(
-                {task_browser, task_elevenlabs},
-                return_when=asyncio.FIRST_COMPLETED,
-            )
+            # Wait for the browser relay to finish (either commit or disconnect).
+            # Do NOT cancel the ElevenLabs relay yet — after a commit, ElevenLabs
+            # still needs to send the committed_transcript back.
+            await task_browser
 
-            for task in pending:
-                task.cancel()
-                with suppress(asyncio.CancelledError, Exception):
-                    await task
+            # Now wait for ElevenLabs to send the committed transcript (with timeout)
+            try:
+                await asyncio.wait_for(task_elevenlabs, timeout=15.0)
+            except TimeoutError:
+                logger.warning(
+                    "transcription_ws_committed_timeout",
+                    user_id=str(user_id),
+                )
+                task_elevenlabs.cancel()
+                with suppress(asyncio.CancelledError):
+                    await task_elevenlabs
 
-            # Propagate any exceptions from completed tasks
-            for task in done:
-                exc = task.exception()
-                if exc:
-                    logger.warning(
-                        "transcription_ws_task_error",
-                        error=str(exc),
-                        user_id=str(user_id),
-                    )
+            # Check for exceptions
+            for task in (task_browser, task_elevenlabs):
+                if task.done() and not task.cancelled():
+                    exc = task.exception()
+                    if exc:
+                        logger.warning(
+                            "transcription_ws_task_error",
+                            error=str(exc),
+                            user_id=str(user_id),
+                        )
 
     except Exception as exc:
         logger.warning(

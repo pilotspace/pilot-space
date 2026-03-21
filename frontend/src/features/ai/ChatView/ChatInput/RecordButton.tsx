@@ -24,6 +24,8 @@ interface RecordButtonProps {
   workspaceId: string;
   /** Called with transcript text and audio URL when recording+transcription completes */
   onTranscript: (text: string, audioUrl: string | null) => void;
+  /** Called with partial transcript text while user speaks (live mode only) */
+  onPartialTranscript?: (text: string) => void;
   /** Whether the button is disabled (e.g. during AI streaming) */
   disabled?: boolean;
 }
@@ -43,6 +45,7 @@ const BAR_DELAYS = ['0ms', '60ms', '30ms', '90ms'];
 export const RecordButton = observer(function RecordButton({
   workspaceId,
   onTranscript,
+  onPartialTranscript,
   disabled = false,
 }: RecordButtonProps) {
   const { aiStore } = useStore();
@@ -80,6 +83,7 @@ export const RecordButton = observer(function RecordButton({
     },
     onPartialTranscript: (text) => {
       setPartialText(text);
+      onPartialTranscript?.(text);
     },
   });
 
