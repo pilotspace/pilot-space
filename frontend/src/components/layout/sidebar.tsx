@@ -209,7 +209,7 @@ export const SidebarUserControls = observer(function SidebarUserControls({
 
   if (collapsed) {
     return (
-      <div className="flex items-center justify-center gap-1 border-t border-sidebar-border p-1.5">
+      <div className="flex flex-col items-center gap-1.5 border-t border-sidebar-border p-2">
         <NotificationPanel store={notificationStore} workspaceId={workspaceId} collapsed />
         <DropdownMenu>
           <Tooltip delayDuration={0}>
@@ -399,7 +399,7 @@ export const Sidebar = observer(function Sidebar() {
         <div
           className={cn(
             'flex h-10 items-center gap-2 border-b border-sidebar-border',
-            collapsed ? 'justify-center px-0' : 'px-3'
+            collapsed ? 'justify-center px-2' : 'px-3'
           )}
         >
           <motion.div
@@ -408,9 +408,7 @@ export const Sidebar = observer(function Sidebar() {
           >
             <Compass className="h-5 w-5 text-primary" />
           </motion.div>
-          {collapsed ? (
-            <WorkspaceSwitcher currentSlug={workspaceSlug} collapsed />
-          ) : (
+          {!collapsed && (
             <motion.div
               initial={shouldReduceMotion ? false : { opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
@@ -423,12 +421,12 @@ export const Sidebar = observer(function Sidebar() {
         </div>
 
         {/* Main Navigation */}
-        <div className="flex flex-col gap-0.5 p-2">
+        <div className="flex flex-col gap-1 p-2">
           {navigation.map((section, sectionIndex) => (
             <nav
               key={section.label}
               aria-label={`${section.label} navigation`}
-              className={cn(sectionIndex > 0 && 'mt-3')}
+              className={cn(sectionIndex > 0 && 'mt-4')}
             >
               {!collapsed ? (
                 <div className="mb-1 flex items-center gap-1.5 px-2.5" aria-hidden="true">
@@ -442,7 +440,7 @@ export const Sidebar = observer(function Sidebar() {
               ) : (
                 sectionIndex > 0 && (
                   <div
-                    className="mx-auto mb-1.5 h-px w-4 rounded-full bg-sidebar-border"
+                    className="mx-auto mb-2 h-px w-8 rounded-full bg-sidebar-border"
                     aria-hidden="true"
                   />
                 )
@@ -468,9 +466,15 @@ export const Sidebar = observer(function Sidebar() {
                         className={cn(
                           'group relative flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all duration-200',
                           isActive
-                            ? 'bg-sidebar-accent text-sidebar-primary shadow-warm-sm'
+                            ? [
+                                'bg-sidebar-accent text-sidebar-primary font-semibold',
+                                !collapsed &&
+                                  'before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-4 before:w-[3px] before:rounded-full before:bg-primary',
+                                collapsed &&
+                                  'after:absolute after:bottom-0 after:left-1/2 after:-translate-x-1/2 after:h-[3px] after:w-3 after:rounded-full after:bg-primary',
+                              ]
                             : 'text-sidebar-foreground hover:bg-sidebar-accent/50',
-                          collapsed && 'justify-center px-2'
+                          collapsed && 'justify-center px-0 py-2'
                         )}
                       >
                         <item.icon
@@ -525,12 +529,12 @@ export const Sidebar = observer(function Sidebar() {
         <Separator className="mx-2" />
 
         {/* Notes sections — Project page trees + Personal pages */}
-        <ScrollArea className="flex-1 px-2 py-1.5">
+        <ScrollArea className="flex-1 px-2 py-2">
           {!collapsed && (
             <>
               {/* Pinned Notes */}
-              <div className="mb-3" data-testid="pinned-notes">
-                <div className="mb-1.5 flex items-center gap-1.5 px-1.5">
+              <div className="mb-4" data-testid="pinned-notes">
+                <div className="mb-2 flex items-center gap-1.5 px-1.5">
                   <PinIcon className="h-2.5 w-2.5 text-muted-foreground" />
                   <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                     Pinned
@@ -551,9 +555,9 @@ export const Sidebar = observer(function Sidebar() {
                           data-testid="note-item"
                           aria-current={isActive ? 'page' : undefined}
                           className={cn(
-                            'group flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs transition-colors',
+                            'group relative flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs transition-colors',
                             isActive
-                              ? 'bg-sidebar-accent text-sidebar-primary shadow-warm-sm'
+                              ? 'bg-sidebar-accent text-sidebar-primary font-semibold before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-3.5 before:w-[3px] before:rounded-full before:bg-primary'
                               : 'text-sidebar-foreground hover:bg-sidebar-accent/50'
                           )}
                         >
@@ -590,13 +594,15 @@ export const Sidebar = observer(function Sidebar() {
                   className={cn(
                     'shadow-warm-sm transition-all duration-200',
                     'hover:shadow-warm-md',
-                    collapsed ? 'h-8 w-8' : 'w-full'
+                    collapsed ? 'h-9 w-9' : 'w-full'
                   )}
                 >
                   {createNote.isPending ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    <Loader2
+                      className={cn(collapsed ? 'h-4 w-4' : 'h-3.5 w-3.5', 'animate-spin')}
+                    />
                   ) : (
-                    <Plus className="h-3.5 w-3.5" />
+                    <Plus className={collapsed ? 'h-4 w-4' : 'h-3.5 w-3.5'} />
                   )}
                   {!collapsed && (
                     <span className="ml-1.5 text-xs">
@@ -620,7 +626,7 @@ export const Sidebar = observer(function Sidebar() {
         />
 
         {/* Collapse Toggle — close button on mobile, chevron toggle on desktop */}
-        <div className="border-t border-sidebar-border p-1.5">
+        <div className="border-t border-sidebar-border p-2">
           <Tooltip delayDuration={0}>
             <TooltipTrigger asChild>
               <Button
@@ -637,7 +643,7 @@ export const Sidebar = observer(function Sidebar() {
                       : 'Collapse sidebar'
                 }
                 className={cn(
-                  'h-6 w-full justify-center text-muted-foreground hover:text-sidebar-foreground',
+                  'h-8 w-full justify-center text-muted-foreground hover:text-sidebar-foreground',
                   collapsed && 'px-2'
                 )}
               >
