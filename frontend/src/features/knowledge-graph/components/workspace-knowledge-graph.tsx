@@ -9,12 +9,16 @@
 
 import { useCallback, useEffect, useState, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { RefreshCw } from 'lucide-react';
 import { ReactFlowProvider } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+import { toast } from 'sonner';
 
 import { GraphCanvasShell } from '@/features/issues/components/graph-canvas-shell';
 import { useGraphCanvas } from '@/features/issues/hooks/use-graph-canvas';
 import { useWorkspaceKnowledgeGraph } from '@/features/knowledge-graph/hooks/useWorkspaceKnowledgeGraph';
+import { knowledgeGraphApi } from '@/services/api/knowledge-graph';
+import { apiClient } from '@/services/api/client';
 import type { FilterChip } from '@/features/issues/utils/graph-shared';
 import type { GraphNodeType } from '@/types/knowledge-graph';
 
@@ -42,6 +46,8 @@ interface CanvasProps {
   maxNodes: number;
   onNodeCountChange: (count: number) => void;
   onNavigate: (nodeType: string, entityId: string) => void;
+  onRegenerate: () => void;
+  isRegenerating: boolean;
 }
 
 function WorkspaceGraphCanvas({
@@ -50,6 +56,8 @@ function WorkspaceGraphCanvas({
   maxNodes,
   onNodeCountChange,
   onNavigate,
+  onRegenerate,
+  isRegenerating,
 }: CanvasProps) {
   const nodeTypes_ = useMemo<GraphNodeType[] | undefined>(
     () => (activeFilter === 'all' ? undefined : [activeFilter]),
@@ -94,6 +102,8 @@ function WorkspaceGraphCanvas({
       isError={isError}
       onRefetch={refetch}
       onNavigate={onNavigate}
+      onRegenerate={onRegenerate}
+      isRegenerating={isRegenerating}
       minZoom={0.2}
     />
   );
@@ -112,6 +122,7 @@ const NODE_TYPE_ROUTES: Record<string, string> = {
 export function WorkspaceKnowledgeGraph({ workspaceId }: WorkspaceKnowledgeGraphProps) {
   const [activeFilter, setActiveFilter] = useState<GraphNodeType | 'all'>('all');
   const [nodeCount, setNodeCount] = useState(0);
+  const [isRegenerating, setIsRegenerating] = useState(false);
   const router = useRouter();
   const params = useParams<{ workspaceSlug: string }>();
 
@@ -128,6 +139,39 @@ export function WorkspaceKnowledgeGraph({ workspaceId }: WorkspaceKnowledgeGraph
     },
     [router, params.workspaceSlug]
   );
+
+  const { refetch } = useWorkspaceKnowledgeGraph(workspaceId, {
+    nodeTypes: activeFilter === 'all' ? undefined : [activeFilter],
+  });
+
+  const handleRegenerate = useCallback(async () => {
+    setIsRegenerating(true);
+    try {
+      // Fetch all projects in the workspace
+      const projects = await apiClient.get<{ id: string; name: string }[]>(
+        `/workspaces/${workspaceId}/projects`
+      );
+      const projectList = Array.isArray(projects) ? projects : [];
+      if (projectList.length === 0) {
+        toast.warning('No projects found. Create a project with issues first.');
+        return;
+      }
+      // Trigger regeneration for each project
+      let totalEnqueued = 0;
+      for (const project of projectList) {
+        const result = await knowledgeGraphApi.regenerateProjectGraph(workspaceId, project.id);
+        totalEnqueued += result.enqueued;
+      }
+      toast.success(
+        `Knowledge graph regeneration started (${totalEnqueued} jobs across ${projectList.length} projects)`
+      );
+      setTimeout(() => void refetch(), 5000);
+    } catch {
+      toast.error('Failed to start knowledge graph regeneration');
+    } finally {
+      setIsRegenerating(false);
+    }
+  }, [workspaceId, refetch]);
 
   return (
     <div className="flex flex-col h-full bg-background" data-testid="workspace-knowledge-graph">
@@ -160,6 +204,17 @@ export function WorkspaceKnowledgeGraph({ workspaceId }: WorkspaceKnowledgeGraph
           ))}
         </div>
 
+        <button
+          type="button"
+          onClick={() => void handleRegenerate()}
+          disabled={isRegenerating}
+          className="shrink-0 rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label="Regenerate knowledge graph for all projects"
+          title="Regenerate all projects"
+        >
+          <RefreshCw className={`size-3.5 ${isRegenerating ? 'animate-spin' : ''}`} />
+        </button>
+
         {nodeCount > 0 && (
           <span className="ml-auto text-xs text-muted-foreground shrink-0 whitespace-nowrap">
             {nodeCount} nodes
@@ -175,6 +230,8 @@ export function WorkspaceKnowledgeGraph({ workspaceId }: WorkspaceKnowledgeGraph
             maxNodes={200}
             onNodeCountChange={handleNodeCountChange}
             onNavigate={handleNavigate}
+            onRegenerate={handleRegenerate}
+            isRegenerating={isRegenerating}
           />
         </div>
       </ReactFlowProvider>
