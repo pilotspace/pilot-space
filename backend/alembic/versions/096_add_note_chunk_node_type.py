@@ -7,7 +7,7 @@ missing from the database check constraint, causing IntegrityError on
 insert.
 
 Revision ID: 096_add_note_chunk_node_type
-Revises: 095_add_transcript_cache_rls
+Revises: 22403cf6e40a
 Create Date: 2026-03-22
 """
 
@@ -16,7 +16,7 @@ from sqlalchemy import text
 from alembic import op
 
 revision = "096_add_note_chunk_node_type"
-down_revision = "095_add_transcript_cache_rls"
+down_revision = "22403cf6e40a"  # pragma: allowlist secret
 branch_labels = None
 depends_on = None
 
