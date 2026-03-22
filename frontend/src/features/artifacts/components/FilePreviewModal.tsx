@@ -1,7 +1,18 @@
 'use client';
 
 import * as React from 'react';
-import { Download, Maximize2, Minimize2, TableOfContents, X, ZoomIn, ZoomOut } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  Maximize2,
+  Minimize2,
+  Play,
+  TableOfContents,
+  X,
+  ZoomIn,
+  ZoomOut,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import {
@@ -46,6 +57,11 @@ const DocxRenderer = dynamic(
 // SheetJS references browser APIs (ArrayBuffer, etc.) — ssr: false is REQUIRED.
 const XlsxRenderer = dynamic(
   () => import('./renderers/XlsxRenderer').then((m) => ({ default: m.XlsxRenderer })),
+  { ssr: false }
+);
+// PptxViewJS uses Canvas API and browser globals — ssr: false is REQUIRED.
+const PptxRenderer = dynamic(
+  () => import('./renderers/PptxRenderer').then((m) => ({ default: m.PptxRenderer })),
   { ssr: false }
 );
 
@@ -223,16 +239,58 @@ export function FilePreviewModal({
   const [isMaximized, setIsMaximized] = React.useState(false);
   const [docxTocOpen, setDocxTocOpen] = React.useState(false);
 
-  // Reset maximize and ToC state whenever the modal re-opens
+  // PPTX slide navigation state — lives here (controlled component pattern)
+  const [currentSlide, setCurrentSlide] = React.useState(0);
+  const [slideCount, setSlideCount] = React.useState(0);
+
+  // Fullscreen state — tracks browser Fullscreen API state
+  const slideContainerRef = React.useRef<HTMLDivElement>(null);
+  const [isFullscreen, setIsFullscreen] = React.useState(false);
+
+  // Reset maximize, ToC, and PPTX slide state whenever the modal re-opens
   React.useEffect(() => {
     if (open) {
       setIsMaximized(false);
       setDocxTocOpen(false);
+      setCurrentSlide(0);
+      setSlideCount(0);
     }
   }, [open]);
 
+  // Listen for fullscreen change events (handles browser Escape key exit and external changes)
+  React.useEffect(() => {
+    function handleFullscreenChange() {
+      setIsFullscreen(!!document.fullscreenElement);
+    }
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
+  const toggleFullscreen = React.useCallback(() => {
+    if (!slideContainerRef.current) return;
+    if (document.fullscreenElement) {
+      void document.exitFullscreen();
+    } else {
+      void slideContainerRef.current.requestFullscreen();
+    }
+  }, []);
+
   const rendererType = resolveRenderer(mimeType, filename);
   const { content, isLoading, isExpired } = useFileContent(signedUrl, rendererType, open);
+
+  // Keyboard navigation for PPTX slides — active when renderer is pptx and slides are loaded
+  React.useEffect(() => {
+    if (rendererType !== 'pptx' || slideCount === 0) return;
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'ArrowLeft' && currentSlide > 0) {
+        setCurrentSlide((s) => s - 1);
+      } else if (e.key === 'ArrowRight' && currentSlide < slideCount - 1) {
+        setCurrentSlide((s) => s + 1);
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [rendererType, currentSlide, slideCount]);
 
   // Images use the lightbox overlay instead of a Dialog
   if (rendererType === 'image') {
@@ -260,18 +318,14 @@ export function FilePreviewModal({
     }
 
     // Office formats — handle before content fetch checks
-    // Legacy formats (.doc, .xls, .ppt) degrade to download — cannot be parsed client-side.
-    // Modern formats route to their real renderers (Phase 2-4); pptx still uses placeholder.
+    // Legacy formats (.doc, .ppt) degrade to download — cannot be parsed client-side.
+    // Modern formats (docx, xlsx, pptx) fall through to content fetch below.
     if (rendererType === 'xlsx' || rendererType === 'docx' || rendererType === 'pptx') {
       if (isLegacyOfficeFormat(filename)) {
         return <DownloadFallback filename={filename} signedUrl={signedUrl} reason="legacy" />;
       }
-      // docx: real renderer available (Phase 2). Falls through to content fetch below.
-      // xlsx: real renderer available (Phase 3). Falls through to content fetch below.
-      // pptx: still placeholder until Phase 4.
-      if (rendererType === 'pptx') {
-        return <DownloadFallback filename={filename} signedUrl={signedUrl} reason="unsupported" />;
-      }
+      // docx: real renderer (Phase 2), xlsx: real renderer (Phase 3), pptx: real renderer (Phase 4).
+      // All fall through to content fetch below.
     }
 
     // Content-based renderers: need fetch
@@ -320,6 +374,63 @@ export function FilePreviewModal({
             tocOpen={docxTocOpen}
             onTocOpenChange={setDocxTocOpen}
           />
+        );
+      case 'pptx':
+        // content is ArrayBuffer for 'pptx' renderer type (useFileContent binary branch)
+        return (
+          <div
+            ref={slideContainerRef}
+            className={cn(
+              'flex flex-col items-center',
+              isFullscreen && 'bg-black h-screen w-screen justify-center'
+            )}
+          >
+            <div className={cn('w-full', isFullscreen && 'max-w-5xl px-4')}>
+              <PptxRenderer
+                content={content as ArrayBuffer}
+                currentSlide={currentSlide}
+                onSlideCountKnown={setSlideCount}
+                onNavigate={setCurrentSlide}
+              />
+            </div>
+            {/* Navigation toolbar */}
+            <div
+              className={cn(
+                'flex items-center justify-center gap-2 py-2',
+                isFullscreen &&
+                  'absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/60 rounded-lg px-4 py-2'
+              )}
+            >
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn('size-8', isFullscreen && 'text-white hover:bg-white/10')}
+                disabled={currentSlide === 0}
+                onClick={() => setCurrentSlide((s) => s - 1)}
+                aria-label="Previous slide"
+              >
+                <ChevronLeft className="size-4" />
+              </Button>
+              <span
+                className={cn(
+                  'text-xs tabular-nums min-w-[80px] text-center',
+                  isFullscreen ? 'text-white/80' : 'text-muted-foreground'
+                )}
+              >
+                Slide {currentSlide + 1} of {slideCount || '…'}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn('size-8', isFullscreen && 'text-white hover:bg-white/10')}
+                disabled={slideCount === 0 || currentSlide >= slideCount - 1}
+                onClick={() => setCurrentSlide((s) => s + 1)}
+                aria-label="Next slide"
+              >
+                <ChevronRight className="size-4" />
+              </Button>
+            </div>
+          </div>
         );
       default:
         return <DownloadFallback filename={filename} signedUrl={signedUrl} reason="unsupported" />;
@@ -381,6 +492,21 @@ export function FilePreviewModal({
                 aria-pressed={docxTocOpen}
               >
                 <TableOfContents className="size-4" />
+              </Button>
+            )}
+
+            {/* Fullscreen slideshow button — only shown for PPTX when slides are loaded */}
+            {rendererType === 'pptx' && slideCount > 0 && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-8"
+                onClick={toggleFullscreen}
+                aria-label={
+                  isFullscreen ? 'Exit fullscreen slideshow' : 'Enter fullscreen slideshow'
+                }
+              >
+                <Play className="size-4" />
               </Button>
             )}
 
