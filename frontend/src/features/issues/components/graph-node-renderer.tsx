@@ -3,12 +3,12 @@
 /**
  * GraphNodeComponent — custom ReactFlow node renderer for knowledge graph.
  *
- * Design principles (Pilot Space v4):
- *   - Tier-based sizing: projects > entities > dev artifacts > chunks
- *   - Tinted surface with left accent bar (not white-on-saturated)
- *   - Readable labels at default zoom
- *   - Current node: primary ring + subtle glow
- *   - Highlighted node: warm amber ring
+ * Design: "Entwined Growth Tree" — organic botanical aesthetic.
+ *   - Project nodes: seed pods with rounded silhouette, filled with branch color
+ *   - Entity nodes: leaf-shaped capsules with tinted surface + colored stem accent
+ *   - Dev/chunk nodes: smaller buds with subtle coloring
+ *   - Current node: warm glow ring (living energy)
+ *   - Highlighted node: golden shimmer
  */
 
 import { Handle, Position, type NodeProps, type Node, type NodeTypes } from '@xyflow/react';
@@ -90,35 +90,11 @@ export function GraphNodeComponent({ data }: NodeProps<GraphFlowNode>) {
   const { width, height } = getNodeDimensions(style.tier, isCurrent);
   const IconComponent = NODE_ICONS[node.nodeType] ?? ScrollText;
   const isProject = style.tier === 0;
-  const iconSize = isCurrent
-    ? 16
-    : isProject
-      ? 16
-      : style.tier === 1
-        ? 14
-        : style.tier === 2
-          ? 12
-          : 10;
-  const fontSize = isCurrent
-    ? 13
-    : isProject
-      ? 13
-      : style.tier === 1
-        ? 11
-        : style.tier === 2
-          ? 10
-          : 9;
-  const maxLabelWidth = width - iconSize - 16;
-  const maxChars = isCurrent
-    ? 28
-    : isProject
-      ? 24
-      : style.tier === 1
-        ? 28
-        : style.tier === 2
-          ? 20
-          : 16;
 
+  const iconSize = isCurrent ? 14 : isProject ? 14 : style.tier === 1 ? 12 : 10;
+  const fontSize = isCurrent ? 11.5 : isProject ? 11.5 : style.tier === 1 ? 10 : 9;
+  const maxLabelWidth = width - iconSize - 14;
+  const maxChars = isCurrent ? 28 : isProject ? 22 : style.tier === 1 ? 24 : 18;
   const truncated = truncateLabel(node.label, maxChars);
 
   const tooltipLines = [
@@ -127,36 +103,41 @@ export function GraphNodeComponent({ data }: NodeProps<GraphFlowNode>) {
     node.summary ? node.summary.slice(0, 100) + (node.summary.length > 100 ? '\u2026' : '') : null,
   ].filter(Boolean);
 
+  // Organic border radius — rounder for projects (seed pod), leaf-like for entities
+  const radius = isProject ? height / 2 : style.tier <= 1 ? 14 : 10;
+
+  // Shadow: organic depth — projects get a colored ambient glow
+  const shadow = isCurrent
+    ? `0 0 0 2.5px ${style.bg}, 0 0 16px 3px color-mix(in srgb, ${style.bg} 35%, transparent)`
+    : isHighlighted
+      ? `0 0 0 2px #c4a035, 0 0 10px 2px rgba(196,160,53,0.2)`
+      : isProject
+        ? `0 3px 12px -2px color-mix(in srgb, ${style.bg} 30%, transparent), 0 1px 4px rgba(55,53,47,0.06)`
+        : `0 1px 4px rgba(55,53,47,0.08), 0 0 0 1px color-mix(in srgb, ${style.bg} 12%, transparent)`;
+
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <button
           type="button"
           onClick={() => onNodeClick?.(node)}
-          className="group relative flex items-center gap-1.5 cursor-pointer transition-shadow duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+          className="group relative flex items-center cursor-pointer transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
           style={{
             width,
             height,
-            borderRadius: isProject ? 12 : 8,
-            backgroundColor: isProject ? style.bg : style.bgTint,
-            border: isProject
-              ? `2px solid color-mix(in srgb, ${style.bg} 70%, transparent)`
-              : `1px solid color-mix(in srgb, ${style.bg} 25%, transparent)`,
-            borderLeftWidth: isProject ? 2 : 3,
-            borderLeftColor: isProject ? undefined : style.bg,
-            paddingLeft: isProject ? 8 : 6,
-            paddingRight: isProject ? 8 : 6,
-            boxShadow: isCurrent
-              ? `0 0 0 2px #29a386, 0 0 12px 2px rgba(41,163,134,0.25)`
-              : isProject
-                ? `0 2px 8px rgba(139,126,200,0.25), 0 1px 3px rgba(55,53,47,0.08)`
-                : isHighlighted
-                  ? `0 0 0 2px #c4a035, 0 0 8px 2px rgba(196,160,53,0.2)`
-                  : `0 1px 2px rgba(55,53,47,0.06)`,
+            borderRadius: radius,
+            backgroundColor: isProject
+              ? style.bg
+              : `color-mix(in srgb, ${style.bg} 8%, var(--background))`,
+            border: 'none',
+            paddingLeft: isProject ? 10 : 8,
+            paddingRight: isProject ? 10 : 8,
+            gap: 5,
+            boxShadow: shadow,
           }}
           aria-label={`${style.label}: ${node.label}`}
         >
-          {/* Invisible handles — top-down tree: parent (bottom) → child (top) */}
+          {/* Top-down tree handles */}
           <Handle
             type="target"
             position={Position.Top}
@@ -168,24 +149,54 @@ export function GraphNodeComponent({ data }: NodeProps<GraphFlowNode>) {
             className="!w-0 !h-0 !border-0 !bg-transparent !min-w-0 !min-h-0"
           />
 
-          <IconComponent
-            width={iconSize}
-            height={iconSize}
-            className="shrink-0"
-            style={{ color: isProject ? '#fff' : style.bg }}
-            strokeWidth={1.8}
-          />
+          {/* Stem accent — vertical bar on left (entity nodes only) */}
+          {!isProject && (
+            <span
+              className="absolute left-0 top-1/2 -translate-y-1/2 rounded-full"
+              style={{
+                width: 3,
+                height: '60%',
+                backgroundColor: style.bg,
+                opacity: 0.7,
+              }}
+              aria-hidden="true"
+            />
+          )}
+
+          {/* Icon */}
           <span
-            className="leading-none truncate"
+            className="shrink-0 flex items-center justify-center rounded-full"
+            style={{
+              width: iconSize + 6,
+              height: iconSize + 6,
+              backgroundColor: isProject
+                ? 'rgba(255,255,255,0.2)'
+                : `color-mix(in srgb, ${style.bg} 15%, transparent)`,
+            }}
+          >
+            <IconComponent
+              width={iconSize}
+              height={iconSize}
+              style={{ color: isProject ? '#fff' : style.bg }}
+              strokeWidth={1.6}
+            />
+          </span>
+
+          {/* Label */}
+          <span
+            className="leading-tight truncate"
             style={{
               fontSize,
               fontWeight: isProject ? 600 : style.tier <= 1 ? 500 : 400,
               color: isProject ? '#fff' : 'var(--foreground)',
               maxWidth: maxLabelWidth - (onNodeExpand ? 14 : 0),
+              letterSpacing: isProject ? '0.01em' : undefined,
             }}
           >
             {truncated}
           </span>
+
+          {/* Expand/collapse toggle */}
           {onNodeExpand && (
             <span
               role="button"
@@ -200,21 +211,26 @@ export function GraphNodeComponent({ data }: NodeProps<GraphFlowNode>) {
                   onNodeExpand(node.id);
                 }
               }}
-              className={`shrink-0 ml-auto rounded p-0.5 transition-opacity hover:bg-black/10 ${isExpanded ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+              className={`shrink-0 ml-auto rounded-full p-0.5 transition-opacity ${isExpanded ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+              style={{
+                backgroundColor: isProject
+                  ? 'rgba(255,255,255,0.15)'
+                  : `color-mix(in srgb, ${style.bg} 10%, transparent)`,
+              }}
               aria-label={isExpanded ? 'Collapse neighbors' : 'Expand neighbors'}
               aria-pressed={isExpanded}
             >
               {isExpanded ? (
                 <Shrink
-                  width={style.tier <= 1 ? 10 : 8}
-                  height={style.tier <= 1 ? 10 : 8}
+                  width={style.tier <= 1 ? 9 : 7}
+                  height={style.tier <= 1 ? 9 : 7}
                   style={{ color: isProject ? '#fff' : style.bgDark }}
                   strokeWidth={2}
                 />
               ) : (
                 <Expand
-                  width={style.tier <= 1 ? 10 : 8}
-                  height={style.tier <= 1 ? 10 : 8}
+                  width={style.tier <= 1 ? 9 : 7}
+                  height={style.tier <= 1 ? 9 : 7}
                   style={{ color: isProject ? '#fff' : style.bgDark }}
                   strokeWidth={2}
                 />
@@ -223,7 +239,13 @@ export function GraphNodeComponent({ data }: NodeProps<GraphFlowNode>) {
           )}
         </button>
       </TooltipTrigger>
-      <TooltipContent side="top" className="max-w-[220px] rounded-lg px-3 py-2">
+      <TooltipContent
+        side="top"
+        className="max-w-[220px] rounded-xl px-3 py-2.5 shadow-lg"
+        style={{
+          borderColor: `color-mix(in srgb, ${style.bg} 20%, var(--border))`,
+        }}
+      >
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-1.5">
             <span
@@ -233,7 +255,7 @@ export function GraphNodeComponent({ data }: NodeProps<GraphFlowNode>) {
             <span className="font-semibold text-xs">{tooltipLines[0]}</span>
           </div>
           {tooltipLines.slice(1).map((line, i) => (
-            <span key={i} className="text-[11px] leading-snug opacity-70 pl-3.5">
+            <span key={i} className="text-[11px] leading-snug opacity-60 pl-3.5">
               {line}
             </span>
           ))}

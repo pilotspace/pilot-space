@@ -134,9 +134,9 @@ export function GraphCanvasShell({
           >
             <Background
               variant={BackgroundVariant.Dots}
-              gap={20}
-              size={0.8}
-              className="opacity-20"
+              gap={24}
+              size={0.6}
+              className="opacity-[0.12]"
             />
             <MiniMap
               position="bottom-right"
