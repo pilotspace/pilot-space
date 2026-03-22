@@ -31,7 +31,7 @@ Requirements for Office Suite Preview milestone. Each maps to roadmap phases.
 ### PowerPoint Preview
 
 - [x] **PPTX-01**: User can view PPTX slides one at a time with prev/next navigation and "Slide N of M" counter
-- [ ] **PPTX-02**: User sees slide thumbnail strip sidebar for quick navigation to any slide
+- [x] **PPTX-02**: User sees slide thumbnail strip sidebar for quick navigation to any slide
 - [ ] **PPTX-03**: User can add per-slide annotations linked to Pilot Space notes (persisted server-side)
 - [x] **PPTX-04**: User can enter fullscreen slideshow mode with keyboard navigation (arrow keys)
 
@@ -78,7 +78,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DOCX-03 | Phase 2 | Complete |
 | DOCX-04 | Phase 2 | Complete |
 | PPTX-01 | Phase 4 | Complete |
-| PPTX-02 | Phase 4 | Pending |
+| PPTX-02 | Phase 4 | Complete |
 | PPTX-03 | Phase 5 | Pending |
 | PPTX-04 | Phase 4 | Complete |
 
