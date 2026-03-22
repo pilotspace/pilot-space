@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Download, Maximize2, Minimize2, X, ZoomIn, ZoomOut } from 'lucide-react';
+import { Download, Maximize2, Minimize2, TableOfContents, X, ZoomIn, ZoomOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import {
@@ -216,10 +216,14 @@ export function FilePreviewModal({
   signedUrl,
 }: FilePreviewModalProps) {
   const [isMaximized, setIsMaximized] = React.useState(false);
+  const [docxTocOpen, setDocxTocOpen] = React.useState(false);
 
-  // Reset maximize state whenever the modal re-opens
+  // Reset maximize and ToC state whenever the modal re-opens
   React.useEffect(() => {
-    if (open) setIsMaximized(false);
+    if (open) {
+      setIsMaximized(false);
+      setDocxTocOpen(false);
+    }
   }, [open]);
 
   const rendererType = resolveRenderer(mimeType, filename);
@@ -299,7 +303,14 @@ export function FilePreviewModal({
         return <CsvRenderer content={content as string} />;
       case 'docx':
         // content is ArrayBuffer for 'docx' renderer type (useFileContent binary branch)
-        return <DocxRenderer content={content as ArrayBuffer} filename={filename} />;
+        return (
+          <DocxRenderer
+            content={content as ArrayBuffer}
+            filename={filename}
+            tocOpen={docxTocOpen}
+            onTocOpenChange={setDocxTocOpen}
+          />
+        );
       default:
         return <DownloadFallback filename={filename} signedUrl={signedUrl} reason="unsupported" />;
     }
@@ -346,6 +357,20 @@ export function FilePreviewModal({
                 >
                   <Download className="size-4" />
                 </a>
+              </Button>
+            )}
+
+            {/* ToC toggle — only shown for .docx files */}
+            {rendererType === 'docx' && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-8"
+                onClick={() => setDocxTocOpen((o) => !o)}
+                aria-label={docxTocOpen ? 'Hide table of contents' : 'Show table of contents'}
+                aria-pressed={docxTocOpen}
+              >
+                <TableOfContents className="size-4" />
               </Button>
             )}
 
