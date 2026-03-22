@@ -38,6 +38,8 @@ export interface GraphCanvasShellProps {
   onRegenerate?: () => void;
   /** Whether regeneration is in progress. */
   isRegenerating?: boolean;
+  /** Navigate to an entity page (issue, note, project). */
+  onNavigate?: (nodeType: string, entityId: string) => void;
   /** Minimum zoom level. Default: 0.3. */
   minZoom?: number;
 }
@@ -52,6 +54,7 @@ export function GraphCanvasShell({
   emptyStateAction,
   onRegenerate,
   isRegenerating,
+  onNavigate,
   minZoom = 0.3,
 }: GraphCanvasShellProps) {
   // Incrementing this key remounts the ErrorBoundary, resetting hasError after retry
@@ -150,6 +153,7 @@ export function GraphCanvasShell({
           node={selectedNode}
           onClose={() => setSelectedNode(null)}
           onExpand={handleNodeDoubleClick}
+          onNavigate={onNavigate}
         />
       )}
     </>

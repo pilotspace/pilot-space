@@ -8,6 +8,7 @@
  */
 
 import { useCallback, useEffect, useState, useMemo } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 import { ReactFlowProvider } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
@@ -40,6 +41,7 @@ interface CanvasProps {
   activeFilter: GraphNodeType | 'all';
   maxNodes: number;
   onNodeCountChange: (count: number) => void;
+  onNavigate: (nodeType: string, entityId: string) => void;
 }
 
 function WorkspaceGraphCanvas({
@@ -47,6 +49,7 @@ function WorkspaceGraphCanvas({
   activeFilter,
   maxNodes,
   onNodeCountChange,
+  onNavigate,
 }: CanvasProps) {
   const nodeTypes_ = useMemo<GraphNodeType[] | undefined>(
     () => (activeFilter === 'all' ? undefined : [activeFilter]),
@@ -90,6 +93,7 @@ function WorkspaceGraphCanvas({
       isLoading={isLoading}
       isError={isError}
       onRefetch={refetch}
+      onNavigate={onNavigate}
       minZoom={0.2}
     />
   );
@@ -97,13 +101,33 @@ function WorkspaceGraphCanvas({
 
 // ── Public component ────────────────────────────────────────────────────────
 
+/** Map node type → URL segment for navigation. */
+const NODE_TYPE_ROUTES: Record<string, string> = {
+  issue: 'issues',
+  note: 'notes',
+  project: 'projects',
+  cycle: 'projects', // cycles live under project pages
+};
+
 export function WorkspaceKnowledgeGraph({ workspaceId }: WorkspaceKnowledgeGraphProps) {
   const [activeFilter, setActiveFilter] = useState<GraphNodeType | 'all'>('all');
   const [nodeCount, setNodeCount] = useState(0);
+  const router = useRouter();
+  const params = useParams<{ workspaceSlug: string }>();
 
   const handleNodeCountChange = useCallback((count: number) => {
     setNodeCount((prev) => (prev === count ? prev : count));
   }, []);
+
+  const handleNavigate = useCallback(
+    (nodeType: string, entityId: string) => {
+      const route = NODE_TYPE_ROUTES[nodeType];
+      if (route && params.workspaceSlug) {
+        router.push(`/${params.workspaceSlug}/${route}/${entityId}`);
+      }
+    },
+    [router, params.workspaceSlug]
+  );
 
   return (
     <div className="flex flex-col h-full bg-background" data-testid="workspace-knowledge-graph">
@@ -150,6 +174,7 @@ export function WorkspaceKnowledgeGraph({ workspaceId }: WorkspaceKnowledgeGraph
             activeFilter={activeFilter}
             maxNodes={200}
             onNodeCountChange={handleNodeCountChange}
+            onNavigate={handleNavigate}
           />
         </div>
       </ReactFlowProvider>

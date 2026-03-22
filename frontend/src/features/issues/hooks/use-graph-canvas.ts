@@ -88,6 +88,8 @@ export function useGraphCanvas(options: UseGraphCanvasOptions): UseGraphCanvasRe
   const [selectedNode, setSelectedNode] = useState<GraphNodeDTO | null>(null);
   const [extraNodes, setExtraNodes] = useState<GraphNodeDTO[]>([]);
   const [extraEdges, setExtraEdges] = useState<GraphEdgeDTO[]>([]);
+  // Track which nodes have been expanded so we can toggle (collapse) them
+  const [expandedNodeIds, setExpandedNodeIds] = useState<Set<string>>(new Set());
   const [flowNodes, setFlowNodes] = useState<Node[]>([]);
   const [flowEdges, setFlowEdges] = useState<Edge[]>([]);
 
@@ -99,6 +101,7 @@ export function useGraphCanvas(options: UseGraphCanvasOptions): UseGraphCanvasRe
     resetKeyRef.current = resetKey;
     setExtraNodes([]);
     setExtraEdges([]);
+    setExpandedNodeIds(new Set());
     setSelectedNode(null);
   }, [resetKey]);
 
@@ -180,18 +183,48 @@ export function useGraphCanvas(options: UseGraphCanvasOptions): UseGraphCanvasRe
 
   // ── Node double-click → expand neighbors ──────────────────────────────
 
+  // Track which neighbor node IDs were added by each expansion
+  const expandedChildrenRef = useRef<Map<string, Set<string>>>(new Map());
+
   const handleNodeDoubleClick = useCallback(
     async (nodeId: string) => {
+      // ── Toggle: collapse if already expanded ──────────────────────────
+      if (expandedNodeIds.has(nodeId)) {
+        const childIds = expandedChildrenRef.current.get(nodeId);
+        if (childIds && childIds.size > 0) {
+          // Remove nodes added by this expansion (but keep if also added by another)
+          const otherChildren = new Set<string>();
+          expandedChildrenRef.current.forEach((ids, parentId) => {
+            if (parentId !== nodeId) ids.forEach((id) => otherChildren.add(id));
+          });
+          setExtraNodes((prev) =>
+            prev.filter((n) => otherChildren.has(n.id) || !childIds.has(n.id))
+          );
+          setExtraEdges((prev) =>
+            prev.filter((e) => {
+              const srcRemoved = childIds.has(e.sourceId) && !otherChildren.has(e.sourceId);
+              const tgtRemoved = childIds.has(e.targetId) && !otherChildren.has(e.targetId);
+              return !srcRemoved && !tgtRemoved;
+            })
+          );
+        }
+        expandedChildrenRef.current.delete(nodeId);
+        setExpandedNodeIds((prev) => {
+          const next = new Set(prev);
+          next.delete(nodeId);
+          return next;
+        });
+        return;
+      }
+
+      // ── Expand: fetch and add neighbors ──────────────────────────────
       const currentResetKey = resetKeyRef.current;
-      // Pre-flight check — avoids unnecessary API call when already at cap
       if (maxNodeCap - mergedNodes.length <= 0) {
         toast.warning(
           `Graph limit reached (${maxNodeCap} nodes). Clear filters to reset the view.`
         );
         return;
       }
-      // Capture base node count before the async call so concurrent expansions
-      // each recompute remaining inside the functional updater against live state
       const baseNodeCount = data?.nodes.length ?? 0;
       try {
         const neighbors = await knowledgeGraphApi.getNodeNeighbors(
@@ -199,12 +232,12 @@ export function useGraphCanvas(options: UseGraphCanvasOptions): UseGraphCanvasRe
           nodeId,
           Math.min(expandDepth, 4)
         );
-        // Abort if filter/depth changed during the async call
         if (resetKeyRef.current !== currentResetKey) return;
+
+        const addedIds = new Set<string>();
         setExtraNodes((prev) => {
           const ids = new Set(prev.map((n) => n.id));
           const newNodes = neighbors.nodes.filter((n) => !ids.has(n.id));
-          // Recompute from live prev to prevent concurrent expansions exceeding cap
           const currentRemaining = Math.max(0, maxNodeCap - baseNodeCount - prev.length);
           const nodesToAdd = newNodes.slice(0, currentRemaining);
           if (newNodes.length > nodesToAdd.length) {
@@ -212,19 +245,23 @@ export function useGraphCanvas(options: UseGraphCanvasOptions): UseGraphCanvasRe
               `Graph limit reached (${maxNodeCap} nodes). ${newNodes.length - nodesToAdd.length} nodes were not added.`
             );
           }
+          nodesToAdd.forEach((n) => addedIds.add(n.id));
           return [...prev, ...nodesToAdd];
         });
         setExtraEdges((prev) => {
           const ids = new Set(prev.map((e) => e.id));
           return [...prev, ...neighbors.edges.filter((e) => !ids.has(e.id))];
         });
+
+        expandedChildrenRef.current.set(nodeId, addedIds);
+        setExpandedNodeIds((prev) => new Set(prev).add(nodeId));
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error';
         console.error('Failed to expand node:', err);
         toast.error(`Failed to expand node: ${message}`);
       }
     },
-    [mergedNodes.length, expandDepth, workspaceId, maxNodeCap, data]
+    [mergedNodes.length, expandDepth, workspaceId, maxNodeCap, data, expandedNodeIds]
   );
 
   // ── Node click → select ───────────────────────────────────────────────
@@ -243,9 +280,10 @@ export function useGraphCanvas(options: UseGraphCanvasOptions): UseGraphCanvasRe
           ...(n.data as GraphNodeData),
           onNodeClick: handleNodeClick,
           onNodeExpand: handleNodeDoubleClick,
+          isExpanded: expandedNodeIds.has(n.id),
         },
       })),
-    [flowNodes, handleNodeClick]
+    [flowNodes, handleNodeClick, handleNodeDoubleClick, expandedNodeIds]
   );
 
   // ── Derived state ─────────────────────────────────────────────────────

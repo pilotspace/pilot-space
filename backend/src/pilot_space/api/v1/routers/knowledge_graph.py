@@ -94,12 +94,15 @@ _EDGE_LABELS: dict[EdgeType, str] = {
 
 def _node_to_dto(node: GraphNode, score: float | None = None) -> GraphNodeDTO:
     """Map a domain GraphNode to a GraphNodeDTO."""
+    props = dict(node.properties or {})
+    if node.external_id:
+        props["external_id"] = str(node.external_id)
     return GraphNodeDTO(
         id=str(node.id),
         node_type=node.node_type.value,
         label=node.label,
         summary=node.summary or None,
-        properties=node.properties,  # type: ignore[arg-type]
+        properties=props,
         created_at=node.created_at,
         updated_at=node.updated_at,
         score=score,

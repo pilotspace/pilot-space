@@ -7,18 +7,22 @@
  * summary, and timestamp. Clickable node type badge.
  */
 
-import { Expand, X } from 'lucide-react';
+import { ExternalLink, Expand, X } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import type { GraphNodeDTO } from '@/types/knowledge-graph';
 import { getGraphNodeStyle } from '@/features/issues/utils/graph-styles';
+
+/** Node types that link to navigable pages. */
+const NAVIGABLE_TYPES = new Set(['issue', 'note', 'project', 'cycle']);
 
 interface GraphDetailPanelProps {
   node: GraphNodeDTO;
   onClose: () => void;
   onExpand?: (nodeId: string) => void;
+  onNavigate?: (nodeType: string, entityId: string) => void;
 }
 
-export function GraphDetailPanel({ node, onClose, onExpand }: GraphDetailPanelProps) {
+export function GraphDetailPanel({ node, onClose, onExpand, onNavigate }: GraphDetailPanelProps) {
   const style = getGraphNodeStyle(node.nodeType);
 
   return (
@@ -69,6 +73,21 @@ export function GraphDetailPanel({ node, onClose, onExpand }: GraphDetailPanelPr
         </div>
 
         <div className="flex items-center gap-1 shrink-0">
+          {onNavigate &&
+            typeof node.properties?.external_id === 'string' &&
+            NAVIGABLE_TYPES.has(node.nodeType) && (
+              <button
+                type="button"
+                onClick={() =>
+                  onNavigate(node.nodeType, (node.properties?.external_id as string) ?? node.id)
+                }
+                className="rounded-md p-1 hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label={`Open ${style.label.toLowerCase()}`}
+                title={`Open ${style.label.toLowerCase()}`}
+              >
+                <ExternalLink className="size-3.5 text-muted-foreground" />
+              </button>
+            )}
           {onExpand && (
             <button
               type="button"

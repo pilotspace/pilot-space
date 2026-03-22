@@ -31,6 +31,7 @@ import {
   Heart,
   Scale,
   Expand,
+  Shrink,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -47,6 +48,7 @@ export interface GraphNodeData extends Record<string, unknown> {
   node: GraphNodeDTO;
   isCurrent?: boolean;
   isHighlighted?: boolean;
+  isExpanded?: boolean;
   onNodeClick?: (node: GraphNodeDTO) => void;
   onNodeExpand?: (nodeId: string) => void;
 }
@@ -75,7 +77,14 @@ const NODE_ICONS: Partial<Record<GraphNodeType, LucideIcon>> = {
 // ── Component ─────────────────────────────────────────────────────────────
 
 export function GraphNodeComponent({ data }: NodeProps<GraphFlowNode>) {
-  const { node, isCurrent = false, isHighlighted = false, onNodeClick, onNodeExpand } = data;
+  const {
+    node,
+    isCurrent = false,
+    isHighlighted = false,
+    isExpanded = false,
+    onNodeClick,
+    onNodeExpand,
+  } = data;
 
   const style = getGraphNodeStyle(node.nodeType);
   const { width, height } = getNodeDimensions(style.tier, isCurrent);
@@ -191,15 +200,25 @@ export function GraphNodeComponent({ data }: NodeProps<GraphFlowNode>) {
                   onNodeExpand(node.id);
                 }
               }}
-              className="shrink-0 ml-auto rounded p-0.5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/10"
-              aria-label="Expand neighbors"
+              className={`shrink-0 ml-auto rounded p-0.5 transition-opacity hover:bg-black/10 ${isExpanded ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+              aria-label={isExpanded ? 'Collapse neighbors' : 'Expand neighbors'}
+              aria-pressed={isExpanded}
             >
-              <Expand
-                width={style.tier <= 1 ? 10 : 8}
-                height={style.tier <= 1 ? 10 : 8}
-                style={{ color: isProject ? '#fff' : style.bgDark }}
-                strokeWidth={2}
-              />
+              {isExpanded ? (
+                <Shrink
+                  width={style.tier <= 1 ? 10 : 8}
+                  height={style.tier <= 1 ? 10 : 8}
+                  style={{ color: isProject ? '#fff' : style.bgDark }}
+                  strokeWidth={2}
+                />
+              ) : (
+                <Expand
+                  width={style.tier <= 1 ? 10 : 8}
+                  height={style.tier <= 1 ? 10 : 8}
+                  style={{ color: isProject ? '#fff' : style.bgDark }}
+                  strokeWidth={2}
+                />
+              )}
             </span>
           )}
         </button>
