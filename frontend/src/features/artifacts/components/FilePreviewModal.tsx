@@ -36,6 +36,13 @@ const CsvRenderer = dynamic(() =>
 const HtmlRenderer = dynamic(() =>
   import('./renderers/HtmlRenderer').then((m) => ({ default: m.HtmlRenderer }))
 );
+// docx-preview and mammoth reference browser APIs (window, document) on import.
+// ssr: false is REQUIRED to prevent "window is not defined" errors during Next.js
+// server render pass.
+const DocxRenderer = dynamic(
+  () => import('./renderers/DocxRenderer').then((m) => ({ default: m.DocxRenderer })),
+  { ssr: false }
+);
 
 export interface FilePreviewModalProps {
   open: boolean;
@@ -242,13 +249,18 @@ export function FilePreviewModal({
       return <DownloadFallback filename={filename} signedUrl={signedUrl} reason="unsupported" />;
     }
 
-    // Office formats — handle before content fetch checks (legacy doesn't need fetch;
-    // modern formats will get real renderers in Phase 2-4, placeholder for now)
+    // Office formats — handle before content fetch checks
+    // Legacy formats (.doc, .xls, .ppt) degrade to download — cannot be parsed client-side.
+    // Modern formats route to their real renderers (Phase 2-4); xlsx/pptx still use placeholder.
     if (rendererType === 'xlsx' || rendererType === 'docx' || rendererType === 'pptx') {
       if (isLegacyOfficeFormat(filename)) {
         return <DownloadFallback filename={filename} signedUrl={signedUrl} reason="legacy" />;
       }
-      return <DownloadFallback filename={filename} signedUrl={signedUrl} reason="unsupported" />;
+      // docx: real renderer available (Phase 2). Falls through to content fetch below.
+      // xlsx, pptx: still placeholder until Phase 3-4.
+      if (rendererType === 'xlsx' || rendererType === 'pptx') {
+        return <DownloadFallback filename={filename} signedUrl={signedUrl} reason="unsupported" />;
+      }
     }
 
     // Content-based renderers: need fetch
@@ -285,6 +297,9 @@ export function FilePreviewModal({
         return <HtmlRenderer content={content as string} filename={filename} />;
       case 'csv':
         return <CsvRenderer content={content as string} />;
+      case 'docx':
+        // content is ArrayBuffer for 'docx' renderer type (useFileContent binary branch)
+        return <DocxRenderer content={content as ArrayBuffer} filename={filename} />;
       default:
         return <DownloadFallback filename={filename} signedUrl={signedUrl} reason="unsupported" />;
     }
