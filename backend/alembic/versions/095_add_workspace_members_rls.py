@@ -9,7 +9,7 @@ This runs per-row on every query against RLS-protected tables. Without
 a partial index on user_id (filtered to is_deleted = false), each check
 triggers a full table scan on workspace_members.
 
-Revision ID: 095_add_workspace_members_rls_index
+Revision ID: 095_add_workspace_members_rls
 Revises: 094_add_artifacts_rls_with_check
 Create Date: 2026-03-20
 """
@@ -18,7 +18,7 @@ from collections.abc import Sequence
 
 from alembic import op
 
-revision: str = "095_add_workspace_members_rls_index"
+revision: str = "095_add_workspace_members_rls"
 down_revision: str = "094_add_artifacts_rls_with_check"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
