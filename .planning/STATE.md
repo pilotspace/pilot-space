@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: milestone
 status: planning
-stopped_at: Completed 04-powerpoint-base 04-02-PLAN.md
-last_updated: "2026-03-22T09:12:16.493Z"
+stopped_at: Completed 05-pptx-annotations 05-01-PLAN.md
+last_updated: "2026-03-22T09:22:25.786Z"
 last_activity: 2026-03-21 — Roadmap created for v1.2 Office Suite Preview
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 10
-  completed_plans: 8
+  completed_plans: 9
   percent: 10
 ---
 
@@ -58,6 +58,7 @@ Progress: [█░░░░░░░░░] 10%
 | Phase 03-excel-renderer P02 | 8 | 2 tasks | 1 files |
 | Phase 04-powerpoint-base PP01 | 4 | 2 tasks | 4 files |
 | Phase 04-powerpoint-base P02 | 3 | 2 tasks | 2 files |
+| Phase 05-pptx-annotations PP01 | 8 | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -86,6 +87,9 @@ Recent decisions affecting current work:
 - [Phase 04-powerpoint-base]: Controlled component pattern: currentSlide state in FilePreviewModal not ArtifactStore; Phase 5 interface contract locked: currentSlide prop, onSlideCountKnown, onNavigate callbacks
 - [Phase 04-powerpoint-base]: Single canvas re-render per slide change; PPTXViewer destroy() on unmount; default 16:9 aspect ratio for canvas sizing
 - [Phase 04-powerpoint-base]: Separate PPTXViewer instance for thumbnails avoids cross-instance state with main PptxRenderer; thumbnail strip hidden in fullscreen; showThumbnails defaults false
+- [Phase 05-pptx-annotations]: Hard delete for annotations (no soft-delete): annotations are ephemeral comments, not audited entities
+- [Phase 05-pptx-annotations]: Author ownership enforced at router layer (404+403 checks) in addition to RLS workspace isolation
+- [Phase 05-pptx-annotations]: Migration 096 merges two 095 heads using tuple down_revision
 
 ### Pending Todos
 
@@ -98,6 +102,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-22T09:12:16.491Z
-Stopped at: Completed 04-powerpoint-base 04-02-PLAN.md
+Last session: 2026-03-22T09:22:25.784Z
+Stopped at: Completed 05-pptx-annotations 05-01-PLAN.md
 Resume file: None
