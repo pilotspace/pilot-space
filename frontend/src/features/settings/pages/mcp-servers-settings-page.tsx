@@ -158,7 +158,7 @@ export const MCPServersSettingsPage = observer(function MCPServersSettingsPage()
         msgs.push(`${result.errors.length} errors`);
       }
       toast.success(`Import complete: ${msgs.join(', ')}`);
-      if (result.errors.length === 0) {
+      if (result.errors.length === 0 && result.skipped.length === 0) {
         setDialogOpen(false);
       }
     } catch {

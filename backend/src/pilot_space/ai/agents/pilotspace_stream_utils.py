@@ -762,9 +762,28 @@ def _build_server_config(
 
         if server.transport == McpTransport.STREAMABLE_HTTP:
             return McpHttpServerConfig(type="http", url=url, headers=headers) if headers else McpHttpServerConfig(type="http", url=url)
-        return McpSSEServerConfig(type="sse", url=url, headers=headers) if headers else McpSSEServerConfig(type="sse", url=url)
+        if server.transport == McpTransport.SSE:
+            return McpSSEServerConfig(type="sse", url=url, headers=headers) if headers else McpSSEServerConfig(type="sse", url=url)
+
+        # Transport mismatch — remote server with stdio transport is invalid.
+        logger.warning(
+            "mcp_server_transport_mismatch",
+            server_id=str(server.id),
+            server_type=server.server_type.value,
+            transport=server.transport.value,
+        )
+        return None
 
     # Command (COMMAND / legacy NPX / UVX) — build McpStdioServerConfig
+    if server.transport != McpTransport.STDIO:
+        logger.warning(
+            "mcp_server_transport_mismatch",
+            server_id=str(server.id),
+            server_type=server.server_type.value,
+            transport=server.transport.value,
+        )
+        return None
+
     command_str = server.url_or_command
     if not command_str:
         return None
@@ -811,6 +830,7 @@ def _build_server_config(
                 "mcp_env_decrypt_failed",
                 server_id=str(server.id),
             )
+            return None
 
     stdio_config = McpStdioServerConfig(type="stdio", command=command)
     if args:

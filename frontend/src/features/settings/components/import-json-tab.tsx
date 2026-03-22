@@ -134,14 +134,20 @@ export function ImportJsonTab({ onImport, isImporting }: ImportJsonTabProps) {
       </p>
 
       {/* Textarea */}
-      <textarea
-        className="w-full h-48 rounded-md border border-border bg-muted/30 p-3 font-mono text-xs resize-none focus:outline-none focus:ring-2 focus:ring-ring"
-        value={jsonText}
-        onChange={(e) => setJsonText(e.target.value)}
-        placeholder={PLACEHOLDER}
-        disabled={isImporting}
-        spellCheck={false}
-      />
+      <div className="space-y-1.5">
+        <label htmlFor="import-json-input" className="text-sm font-medium leading-none">
+          Import configuration JSON
+        </label>
+        <textarea
+          id="import-json-input"
+          className="w-full h-48 rounded-md border border-border bg-muted/30 p-3 font-mono text-xs resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+          value={jsonText}
+          onChange={(e) => setJsonText(e.target.value)}
+          placeholder={PLACEHOLDER}
+          disabled={isImporting}
+          spellCheck={false}
+        />
+      </div>
 
       {/* Upload file */}
       <div>

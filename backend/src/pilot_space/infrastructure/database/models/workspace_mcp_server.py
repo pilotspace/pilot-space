@@ -10,7 +10,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, Enum, Index, String, Text
+from sqlalchemy import Boolean, DateTime, Enum, Index, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from pilot_space.infrastructure.database.base import WorkspaceScopedModel
@@ -68,13 +68,18 @@ class WorkspaceMcpServer(WorkspaceScopedModel):
 
     Stores connection details and encrypted credentials for Model Context
     Protocol servers. Supports Bearer token and OAuth 2.0 authentication,
-    plus encrypted headers and environment variable blobs for NPX/UVX.
+    plus encrypted environment variable blobs for NPX/UVX.
+
+    Headers are stored as **plaintext** in ``headers_json`` and returned
+    in full in API responses (they are not sensitive). The legacy
+    ``headers_encrypted`` column is retained for migration from older rows
+    but new writes always go to ``headers_json``.
 
     Attributes:
         workspace_id: Reference to parent workspace.
         display_name: Human-readable label shown in UI.
-        url: Remote MCP server endpoint (backward-compat alias for url_or_command).
-        auth_type: Authentication mechanism (bearer or oauth2).
+        url: Remote MCP server endpoint (backward-compat alias for url_or_command; nullable for command-type servers).
+        auth_type: Authentication mechanism (none, bearer, or oauth2).
         auth_token_encrypted: Fernet-encrypted Bearer token or OAuth access token.
         oauth_client_id: OAuth 2.0 client ID (auth_type=oauth2 only).
         oauth_auth_url: OAuth 2.0 authorization endpoint URL.
@@ -86,7 +91,8 @@ class WorkspaceMcpServer(WorkspaceScopedModel):
         transport: SSE, stdio, or streamable_http.
         url_or_command: Primary URL (remote) or launch command (NPX/UVX).
         command_args: Extra CLI arguments for NPX/UVX launch.
-        headers_encrypted: Fernet-encrypted JSON blob of HTTP headers.
+        headers_json: Plaintext JSON blob of HTTP headers (returned in API responses).
+        headers_encrypted: Legacy Fernet-encrypted headers (read-only migration fallback).
         env_vars_encrypted: Fernet-encrypted JSON blob of env var key-value pairs.
         is_enabled: Admin toggle; disabled servers are excluded from polling.
     """
@@ -101,7 +107,7 @@ class WorkspaceMcpServer(WorkspaceScopedModel):
             "workspace_id",
             "display_name",
             unique=True,
-            postgresql_where="is_deleted = false",
+            postgresql_where=text("is_deleted = false"),
         ),
         {"schema": None},
     )
@@ -111,10 +117,10 @@ class WorkspaceMcpServer(WorkspaceScopedModel):
         nullable=False,
         doc="Human-readable server label shown in UI",
     )
-    url: Mapped[str] = mapped_column(
-        String(512),
-        nullable=False,
-        doc="Remote MCP server endpoint URL — kept for backward compat with AI agent hot-loader",
+    url: Mapped[str | None] = mapped_column(
+        String(1024),
+        nullable=True,
+        doc="Remote MCP server endpoint URL — legacy compat alias for url_or_command",
     )
     auth_type: Mapped[McpAuthType] = mapped_column(
         Enum(

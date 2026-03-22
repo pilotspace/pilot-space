@@ -49,6 +49,7 @@ export function MCPServerDialog({
 }: MCPServerDialogProps) {
   const isEdit = !!initialData;
   const defaultTab = isEdit ? 'form' : 'import';
+  const formId = React.useId() + '-mcp-form';
 
   const [activeTab, setActiveTab] = React.useState(defaultTab);
   const [testResult, setTestResult] = React.useState<MCPServerTestResult | null>(null);
@@ -109,6 +110,7 @@ export function MCPServerDialog({
               initialData={initialData}
               onSave={handleFormSave}
               isSaving={isSaving}
+              formId={formId}
             />
 
             {/* Footer for form tab */}
@@ -151,14 +153,8 @@ export function MCPServerDialog({
               </Button>
               <Button
                 type="submit"
+                form={formId}
                 disabled={isSaving}
-                onClick={() => {
-                  // Trigger form submit from the FormConfigTab's form element
-                  const formEl = document.querySelector<HTMLFormElement>(
-                    '[data-slot="dialog-content"] form'
-                  );
-                  formEl?.requestSubmit();
-                }}
               >
                 {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {isEdit ? 'Save Changes' : 'Save Configuration'}

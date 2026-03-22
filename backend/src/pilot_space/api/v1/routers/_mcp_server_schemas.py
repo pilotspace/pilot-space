@@ -89,7 +89,7 @@ class WorkspaceMcpServerCreate(BaseModel):
     )
     headers: dict[str, str] | None = Field(
         default=None,
-        description="HTTP headers to inject (will be encrypted at rest)",
+        description="HTTP headers to inject (stored as plaintext; returned in API responses)",
     )
     env_vars: dict[str, str] | None = Field(
         default=None,
@@ -105,6 +105,27 @@ class WorkspaceMcpServerCreate(BaseModel):
     oauth_auth_url: str | None = Field(default=None, max_length=512)
     oauth_token_url: str | None = Field(default=None, max_length=512)
     oauth_scopes: str | None = Field(default=None, max_length=512)
+
+    @model_validator(mode="after")
+    def validate_server_type_transport(self) -> WorkspaceMcpServerCreate:
+        """Reject invalid server_type / transport combinations.
+
+        Remote servers must use SSE or Streamable HTTP.
+        Command-type servers must use stdio.
+        """
+        if self.server_type == McpServerType.REMOTE:
+            if self.transport not in (McpTransport.SSE, McpTransport.STREAMABLE_HTTP):
+                raise ValueError(
+                    f"Remote servers only support 'sse' or 'streamable_http' transport, "
+                    f"got '{self.transport.value}'"
+                )
+        elif self.server_type in (McpServerType.COMMAND, McpServerType.NPX, McpServerType.UVX):
+            if self.transport != McpTransport.STDIO:
+                raise ValueError(
+                    f"{self.server_type.value} servers only support 'stdio' transport, "
+                    f"got '{self.transport.value}'"
+                )
+        return self
 
     @model_validator(mode="after")
     def validate_url_or_command(self) -> WorkspaceMcpServerCreate:
@@ -125,7 +146,7 @@ class WorkspaceMcpServerCreate(BaseModel):
         # Always populate url_or_command so downstream code has one source of truth
         self.url_or_command = effective
         # Keep url in sync for backward compat with AI agent hot-loader
-        self.url = effective[:512]  # truncate to url column length
+        self.url = effective
 
         return self
 
@@ -188,8 +209,9 @@ class WorkspaceMcpServerUpdate(BaseModel):
     """Request body for partial PATCH update of an MCP server.
 
     All fields are optional. Fields not included in the request are left
-    unchanged. For secret fields (auth_token, headers, env_vars), omitting
-    the field preserves the existing encrypted value.
+    unchanged. For secret fields (auth_token, env_vars), omitting the field
+    preserves the existing encrypted value. Headers are stored as plaintext
+    and returned in API responses.
     """
 
     display_name: str | None = Field(default=None, max_length=128)
@@ -209,6 +231,24 @@ class WorkspaceMcpServerUpdate(BaseModel):
     oauth_auth_url: str | None = Field(default=None, max_length=512)
     oauth_token_url: str | None = Field(default=None, max_length=512)
     oauth_scopes: str | None = Field(default=None, max_length=512)
+
+    @model_validator(mode="after")
+    def validate_server_type_transport(self) -> WorkspaceMcpServerUpdate:
+        """Reject invalid server_type / transport combinations when both are in the PATCH."""
+        if self.server_type is not None and self.transport is not None:
+            if self.server_type == McpServerType.REMOTE:
+                if self.transport not in (McpTransport.SSE, McpTransport.STREAMABLE_HTTP):
+                    raise ValueError(
+                        f"Remote servers only support 'sse' or 'streamable_http' transport, "
+                        f"got '{self.transport.value}'"
+                    )
+            elif self.server_type in (McpServerType.COMMAND, McpServerType.NPX, McpServerType.UVX):
+                if self.transport != McpTransport.STDIO:
+                    raise ValueError(
+                        f"{self.server_type.value} servers only support 'stdio' transport, "
+                        f"got '{self.transport.value}'"
+                    )
+        return self
 
     @model_validator(mode="after")
     def validate_url_or_command(self) -> WorkspaceMcpServerUpdate:
@@ -296,13 +336,14 @@ class WorkspaceMcpServerResponse(BaseModel):
     is_enabled: bool
 
     # Legacy field for backward compat
-    url: str
+    url: str | None = None
 
     auth_type: McpAuthType
 
     # Boolean presence flags — raw secrets are NEVER returned
     has_auth_secret: bool = False
-    has_headers_secret: bool = False
+    has_headers: bool = False
+    has_headers_encrypted: bool = False
     has_env_secret: bool = False
 
     # Headers are NOT secret — returned in full for editing
@@ -380,7 +421,8 @@ class WorkspaceMcpServerResponse(BaseModel):
             url=server.url,
             auth_type=server.auth_type,
             has_auth_secret=bool(server.auth_token_encrypted),
-            has_headers_secret=bool(server.headers_encrypted or server.headers_json),
+            has_headers=bool(server.headers_encrypted or server.headers_json),
+            has_headers_encrypted=bool(server.headers_encrypted),
             has_env_secret=bool(server.env_vars_encrypted),
             headers=headers_data,
             env_var_keys=env_keys,
@@ -420,7 +462,7 @@ class McpServerStatusResponse(BaseModel):
     """Status probe result for an MCP server (legacy endpoint)."""
 
     server_id: UUID
-    status: str  # "connected" | "failed" | "unknown"
+    status: McpStatus
     checked_at: datetime
 
 

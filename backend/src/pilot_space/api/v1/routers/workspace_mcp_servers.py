@@ -49,6 +49,7 @@ from pilot_space.infrastructure.database.models.workspace_mcp_server import (
     McpAuthType,
     McpServerType,
     McpStatus,
+    McpTransport,
     WorkspaceMcpServer,
 )
 from pilot_space.infrastructure.database.repositories.workspace_repository import (
@@ -159,7 +160,8 @@ async def register_mcp_server(
 
     # url_or_command is validated and set by the model_validator
     url_or_command = body.url_or_command or body.url or ""
-    url_val = url_or_command[:512]  # Truncate for legacy url column
+    # Mirror into legacy url column (same width now — no truncation needed)
+    url_val = url_or_command if url_or_command else None
 
     server = WorkspaceMcpServer(
         workspace_id=workspace_id,
@@ -298,31 +300,57 @@ async def update_mcp_server(
     )
 
     # Cross-field validation: the model_validator on WorkspaceMcpServerUpdate
-    # already validated (url_or_command, server_type) when both are present in
-    # the request body.  We still need to cover the case where only server_type
-    # changes — the stored url_or_command must be re-validated against the new type.
-    if body.server_type is not None and body.url_or_command is None:
+    # validates (url_or_command, server_type) only when both are present in
+    # the request body.  Here we cover the remaining cases:
+    #   1. Only server_type changes — re-validate stored url_or_command against new type.
+    #   2. Only url_or_command changes — validate new value against stored server_type.
+    if body.server_type is not None or body.url_or_command is not None:
         from pilot_space.api.v1.routers._mcp_server_schemas import (
             _validate_mcp_url,
             _validate_npx_uvx_command,
         )
-        from pilot_space.infrastructure.database.models.workspace_mcp_server import McpServerType
 
-        if not effective_url_or_command:
+        # Skip when both are present — already validated by the Pydantic model_validator.
+        if not (body.server_type is not None and body.url_or_command is not None):
+            if not effective_url_or_command:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="url_or_command is required when changing server_type",
+                )
+            try:
+                if effective_server_type == McpServerType.REMOTE:
+                    _validate_mcp_url(effective_url_or_command)
+                elif effective_server_type in (McpServerType.COMMAND, McpServerType.NPX, McpServerType.UVX):
+                    _validate_npx_uvx_command(effective_url_or_command, effective_server_type)
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=str(exc),
+                ) from exc
+
+    # Cross-field validation: server_type / transport compatibility.
+    # The model_validator on WorkspaceMcpServerUpdate already covers the case
+    # where both are present in the request body.  Here we handle the case
+    # where only one changes — we must check against the stored value.
+    effective_transport = body.transport if body.transport is not None else server.transport
+    if effective_server_type == McpServerType.REMOTE:
+        if effective_transport not in (McpTransport.SSE, McpTransport.STREAMABLE_HTTP):
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="url_or_command is required when changing server_type",
+                detail=(
+                    f"Remote servers only support 'sse' or 'streamable_http' transport, "
+                    f"got '{effective_transport.value}'"
+                ),
             )
-        try:
-            if effective_server_type == McpServerType.REMOTE:
-                _validate_mcp_url(effective_url_or_command)
-            elif effective_server_type in (McpServerType.COMMAND, McpServerType.NPX, McpServerType.UVX):
-                _validate_npx_uvx_command(effective_url_or_command, effective_server_type)
-        except ValueError as exc:
+    elif effective_server_type in (McpServerType.COMMAND, McpServerType.NPX, McpServerType.UVX):
+        if effective_transport != McpTransport.STDIO:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=str(exc),
-            ) from exc
+                detail=(
+                    f"{effective_server_type.value} servers only support 'stdio' transport, "
+                    f"got '{effective_transport.value}'"
+                ),
+            )
 
     if body.server_type is not None:
         server.server_type = body.server_type
@@ -344,7 +372,7 @@ async def update_mcp_server(
     # url_or_command: already validated above; write to ORM and keep url in sync
     if body.url_or_command is not None:
         server.url_or_command = body.url_or_command
-        server.url = body.url_or_command[:512]
+        server.url = body.url_or_command
 
     # Secret fields: only update if new value provided and non-empty
     if body.auth_token is not None and body.auth_token.strip():
@@ -416,6 +444,19 @@ async def get_mcp_server_status(
         )
 
     headers: dict[str, str] = {}
+
+    # Merge plaintext headers from headers_json (e.g. custom API key headers)
+    if server.headers_json:
+        import json as _json
+
+        try:
+            parsed = _json.loads(server.headers_json)
+            if isinstance(parsed, dict):
+                headers.update(parsed)
+        except (ValueError, TypeError):
+            logger.warning("mcp_status_headers_json_parse_failed", server_id=str(server_id))
+
+    # Authorization from encrypted token takes precedence over headers_json
     if server.auth_token_encrypted:
         try:
             token = decrypt_api_key(server.auth_token_encrypted)
@@ -423,31 +464,30 @@ async def get_mcp_server_status(
         except Exception:
             logger.warning("mcp_status_token_decrypt_failed", server_id=str(server_id))
 
-    probe_status = "unknown"
+    probe_status = McpStatus.ENABLED  # optimistic default
     url = server.url_or_command or server.url
-    try:
-        async with httpx.AsyncClient(timeout=5.0, follow_redirects=False) as client:
-            response = await client.get(url, headers=headers)
-            probe_status = "connected" if response.status_code < 500 else "failed"
-    except (httpx.ConnectError, httpx.TimeoutException, httpx.RequestError):
-        probe_status = "failed"
-    except Exception:
-        probe_status = "unknown"
+    if not url:
+        probe_status = McpStatus.CONFIG_ERROR
+    else:
+        try:
+            async with httpx.AsyncClient(timeout=5.0, follow_redirects=False) as client:
+                response = await client.get(url, headers=headers)
+                probe_status = McpStatus.ENABLED if response.status_code < 500 else McpStatus.UNREACHABLE
+        except (httpx.ConnectError, httpx.TimeoutException, httpx.RequestError):
+            probe_status = McpStatus.UNREACHABLE
+        except Exception:
+            probe_status = McpStatus.UNHEALTHY
 
     checked_at = datetime.now(UTC)
     server.last_status_checked_at = checked_at
-    # Map old-style status to new McpStatus enum
-    if probe_status == "connected":
-        server.last_status = McpStatus.ENABLED
-    elif probe_status == "failed":
-        server.last_status = McpStatus.UNREACHABLE
+    server.last_status = probe_status
     await repo.update(server)
 
     logger.info(
         "mcp_server_status_probed",
         server_id=str(server_id),
         workspace_id=str(workspace_id),
-        status=probe_status,
+        status=probe_status.value,
     )
 
     return McpServerStatusResponse(
@@ -636,7 +676,7 @@ async def import_mcp_servers(
 
     try:
         parsed = ImportMcpServersService.parse_config_json(body.config_json)
-    except ValueError as exc:
+    except (ValueError, TypeError) as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(exc),
@@ -751,25 +791,37 @@ async def get_mcp_oauth_url(
             detail="Server missing oauth_auth_url or oauth_client_id",
         )
 
+    redis_client = _get_redis_client(request)
+    if redis_client is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="OAuth state storage (Redis) is unavailable; cannot initiate OAuth flow",
+        )
+
     nonce = secrets.token_urlsafe(32)
     state = f"mcp_oauth_{server_id}_{nonce}"
 
-    redis_client = _get_redis_client(request)
-    if redis_client is not None:
-        import json
+    import json
 
-        state_data: dict[str, Any] = {
-            "server_id": str(server_id),
-            "workspace_id": str(workspace_id),
-            "workspace_slug": workspace.slug,
-            "user_id": str(current_user.user_id),
-            "nonce": nonce,
-        }
+    state_data: dict[str, Any] = {
+        "server_id": str(server_id),
+        "workspace_id": str(workspace_id),
+        "workspace_slug": workspace.slug,
+        "user_id": str(current_user.user_id),
+        "nonce": nonce,
+    }
+    try:
         await redis_client.client.set(
             f"mcp_oauth_state:{state}",
             json.dumps(state_data),
             ex=600,
         )
+    except Exception as exc:
+        logger.error("mcp_oauth_state_persist_failed", server_id=str(server_id), error=str(exc))
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Failed to persist OAuth state; cannot initiate OAuth flow",
+        ) from exc
 
     callback_url = str(request.base_url).rstrip("/") + "/api/v1/oauth2/mcp-callback"
     params = {

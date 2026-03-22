@@ -40,7 +40,7 @@ interface MCPServersTableProps {
   onFilterStatusChange: (status: McpStatus | 'all') => void;
   onFilterSearchChange: (search: string) => void;
   onEdit: (server: MCPServer) => void;
-  onTestConnection: (serverId: string) => void;
+  onTestConnection: (serverId: string) => Promise<unknown> | void;
   onToggleEnabled: (serverId: string, enabled: boolean) => void;
   onDelete: (serverId: string) => void;
   deletingServerId: string | null;
@@ -126,6 +126,7 @@ export function MCPServersTable({
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
+            aria-label="Search servers"
             placeholder="Search servers..."
             value={filterSearch}
             onChange={(e) => onFilterSearchChange(e.target.value)}

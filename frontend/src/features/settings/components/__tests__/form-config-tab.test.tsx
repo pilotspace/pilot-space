@@ -22,7 +22,8 @@ const makeServer = (overrides?: Partial<MCPServer>): MCPServer => ({
   command_args: null,
   auth_type: 'bearer',
   has_auth_secret: true,
-  has_headers_secret: false,
+  has_headers: false,
+  has_headers_encrypted: false,
   has_env_secret: false,
   is_enabled: true,
   last_status: 'enabled',
@@ -71,7 +72,7 @@ describe('FormConfigTab', () => {
       <FormConfigTab
         initialData={makeServer({
           headers: { 'X-Custom': 'value1', 'Authorization': 'Bearer xyz' },
-          has_headers_secret: true,
+          has_headers: true,
         })}
         onSave={vi.fn()}
         isSaving={false}

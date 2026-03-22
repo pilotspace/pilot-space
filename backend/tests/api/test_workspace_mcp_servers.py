@@ -276,7 +276,7 @@ async def test_status_endpoint(
 ) -> None:
     """MCP-05: GET .../status returns JSON with status field.
 
-    The status field must be one of: 'connected', 'failed', 'unknown'.
+    The status field must be a valid McpStatus enum value.
     In unit tests we mock httpx so the server is not actually contacted.
     """
     from unittest.mock import AsyncMock, patch
@@ -314,7 +314,7 @@ async def test_status_endpoint(
     assert status_response.status_code == 200
     status_data = status_response.json()
     assert "status" in status_data
-    assert status_data["status"] in ("connected", "failed", "unknown")
+    assert status_data["status"] in ("enabled", "disabled", "unhealthy", "unreachable", "config_error")
 
 
 # ---------------------------------------------------------------------------
@@ -908,7 +908,8 @@ async def test_register_server_with_new_fields(
 
     # Secret flags instead of raw values
     assert data["has_auth_secret"] is True
-    assert data["has_headers_secret"] is True
+    assert data["has_headers"] is True
+    assert data["has_headers_encrypted"] is False
 
     # Headers are now visible in response (not secret)
     assert data["headers"] == {"X-Custom": "value1"}
@@ -1574,12 +1575,11 @@ def test_update_schema_no_validation_when_url_or_command_omitted() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_post_duplicate_display_name_returns_409(
+async def test_post_duplicate_display_name_returns_409(
     mock_workspace_p25: object,
     mock_mcp_repo_p25: object,
 ) -> None:
     """POST with a display_name already used by an active server returns 409."""
-    import asyncio
     from unittest.mock import AsyncMock, MagicMock, patch
 
     from httpx import ASGITransport, AsyncClient
@@ -1615,24 +1615,20 @@ def test_post_duplicate_display_name_returns_409(
             patch(_SET_RLS_PATH, new=AsyncMock()),
             patch(_MCP_REPO_PATH, return_value=repo),
         ):
-
-            async def _run() -> int:
-                async with AsyncClient(
-                    transport=ASGITransport(app=app),
-                    base_url="http://test",
-                    headers={"Authorization": "Bearer test-token"},
-                ) as client:
-                    resp = await client.post(
-                        f"/api/v1/workspaces/{workspace.id}/mcp-servers",  # type: ignore[attr-defined]
-                        json={
-                            "display_name": "Duplicate Server",
-                            "url_or_command": "https://mcp.example.com/sse",
-                            "server_type": "remote",
-                        },
-                    )
-                    return resp.status_code
-
-            status_code = asyncio.get_event_loop().run_until_complete(_run())
+            async with AsyncClient(
+                transport=ASGITransport(app=app),
+                base_url="http://test",
+                headers={"Authorization": "Bearer test-token"},
+            ) as client:
+                resp = await client.post(
+                    f"/api/v1/workspaces/{workspace.id}/mcp-servers",  # type: ignore[attr-defined]
+                    json={
+                        "display_name": "Duplicate Server",
+                        "url_or_command": "https://mcp.example.com/sse",
+                        "server_type": "remote",
+                    },
+                )
+                status_code = resp.status_code
     finally:
         app.dependency_overrides.pop(get_current_user, None)
         app.dependency_overrides.pop(get_session, None)
@@ -1640,12 +1636,11 @@ def test_post_duplicate_display_name_returns_409(
     assert status_code == 409
 
 
-def test_patch_rename_to_existing_name_returns_409(
+async def test_patch_rename_to_existing_name_returns_409(
     mock_workspace_p25: object,
     mock_mcp_repo_p25: object,
 ) -> None:
     """PATCH renaming to an already-taken display_name returns 409."""
-    import asyncio
     from datetime import UTC, datetime
     from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -1713,20 +1708,16 @@ def test_patch_rename_to_existing_name_returns_409(
             patch(_SET_RLS_PATH, new=AsyncMock()),
             patch(_MCP_REPO_PATH, return_value=repo),
         ):
-
-            async def _run() -> int:
-                async with AsyncClient(
-                    transport=ASGITransport(app=app),
-                    base_url="http://test",
-                    headers={"Authorization": "Bearer test-token"},
-                ) as client:
-                    resp = await client.patch(
-                        f"/api/v1/workspaces/{workspace.id}/mcp-servers/{server_id}",  # type: ignore[attr-defined]
-                        json={"display_name": "Taken Name"},
-                    )
-                    return resp.status_code
-
-            status_code = asyncio.get_event_loop().run_until_complete(_run())
+            async with AsyncClient(
+                transport=ASGITransport(app=app),
+                base_url="http://test",
+                headers={"Authorization": "Bearer test-token"},
+            ) as client:
+                resp = await client.patch(
+                    f"/api/v1/workspaces/{workspace.id}/mcp-servers/{server_id}",  # type: ignore[attr-defined]
+                    json={"display_name": "Taken Name"},
+                )
+                status_code = resp.status_code
     finally:
         app.dependency_overrides.pop(get_current_user, None)
         app.dependency_overrides.pop(get_session, None)
@@ -1750,9 +1741,8 @@ _LOADER_DECRYPT_PATH = (
 )
 
 
-def test_loader_key_includes_uuid_suffix() -> None:
+async def test_loader_key_includes_uuid_suffix() -> None:
     """Keys from load_workspace_mcp_servers must be WORKSPACE_{NAME}_{SHORT_ID}."""
-    import asyncio
     from unittest.mock import AsyncMock, MagicMock, patch
     from uuid import UUID
 
@@ -1788,18 +1778,15 @@ def test_loader_key_includes_uuid_suffix() -> None:
         patch(_LOADER_REPO_PATH, return_value=repo_mock),
         patch(_LOADER_BUILD_PATH, return_value=MagicMock()),
     ):
-        result = asyncio.get_event_loop().run_until_complete(
-            load_workspace_mcp_servers(workspace_id, db_session)
-        )
+        result = await load_workspace_mcp_servers(workspace_id, db_session)
 
     # Short ID is first 8 hex chars of a1b2c3d4-... uppercased = "A1B2C3D4"
     expected_key = "WORKSPACE_MY_SERVER_A1B2C3D4"
     assert expected_key in result, f"Expected key {expected_key!r}, got keys: {list(result)}"
 
 
-def test_loader_two_servers_get_distinct_keys() -> None:
+async def test_loader_two_servers_get_distinct_keys() -> None:
     """Two servers with identical normalized names each get a unique key via UUID suffix."""
-    import asyncio
     from unittest.mock import AsyncMock, MagicMock, patch
     from uuid import UUID
 
@@ -1842,9 +1829,7 @@ def test_loader_two_servers_get_distinct_keys() -> None:
         patch(_LOADER_REPO_PATH, return_value=repo_mock),
         patch(_LOADER_BUILD_PATH, return_value=MagicMock()),
     ):
-        result = asyncio.get_event_loop().run_until_complete(
-            load_workspace_mcp_servers(workspace_id, db_session)
-        )
+        result = await load_workspace_mcp_servers(workspace_id, db_session)
 
     assert len(result) == 2, f"Expected 2 distinct keys, got: {list(result)}"
     assert "WORKSPACE_MY_SERVER_AAAAAAAA" in result

@@ -263,8 +263,6 @@ class ImportMcpServersService:
                 continue
 
             # Encrypt env_vars and headers if provided
-            from contextlib import suppress
-
             from pilot_space.infrastructure.encryption_kv import encrypt_kv
 
             headers_encrypted: str | None = None
@@ -276,16 +274,22 @@ class ImportMcpServersService:
 
             env_vars_encrypted: str | None = None
             if entry.env_vars:
-                with suppress(Exception):
+                try:
                     env_vars_encrypted = encrypt_kv(entry.env_vars)
-
-            # Truncate url to 512 chars for legacy column
-            url_val = entry.url_or_command[:512]
+                except Exception as exc:
+                    logger.error(
+                        "mcp_import_env_vars_encryption_failed",
+                        name=entry.name,
+                        error=str(exc),
+                    )
+                    raise ImportError(
+                        f"Failed to encrypt env_vars for server '{entry.name}': {exc}"
+                    ) from exc
 
             server = WorkspaceMcpServer(
                 workspace_id=workspace_id,
                 display_name=entry.name,
-                url=url_val,
+                url=entry.url_or_command,
                 url_or_command=entry.url_or_command,
                 server_type=entry.server_type,
                 transport=entry.transport,

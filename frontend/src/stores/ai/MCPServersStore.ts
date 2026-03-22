@@ -26,7 +26,8 @@ export interface MCPServer {
   command_args: string | null;
   auth_type: 'none' | 'bearer' | 'oauth2';
   has_auth_secret: boolean;
-  has_headers_secret: boolean;
+  has_headers: boolean;
+  has_headers_encrypted: boolean;
   has_env_secret: boolean;
   /** Full header key-value pairs (headers are not secret) */
   headers?: Record<string, string> | null;

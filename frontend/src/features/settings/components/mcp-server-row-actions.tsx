@@ -31,7 +31,7 @@ import type { MCPServer } from '@/stores/ai/MCPServersStore';
 interface MCPServerRowActionsProps {
   server: MCPServer;
   onEdit: (server: MCPServer) => void;
-  onTestConnection: (serverId: string) => void;
+  onTestConnection: (serverId: string) => Promise<unknown> | void;
   onToggleEnabled: (serverId: string, enabled: boolean) => void;
   onDelete: (serverId: string) => void;
   isDeleting?: boolean;
@@ -62,7 +62,10 @@ export function MCPServerRowActions({
             <Pencil className="mr-2 h-4 w-4" />
             Edit
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => onTestConnection(server.id)} disabled={isTesting}>
+          <DropdownMenuItem
+            onClick={() => { Promise.resolve(onTestConnection(server.id)).catch(() => {}); }}
+            disabled={isTesting}
+          >
             {isTesting ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (

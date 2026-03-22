@@ -58,6 +58,7 @@ interface FormConfigTabProps {
   initialData?: MCPServer;
   onSave: (data: MCPServerRegisterRequest | MCPServerUpdateRequest) => void;
   isSaving: boolean;
+  formId?: string;
 }
 
 // ── Helpers ─────────────────────────────────────────────────
@@ -175,7 +176,7 @@ function KVEditor({
 
 // ── Component ───────────────────────────────────────────────
 
-export function FormConfigTab({ initialData, onSave, isSaving }: FormConfigTabProps) {
+export function FormConfigTab({ initialData, onSave, isSaving, formId }: FormConfigTabProps) {
   const [form, setForm] = React.useState<FormConfigData>(() => buildInitialState(initialData));
   const isEdit = !!initialData;
 
@@ -189,6 +190,16 @@ export function FormConfigTab({ initialData, onSave, isSaving }: FormConfigTabPr
       transport: getDefaultTransport(type),
       urlOrCommand: '',
       commandArgs: '',
+      // Clear remote-only auth/header fields so secrets don't persist hidden
+      ...(type !== 'remote' && {
+        authType: 'none' as const,
+        authToken: '',
+        headers: [],
+        oauthClientId: '',
+        oauthAuthUrl: '',
+        oauthTokenUrl: '',
+        oauthScopes: '',
+      }),
     }));
   };
 
@@ -201,8 +212,11 @@ export function FormConfigTab({ initialData, onSave, isSaving }: FormConfigTabPr
     e.preventDefault();
     if (!canSubmit || isSaving) return;
 
+    const isRemote = form.serverType === 'remote';
+
+    // Remote-only: headers; for command types, always omit.
     const headersMap =
-      form.headers.length > 0
+      isRemote && form.headers.length > 0
         ? Object.fromEntries(form.headers.filter((p) => p.key.trim()).map((p) => [p.key, p.value]))
         : undefined;
 
@@ -214,6 +228,11 @@ export function FormConfigTab({ initialData, onSave, isSaving }: FormConfigTabPr
       ? Object.fromEntries(envVarEntries.map((p) => [p.key, p.value]))
       : undefined;
 
+    // Auth fields are remote-only — force 'none' for command types to
+    // prevent stale secrets from leaking into the request payload.
+    const authType = isRemote ? form.authType : 'none';
+    const authToken = isRemote && form.authToken ? form.authToken : undefined;
+
     if (isEdit) {
       const data: MCPServerUpdateRequest = {
         display_name: form.displayName.trim(),
@@ -221,8 +240,8 @@ export function FormConfigTab({ initialData, onSave, isSaving }: FormConfigTabPr
         transport: form.transport,
         url_or_command: form.urlOrCommand.trim(),
         command_args: form.commandArgs.trim() || null,
-        auth_type: form.authType,
-        ...(form.authToken ? { auth_token: form.authToken } : {}),
+        auth_type: authType,
+        ...(authToken ? { auth_token: authToken } : {}),
         ...(headersMap ? { headers: headersMap } : {}),
         ...(envVarsMap ? { env_vars: envVarsMap } : {}),
       };
@@ -234,11 +253,11 @@ export function FormConfigTab({ initialData, onSave, isSaving }: FormConfigTabPr
         transport: form.transport,
         url_or_command: form.urlOrCommand.trim(),
         command_args: form.commandArgs.trim() || undefined,
-        auth_type: form.authType,
-        ...(form.authToken ? { auth_token: form.authToken } : {}),
+        auth_type: authType,
+        ...(authToken ? { auth_token: authToken } : {}),
         ...(headersMap ? { headers: headersMap } : {}),
         ...(envVarsMap ? { env_vars: envVarsMap } : {}),
-        ...(form.authType === 'oauth2'
+        ...(authType === 'oauth2'
           ? {
               oauth_client_id: form.oauthClientId.trim(),
               oauth_auth_url: form.oauthAuthUrl.trim(),
@@ -252,7 +271,7 @@ export function FormConfigTab({ initialData, onSave, isSaving }: FormConfigTabPr
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
+    <form id={formId} onSubmit={handleSubmit} className="space-y-5">
       {/* Row 1: Name + Type */}
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
@@ -449,7 +468,7 @@ export function FormConfigTab({ initialData, onSave, isSaving }: FormConfigTabPr
                 <HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
               </TooltipTrigger>
               <TooltipContent side="right" className="max-w-[280px]">
-                Custom HTTP headers sent with every request to the remote MCP server. Use for API keys, auth tokens, or custom routing headers.
+                Custom HTTP headers sent with every request to the remote MCP server. Headers are stored in plaintext — do not put secrets here. Use the Bearer Token field or Environment Variables for sensitive values.
               </TooltipContent>
             </Tooltip>
           </div>
