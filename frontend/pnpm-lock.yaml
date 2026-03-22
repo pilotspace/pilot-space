@@ -81,8 +81,8 @@ importers:
         specifier: ^3.16.0
         version: 3.16.0(@tiptap/pm@3.16.0)
       '@tiptap/extension-blockquote':
-        specifier: ^3.16.0
-        version: 3.16.0(@tiptap/core@3.16.0(@tiptap/pm@3.16.0))
+        specifier: ^3.20.4
+        version: 3.20.4(@tiptap/core@3.16.0(@tiptap/pm@3.16.0))
       '@tiptap/extension-character-count':
         specifier: ^3.17.0
         version: 3.17.0(@tiptap/extensions@3.16.0(@tiptap/core@3.16.0(@tiptap/pm@3.16.0))(@tiptap/pm@3.16.0))
@@ -117,8 +117,8 @@ importers:
         specifier: ^3.17.1
         version: 3.17.1(@tiptap/extension-list@3.16.0(@tiptap/core@3.16.0(@tiptap/pm@3.16.0))(@tiptap/pm@3.16.0))
       '@tiptap/extension-youtube':
-        specifier: ^3.16.0
-        version: 3.16.0(@tiptap/core@3.16.0(@tiptap/pm@3.16.0))
+        specifier: ^3.20.4
+        version: 3.20.4(@tiptap/core@3.16.0(@tiptap/pm@3.16.0))
       '@tiptap/pm':
         specifier: ^3.16.0
         version: 3.16.0
@@ -1973,11 +1973,6 @@ packages:
     peerDependencies:
       '@tiptap/pm': ^3.16.0
 
-  '@tiptap/extension-blockquote@3.16.0':
-    resolution: {integrity: sha512-c1bhJ3KDFXyNcMweiBzu0LouBXfUC/sUMtaEafQePR98BVu+d0tmWXcGlfVarGVoRyCYFa1mHpkgtxp4SS3lag==}
-    peerDependencies:
-      '@tiptap/core': ^3.16.0
-
   '@tiptap/extension-blockquote@3.20.4':
     resolution: {integrity: sha512-9sskyyhYj2oKat//lyZVXCp9YrPt4oJAZnGHYWXS0xlskjsLElrfKKlM4vpbhGss3VrhQRoEGqWLnIaJYPF1zw==}
     peerDependencies:
@@ -2162,10 +2157,10 @@ packages:
     peerDependencies:
       '@tiptap/core': ^3.16.0
 
-  '@tiptap/extension-youtube@3.16.0':
-    resolution: {integrity: sha512-G+g36rzbanNxnN9t5SUvqoL5ooT+5QexZNANG9JFb2Lg74oweCaX4IUEgwo03X/oVrr/cehcVS3QUAh15vyYgQ==}
+  '@tiptap/extension-youtube@3.20.4':
+    resolution: {integrity: sha512-CGwoYqaZKAlY0nju0Bq7ynlGs2GJCg4/oWHAAwgNSdTrCqz8SHa1keh99ZYHy2wmVvFVXOUipIfhI6+u3E81Bg==}
     peerDependencies:
-      '@tiptap/core': ^3.16.0
+      '@tiptap/core': ^3.20.4
 
   '@tiptap/extensions@3.16.0':
     resolution: {integrity: sha512-0iVrn0FHcHIRMdsQLQbf16NgYrKz+Sup/8dDMVBy1QoHn5Hb51QZABqXJTZ6u7My34b4fNZrSggzBAE7l7N/pA==}
@@ -6926,10 +6921,6 @@ snapshots:
     dependencies:
       '@tiptap/pm': 3.16.0
 
-  '@tiptap/extension-blockquote@3.16.0(@tiptap/core@3.16.0(@tiptap/pm@3.16.0))':
-    dependencies:
-      '@tiptap/core': 3.16.0(@tiptap/pm@3.16.0)
-
   '@tiptap/extension-blockquote@3.20.4(@tiptap/core@3.16.0(@tiptap/pm@3.16.0))':
     dependencies:
       '@tiptap/core': 3.16.0(@tiptap/pm@3.16.0)
@@ -7084,7 +7075,7 @@ snapshots:
     dependencies:
       '@tiptap/core': 3.16.0(@tiptap/pm@3.16.0)
 
-  '@tiptap/extension-youtube@3.16.0(@tiptap/core@3.16.0(@tiptap/pm@3.16.0))':
+  '@tiptap/extension-youtube@3.20.4(@tiptap/core@3.16.0(@tiptap/pm@3.16.0))':
     dependencies:
       '@tiptap/core': 3.16.0(@tiptap/pm@3.16.0)
 
