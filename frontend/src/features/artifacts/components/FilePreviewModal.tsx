@@ -43,6 +43,11 @@ const DocxRenderer = dynamic(
   () => import('./renderers/DocxRenderer').then((m) => ({ default: m.DocxRenderer })),
   { ssr: false }
 );
+// SheetJS references browser APIs (ArrayBuffer, etc.) — ssr: false is REQUIRED.
+const XlsxRenderer = dynamic(
+  () => import('./renderers/XlsxRenderer').then((m) => ({ default: m.XlsxRenderer })),
+  { ssr: false }
+);
 
 export interface FilePreviewModalProps {
   open: boolean;
@@ -255,14 +260,15 @@ export function FilePreviewModal({
 
     // Office formats — handle before content fetch checks
     // Legacy formats (.doc, .xls, .ppt) degrade to download — cannot be parsed client-side.
-    // Modern formats route to their real renderers (Phase 2-4); xlsx/pptx still use placeholder.
+    // Modern formats route to their real renderers (Phase 2-4); pptx still uses placeholder.
     if (rendererType === 'xlsx' || rendererType === 'docx' || rendererType === 'pptx') {
       if (isLegacyOfficeFormat(filename)) {
         return <DownloadFallback filename={filename} signedUrl={signedUrl} reason="legacy" />;
       }
       // docx: real renderer available (Phase 2). Falls through to content fetch below.
-      // xlsx, pptx: still placeholder until Phase 3-4.
-      if (rendererType === 'xlsx' || rendererType === 'pptx') {
+      // xlsx: real renderer available (Phase 3). Falls through to content fetch below.
+      // pptx: still placeholder until Phase 4.
+      if (rendererType === 'pptx') {
         return <DownloadFallback filename={filename} signedUrl={signedUrl} reason="unsupported" />;
       }
     }
@@ -301,6 +307,9 @@ export function FilePreviewModal({
         return <HtmlRenderer content={content as string} filename={filename} />;
       case 'csv':
         return <CsvRenderer content={content as string} />;
+      case 'xlsx':
+        // content is ArrayBuffer for 'xlsx' renderer type (useFileContent binary branch)
+        return <XlsxRenderer content={content as ArrayBuffer} />;
       case 'docx':
         // content is ArrayBuffer for 'docx' renderer type (useFileContent binary branch)
         return (
