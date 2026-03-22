@@ -16,7 +16,10 @@ from uuid import UUID
 from sqlalchemy import and_, delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from pilot_space.application.services.embedding_service import EmbeddingService
+from pilot_space.application.services.embedding_service import (
+    EmbeddingConfig,
+    EmbeddingService,
+)
 from pilot_space.application.services.memory.graph_write_service import (
     GraphWritePayload,
     GraphWriteService,
@@ -87,11 +90,25 @@ class KgPopulateHandler:
         anthropic_api_key: str | None = None,
     ) -> None:
         self._session = session
+        self._fallback_embedding = embedding_service
         self._embedding = embedding_service
         self._queue = queue
         self._anthropic_api_key = anthropic_api_key
         self._repo = KnowledgeGraphRepository(session)
         self._converter = ContentConverter()
+
+    async def _resolve_workspace_embedding(self, workspace_id: UUID) -> None:
+        """Resolve workspace BYOK embedding key, falling back to server key."""
+        try:
+            from pilot_space.ai.agents.pilotspace_stream_utils import get_workspace_embedding_key
+
+            key = await get_workspace_embedding_key(self._session, workspace_id)
+            if key:
+                self._embedding = EmbeddingService(EmbeddingConfig(openai_api_key=key))
+                return
+        except Exception:
+            pass
+        self._embedding = self._fallback_embedding
 
     async def handle(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Dispatch to _handle_issue or _handle_note based on entity_type.
@@ -106,6 +123,9 @@ class KgPopulateHandler:
             logger.warning("KgPopulateHandler: invalid payload %r — %s", payload, exc)
             return {"success": False, "error": str(exc)}
 
+        # Resolve workspace BYOK embedding key (falls back to server key)
+        await self._resolve_workspace_embedding(p.workspace_id)
+
         if p.entity_type == "issue":
             return await self._handle_issue(p)
         if p.entity_type == "note":
@@ -116,10 +136,6 @@ class KgPopulateHandler:
             return await self._handle_cycle(p)
         logger.warning("KgPopulateHandler: unknown entity_type %r", p.entity_type)
         return {"success": False, "error": f"unknown entity_type: {p.entity_type}"}
-
-    # ------------------------------------------------------------------
-    # Issue handling
-    # ------------------------------------------------------------------
 
     async def _handle_issue(self, p: _KgPopulatePayload) -> dict[str, Any]:
         issue = await self._session.get(IssueModel, p.entity_id)
@@ -240,10 +256,6 @@ class KgPopulateHandler:
             "chunks": n_chunks,
             "edges": edges_created,
         }
-
-    # ------------------------------------------------------------------
-    # Note handling
-    # ------------------------------------------------------------------
 
     async def _handle_note(self, p: _KgPopulatePayload) -> dict[str, Any]:
         # C-3: Advisory lock prevents concurrent chunk delete/recreate races.
@@ -381,10 +393,6 @@ class KgPopulateHandler:
             "edges": edges_created,
         }
 
-    # ------------------------------------------------------------------
-    # Project handling
-    # ------------------------------------------------------------------
-
     async def _handle_project(self, p: _KgPopulatePayload) -> dict[str, Any]:
         project = await self._session.get(ProjectModel, p.entity_id)
         if project is None or project.is_deleted:
@@ -446,10 +454,6 @@ class KgPopulateHandler:
             "children_linked": children_linked,
             "edges": edges_created,
         }
-
-    # ------------------------------------------------------------------
-    # Cycle handling
-    # ------------------------------------------------------------------
 
     async def _handle_cycle(self, p: _KgPopulatePayload) -> dict[str, Any]:
         cycle = await self._session.get(CycleModel, p.entity_id)
@@ -519,10 +523,6 @@ class KgPopulateHandler:
             "node_ids": [str(n) for n in result.node_ids],
             "edges": edges_created,
         }
-
-    # ------------------------------------------------------------------
-    # Structural BELONGS_TO edges
-    # ------------------------------------------------------------------
 
     async def _link_to_project(
         self,
@@ -613,10 +613,6 @@ class KgPopulateHandler:
         if edges_created:
             await self._session.flush()
         return edges_created
-
-    # ------------------------------------------------------------------
-    # Similarity edge creation
-    # ------------------------------------------------------------------
 
     async def _find_and_link_similar(
         self,

@@ -63,11 +63,14 @@ def _make_handler(
 ) -> KgPopulateHandler:
     if embedding_service is None:
         embedding_service = _make_embedding_service()
-    return KgPopulateHandler(
+    handler = KgPopulateHandler(
         session=session,
         embedding_service=embedding_service,
         queue=queue,
     )
+    # Skip BYOK key lookup in tests — the test-injected embedding_service is authoritative
+    handler._resolve_workspace_embedding = AsyncMock()  # type: ignore[method-assign]
+    return handler
 
 
 def _make_scored_node(score: float = 0.9, project_id: UUID | None = None) -> ScoredNode:
