@@ -18,7 +18,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useEditor, EditorContent } from '@tiptap/react';
 import type { Content } from '@tiptap/core';
-import { Activity, Network } from 'lucide-react';
+import { Activity } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import { SelectionToolbar } from '@/components/editor/SelectionToolbar';
@@ -28,12 +28,11 @@ import {
   ActivityTimeline,
   CollapsibleSection,
   IssueSectionDivider,
-  IssueGraph,
 } from '@/features/issues/components';
 import { IssueDescriptionEmptyState } from './issue-description-empty-state';
 import { GitHubImplementationSection } from './github-implementation-section';
 import { IssueKnowledgeGraphMini } from './issue-knowledge-graph-mini';
-import { useIssueLinks, useIssueRelations } from '@/features/issues/hooks';
+import { useIssueLinks } from '@/features/issues/hooks';
 import { createIssueNoteExtensions } from '@/features/issues/editor/create-issue-note-extensions';
 import { integrationsApi } from '@/services/api/integrations';
 import type { Issue, UpdateIssueData } from '@/types';
@@ -94,12 +93,6 @@ export function IssueEditorContent({
     staleTime: 5 * 60_000,
     enabled: !!workspaceId,
   });
-
-  // -- Issue-to-issue relations (hoisted for accurate CollapsibleSection count) --
-  const { data: relations = [], isLoading: relationsLoading } = useIssueRelations(
-    workspaceId,
-    issue.id
-  );
 
   // -- TipTap Editor --
   const extensions = useMemo(
@@ -286,20 +279,6 @@ export function IssueEditorContent({
               issueIdentifier={issue.identifier}
               onAffectedNodeClick={onNodeClickHighlight}
             />
-
-            <CollapsibleSection
-              title="Relationships"
-              icon={<Network className="size-3.5" />}
-              count={(issue.noteLinks?.length ?? 0) + (issue.project ? 1 : 0) + relations.length}
-            >
-              <IssueGraph
-                issue={issue}
-                workspaceId={workspaceId}
-                workspaceSlug={workspaceSlug}
-                relations={relations}
-                relationsLoading={relationsLoading}
-              />
-            </CollapsibleSection>
 
             <IssueKnowledgeGraphMini
               workspaceId={workspaceId}
