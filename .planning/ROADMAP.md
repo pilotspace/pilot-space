@@ -29,7 +29,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. useFileContent returns an ArrayBuffer (not a string) when fetching .xlsx, .docx, and .pptx files — verified by no "Invalid signature" parse errors in renderer phases
   3. mime-type-router routes .xlsx/.xls to 'xlsx', .docx/.doc to 'docx', and .pptx/.ppt to 'pptx' renderer types
   4. User sees a "Download to view" fallback message when opening .doc or .ppt legacy binary files in the artifact modal
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 Plans:
 - [ ] 01-01-PLAN.md — MIME routing, ArrayBuffer fetch mode, backend allowlist
 - [ ] 01-02-PLAN.md — Legacy format fallback and FilePreviewModal wiring
@@ -97,7 +97,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation | 0/2 | Planning complete | - |
+| 1. Foundation | 1/2 | In Progress|  |
 | 2. Word Renderer | 0/2 | Planning complete | - |
 | 3. Excel Renderer | 0/2 | Planning complete | - |
 | 4. PowerPoint Base | 0/2 | Planning complete | - |
