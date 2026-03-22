@@ -5,6 +5,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Download,
+  LayoutList,
   Maximize2,
   Minimize2,
   Play,
@@ -62,6 +63,11 @@ const XlsxRenderer = dynamic(
 // PptxViewJS uses Canvas API and browser globals — ssr: false is REQUIRED.
 const PptxRenderer = dynamic(
   () => import('./renderers/PptxRenderer').then((m) => ({ default: m.PptxRenderer })),
+  { ssr: false }
+);
+// PptxThumbnailStrip also uses Canvas API and IntersectionObserver — ssr: false is REQUIRED.
+const PptxThumbnailStrip = dynamic(
+  () => import('./renderers/PptxThumbnailStrip').then((m) => ({ default: m.PptxThumbnailStrip })),
   { ssr: false }
 );
 
@@ -242,6 +248,8 @@ export function FilePreviewModal({
   // PPTX slide navigation state — lives here (controlled component pattern)
   const [currentSlide, setCurrentSlide] = React.useState(0);
   const [slideCount, setSlideCount] = React.useState(0);
+  // Thumbnail strip visibility — hidden by default to maximise slide viewing area
+  const [showThumbnails, setShowThumbnails] = React.useState(false);
 
   // Fullscreen state — tracks browser Fullscreen API state
   const slideContainerRef = React.useRef<HTMLDivElement>(null);
@@ -254,6 +262,7 @@ export function FilePreviewModal({
       setDocxTocOpen(false);
       setCurrentSlide(0);
       setSlideCount(0);
+      setShowThumbnails(false);
     }
   }, [open]);
 
@@ -378,57 +387,71 @@ export function FilePreviewModal({
       case 'pptx':
         // content is ArrayBuffer for 'pptx' renderer type (useFileContent binary branch)
         return (
-          <div
-            ref={slideContainerRef}
-            className={cn(
-              'flex flex-col items-center',
-              isFullscreen && 'bg-black h-screen w-screen justify-center'
+          <div className="flex h-full">
+            {/* Thumbnail sidebar — left; hidden in fullscreen for clean slide-only view */}
+            {showThumbnails && slideCount > 0 && !isFullscreen && (
+              <div className="border-r shrink-0 overflow-hidden">
+                <PptxThumbnailStrip
+                  content={content as ArrayBuffer}
+                  slideCount={slideCount}
+                  currentSlide={currentSlide}
+                  onNavigate={setCurrentSlide}
+                />
+              </div>
             )}
-          >
-            <div className={cn('w-full', isFullscreen && 'max-w-5xl px-4')}>
-              <PptxRenderer
-                content={content as ArrayBuffer}
-                currentSlide={currentSlide}
-                onSlideCountKnown={setSlideCount}
-                onNavigate={setCurrentSlide}
-              />
-            </div>
-            {/* Navigation toolbar */}
+            {/* Main slide area — fills remaining horizontal space */}
             <div
+              ref={slideContainerRef}
               className={cn(
-                'flex items-center justify-center gap-2 py-2',
-                isFullscreen &&
-                  'absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/60 rounded-lg px-4 py-2'
+                'flex flex-col items-center flex-1 min-w-0',
+                isFullscreen && 'bg-black h-screen w-screen justify-center'
               )}
             >
-              <Button
-                variant="ghost"
-                size="icon"
-                className={cn('size-8', isFullscreen && 'text-white hover:bg-white/10')}
-                disabled={currentSlide === 0}
-                onClick={() => setCurrentSlide((s) => s - 1)}
-                aria-label="Previous slide"
-              >
-                <ChevronLeft className="size-4" />
-              </Button>
-              <span
+              <div className={cn('w-full', isFullscreen && 'max-w-5xl px-4')}>
+                <PptxRenderer
+                  content={content as ArrayBuffer}
+                  currentSlide={currentSlide}
+                  onSlideCountKnown={setSlideCount}
+                  onNavigate={setCurrentSlide}
+                />
+              </div>
+              {/* Navigation toolbar */}
+              <div
                 className={cn(
-                  'text-xs tabular-nums min-w-[80px] text-center',
-                  isFullscreen ? 'text-white/80' : 'text-muted-foreground'
+                  'flex items-center justify-center gap-2 py-2',
+                  isFullscreen &&
+                    'absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/60 rounded-lg px-4 py-2'
                 )}
               >
-                Slide {currentSlide + 1} of {slideCount || '…'}
-              </span>
-              <Button
-                variant="ghost"
-                size="icon"
-                className={cn('size-8', isFullscreen && 'text-white hover:bg-white/10')}
-                disabled={slideCount === 0 || currentSlide >= slideCount - 1}
-                onClick={() => setCurrentSlide((s) => s + 1)}
-                aria-label="Next slide"
-              >
-                <ChevronRight className="size-4" />
-              </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={cn('size-8', isFullscreen && 'text-white hover:bg-white/10')}
+                  disabled={currentSlide === 0}
+                  onClick={() => setCurrentSlide((s) => s - 1)}
+                  aria-label="Previous slide"
+                >
+                  <ChevronLeft className="size-4" />
+                </Button>
+                <span
+                  className={cn(
+                    'text-xs tabular-nums min-w-[80px] text-center',
+                    isFullscreen ? 'text-white/80' : 'text-muted-foreground'
+                  )}
+                >
+                  Slide {currentSlide + 1} of {slideCount || '…'}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={cn('size-8', isFullscreen && 'text-white hover:bg-white/10')}
+                  disabled={slideCount === 0 || currentSlide >= slideCount - 1}
+                  onClick={() => setCurrentSlide((s) => s + 1)}
+                  aria-label="Next slide"
+                >
+                  <ChevronRight className="size-4" />
+                </Button>
+              </div>
             </div>
           </div>
         );
@@ -492,6 +515,20 @@ export function FilePreviewModal({
                 aria-pressed={docxTocOpen}
               >
                 <TableOfContents className="size-4" />
+              </Button>
+            )}
+
+            {/* Thumbnail strip toggle — only shown for PPTX when slides are loaded */}
+            {rendererType === 'pptx' && slideCount > 0 && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-8"
+                onClick={() => setShowThumbnails((s) => !s)}
+                aria-label={showThumbnails ? 'Hide slide thumbnails' : 'Show slide thumbnails'}
+                aria-pressed={showThumbnails}
+              >
+                <LayoutList className="size-4" />
               </Button>
             )}
 
