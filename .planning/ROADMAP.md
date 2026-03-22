@@ -85,7 +85,10 @@ Plans:
   1. User can open the annotation panel on any slide, type a note, and save it — the annotation is visible the next time they open the same PPTX artifact
   2. Each annotation is stored against a specific slide index so navigating to slide 3 shows only slide 3's annotations
   3. User can edit or delete an existing slide annotation from the annotation panel
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 05-01-PLAN.md — Backend: ArtifactAnnotation model, migration with RLS, repository, CRUD API router, DI wiring
+- [ ] 05-02-PLAN.md — Frontend: API client, TanStack Query hooks, PptxAnnotationPanel, FilePreviewModal wiring
 
 ## Progress
 
@@ -98,4 +101,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 2. Word Renderer | 0/2 | Planning complete | - |
 | 3. Excel Renderer | 0/2 | Planning complete | - |
 | 4. PowerPoint Base | 0/2 | Planning complete | - |
-| 5. PPTX Annotations | 0/TBD | Not started | - |
+| 5. PPTX Annotations | 0/2 | Planning complete | - |
