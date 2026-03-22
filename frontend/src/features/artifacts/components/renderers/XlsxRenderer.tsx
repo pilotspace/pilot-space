@@ -12,6 +12,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Input } from '@/components/ui/input';
 import { DownloadFallback } from './DownloadFallback';
 
 interface XlsxRendererProps {
@@ -27,11 +28,30 @@ interface SheetData {
 
 const MAX_ROWS = 500;
 
+function highlightCell(value: string, term: string): React.ReactNode {
+  if (!term) return value;
+  const idx = value.toLowerCase().indexOf(term.toLowerCase());
+  if (idx === -1) return value;
+  return (
+    <>
+      {value.slice(0, idx)}
+      <mark className="bg-primary/20 rounded-sm px-0.5">{value.slice(idx, idx + term.length)}</mark>
+      {value.slice(idx + term.length)}
+    </>
+  );
+}
+
 export function XlsxRenderer({ content }: XlsxRendererProps) {
   const [parsedWorkbook, setParsedWorkbook] = React.useState<XLSX.WorkBook | null>(null);
   const [isParsing, setIsParsing] = React.useState(true);
   const [activeSheet, setActiveSheet] = React.useState<string>('');
   const [error, setError] = React.useState(false);
+  const [searchInput, setSearchInput] = React.useState('');
+  const [searchTerm, setSearchTerm] = React.useState('');
+  const [colWidths, setColWidths] = React.useState<Record<number, number>>({});
+  const dragState = React.useRef<{ colIndex: number; startX: number; startWidth: number } | null>(
+    null
+  );
 
   React.useEffect(() => {
     setIsParsing(true);
@@ -54,6 +74,19 @@ export function XlsxRenderer({ content }: XlsxRendererProps) {
     return () => clearTimeout(timeoutId);
   }, [content]);
 
+  // Clear search when active sheet changes
+  React.useEffect(() => {
+    setSearchInput('');
+    setSearchTerm('');
+    setColWidths({});
+  }, [activeSheet]);
+
+  // Debounce search input at 300ms
+  React.useEffect(() => {
+    const timer = setTimeout(() => setSearchTerm(searchInput), 300);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
   const sheetData = React.useMemo<SheetData | null>(() => {
     if (!parsedWorkbook || !activeSheet) return null;
     const ws = parsedWorkbook.Sheets[activeSheet];
@@ -73,6 +106,45 @@ export function XlsxRenderer({ content }: XlsxRendererProps) {
       truncated,
     };
   }, [parsedWorkbook, activeSheet]);
+
+  const matchCount = React.useMemo(() => {
+    if (!searchTerm || !sheetData) return 0;
+    const term = searchTerm.toLowerCase();
+    let count = 0;
+    for (const row of sheetData.rows) {
+      for (const cell of row) {
+        if (String(cell).toLowerCase().includes(term)) count++;
+      }
+    }
+    for (const h of sheetData.headers) {
+      if (String(h).toLowerCase().includes(term)) count++;
+    }
+    return count;
+  }, [searchTerm, sheetData]);
+
+  // Column resize drag handlers
+  const handleResizeMouseDown = React.useCallback((e: React.MouseEvent, colIndex: number) => {
+    e.preventDefault();
+    const th = (e.currentTarget as HTMLElement).closest('th');
+    const startWidth = th ? th.getBoundingClientRect().width : 120;
+    dragState.current = { colIndex, startX: e.clientX, startWidth };
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      if (!dragState.current) return;
+      const delta = moveEvent.clientX - dragState.current.startX;
+      const newWidth = Math.max(60, dragState.current.startWidth + delta);
+      setColWidths((prev) => ({ ...prev, [dragState.current!.colIndex]: newWidth }));
+    };
+
+    const onMouseUp = () => {
+      dragState.current = null;
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  }, []);
 
   if (isParsing) {
     return (
@@ -97,12 +169,37 @@ export function XlsxRenderer({ content }: XlsxRendererProps) {
           Showing 500 of {sheetData.totalRows.toLocaleString()} rows. Download for full data.
         </p>
       )}
+      <div className="flex items-center gap-2 px-3 py-2 border-b shrink-0">
+        <Input
+          placeholder="Search in sheet..."
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+          className="h-8 max-w-xs text-sm"
+        />
+        {searchTerm && (
+          <span className="text-xs text-muted-foreground whitespace-nowrap">
+            {matchCount} {matchCount === 1 ? 'match' : 'matches'}
+          </span>
+        )}
+      </div>
       <ScrollArea className="flex-1">
-        <Table>
-          <TableHeader>
+        <Table className="table-fixed">
+          <TableHeader className="sticky top-0 z-10 bg-background">
             <TableRow>
               {sheetData.headers.map((h, i) => (
-                <TableHead key={i}>{h}</TableHead>
+                <TableHead
+                  key={i}
+                  className="relative overflow-hidden"
+                  style={{ width: colWidths[i] ?? 120, minWidth: 60 }}
+                >
+                  {highlightCell(String(h), searchTerm)}
+                  <div
+                    role="separator"
+                    aria-label="Resize column"
+                    className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-primary/30 select-none"
+                    onMouseDown={(e) => handleResizeMouseDown(e, i)}
+                  />
+                </TableHead>
               ))}
             </TableRow>
           </TableHeader>
@@ -110,7 +207,13 @@ export function XlsxRenderer({ content }: XlsxRendererProps) {
             {sheetData.rows.map((row, ri) => (
               <TableRow key={ri} className={ri % 2 !== 0 ? 'bg-muted/30' : undefined}>
                 {row.map((cell, ci) => (
-                  <TableCell key={ci}>{cell}</TableCell>
+                  <TableCell
+                    key={ci}
+                    style={{ width: colWidths[ci] ?? 120, minWidth: 60 }}
+                    className="overflow-hidden text-ellipsis"
+                  >
+                    {highlightCell(String(cell), searchTerm)}
+                  </TableCell>
                 ))}
               </TableRow>
             ))}
