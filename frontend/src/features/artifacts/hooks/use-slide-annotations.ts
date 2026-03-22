@@ -24,9 +24,12 @@ export const ANNOTATION_QUERY_KEY = 'artifact-annotations';
 
 export const annotationKeys = {
   all: [ANNOTATION_QUERY_KEY] as const,
-  artifact: (artifactId: string) => [...annotationKeys.all, artifactId] as const,
-  slide: (artifactId: string, slideIndex: number) =>
-    [...annotationKeys.artifact(artifactId), slideIndex] as const,
+  workspace: (workspaceId: string, projectId: string) =>
+    [...annotationKeys.all, workspaceId, projectId] as const,
+  artifact: (workspaceId: string, projectId: string, artifactId: string) =>
+    [...annotationKeys.workspace(workspaceId, projectId), artifactId] as const,
+  slide: (workspaceId: string, projectId: string, artifactId: string, slideIndex: number) =>
+    [...annotationKeys.artifact(workspaceId, projectId, artifactId), slideIndex] as const,
 };
 
 // ---------------------------------------------------------------------------
@@ -44,7 +47,7 @@ export function useSlideAnnotations(
   slideIndex: number
 ) {
   return useQuery<ArtifactAnnotation[]>({
-    queryKey: annotationKeys.slide(artifactId, slideIndex),
+    queryKey: annotationKeys.slide(workspaceId, projectId, artifactId, slideIndex),
     queryFn: () => annotationApi.list(workspaceId, projectId, artifactId, slideIndex),
     enabled: !!workspaceId && !!projectId && !!artifactId,
     staleTime: 30 * 1000, // 30 seconds
@@ -72,7 +75,7 @@ export function useCreateAnnotation(workspaceId: string, projectId: string, arti
       annotationApi.create(workspaceId, projectId, artifactId, input),
 
     onMutate: async (input: CreateAnnotationInput) => {
-      const slideKey = annotationKeys.slide(artifactId, input.slideIndex);
+      const slideKey = annotationKeys.slide(workspaceId, projectId, artifactId, input.slideIndex);
 
       // Cancel in-flight refetches to prevent overwriting optimistic update
       await queryClient.cancelQueries({ queryKey: slideKey });
@@ -111,7 +114,7 @@ export function useCreateAnnotation(workspaceId: string, projectId: string, arti
 
     onSettled: (_data, _err, input) => {
       void queryClient.invalidateQueries({
-        queryKey: annotationKeys.slide(artifactId, input.slideIndex),
+        queryKey: annotationKeys.slide(workspaceId, projectId, artifactId, input.slideIndex),
       });
     },
   });
@@ -141,7 +144,7 @@ export function useUpdateAnnotation(workspaceId: string, projectId: string, arti
       }),
 
     onMutate: async (input: UpdateAnnotationInput) => {
-      const slideKey = annotationKeys.slide(artifactId, input.slideIndex);
+      const slideKey = annotationKeys.slide(workspaceId, projectId, artifactId, input.slideIndex);
 
       // Cancel in-flight refetches to prevent overwriting optimistic update
       await queryClient.cancelQueries({ queryKey: slideKey });
@@ -175,7 +178,7 @@ export function useUpdateAnnotation(workspaceId: string, projectId: string, arti
 
     onSettled: (_data, _err, input) => {
       void queryClient.invalidateQueries({
-        queryKey: annotationKeys.slide(artifactId, input.slideIndex),
+        queryKey: annotationKeys.slide(workspaceId, projectId, artifactId, input.slideIndex),
       });
     },
   });
@@ -202,7 +205,7 @@ export function useDeleteAnnotation(workspaceId: string, projectId: string, arti
       annotationApi.delete(workspaceId, projectId, artifactId, input.annotationId),
 
     onMutate: async (input: DeleteAnnotationInput) => {
-      const slideKey = annotationKeys.slide(artifactId, input.slideIndex);
+      const slideKey = annotationKeys.slide(workspaceId, projectId, artifactId, input.slideIndex);
 
       // Cancel in-flight refetches to prevent overwriting optimistic update
       await queryClient.cancelQueries({ queryKey: slideKey });
@@ -230,7 +233,7 @@ export function useDeleteAnnotation(workspaceId: string, projectId: string, arti
 
     onSettled: (_data, _err, input) => {
       void queryClient.invalidateQueries({
-        queryKey: annotationKeys.slide(artifactId, input.slideIndex),
+        queryKey: annotationKeys.slide(workspaceId, projectId, artifactId, input.slideIndex),
       });
     },
   });

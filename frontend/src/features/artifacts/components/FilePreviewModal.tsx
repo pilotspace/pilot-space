@@ -302,10 +302,14 @@ export const FilePreviewModal = observer(function FilePreviewModal({
   const rendererType = resolveRenderer(mimeType, filename);
   const { content, isLoading, isExpired } = useFileContent(signedUrl, rendererType, open);
 
-  // Keyboard navigation for PPTX slides — active when renderer is pptx and slides are loaded
+  // Keyboard navigation for PPTX slides — only when renderer is pptx, slides loaded,
+  // modal is open, and focus is NOT inside an editable element (textarea, input, contenteditable)
   React.useEffect(() => {
-    if (rendererType !== 'pptx' || slideCount === 0) return;
+    if (!open || rendererType !== 'pptx' || slideCount === 0) return;
     function handleKeyDown(e: KeyboardEvent) {
+      // Skip if focus is inside an editable element (annotation textarea, search input, etc.)
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'TEXTAREA' || tag === 'INPUT' || (e.target as HTMLElement)?.isContentEditable) return;
       if (e.key === 'ArrowLeft' && currentSlide > 0) {
         setCurrentSlide((s) => s - 1);
       } else if (e.key === 'ArrowRight' && currentSlide < slideCount - 1) {
@@ -314,7 +318,7 @@ export const FilePreviewModal = observer(function FilePreviewModal({
     }
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [rendererType, currentSlide, slideCount]);
+  }, [open, rendererType, currentSlide, slideCount]);
 
   // Images use the lightbox overlay instead of a Dialog
   if (rendererType === 'image') {
@@ -388,13 +392,14 @@ export const FilePreviewModal = observer(function FilePreviewModal({
         return <CsvRenderer content={content as string} />;
       case 'xlsx':
         // content is ArrayBuffer for 'xlsx' renderer type (useFileContent binary branch)
-        return <XlsxRenderer content={content as ArrayBuffer} />;
+        return <XlsxRenderer content={content as ArrayBuffer} filename={filename} signedUrl={signedUrl} />;
       case 'docx':
         // content is ArrayBuffer for 'docx' renderer type (useFileContent binary branch)
         return (
           <DocxRenderer
             content={content as ArrayBuffer}
             filename={filename}
+            signedUrl={signedUrl}
             tocOpen={docxTocOpen}
             onTocOpenChange={setDocxTocOpen}
           />
@@ -466,6 +471,18 @@ export const FilePreviewModal = observer(function FilePreviewModal({
                 >
                   <ChevronRight className="size-4" />
                 </Button>
+                {/* Exit fullscreen — visible only inside fullscreen since header is outside subtree */}
+                {isFullscreen && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-8 text-white hover:bg-white/10 ml-2"
+                    onClick={toggleFullscreen}
+                    aria-label="Exit fullscreen"
+                  >
+                    <X className="size-4" />
+                  </Button>
+                )}
               </div>
             </div>
             {/* Annotation panel — right side; hidden in fullscreen for clean slide view */}

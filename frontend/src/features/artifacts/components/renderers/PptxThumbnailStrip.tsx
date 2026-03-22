@@ -162,6 +162,11 @@ export function PptxThumbnailStrip({
 
     let cancelled = false;
 
+    // Reset cached state when content changes (new deck loaded)
+    renderedRef.current = new Set();
+    setIsReady(false);
+    setError(null);
+
     async function init() {
       try {
         // Create a hidden off-screen canvas for the thumbnail viewer

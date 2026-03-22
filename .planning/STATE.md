@@ -4,7 +4,7 @@ milestone: v1.2
 milestone_name: milestone
 status: planning
 stopped_at: Completed 05-pptx-annotations 05-02-PLAN.md
-last_updated: "2026-03-22T09:29:16.229Z"
+last_updated: "2026-03-22T09:33:14.100Z"
 last_activity: 2026-03-21 — Roadmap created for v1.2 Office Suite Preview
 progress:
   total_phases: 5

@@ -17,6 +17,8 @@ import { DownloadFallback } from './DownloadFallback';
 
 interface XlsxRendererProps {
   content: ArrayBuffer;
+  filename?: string;
+  signedUrl?: string;
 }
 
 interface SheetData {
@@ -41,7 +43,7 @@ function highlightCell(value: string, term: string): React.ReactNode {
   );
 }
 
-export function XlsxRenderer({ content }: XlsxRendererProps) {
+export function XlsxRenderer({ content, filename = 'spreadsheet.xlsx', signedUrl = '' }: XlsxRendererProps) {
   const [parsedWorkbook, setParsedWorkbook] = React.useState<XLSX.WorkBook | null>(null);
   const [isParsing, setIsParsing] = React.useState(true);
   const [activeSheet, setActiveSheet] = React.useState<string>('');
@@ -159,7 +161,7 @@ export function XlsxRenderer({ content }: XlsxRendererProps) {
   }
 
   if (error || !sheetData) {
-    return <DownloadFallback filename="spreadsheet.xlsx" signedUrl="" reason="error" />;
+    return <DownloadFallback filename={filename} signedUrl={signedUrl} reason="error" />;
   }
 
   return (

@@ -39,6 +39,7 @@ export function PptxRenderer({ content, currentSlide, onSlideCountKnown }: PptxR
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const viewerRef = React.useRef<PPTXViewer | null>(null);
   const loadedRef = React.useRef(false);
+  const latestSlideRef = React.useRef(currentSlide);
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -76,8 +77,8 @@ export function PptxRenderer({ content, currentSlide, onSlideCountKnown }: PptxR
         const slideCount = viewer.getSlideCount();
         onSlideCountKnown(slideCount);
 
-        // Render the initial slide
-        await viewer.renderSlide(currentSlide, canvasRef.current ?? undefined);
+        // Render the latest slide (may have changed during async load)
+        await viewer.renderSlide(latestSlideRef.current, canvasRef.current ?? undefined);
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : 'Failed to load presentation');
@@ -96,6 +97,11 @@ export function PptxRenderer({ content, currentSlide, onSlideCountKnown }: PptxR
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [content]); // Re-run only when content changes; onSlideCountKnown is stable
+
+  // Keep latestSlideRef in sync with prop so load effect reads correct value
+  React.useEffect(() => {
+    latestSlideRef.current = currentSlide;
+  }, [currentSlide]);
 
   // --- Re-render when currentSlide prop changes (after initial load) ---
   React.useEffect(() => {

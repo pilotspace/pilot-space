@@ -200,7 +200,7 @@ export function PptxAnnotationPanel({
   }, [currentSlide]);
 
   // TanStack Query hooks
-  const { data: annotations = [], isLoading } = useSlideAnnotations(
+  const { data: annotations = [], isLoading, isError } = useSlideAnnotations(
     workspaceId,
     projectId,
     artifactId,
@@ -329,6 +329,10 @@ export function PptxAnnotationPanel({
             >
               <div className="h-4 w-4 animate-spin rounded-full border-2 border-border border-t-primary" />
             </div>
+          ) : isError ? (
+            <p className="text-sm text-destructive text-center py-8">
+              Failed to load annotations. Please try again.
+            </p>
           ) : annotations.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">
               No annotations on this slide. Add one below.

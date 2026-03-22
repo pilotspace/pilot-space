@@ -174,21 +174,15 @@ export function resolveRenderer(mimeType: string, filename: string): RendererTyp
   if (ext === 'xlsx' || ext === 'xls') return 'xlsx';
   if (ext === 'docx' || ext === 'doc') return 'docx';
   if (ext === 'pptx' || ext === 'ppt') return 'pptx';
-  // Also route by MIME for cases where extension is missing or wrong
-  if (
-    lowerMime === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
-    lowerMime === 'application/vnd.ms-excel'
-  )
+  // MIME fallback — only modern OOXML formats. Legacy MIME types (application/msword,
+  // application/vnd.ms-excel, application/vnd.ms-powerpoint) fall through to 'download'
+  // because they indicate binary formats (.doc/.xls/.ppt) that can't be parsed client-side.
+  // Extension-based routing above already handles files with extensions correctly.
+  if (lowerMime === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     return 'xlsx';
-  if (
-    lowerMime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
-    lowerMime === 'application/msword'
-  )
+  if (lowerMime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
     return 'docx';
-  if (
-    lowerMime === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
-    lowerMime === 'application/vnd.ms-powerpoint'
-  )
+  if (lowerMime === 'application/vnd.openxmlformats-officedocument.presentationml.presentation')
     return 'pptx';
 
   // 4. Markdown — filename extension wins over generic text/plain

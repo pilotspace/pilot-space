@@ -38,7 +38,7 @@ export const annotationApi = {
   list(wid: string, pid: string, aid: string, slideIndex: number): Promise<ArtifactAnnotation[]> {
     return apiClient
       .get<AnnotationListResponse>(
-        `/workspaces/${wid}/projects/${pid}/artifacts/${aid}/annotations?slideIndex=${slideIndex}`
+        `/workspaces/${wid}/projects/${pid}/artifacts/${aid}/annotations?slide_index=${slideIndex}`
       )
       .then((res) => res.annotations);
   },
@@ -57,7 +57,7 @@ export const annotationApi = {
   ): Promise<ArtifactAnnotation> {
     return apiClient.post<ArtifactAnnotation>(
       `/workspaces/${wid}/projects/${pid}/artifacts/${aid}/annotations`,
-      body
+      { slide_index: body.slideIndex, content: body.content }
     );
   },
 

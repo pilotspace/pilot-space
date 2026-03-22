@@ -45,7 +45,7 @@ export const DOCX_PURIFY_CONFIG: Record<string, unknown> = {
    * URI-accepting attributes. Only allows https:, http:, and mailto:.
    * This is the primary defense against javascript: href XSS from crafted DOCX files.
    */
-  ALLOWED_URI_REGEXP: /^(?:https?|mailto|data:image\/):/i,
+  ALLOWED_URI_REGEXP: /^(?:https?:|mailto:|data:image\/)/i,
 
   /**
    * Forbidden tags — executable or metadata injection vectors.

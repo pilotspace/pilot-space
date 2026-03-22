@@ -65,12 +65,12 @@ def upgrade() -> None:
     # Enable Row Level Security
     op.execute(text("ALTER TABLE artifact_annotations ENABLE ROW LEVEL SECURITY"))
 
-    # Workspace isolation policy (ALL operations) — workspace members with lowercase roles
+    # Workspace isolation — SELECT: workspace members can read all annotations
     op.execute(
         text("""
-        CREATE POLICY "artifact_annotations_workspace_isolation"
+        CREATE POLICY "artifact_annotations_workspace_select"
         ON artifact_annotations
-        FOR ALL
+        FOR SELECT
         USING (
             workspace_id IN (
                 SELECT wm.workspace_id
@@ -80,6 +80,15 @@ def upgrade() -> None:
                 AND wm.role IN ('owner', 'admin', 'member', 'guest')
             )
         )
+    """)
+    )
+
+    # Workspace isolation — INSERT: workspace members can create annotations
+    op.execute(
+        text("""
+        CREATE POLICY "artifact_annotations_workspace_insert"
+        ON artifact_annotations
+        FOR INSERT
         WITH CHECK (
             workspace_id IN (
                 SELECT wm.workspace_id
@@ -92,25 +101,43 @@ def upgrade() -> None:
     """)
     )
 
-    # Author-only modify policy (UPDATE/DELETE) — only the annotation creator can modify/delete
+    # Author-only UPDATE — only the annotation creator can modify
     op.execute(
         text("""
-        CREATE POLICY "artifact_annotations_author_modify"
+        CREATE POLICY "artifact_annotations_author_update"
         ON artifact_annotations
-        FOR ALL
+        FOR UPDATE
         USING (user_id = current_setting('app.current_user_id', true)::uuid)
         WITH CHECK (user_id = current_setting('app.current_user_id', true)::uuid)
+    """)
+    )
+
+    # Author-only DELETE — only the annotation creator can delete
+    op.execute(
+        text("""
+        CREATE POLICY "artifact_annotations_author_delete"
+        ON artifact_annotations
+        FOR DELETE
+        USING (user_id = current_setting('app.current_user_id', true)::uuid)
     """)
     )
 
 
 def downgrade() -> None:
     op.execute(
-        text('DROP POLICY IF EXISTS "artifact_annotations_author_modify" ON artifact_annotations')
+        text('DROP POLICY IF EXISTS "artifact_annotations_author_delete" ON artifact_annotations')
+    )
+    op.execute(
+        text('DROP POLICY IF EXISTS "artifact_annotations_author_update" ON artifact_annotations')
     )
     op.execute(
         text(
-            'DROP POLICY IF EXISTS "artifact_annotations_workspace_isolation" ON artifact_annotations'
+            'DROP POLICY IF EXISTS "artifact_annotations_workspace_insert" ON artifact_annotations'
+        )
+    )
+    op.execute(
+        text(
+            'DROP POLICY IF EXISTS "artifact_annotations_workspace_select" ON artifact_annotations'
         )
     )
     op.execute(text("DROP TABLE IF EXISTS artifact_annotations"))
