@@ -18,7 +18,7 @@ from __future__ import annotations
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, File, Form, HTTPException, Response, UploadFile, status
+from fastapi import APIRouter, File, Form, HTTPException, Request, Response, UploadFile, status
 from sqlalchemy import select
 
 from pilot_space.api.v1.routers.workspace_quota import (
@@ -34,7 +34,6 @@ from pilot_space.infrastructure.database.models.workspace_member import (
     WorkspaceRole,
 )
 from pilot_space.infrastructure.logging import get_logger
-from pilot_space.infrastructure.storage.client import SupabaseStorageClient
 
 logger = get_logger(__name__)
 
@@ -161,6 +160,7 @@ async def get_attachment_url(
     attachment_id: UUID,
     user_id: CurrentUserId,
     db: DbSession,
+    request: Request,
 ) -> dict[str, str | int]:
     """Get a 1-hour signed download URL for a chat attachment.
 
@@ -170,6 +170,7 @@ async def get_attachment_url(
         attachment_id: UUID of the attachment.
         user_id: Authenticated user ID.
         db: Async DB session.
+        request: FastAPI request (used to access the DI container).
 
     Returns:
         dict with url and expiresIn fields.
@@ -181,7 +182,7 @@ async def get_attachment_url(
     if attachment.user_id != user_id:
         raise HTTPException(status_code=403, detail="Not your attachment")
 
-    storage = SupabaseStorageClient()
+    storage = request.app.state.container.storage_client()
     signed_url = await storage.get_signed_url(
         bucket="chat-attachments",
         key=attachment.storage_key,

@@ -146,11 +146,13 @@ async def get_activity_service(
 
 
 async def get_attachment_upload_service(
+    request: Request,
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> AttachmentUploadService:
     """Get AttachmentUploadService instance.
 
     Args:
+        request: FastAPI request (used to access the DI container).
         session: Database session.
 
     Returns:
@@ -162,11 +164,10 @@ async def get_attachment_upload_service(
     from pilot_space.infrastructure.database.repositories.chat_attachment_repository import (
         ChatAttachmentRepository,
     )
-    from pilot_space.infrastructure.storage.client import SupabaseStorageClient
 
     return AttachmentUploadService(
         session=session,
-        storage_client=SupabaseStorageClient(),
+        storage_client=request.app.state.container.storage_client(),
         attachment_repo=ChatAttachmentRepository(session),
     )
 
@@ -262,15 +263,21 @@ async def get_drive_file_service(
     from pilot_space.infrastructure.database.repositories.drive_credential_repository import (
         DriveCredentialRepository,
     )
-    from pilot_space.infrastructure.storage.client import SupabaseStorageClient
 
     settings = get_settings()
     credential_repo = DriveCredentialRepository(session)
 
     redis_client = None
+    storage_client = None
     if hasattr(request.app.state, "container"):
         container = request.app.state.container
         redis_client = container.redis_client()
+        storage_client = container.storage_client()
+
+    if storage_client is None:
+        from pilot_space.infrastructure.storage.client import SupabaseStorageClient
+
+        storage_client = SupabaseStorageClient()
 
     oauth_service = DriveOAuthService(
         credential_repo=credential_repo,
@@ -281,7 +288,7 @@ async def get_drive_file_service(
     return DriveFileService(
         credential_repo=credential_repo,
         attachment_repo=ChatAttachmentRepository(session),
-        storage_client=SupabaseStorageClient(),
+        storage_client=storage_client,
         settings=settings,
         oauth_service=oauth_service,
     )
