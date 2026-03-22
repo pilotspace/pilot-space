@@ -43,7 +43,10 @@ Plans:
   2. When docx-preview fails on a complex document, user sees the document rendered via mammoth fallback without a blank or error screen
   3. User sees visual page-break dividers in the scrollable document view separating logical pages
   4. User can open a sidebar showing the document's table of contents (extracted from DOCX headings) and click a heading to jump to that section
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 02-01-PLAN.md — DocxRenderer with docx-preview primary, mammoth fallback, DOCX_PURIFY_CONFIG security, page-break indicators
+- [ ] 02-02-PLAN.md — Table of contents sidebar with heading extraction and modal toggle
 
 ### Phase 3: Excel Renderer
 **Goal**: Users can inspect .xlsx and .xls spreadsheet data inside the artifact modal with sheet navigation, without freezing the browser
@@ -86,7 +89,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation | 0/2 | Planning complete | - |
-| 2. Word Renderer | 0/TBD | Not started | - |
+| 2. Word Renderer | 0/2 | Planning complete | - |
 | 3. Excel Renderer | 0/TBD | Not started | - |
 | 4. PowerPoint Base | 0/TBD | Not started | - |
 | 5. PPTX Annotations | 0/TBD | Not started | - |
