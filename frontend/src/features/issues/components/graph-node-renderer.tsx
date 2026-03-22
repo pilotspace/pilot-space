@@ -91,10 +91,10 @@ export function GraphNodeComponent({ data }: NodeProps<GraphFlowNode>) {
   const IconComponent = NODE_ICONS[node.nodeType] ?? ScrollText;
   const isProject = style.tier === 0;
 
-  const iconSize = isCurrent ? 14 : isProject ? 14 : style.tier === 1 ? 12 : 10;
-  const fontSize = isCurrent ? 11.5 : isProject ? 11.5 : style.tier === 1 ? 10 : 9;
-  const maxLabelWidth = width - iconSize - 14;
-  const maxChars = isCurrent ? 28 : isProject ? 22 : style.tier === 1 ? 24 : 18;
+  const iconSize = isCurrent ? 16 : isProject ? 16 : style.tier === 1 ? 14 : 12;
+  const fontSize = isCurrent ? 13 : isProject ? 13 : style.tier === 1 ? 11.5 : 10;
+  const maxLabelWidth = width - iconSize - 18;
+  const maxChars = isCurrent ? 32 : isProject ? 28 : style.tier === 1 ? 28 : 22;
   const truncated = truncateLabel(node.label, maxChars);
 
   const tooltipLines = [
