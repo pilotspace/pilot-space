@@ -72,7 +72,10 @@ Plans:
   2. User can click Prev and Next buttons (or arrow keys in fullscreen) to move between slides — the counter updates with each navigation
   3. User can see a thumbnail strip sidebar showing all slides and click any thumbnail to jump directly to that slide
   4. User can enter fullscreen slideshow mode and use left/right arrow keys to advance and retreat between slides
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 04-01-PLAN.md — PptxRenderer with navigation controls, fullscreen mode, slide state in FilePreviewModal
+- [ ] 04-02-PLAN.md — Thumbnail strip sidebar with lazy rendering and toggle
 
 ### Phase 5: PPTX Annotations
 **Goal**: Users can attach text annotations to individual PPTX slides, linked to the current project context, and see them persist across page reloads
@@ -94,5 +97,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 1. Foundation | 0/2 | Planning complete | - |
 | 2. Word Renderer | 0/2 | Planning complete | - |
 | 3. Excel Renderer | 0/2 | Planning complete | - |
-| 4. PowerPoint Base | 0/TBD | Not started | - |
+| 4. PowerPoint Base | 0/2 | Planning complete | - |
 | 5. PPTX Annotations | 0/TBD | Not started | - |
