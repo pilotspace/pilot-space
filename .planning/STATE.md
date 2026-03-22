@@ -15,4 +15,4 @@ None
 
 | # | Description | Date | Commit | Status | Directory |
 |---|-------------|------|--------|--------|-----------|
-| 1 | Improve left sidebar collapsed state spacing, active indicators, and vertical rhythm | 2026-03-23 | 62c272fc | Done | 260323-0wz-improve-left-sidebar-panel-ui-fix-collap |
+| 260323-0wz | Improve left sidebar panel UI - fix collapsed state and uncomfortable layout | 2026-03-22 | 62c272fc | Verified | [260323-0wz-improve-left-sidebar-panel-ui-fix-collap](./quick/260323-0wz-improve-left-sidebar-panel-ui-fix-collap/) |
