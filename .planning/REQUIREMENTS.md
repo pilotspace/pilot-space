@@ -26,7 +26,7 @@ Requirements for Office Suite Preview milestone. Each maps to roadmap phases.
 - [x] **DOCX-01**: User can preview .docx files with preserved formatting (fonts, colors, alignment, images) via docx-preview
 - [x] **DOCX-02**: System falls back to mammoth.js renderer when docx-preview fails on complex documents
 - [x] **DOCX-03**: User sees visual page-break indicators in scrollable document view
-- [ ] **DOCX-04**: User can navigate document sections via table of contents sidebar extracted from DOCX headings
+- [x] **DOCX-04**: User can navigate document sections via table of contents sidebar extracted from DOCX headings
 
 ### PowerPoint Preview
 
@@ -76,7 +76,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DOCX-01 | Phase 2 | Complete |
 | DOCX-02 | Phase 2 | Complete |
 | DOCX-03 | Phase 2 | Complete |
-| DOCX-04 | Phase 2 | Pending |
+| DOCX-04 | Phase 2 | Complete |
 | PPTX-01 | Phase 4 | Pending |
 | PPTX-02 | Phase 4 | Pending |
 | PPTX-03 | Phase 5 | Pending |
