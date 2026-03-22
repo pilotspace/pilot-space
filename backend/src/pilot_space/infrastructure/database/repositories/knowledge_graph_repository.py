@@ -281,19 +281,19 @@ class KnowledgeGraphRepository:
         """
         # Only static SQL string fragments are f-string-interpolated — no user
         # data ever enters the SQL text directly.
-        edge_type_clause = "AND edge_type = ANY(:edge_types)" if edge_types else ""
-        ws_clause = "AND workspace_id = :workspace_id" if workspace_id is not None else ""
+        edge_type_clause = "AND e.edge_type = ANY(:edge_types)" if edge_types else ""
+        ws_clause = "AND e.workspace_id = :workspace_id" if workspace_id is not None else ""
 
         raw = text(
             f"""
             WITH RECURSIVE neighbors(id, depth) AS (
                 -- Anchor: direct neighbors in both directions (exclude deleted)
                 SELECT cand.id, 1
-                  FROM graph_edges
+                  FROM graph_edges e
                   JOIN graph_nodes cand
-                    ON cand.id = CASE WHEN source_id = :nid THEN target_id ELSE source_id END
+                    ON cand.id = CASE WHEN e.source_id = :nid THEN e.target_id ELSE e.source_id END
                    AND cand.is_deleted = false
-                  WHERE (source_id = :nid OR target_id = :nid) {edge_type_clause} {ws_clause}
+                  WHERE (e.source_id = :nid OR e.target_id = :nid) {edge_type_clause} {ws_clause}
                 UNION ALL
                 -- Recursive: expand bidirectionally, skip deleted + anti-backtrack
                 SELECT cand.id, n.depth + 1
