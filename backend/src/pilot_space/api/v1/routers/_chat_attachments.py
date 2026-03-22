@@ -74,6 +74,6 @@ async def resolve_attachments(
             },
         )
 
-    client = storage_client if storage_client is not None else SupabaseStorageClient()
+    client = storage_client or SupabaseStorageClient()
     blocks = await AttachmentContentService(client).build_content_blocks(valid_records)
     return valid_records, blocks

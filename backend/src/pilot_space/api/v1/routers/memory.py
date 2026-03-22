@@ -14,7 +14,7 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Path, Response, status
+from fastapi import APIRouter, Depends, Path, Request, Response, status
 
 from pilot_space.api.v1.schemas.memory import (
     ConstitutionIngestRequest,
@@ -42,7 +42,6 @@ from pilot_space.infrastructure.database.repositories.memory_repository import (
     MemoryEntryRepository,
 )
 from pilot_space.infrastructure.logging import get_logger
-from pilot_space.infrastructure.queue.supabase_queue import SupabaseQueueClient
 
 logger = get_logger(__name__)
 
@@ -151,6 +150,7 @@ async def get_constitution_version(
 async def ingest_constitution(
     workspace_id: WorkspaceIdPath,
     request: ConstitutionIngestRequest,
+    fastapi_request: Request,
     session: SessionDep,
     response: Response,
     _member: Annotated[UUID, Depends(require_workspace_member)],
@@ -164,7 +164,7 @@ async def ingest_constitution(
 
     const_repo = ConstitutionRuleRepository(session)
 
-    queue = SupabaseQueueClient()
+    queue = fastapi_request.app.state.container.queue_client()
 
     service = ConstitutionIngestService(const_repo, queue, session)
 

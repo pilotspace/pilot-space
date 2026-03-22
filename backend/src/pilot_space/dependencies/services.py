@@ -268,16 +268,9 @@ async def get_drive_file_service(
     credential_repo = DriveCredentialRepository(session)
 
     redis_client = None
-    storage_client = None
-    if hasattr(request.app.state, "container"):
-        container = request.app.state.container
-        redis_client = container.redis_client()
-        storage_client = container.storage_client()
-
-    if storage_client is None:
-        from pilot_space.infrastructure.storage.client import SupabaseStorageClient
-
-        storage_client = SupabaseStorageClient()
+    container = request.app.state.container
+    redis_client = container.redis_client()
+    storage_client = container.storage_client()
 
     oauth_service = DriveOAuthService(
         credential_repo=credential_repo,

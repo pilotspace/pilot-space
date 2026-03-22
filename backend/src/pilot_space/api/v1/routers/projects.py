@@ -26,7 +26,7 @@ from pilot_space.api.v1.schemas.project import (
 from pilot_space.dependencies.auth import CurrentUser, SessionDep
 from pilot_space.infrastructure.database.models.project import Project
 from pilot_space.infrastructure.logging import get_logger
-from pilot_space.infrastructure.queue.supabase_queue import SupabaseQueueClient
+from pilot_space.infrastructure.queue.models import QueueName
 
 logger = get_logger(__name__)
 
@@ -36,8 +36,11 @@ router = APIRouter(prefix="/projects", tags=["projects"])
 async def _enqueue_kg_populate(project: Project) -> None:
     """Enqueue a KG populate job for a project (non-fatal)."""
     try:
-        queue = SupabaseQueueClient()
-        from pilot_space.infrastructure.queue.models import QueueName
+        from pilot_space.container.container import Container
+
+        queue = Container.queue_client()
+        if queue is None:
+            return
 
         await queue.enqueue(
             QueueName.AI_NORMAL,

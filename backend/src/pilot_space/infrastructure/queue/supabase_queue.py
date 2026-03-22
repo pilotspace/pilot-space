@@ -123,34 +123,24 @@ class SupabaseQueueClient:
             QueueConnectionError: If connection to Supabase fails.
             QueueOperationError: If the RPC call fails.
         """
+        import httpx
+        from postgrest.exceptions import APIError as PostgrestAPIError
+
         try:
             sdk_client = await self._get_client()
             response = await sdk_client.postgrest.rpc(function_name, params).execute()
+        except SupabaseQueueError:
+            raise
+        except PostgrestAPIError as exc:
+            logger.exception("rpc_call_api_error", function=function_name)
+            raise QueueOperationError(f"RPC {function_name} failed: {exc}") from exc
+        except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
+            logger.exception("rpc_call_connection_error", function=function_name)
+            raise QueueConnectionError(f"Connection failed: {exc}") from exc
+        except httpx.HTTPError as exc:
+            logger.exception("rpc_call_http_error", function=function_name)
+            raise QueueOperationError(f"Request failed: {exc}") from exc
         except Exception as exc:
-            # Classify the exception before wrapping
-            exc_type = type(exc).__name__
-            exc_module = type(exc).__module__ or ""
-
-            # postgrest.exceptions.APIError → QueueOperationError
-            if exc_type == "APIError" and "postgrest" in exc_module:
-                logger.exception("rpc_call_api_error", function=function_name)
-                raise QueueOperationError(f"RPC {function_name} failed: {exc}") from exc
-
-            # httpx connection errors → QueueConnectionError
-            if exc_type in ("ConnectError", "ConnectTimeout") and "httpx" in exc_module:
-                logger.exception("rpc_call_connection_error", function=function_name)
-                raise QueueConnectionError(f"Connection failed: {exc}") from exc
-
-            # Any other httpx errors → QueueOperationError
-            if "httpx" in exc_module:
-                logger.exception("rpc_call_http_error", function=function_name)
-                raise QueueOperationError(f"Request failed: {exc}") from exc
-
-            # Re-raise already-domain exceptions as-is
-            if isinstance(exc, SupabaseQueueError):
-                raise
-
-            # Unknown error → QueueOperationError
             logger.exception("rpc_call_unknown_error", function=function_name)
             raise QueueOperationError(f"RPC {function_name} failed: {exc}") from exc
 
@@ -200,25 +190,19 @@ class SupabaseQueueClient:
             },
         }
 
-        try:
-            result = await self._rpc_call(
-                "pgmq_send",
-                {
-                    "queue_name": queue,
-                    "msg": enriched_payload,
-                    "delay": delay_seconds,
-                },
-            )
-        except SupabaseQueueError:
-            raise
-        except Exception as e:
-            logger.exception("Failed to enqueue message to %s", queue)
-            raise QueueOperationError(f"Enqueue failed: {e}") from e
-        else:
-            # pgmq_send returns the message ID as a bigint
-            returned_id = str(result) if result is not None else msg_id
-            logger.info("Enqueued message %s to %s", returned_id, queue)
-            return returned_id
+        result = await self._rpc_call(
+            "pgmq_send",
+            {
+                "queue_name": queue,
+                "msg": enriched_payload,
+                "delay": delay_seconds,
+            },
+        )
+
+        # pgmq_send returns the message ID as a bigint
+        returned_id = str(result) if result is not None else msg_id
+        logger.info("Enqueued message %s to %s", returned_id, queue)
+        return returned_id
 
     async def dequeue(
         self,
@@ -246,42 +230,36 @@ class SupabaseQueueClient:
         queue = str(queue_name)
         batch_size = min(max(batch_size, 1), 100)
 
-        try:
-            result = await self._rpc_call(
-                "pgmq_read",
+        result = await self._rpc_call(
+            "pgmq_read",
+            {
+                "queue_name": queue,
+                "vt": visibility_timeout,
+                "qty": batch_size,
+            },
+        )
+
+        if not result:
+            return []
+
+        # Cast result to list - pgmq_read returns list of message dicts
+        result_list = cast("list[dict[str, Any]]", result)
+
+        messages: list[QueueMessage] = []
+        for item in result_list:
+            msg = QueueMessage.from_dict(
                 {
+                    **item,
                     "queue_name": queue,
-                    "vt": visibility_timeout,
-                    "qty": batch_size,
-                },
+                    "visibility_timeout": visibility_timeout,
+                }
             )
-        except SupabaseQueueError:
-            raise
-        except Exception as e:
-            logger.exception("Failed to dequeue from %s", queue)
-            raise QueueOperationError(f"Dequeue failed: {e}") from e
-        else:
-            if not result:
-                return []
+            messages.append(msg)
 
-            # Cast result to list - pgmq_read returns list of message dicts
-            result_list = cast("list[dict[str, Any]]", result)
+        if messages:
+            logger.debug("Dequeued %d messages from %s", len(messages), queue)
 
-            messages: list[QueueMessage] = []
-            for item in result_list:
-                msg = QueueMessage.from_dict(
-                    {
-                        **item,
-                        "queue_name": queue,
-                        "visibility_timeout": visibility_timeout,
-                    }
-                )
-                messages.append(msg)
-
-            if messages:
-                logger.debug("Dequeued %d messages from %s", len(messages), queue)
-
-            return messages
+        return messages
 
     async def ack(
         self,
@@ -304,24 +282,18 @@ class SupabaseQueueClient:
         """
         queue = str(queue_name)
 
-        try:
-            result = await self._rpc_call(
-                "pgmq_delete",
-                {
-                    "queue_name": queue,
-                    "msg_id": int(msg_id) if msg_id.isdigit() else msg_id,
-                },
-            )
-        except SupabaseQueueError:
-            raise
-        except Exception as e:
-            logger.exception("Failed to ack message %s from %s", msg_id, queue)
-            raise QueueOperationError(f"Ack failed: {e}") from e
-        else:
-            acknowledged = bool(result)
-            if acknowledged:
-                logger.debug("Acknowledged message %s from %s", msg_id, queue)
-            return acknowledged
+        result = await self._rpc_call(
+            "pgmq_delete",
+            {
+                "queue_name": queue,
+                "msg_id": int(msg_id) if msg_id.isdigit() else msg_id,
+            },
+        )
+
+        acknowledged = bool(result)
+        if acknowledged:
+            logger.debug("Acknowledged message %s from %s", msg_id, queue)
+        return acknowledged
 
     async def nack(
         self,
@@ -355,32 +327,26 @@ class SupabaseQueueClient:
         if error:
             logger.warning("Message %s from %s failed: %s", msg_id, queue, error)
 
-        try:
-            if requeue:
-                # Archive (nack) the message - pgmq will handle visibility
-                result = await self._rpc_call(
-                    "pgmq_archive",
-                    {
-                        "queue_name": queue,
-                        "msg_id": int(msg_id) if msg_id.isdigit() else msg_id,
-                    },
-                )
-            else:
-                # Delete without requeue
-                result = await self._rpc_call(
-                    "pgmq_delete",
-                    {
-                        "queue_name": queue,
-                        "msg_id": int(msg_id) if msg_id.isdigit() else msg_id,
-                    },
-                )
+        if requeue:
+            # Archive (nack) the message - pgmq will handle visibility
+            result = await self._rpc_call(
+                "pgmq_archive",
+                {
+                    "queue_name": queue,
+                    "msg_id": int(msg_id) if msg_id.isdigit() else msg_id,
+                },
+            )
+        else:
+            # Delete without requeue
+            result = await self._rpc_call(
+                "pgmq_delete",
+                {
+                    "queue_name": queue,
+                    "msg_id": int(msg_id) if msg_id.isdigit() else msg_id,
+                },
+            )
 
-            return bool(result)
-        except SupabaseQueueError:
-            raise
-        except Exception as e:
-            logger.exception("Failed to nack message %s from %s", msg_id, queue)
-            raise QueueOperationError(f"Nack failed: {e}") from e
+        return bool(result)
 
     async def move_to_dead_letter(
         self,
@@ -506,17 +472,10 @@ class SupabaseQueueClient:
         """
         queue = str(queue_name)
 
-        try:
-            result = await self._rpc_call("pgmq_purge", {"queue_name": queue})
-            count = int(result) if result is not None else 0
-            logger.info("Purged %d messages from %s", count, queue)
-        except SupabaseQueueError:
-            raise
-        except Exception as e:
-            logger.exception("Failed to purge queue %s", queue)
-            raise QueueOperationError(f"Purge failed: {e}") from e
-        else:
-            return count
+        result = await self._rpc_call("pgmq_purge", {"queue_name": queue})
+        count = int(result) if result is not None else 0
+        logger.info("Purged %d messages from %s", count, queue)
+        return count
 
     async def get_queue_length(self, queue_name: str | QueueName) -> int:
         """Get number of messages in queue.
@@ -532,25 +491,18 @@ class SupabaseQueueClient:
         """
         queue = str(queue_name)
 
-        try:
-            result = await self._rpc_call(
-                "pgmq_metrics",
-                {"queue_name": queue},
-            )
-        except SupabaseQueueError:
-            raise
-        except Exception as e:
-            logger.exception("Failed to get queue length for %s", queue)
-            raise QueueOperationError(f"Get length failed: {e}") from e
-        else:
-            # result is list of metrics dicts from pgmq
-            if result and isinstance(result, list):
-                # Cast result - pgmq_metrics returns list of metric dicts
-                metrics_list = cast("list[dict[str, Any]]", result)
-                if len(metrics_list) > 0:
-                    first_item = metrics_list[0]
-                    return int(first_item.get("queue_length", 0))
-            return 0
+        result = await self._rpc_call(
+            "pgmq_metrics",
+            {"queue_name": queue},
+        )
+
+        # result is list of metrics dicts from pgmq
+        if result and isinstance(result, list):
+            metrics_list = cast("list[dict[str, Any]]", result)
+            if len(metrics_list) > 0:
+                first_item = metrics_list[0]
+                return int(first_item.get("queue_length", 0))
+        return 0
 
     # =========================================================================
     # Convenience Methods for Pilot Space Queues

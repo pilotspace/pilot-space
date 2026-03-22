@@ -15,6 +15,8 @@ Usage::
 
 from __future__ import annotations
 
+import asyncio
+
 from supabase import AsyncClient, acreate_client
 
 from pilot_space.config import get_settings
@@ -23,6 +25,7 @@ from pilot_space.infrastructure.logging import get_logger
 logger = get_logger(__name__)
 
 _client: AsyncClient | None = None
+_lock = asyncio.Lock()
 
 
 async def get_supabase_client() -> AsyncClient:
@@ -44,19 +47,24 @@ async def get_supabase_client() -> AsyncClient:
     if _client is not None:
         return _client
 
-    settings = get_settings()
-    url = settings.supabase_url
-    key = settings.supabase_service_key.get_secret_value()
+    async with _lock:
+        # Double-check after acquiring lock
+        if _client is not None:
+            return _client
 
-    if not url or not key:
-        raise RuntimeError(
-            "SUPABASE_URL and SUPABASE_SERVICE_KEY must be configured to use "
-            "the Supabase SDK client."
-        )
+        settings = get_settings()
+        url = settings.supabase_url
+        key = settings.supabase_service_key.get_secret_value()
 
-    logger.info("supabase_client_init", supabase_url=url)
-    _client = await acreate_client(url, key)
-    return _client
+        if not url or not key:
+            raise RuntimeError(
+                "SUPABASE_URL and SUPABASE_SERVICE_KEY must be configured to use "
+                "the Supabase SDK client."
+            )
+
+        logger.info("supabase_client_init", supabase_url=url)
+        _client = await acreate_client(url, key)
+        return _client
 
 
 def reset_supabase_client() -> None:
