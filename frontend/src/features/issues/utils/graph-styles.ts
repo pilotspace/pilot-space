@@ -480,7 +480,7 @@ export function computeForceLayout(
       id: e.id,
       source: e.sourceId,
       target: e.targetId,
-      type: 'default',
+      type: 'smoothstep',
       label: showLabel ? (e.label ?? getEdgeLabel(e.edgeType)) : undefined,
       animated: e.edgeType === 'blocks',
       interactionWidth: 20,
