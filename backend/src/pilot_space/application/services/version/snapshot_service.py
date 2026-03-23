@@ -14,7 +14,7 @@ from uuid import UUID
 
 from sqlalchemy.exc import IntegrityError
 
-from pilot_space.domain.exceptions import NotFoundError
+from pilot_space.domain.exceptions import ConflictError, NotFoundError
 from pilot_space.domain.note_version import NoteVersion, VersionTrigger
 from pilot_space.infrastructure.database.repositories.note_repository import NoteRepository
 from pilot_space.infrastructure.database.repositories.note_version_repository import (
@@ -133,7 +133,7 @@ class VersionSnapshotService:
             )
 
         msg = f"Failed to create snapshot for note {payload.note_id} after {_MAX_VERSION_RETRIES} retries"
-        raise RuntimeError(msg)
+        raise ConflictError(msg)
 
 
 def _default_label(trigger: VersionTrigger) -> str:
