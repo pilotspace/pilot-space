@@ -1,14 +1,10 @@
 'use client';
 
 /**
- * ProjectKnowledgeGraph — full interactive knowledge graph for a project.
+ * WorkspaceKnowledgeGraph — full interactive knowledge graph for a workspace.
  *
- * Layout:
- *   1. Toolbar (40px): filter chips, depth slider, node count
- *   2. ReactFlow canvas (flex-1): interactive, minimap, zoom 0.3–3x
- *   3. Node detail panel (<=200px): shown when a node is selected
- *
- * State: local useState only (no MobX, NOT observer).
+ * Reuses the shared useGraphCanvas hook and GraphCanvasShell component.
+ * Shows all workspace nodes with filter chips, depth is N/A (flat overview).
  */
 
 import { useCallback, useEffect, useState, useMemo } from 'react';
@@ -20,72 +16,64 @@ import { toast } from 'sonner';
 
 import { GraphCanvasShell } from '@/features/issues/components/graph-canvas-shell';
 import { useGraphCanvas } from '@/features/issues/hooks/use-graph-canvas';
-import { useProjectKnowledgeGraph } from '@/features/projects/hooks/useProjectKnowledgeGraph';
+import { useWorkspaceKnowledgeGraph } from '@/features/knowledge-graph/hooks/useWorkspaceKnowledgeGraph';
 import { knowledgeGraphApi } from '@/services/api/knowledge-graph';
+import { projectsApi } from '@/services/api/projects';
 import type { FilterChip } from '@/features/issues/utils/graph-shared';
 import type { GraphNodeType } from '@/types/knowledge-graph';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-export interface ProjectKnowledgeGraphProps {
+export interface WorkspaceKnowledgeGraphProps {
   workspaceId: string;
-  projectId: string;
 }
 
 const FILTER_CHIPS: FilterChip[] = [
+  { label: 'Projects', nodeType: 'project' },
   { label: 'Issues', nodeType: 'issue' },
   { label: 'Notes', nodeType: 'note' },
   { label: 'Cycles', nodeType: 'cycle' },
   { label: 'PRs', nodeType: 'pull_request' },
-  { label: 'Commits', nodeType: 'commit' },
-  { label: 'Code', nodeType: 'code_reference' },
+  { label: 'Decisions', nodeType: 'decision' },
   { label: 'All', nodeType: 'all' },
 ];
 
 // ── Inner component (needs ReactFlowProvider context) ─────────────────────
 
-interface ProjectGraphCanvasProps {
+interface CanvasProps {
   workspaceId: string;
-  projectId: string;
-  depth: number;
   activeFilter: GraphNodeType | 'all';
+  maxNodes: number;
   onNodeCountChange: (count: number) => void;
+  onNavigate: (nodeType: string, entityId: string) => void;
   onRegenerate: () => void;
   isRegenerating: boolean;
-  onNavigate: (nodeType: string, entityId: string) => void;
 }
 
-function ProjectGraphCanvas({
+function WorkspaceGraphCanvas({
   workspaceId,
-  projectId,
-  depth,
   activeFilter,
+  maxNodes,
   onNodeCountChange,
+  onNavigate,
   onRegenerate,
   isRegenerating,
-  onNavigate,
-}: ProjectGraphCanvasProps) {
+}: CanvasProps) {
   const nodeTypes_ = useMemo<GraphNodeType[] | undefined>(
     () => (activeFilter === 'all' ? undefined : [activeFilter]),
     [activeFilter]
   );
 
-  const { data, isLoading, isError, error, refetch } = useProjectKnowledgeGraph(
-    workspaceId,
-    projectId,
-    {
-      depth,
-      nodeTypes: nodeTypes_,
-    }
-  );
+  const { data, isLoading, isError, error, refetch } = useWorkspaceKnowledgeGraph(workspaceId, {
+    nodeTypes: nodeTypes_,
+    maxNodes,
+  });
 
-  // Report node count to parent for toolbar display
+  // Report node count
   useEffect(() => {
     const count = data?.nodes.length ?? 0;
     onNodeCountChange(count);
   }, [data?.nodes.length, onNodeCountChange]);
-
-  const resetKey = `${activeFilter}-${depth}`;
 
   const canvas = useGraphCanvas({
     data,
@@ -95,16 +83,16 @@ function ProjectGraphCanvas({
     refetch,
     workspaceId,
     layoutConfig: {
-      width: 1200,
-      height: 800,
-      linkDistance: 200,
-      chargeStrength: -450,
-      collisionRadius: 85,
+      width: 1600,
+      height: 1000,
+      linkDistance: 240,
+      chargeStrength: -600,
+      collisionRadius: 90,
       edgeStrokeWidth: 1.5,
     },
-    maxNodeCap: 200,
-    expandDepth: depth,
-    resetKey,
+    maxNodeCap: 500,
+    expandDepth: 1,
+    resetKey: activeFilter,
   });
 
   return (
@@ -113,24 +101,25 @@ function ProjectGraphCanvas({
       isLoading={isLoading}
       isError={isError}
       onRefetch={refetch}
+      onNavigate={onNavigate}
       onRegenerate={onRegenerate}
       isRegenerating={isRegenerating}
-      onNavigate={onNavigate}
+      minZoom={0.2}
     />
   );
 }
 
 // ── Public component ────────────────────────────────────────────────────────
 
+/** Map node type → URL segment for navigation. */
 const NODE_TYPE_ROUTES: Record<string, string> = {
   issue: 'issues',
   note: 'notes',
   project: 'projects',
-  cycle: 'projects',
+  cycle: 'projects', // cycles live under project pages
 };
 
-export function ProjectKnowledgeGraph({ workspaceId, projectId }: ProjectKnowledgeGraphProps) {
-  const [depth, setDepth] = useState(2);
+export function WorkspaceKnowledgeGraph({ workspaceId }: WorkspaceKnowledgeGraphProps) {
   const [activeFilter, setActiveFilter] = useState<GraphNodeType | 'all'>('all');
   const [nodeCount, setNodeCount] = useState(0);
   const [isRegenerating, setIsRegenerating] = useState(false);
@@ -151,32 +140,44 @@ export function ProjectKnowledgeGraph({ workspaceId, projectId }: ProjectKnowled
     [router, params.workspaceSlug]
   );
 
-  const { refetch } = useProjectKnowledgeGraph(workspaceId, projectId, {
-    depth,
+  const { refetch } = useWorkspaceKnowledgeGraph(workspaceId, {
     nodeTypes: activeFilter === 'all' ? undefined : [activeFilter],
   });
 
   const handleRegenerate = useCallback(async () => {
     setIsRegenerating(true);
     try {
-      const result = await knowledgeGraphApi.regenerateProjectGraph(workspaceId, projectId);
-      toast.success(`Knowledge graph regeneration started (${result.enqueued} jobs enqueued)`);
-      setTimeout(() => void refetch(), 3000);
+      // Fetch all projects in the workspace
+      const response = await projectsApi.list(workspaceId);
+      const projectList = response?.items ?? [];
+      if (projectList.length === 0) {
+        toast.warning('No projects found. Create a project with issues first.');
+        return;
+      }
+      // Trigger regeneration for each project
+      let totalEnqueued = 0;
+      for (const project of projectList) {
+        const result = await knowledgeGraphApi.regenerateProjectGraph(workspaceId, project.id);
+        totalEnqueued += result.enqueued;
+      }
+      toast.success(
+        `Knowledge graph regeneration started (${totalEnqueued} jobs across ${projectList.length} projects)`
+      );
+      setTimeout(() => void refetch(), 5000);
     } catch {
       toast.error('Failed to start knowledge graph regeneration');
     } finally {
       setIsRegenerating(false);
     }
-  }, [workspaceId, projectId, refetch]);
+  }, [workspaceId, refetch]);
 
   return (
-    <div className="flex flex-col h-full bg-background" data-testid="project-knowledge-graph">
+    <div className="flex flex-col h-full bg-background" data-testid="workspace-knowledge-graph">
       {/* Toolbar */}
       <div
         className="flex items-center gap-2 px-3 border-b border-border shrink-0 overflow-x-auto"
         style={{ height: 40, minHeight: 40 }}
       >
-        {/* Filter chips */}
         <div
           className="flex items-center gap-1"
           role="toolbar"
@@ -201,35 +202,13 @@ export function ProjectKnowledgeGraph({ workspaceId, projectId }: ProjectKnowled
           ))}
         </div>
 
-        <div className="w-px h-5 bg-border shrink-0" aria-hidden="true" />
-
-        {/* Depth slider */}
-        <div className="flex items-center gap-1.5 shrink-0">
-          <label
-            htmlFor="project-graph-depth"
-            className="text-xs text-muted-foreground whitespace-nowrap"
-          >
-            Depth {depth}
-          </label>
-          <input
-            id="project-graph-depth"
-            type="range"
-            min={1}
-            max={3}
-            value={depth}
-            onChange={(e) => setDepth(Number(e.target.value))}
-            className="w-16 h-1 accent-primary cursor-pointer"
-            aria-label="Graph depth"
-          />
-        </div>
-
         <button
           type="button"
           onClick={() => void handleRegenerate()}
           disabled={isRegenerating}
           className="shrink-0 rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          aria-label="Regenerate knowledge graph"
-          title="Regenerate knowledge graph"
+          aria-label="Regenerate knowledge graph for all projects"
+          title="Regenerate all projects"
         >
           <RefreshCw className={`size-3.5 ${isRegenerating ? 'animate-spin' : ''}`} />
         </button>
@@ -241,18 +220,16 @@ export function ProjectKnowledgeGraph({ workspaceId, projectId }: ProjectKnowled
         )}
       </div>
 
-      {/* Graph canvas + detail panel via ReactFlowProvider */}
       <ReactFlowProvider>
         <div className="flex flex-col flex-1 min-h-0">
-          <ProjectGraphCanvas
+          <WorkspaceGraphCanvas
             workspaceId={workspaceId}
-            projectId={projectId}
-            depth={depth}
             activeFilter={activeFilter}
+            maxNodes={200}
             onNodeCountChange={handleNodeCountChange}
+            onNavigate={handleNavigate}
             onRegenerate={handleRegenerate}
             isRegenerating={isRegenerating}
-            onNavigate={handleNavigate}
           />
         </div>
       </ReactFlowProvider>

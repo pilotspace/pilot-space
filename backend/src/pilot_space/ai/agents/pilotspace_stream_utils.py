@@ -610,7 +610,10 @@ def build_graph_write_service_for_session(db_session: Any, queue_client: Any) ->
 
 
 async def get_workspace_embedding_key(db_session: Any, workspace_id: Any) -> str | None:
-    """Look up the workspace BYOK embedding API key (Google), returning None on any failure."""
+    """Look up the workspace BYOK embedding API key, checking openai then google.
+
+    Returns the first non-None key found, or None if no embedding key is configured.
+    """
     try:
         from pilot_space.ai.infrastructure.key_storage import SecureKeyStorage
         from pilot_space.config import get_settings
@@ -619,7 +622,12 @@ async def get_workspace_embedding_key(db_session: Any, workspace_id: Any) -> str
             db=db_session,
             master_secret=get_settings().encryption_key.get_secret_value(),
         )
-        return await storage.get_api_key(workspace_id, "google", "embedding")
+        # Check openai first (primary embedding provider), then google
+        for provider in ("openai", "google"):
+            key = await storage.get_api_key(workspace_id, provider, "embedding")
+            if key:
+                return key
+        return None
     except Exception:
         return None
 
