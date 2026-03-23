@@ -40,20 +40,17 @@ from pilot_space.api.v1.routers._mcp_server_schemas import (
     WorkspaceMcpServerResponse,
     WorkspaceMcpServerUpdate,
 )
+from pilot_space.api.v1.routers._workspace_admin import get_admin_workspace
 from pilot_space.dependencies import (
     CurrentUser,
     DbSession,
 )
-from pilot_space.infrastructure.database.models.workspace import Workspace
 from pilot_space.infrastructure.database.models.workspace_mcp_server import (
     McpAuthType,
     McpServerType,
     McpStatus,
     McpTransport,
     WorkspaceMcpServer,
-)
-from pilot_space.infrastructure.database.repositories.workspace_repository import (
-    WorkspaceRepository,
 )
 from pilot_space.infrastructure.database.rls import set_rls_context
 from pilot_space.infrastructure.logging import get_logger
@@ -62,42 +59,6 @@ logger = get_logger(__name__)
 
 router = APIRouter()
 mcp_oauth_callback_router = APIRouter()
-
-
-# ---------------------------------------------------------------------------
-# Admin gate helper
-# ---------------------------------------------------------------------------
-
-
-async def _get_admin_workspace(
-    workspace_id: UUID,
-    current_user: CurrentUser,
-    session: DbSession,
-) -> Workspace:
-    """Resolve workspace and verify admin access."""
-    workspace_repo = WorkspaceRepository(session=session)
-    workspace = await workspace_repo.get_with_members(workspace_id)
-    if not workspace:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Workspace not found",
-        )
-
-    member = next(
-        (
-            m
-            for m in (workspace.members or [])
-            if m.user_id == current_user.user_id and not m.is_deleted
-        ),
-        None,
-    )
-    if not member or not member.is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Workspace not found",
-        )
-
-    return workspace
 
 
 # ---------------------------------------------------------------------------
@@ -123,7 +84,7 @@ async def register_mcp_server(
     Secrets are never echoed back in the response (only boolean presence flags).
     Requires admin role.
     """
-    await _get_admin_workspace(workspace_id, current_user, session)
+    await get_admin_workspace(workspace_id, current_user, session)
     await set_rls_context(session, current_user.user_id, workspace_id)
 
     from pilot_space.infrastructure.database.repositories.workspace_mcp_server_repository import (
@@ -220,7 +181,7 @@ async def list_mcp_servers(
     Supports optional filtering by server_type, status, and name/URL search.
     Requires admin role.
     """
-    await _get_admin_workspace(workspace_id, current_user, session)
+    await get_admin_workspace(workspace_id, current_user, session)
     await set_rls_context(session, current_user.user_id, workspace_id)
 
     from pilot_space.infrastructure.database.repositories.workspace_mcp_server_repository import (
@@ -453,7 +414,7 @@ async def get_mcp_server_status(
     Uses 5-second timeout and returns old-style status strings.
     Prefer POST .../test for Phase 25 behavior.
     """
-    await _get_admin_workspace(workspace_id, current_user, session)
+    await get_admin_workspace(workspace_id, current_user, session)
     await set_rls_context(session, current_user.user_id, workspace_id)
 
     from pilot_space.infrastructure.database.repositories.workspace_mcp_server_repository import (
@@ -749,7 +710,7 @@ async def delete_mcp_server(
     Sets is_deleted=True on the row; the record is preserved for audit.
     Requires admin role.
     """
-    await _get_admin_workspace(workspace_id, current_user, session)
+    await get_admin_workspace(workspace_id, current_user, session)
     await set_rls_context(session, current_user.user_id, workspace_id)
 
     from pilot_space.infrastructure.database.repositories.workspace_mcp_server_repository import (
@@ -789,8 +750,26 @@ async def get_mcp_oauth_url(
     session: DbSession,
     request: Request,
 ) -> McpOAuthUrlResponse:
-    """Build OAuth 2.0 authorization URL for a registered MCP server (MCP-03)."""
-    workspace = await _get_admin_workspace(workspace_id, current_user, session)
+    """Build OAuth 2.0 authorization URL for a registered MCP server (MCP-03).
+
+    Generates a cryptographic nonce, stores OAuth state in Redis with
+    10-minute TTL, and returns the full authorization URL for the admin
+    to open in a browser.
+
+    Only valid when auth_type=oauth2 and oauth_auth_url is configured.
+    Requires admin role.
+
+    Args:
+        workspace_id: Target workspace UUID.
+        server_id: Server requiring OAuth authorization.
+        current_user: Authenticated user (must be admin).
+        session: Database session.
+        request: FastAPI request (for Redis container access).
+
+    Returns:
+        Authorization URL and state token.
+    """
+    workspace = await get_admin_workspace(workspace_id, current_user, session)
     await set_rls_context(session, current_user.user_id, workspace_id)
 
     from pilot_space.infrastructure.database.repositories.workspace_mcp_server_repository import (
