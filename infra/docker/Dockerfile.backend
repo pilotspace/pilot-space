@@ -87,7 +87,7 @@ COPY pyproject.toml uv.lock ./
 FROM base AS development
 
 # Install all dependencies (excluding the project itself — src/ not copied yet)
-RUN uv sync --frozen --no-install-project
+RUN uv sync --frozen --no-install-project --extra-packages
 
 # Copy source code
 COPY src/ ./src/
@@ -96,7 +96,7 @@ COPY alembic.ini ./
 COPY README.md ./
 
 # Install the project itself now that src/ is present
-RUN uv sync --frozen
+RUN uv sync --frozen --extra-packages
 
 # Set Python path for source code
 ENV PYTHONPATH=/app/src
