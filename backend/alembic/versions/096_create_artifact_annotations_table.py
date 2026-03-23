@@ -19,10 +19,7 @@ from sqlalchemy import text
 from alembic import op
 
 revision: str = "096_create_artifact_annotations_table"
-down_revision: tuple[str, str] = (
-    "095_add_transcript_cache_rls",
-    "095_add_workspace_members_rls_index",
-)
+down_revision: str = "22403cf6e40a"  # pragma: allowlist secret
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
@@ -89,7 +86,7 @@ def upgrade() -> None:
                 FROM workspace_members wm
                 WHERE wm.user_id = current_setting('app.current_user_id', true)::uuid
                 AND wm.is_deleted = false
-                AND wm.role IN ('owner', 'admin', 'member', 'guest')
+                AND wm.role IN ('OWNER', 'ADMIN', 'MEMBER', 'GUEST')
             )
         )
     """)
@@ -115,7 +112,7 @@ def upgrade() -> None:
                 FROM workspace_members wm
                 WHERE wm.user_id = current_setting('app.current_user_id', true)::uuid
                 AND wm.is_deleted = false
-                AND wm.role IN ('owner', 'admin', 'member', 'guest')
+                AND wm.role IN ('OWNER', 'ADMIN', 'MEMBER', 'GUEST')
             )
         )
     """)

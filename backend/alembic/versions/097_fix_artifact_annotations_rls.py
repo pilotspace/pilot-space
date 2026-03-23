@@ -17,7 +17,10 @@ from sqlalchemy import text
 from alembic import op
 
 revision: str = "097_fix_artifact_annotations_rls"
-down_revision: str = "096_create_artifact_annotations_table"
+down_revision: tuple[str, str] = (
+    "096_create_artifact_annotations_table",
+    "096_add_note_chunk_node_type",
+)
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
