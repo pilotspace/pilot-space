@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Tauri Desktop Client
 status: completed
-stopped_at: Completed 40-02-PLAN.md
+stopped_at: Completed 40-01-PLAN.md
 last_updated: "2026-03-23T16:58:25.731Z"
 last_activity: "2026-03-21 - Completed quick task 260321-j7t: Fix all DANGER and WATCH items from Tauri deep context report"
 progress:
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-03-20)
 
 ## Current Position
 
-Phase: 39 of 39 (Tech Debt Cleanup)
-Plan: 1 of 1 in current phase — COMPLETE
-Status: All phases complete — v1.1 + Phase 39 gap closure finished
-Last activity: 2026-03-21 - Completed quick task 260321-j7t: Fix all DANGER and WATCH items from Tauri deep context report
+Phase: 40 of 40 (WebGPU Canvas IDE Editor)
+Plan: 2 of 6 in current phase
+Status: Executing Phase 40 plans
+Last activity: 2026-03-24 - Completed 40-01: Foundation (types, theme, PM parser, FileStore)
 
-Progress: [██████████] 100% (v1.1+gap: 26/26 plans)
+Progress: [█---------] 17% (Phase 40: 1/6 plans)
 
 ## Milestone History
 
@@ -118,6 +118,10 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 40]: Block math requires newline-separated syntax for katex-display rendering
 - [Phase 40]: rehypeMermaid replaces pre>code.language-mermaid with div[data-mermaid] for React component mapping
 
+- [Phase 40-01]: PM block regex validates against 10 known types; invalid types silently skipped
+- [Phase 40-01]: FileStore eviction policy: oldest non-dirty, non-active tab first; fallback to oldest if all dirty
+- [Phase 40-01]: FileStore uses Map<string, OpenFile> for O(1) lookup with insertion-order preservation
+
 ### Roadmap Evolution
 
 - Phase 40 added: WebGPU Note Canvas + IDE File Editor
@@ -139,7 +143,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-23T16:58:25.729Z
-Stopped at: Completed 40-02-PLAN.md
-Resume file: None
-Next action: v1.1 milestone complete — all 25 plans executed across phases 30–38
+Last session: 2026-03-24T00:01:00Z
+Stopped at: Completed 40-01-PLAN.md
+Resume file: .planning/phases/40-webgpu-canvas-ide-editor/40-02-PLAN.md
+Next action: Execute 40-02 plan (next in Phase 40 sequence)
