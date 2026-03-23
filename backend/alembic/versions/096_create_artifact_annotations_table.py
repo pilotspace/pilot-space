@@ -28,20 +28,32 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    # Create artifact_annotations table
+    # Add unique index on artifacts(id, workspace_id) to support composite FK
+    # from artifact_annotations — enforces workspace tenancy at DB level.
+    op.execute(
+        text("""
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_artifacts_id_workspace
+        ON artifacts (id, workspace_id)
+    """)
+    )
+
+    # Create artifact_annotations table with composite FK tying workspace_id to artifact
     op.execute(
         text("""
         CREATE TABLE artifact_annotations (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            artifact_id UUID NOT NULL REFERENCES artifacts(id) ON DELETE CASCADE,
+            artifact_id UUID NOT NULL,
             slide_index INTEGER NOT NULL CHECK (slide_index >= 0),
             content TEXT NOT NULL,
             user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-            workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+            workspace_id UUID NOT NULL,
             is_deleted BOOLEAN NOT NULL DEFAULT false,
             deleted_at TIMESTAMPTZ,
             created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            CONSTRAINT fk_annotation_artifact_workspace
+                FOREIGN KEY (artifact_id, workspace_id)
+                REFERENCES artifacts(id, workspace_id) ON DELETE CASCADE
         )
     """)
     )
@@ -165,3 +177,4 @@ def downgrade() -> None:
         )
     )
     op.execute(text("DROP TABLE IF EXISTS artifact_annotations"))
+    op.execute(text("DROP INDEX IF EXISTS uq_artifacts_id_workspace"))
