@@ -141,9 +141,10 @@ class CreateIssueService:
         )
 
         # Validate name
-        if not payload.name or not payload.name.strip():
+        normalized_name = payload.name.strip() if payload.name else ""
+        if not normalized_name:
             raise ValidationError("Issue name is required")
-        if len(payload.name) > 255:
+        if len(normalized_name) > 255:
             raise ValidationError("Issue name must be 255 characters or less")
 
         # Get next sequence ID for project

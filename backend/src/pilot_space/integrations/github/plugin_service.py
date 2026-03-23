@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 
 import httpx
 
-from pilot_space.domain.exceptions import AppError, NotFoundError
+from pilot_space.domain.exceptions import AppError, NotFoundError, ValidationError
 from pilot_space.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
@@ -39,11 +39,11 @@ def parse_github_url(url: str) -> tuple[str, str]:
         Tuple of (owner, repo_name).
 
     Raises:
-        ValueError: If URL does not match expected GitHub format.
+        ValidationError: If URL does not match expected GitHub format.
     """
     m = _GITHUB_URL_RE.match(url.strip())
     if not m:
-        raise ValueError(f"Invalid GitHub URL: {url!r}")
+        raise ValidationError(f"Invalid GitHub URL: {url!r}")
     return m.group("owner"), m.group("repo")
 
 

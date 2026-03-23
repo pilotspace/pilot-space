@@ -54,6 +54,13 @@ class NotFoundError(AppError):
     http_status = 404
 
 
+class UnauthorizedError(AppError):
+    """Authentication failure — invalid credentials, expired token (401)."""
+
+    error_code = "unauthorized"
+    http_status = 401
+
+
 class ForbiddenError(AppError):
     """Insufficient permissions (403)."""
 
@@ -80,5 +87,6 @@ __all__ = [
     "ConflictError",
     "ForbiddenError",
     "NotFoundError",
+    "UnauthorizedError",
     "ValidationError",
 ]
