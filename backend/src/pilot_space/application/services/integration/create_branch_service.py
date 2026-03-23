@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 
-from pilot_space.domain.exceptions import AppError
+from pilot_space.domain.exceptions import AppError, ConflictError
 from pilot_space.infrastructure.database.models import (
     Activity,
     ActivityType,
@@ -172,7 +172,9 @@ class CreateBranchService:
                 existing.external_id == payload.branch_name
                 and existing.integration_id == payload.integration_id
             ):
-                raise ValueError(f"Branch '{payload.branch_name}' is already linked to this issue")
+                raise ConflictError(
+                    f"Branch '{payload.branch_name}' is already linked to this issue"
+                )
 
         # 4. Create branch via GitHub API
         access_token = decrypt_api_key(integration.access_token)

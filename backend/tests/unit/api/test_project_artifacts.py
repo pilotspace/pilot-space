@@ -36,6 +36,7 @@ from pilot_space.api.v1.routers.project_artifacts import (
     list_artifacts,
     upload_artifact,
 )
+from pilot_space.domain.exceptions import ValidationError
 
 pytestmark = pytest.mark.asyncio
 
@@ -265,7 +266,7 @@ class TestUploadEndpoint:
 
     async def test_upload_disallowed_extension_raises_value_error(self) -> None:
         """service raises ValueError("UNSUPPORTED_FILE_TYPE") → propagates to global handler."""
-        svc = _make_artifact_service(upload_raises=ValueError("UNSUPPORTED_FILE_TYPE"))
+        svc = _make_artifact_service(upload_raises=ValidationError("UNSUPPORTED_FILE_TYPE"))
         file = _make_upload_file(
             filename="malware.exe",
             content_type="application/octet-stream",
@@ -274,7 +275,7 @@ class TestUploadEndpoint:
         session = _make_session()
         current_user = _make_current_user()
 
-        with pytest.raises(ValueError, match="UNSUPPORTED_FILE_TYPE"):
+        with pytest.raises(ValidationError, match="UNSUPPORTED_FILE_TYPE"):
             await upload_artifact(
                 workspace_id=TEST_WORKSPACE_ID,
                 project_id=TEST_PROJECT_ID,
@@ -287,7 +288,7 @@ class TestUploadEndpoint:
 
     async def test_upload_empty_file_raises_value_error(self) -> None:
         """service raises ValueError("EMPTY_FILE") → propagates to global handler."""
-        svc = _make_artifact_service(upload_raises=ValueError("EMPTY_FILE"))
+        svc = _make_artifact_service(upload_raises=ValidationError("EMPTY_FILE"))
         file = _make_upload_file(
             filename="empty.py",
             content=b"",
@@ -297,7 +298,7 @@ class TestUploadEndpoint:
         session = _make_session()
         current_user = _make_current_user()
 
-        with pytest.raises(ValueError, match="EMPTY_FILE"):
+        with pytest.raises(ValidationError, match="EMPTY_FILE"):
             await upload_artifact(
                 workspace_id=TEST_WORKSPACE_ID,
                 project_id=TEST_PROJECT_ID,

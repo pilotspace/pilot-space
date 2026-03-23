@@ -16,7 +16,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
-from pilot_space.domain.exceptions import ForbiddenError, NotFoundError
+from pilot_space.domain.exceptions import ConflictError, ForbiddenError, NotFoundError
 from pilot_space.infrastructure.database.models.activity import Activity, ActivityType
 from pilot_space.infrastructure.database.models.cycle import Cycle, CycleStatus
 from pilot_space.infrastructure.database.models.integration import IntegrationLink
@@ -220,7 +220,7 @@ class WorkspaceMemberService:
             admin_count = sum(1 for m in (workspace.members or []) if m.is_admin)
             if admin_count <= 1:
                 msg = "Cannot demote the only admin from workspace"
-                raise ValueError(msg)
+                raise ConflictError(msg)
 
         # Ownership transfer guard (FR-017, T020a)
         if new_role_enum == WorkspaceRole.OWNER:

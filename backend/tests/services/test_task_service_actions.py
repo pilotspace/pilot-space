@@ -14,6 +14,7 @@ from uuid import UUID, uuid4
 import pytest
 
 from pilot_space.application.services.task_service import TaskService
+from pilot_space.domain.exceptions import NotFoundError, ValidationError
 from pilot_space.infrastructure.database.models import Issue
 from pilot_space.infrastructure.database.models.task import Task, TaskStatus
 
@@ -178,7 +179,7 @@ class TestUpdateStatus:
         """Raises ValueError for invalid status."""
         mock_task_repo.get_by_id.return_value = mock_task
 
-        with pytest.raises(ValueError, match="Invalid status"):
+        with pytest.raises(ValidationError, match="Invalid status"):
             await task_service.update_status(mock_task.id, workspace_id, "invalid_status")
 
     async def test_update_status_task_not_found(
@@ -190,7 +191,7 @@ class TestUpdateStatus:
         """Raises ValueError if task not found."""
         mock_task_repo.get_by_id.return_value = None
 
-        with pytest.raises(ValueError, match="not found"):
+        with pytest.raises(NotFoundError, match="not found"):
             await task_service.update_status(uuid4(), workspace_id, "done")
 
 

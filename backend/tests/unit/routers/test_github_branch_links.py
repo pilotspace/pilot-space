@@ -18,6 +18,7 @@ from pilot_space.application.services.integration.create_branch_service import (
     CreateBranchError,
     CreateBranchResult,
 )
+from pilot_space.domain.exceptions import ConflictError
 from pilot_space.infrastructure.database.models import IntegrationLink, IntegrationLinkType
 
 # ---------------------------------------------------------------------------
@@ -186,7 +187,7 @@ class TestCreateBranchForIssueErrors:
         issue_repo = AsyncMock()
         issue_repo.get_by_id_with_relations = AsyncMock(return_value=issue)
         service = AsyncMock()
-        service.execute = AsyncMock(side_effect=ValueError("already linked"))
+        service.execute = AsyncMock(side_effect=ConflictError("already linked"))
 
         with (
             patch(
@@ -210,7 +211,7 @@ class TestCreateBranchForIssueErrors:
                 "pilot_space.api.v1.routers.github_links.CreateBranchService",
                 return_value=service,
             ),
-            pytest.raises(ValueError, match="already linked"),
+            pytest.raises(ConflictError, match="already linked"),
         ):
             await create_branch_for_issue(
                 session=session,
