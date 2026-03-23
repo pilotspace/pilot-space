@@ -333,5 +333,6 @@ docs/dev-pattern/*
 .claude/*
 .specify/*
 .entire/*
+.planning
 docs/
 specs/

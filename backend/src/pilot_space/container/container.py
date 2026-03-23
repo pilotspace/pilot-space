@@ -159,6 +159,7 @@ class Container(SkillContainer, PluginContainer):
             "pilot_space.api.v1.dependencies_workspace_skills",
             "pilot_space.api.v1.routers.project_artifacts",
             "pilot_space.api.v1.routers.artifact_annotations",
+            "pilot_space.api.v1.routers.notes_ai",
         ],
     )
 

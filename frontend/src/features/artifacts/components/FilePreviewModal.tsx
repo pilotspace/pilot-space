@@ -22,6 +22,7 @@ import {
   Dialog,
   DialogClose,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -30,26 +31,34 @@ import { useStore } from '@/stores';
 import { resolveRenderer, getLanguageForFile } from '../utils/mime-type-router';
 import { useFileContent } from '../hooks/useFileContent';
 import { DownloadFallback } from './renderers/DownloadFallback';
+import { CodeSkeleton, TableSkeleton, ProseSkeleton } from './preview-skeletons';
 
 // Lazy-load heavy renderers — papaparse (~50KB), DOMPurify (~30KB), react-markdown
 // are only loaded when the user actually opens a file preview of that type.
-const MarkdownRenderer = dynamic(() =>
-  import('./renderers/MarkdownRenderer').then((m) => ({ default: m.MarkdownRenderer }))
+// Each has a loading skeleton that matches the expected content shape.
+const MarkdownRenderer = dynamic(
+  () => import('./renderers/MarkdownRenderer').then((m) => ({ default: m.MarkdownRenderer })),
+  { loading: () => <ProseSkeleton /> }
 );
-const TextRenderer = dynamic(() =>
-  import('./renderers/TextRenderer').then((m) => ({ default: m.TextRenderer }))
+const TextRenderer = dynamic(
+  () => import('./renderers/TextRenderer').then((m) => ({ default: m.TextRenderer })),
+  { loading: () => <CodeSkeleton /> }
 );
-const JsonRenderer = dynamic(() =>
-  import('./renderers/JsonRenderer').then((m) => ({ default: m.JsonRenderer }))
+const JsonRenderer = dynamic(
+  () => import('./renderers/JsonRenderer').then((m) => ({ default: m.JsonRenderer })),
+  { loading: () => <CodeSkeleton /> }
 );
-const CodeRenderer = dynamic(() =>
-  import('./renderers/CodeRenderer').then((m) => ({ default: m.CodeRenderer }))
+const CodeRenderer = dynamic(
+  () => import('./renderers/CodeRenderer').then((m) => ({ default: m.CodeRenderer })),
+  { loading: () => <CodeSkeleton /> }
 );
-const CsvRenderer = dynamic(() =>
-  import('./renderers/CsvRenderer').then((m) => ({ default: m.CsvRenderer }))
+const CsvRenderer = dynamic(
+  () => import('./renderers/CsvRenderer').then((m) => ({ default: m.CsvRenderer })),
+  { loading: () => <TableSkeleton /> }
 );
-const HtmlRenderer = dynamic(() =>
-  import('./renderers/HtmlRenderer').then((m) => ({ default: m.HtmlRenderer }))
+const HtmlRenderer = dynamic(
+  () => import('./renderers/HtmlRenderer').then((m) => ({ default: m.HtmlRenderer })),
+  { loading: () => <CodeSkeleton /> }
 );
 // docx-preview and mammoth reference browser APIs (window, document) on import.
 // ssr: false is REQUIRED to prevent "window is not defined" errors during Next.js
@@ -258,6 +267,8 @@ export const FilePreviewModal = observer(function FilePreviewModal({
   const currentUserId = authStore.user?.id ?? '';
 
   const [isMaximized, setIsMaximized] = React.useState(false);
+  // Track when the dialog opens to ignore the originating click's "pointer down outside"
+  const openTimestampRef = React.useRef(0);
   const [docxTocOpen, setDocxTocOpen] = React.useState(false);
 
   // PPTX slide navigation state — lives here (controlled component pattern)
@@ -278,6 +289,7 @@ export const FilePreviewModal = observer(function FilePreviewModal({
       setCurrentSlide(0);
       setSlideCount(0);
       setShowThumbnails(false);
+      openTimestampRef.current = Date.now();
     }
   }, [open]);
 
@@ -519,10 +531,23 @@ export const FilePreviewModal = observer(function FilePreviewModal({
           isMaximized ? 'w-[95vw] h-[95vh] max-w-none' : 'sm:max-w-3xl max-h-[85vh]'
         )}
         showCloseButton={false}
+        onPointerDownOutside={(e) => {
+          // Radix DismissableLayer sees the original FileCard click as "outside"
+          // the dialog (it didn't exist yet). Ignore clicks within 300ms of open.
+          if (Date.now() - openTimestampRef.current < 300) {
+            e.preventDefault();
+          }
+        }}
+        onInteractOutside={(e) => {
+          if (Date.now() - openTimestampRef.current < 300) {
+            e.preventDefault();
+          }
+        }}
       >
         {/* Header */}
         <DialogHeader className="flex-row items-center justify-between px-4 py-3 border-b shrink-0 gap-2">
           <DialogTitle className="text-sm font-medium truncate flex-1">{filename}</DialogTitle>
+          <DialogDescription className="sr-only">Preview of {filename}</DialogDescription>
           <div className="flex items-center gap-1 shrink-0">
             {/* File type badge */}
             <span className="text-xs text-muted-foreground px-2 py-0.5 rounded bg-muted">
@@ -618,8 +643,23 @@ export const FilePreviewModal = observer(function FilePreviewModal({
           </div>
         </DialogHeader>
 
-        {/* Body — scrollable renderer area */}
-        <div className="flex-1 overflow-auto min-h-0">{renderContent()}</div>
+        {/* Body — Suspense boundary prevents dynamic() imports from bubbling
+            suspension through the Dialog portal to the Next.js route segment */}
+        <div className="flex-1 overflow-auto min-h-0">
+          <React.Suspense
+            fallback={
+              <div
+                className="flex items-center justify-center p-8"
+                role="status"
+                aria-label="Loading file content"
+              >
+                <div className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-primary" />
+              </div>
+            }
+          >
+            {renderContent()}
+          </React.Suspense>
+        </div>
       </DialogContent>
     </Dialog>
   );
