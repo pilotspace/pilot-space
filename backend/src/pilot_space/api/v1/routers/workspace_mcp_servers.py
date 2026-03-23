@@ -223,7 +223,7 @@ async def update_mcp_server(
     the existing encrypted value. Providing a new value overwrites the secret.
     Requires admin role.
     """
-    await _get_admin_workspace(workspace_id, current_user, session)
+    await get_admin_workspace(workspace_id, current_user, session)
     await set_rls_context(session, current_user.user_id, workspace_id)
 
     from pilot_space.infrastructure.database.repositories.workspace_mcp_server_repository import (
@@ -509,7 +509,7 @@ async def test_mcp_server_connection(
     Returns status, latency_ms, and error_detail.
     Requires admin role.
     """
-    await _get_admin_workspace(workspace_id, current_user, session)
+    await get_admin_workspace(workspace_id, current_user, session)
     await set_rls_context(session, current_user.user_id, workspace_id)
 
     from pilot_space.application.services.mcp.mcp_connection_tester import (
@@ -572,7 +572,7 @@ async def enable_mcp_server(
     Sets is_enabled=True and clears last_status so the poller re-evaluates.
     Requires admin role.
     """
-    await _get_admin_workspace(workspace_id, current_user, session)
+    await get_admin_workspace(workspace_id, current_user, session)
     await set_rls_context(session, current_user.user_id, workspace_id)
 
     from pilot_space.infrastructure.database.repositories.workspace_mcp_server_repository import (
@@ -613,7 +613,7 @@ async def disable_mcp_server(
     Disabled servers are excluded from polling and MCP routing.
     Requires admin role.
     """
-    await _get_admin_workspace(workspace_id, current_user, session)
+    await get_admin_workspace(workspace_id, current_user, session)
     await set_rls_context(session, current_user.user_id, workspace_id)
 
     from pilot_space.infrastructure.database.repositories.workspace_mcp_server_repository import (
@@ -654,7 +654,7 @@ async def import_mcp_servers(
     and creates the rest. Returns imported, skipped, and errors lists.
     Requires admin role.
     """
-    await _get_admin_workspace(workspace_id, current_user, session)
+    await get_admin_workspace(workspace_id, current_user, session)
     await set_rls_context(session, current_user.user_id, workspace_id)
 
     from pilot_space.application.services.mcp.import_mcp_servers_service import (
