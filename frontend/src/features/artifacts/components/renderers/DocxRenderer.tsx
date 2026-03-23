@@ -248,19 +248,21 @@ export function DocxRenderer({ content, filename, signedUrl, tocOpen = false }: 
         tempContainer.style.pointerEvents = 'none';
         document.body.appendChild(tempContainer);
 
+        let renderedHtml = '';
         try {
           await renderAsync(content, tempContainer, undefined, {
             inWrapper: true,
             ignoreLastRenderedPageBreak: false,
           });
         } finally {
+          // Read innerHTML BEFORE removing from DOM to avoid reading detached node
+          renderedHtml = tempContainer.innerHTML;
           document.body.removeChild(tempContainer);
         }
 
         if (cancelled) return;
 
         // Extract the rendered HTML and inject heading IDs before creating the iframe
-        const renderedHtml = tempContainer.innerHTML;
         const { modifiedHtml, headings: extracted } = extractAndInjectHeadings(renderedHtml);
 
         const doc = `<!DOCTYPE html>

@@ -15,7 +15,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
 
 from pilot_space.infrastructure.database.models.artifact_annotation import ArtifactAnnotation
 
@@ -109,8 +109,11 @@ class ArtifactAnnotationRepository:
         await self.session.execute(
             update(ArtifactAnnotation)
             .where(ArtifactAnnotation.id == annotation_id)
-            .values(content=content)
+            .values(content=content, updated_at=func.now())
         )
+        # Expire any cached ORM instance so the next get_by_id fetches fresh data
+        # (Core-level update bypasses the ORM identity map)
+        self.session.expire_all()
 
     async def delete(self, annotation_id: UUID) -> bool:
         """Hard-delete an annotation row by primary key.
