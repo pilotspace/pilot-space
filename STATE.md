@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-03-20)
 ## Current Position
 
 Phase: 40 of 40 (WebGPU Canvas IDE Editor)
-Plan: 2 of 6 in current phase
+Plan: 5 of 6 in current phase
 Status: Executing Phase 40 plans
-Last activity: 2026-03-24 - Completed 40-01: Foundation (types, theme, PM parser, FileStore)
+Last activity: 2026-03-24 - Completed 40-04: Monaco AI Providers and Yjs Collaboration
 
-Progress: [█---------] 17% (Phase 40: 1/6 plans)
+Progress: [███████---] 67% (Phase 40: 4/6 plans)
 
 ## Milestone History
 
@@ -121,6 +121,12 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 40-01]: PM block regex validates against 10 known types; invalid types silently skipped
 - [Phase 40-01]: FileStore eviction policy: oldest non-dirty, non-active tab first; fallback to oldest if all dirty
 - [Phase 40-01]: FileStore uses Map<string, OpenFile> for O(1) lookup with insertion-order preservation
+- [Phase 40-03]: useState (not useRef) for editor/monaco instances consumed during render -- React 19 react-hooks/refs
+- [Phase 40-03]: Regex constants exported without /g flag; fresh instances created in parseMarkdownLine with /g
+- [Phase 40-03]: PMBlockViewZone is plain component (NOT observer) -- React 19 flushSync constraint
+- [Phase 40-03]: View zone portals built in useEffect+setState, not useMemo, to avoid reading refs during render- [Phase 40-04]: disposeInlineCompletions replaces freeInlineCompletions in Monaco 0.55.1 InlineCompletionsProvider
+- [Phase 40-04]: Y.Text type name 'monaco' (distinct from 'prosemirror' used by TipTap Yjs binding)
+- [Phase 40-04]: MonacoNoteEditor uses useState (not useRef) for editor/monaco instances consumed during render — React 19 refs rule
 
 ### Roadmap Evolution
 
@@ -143,7 +149,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-24T00:01:00Z
-Stopped at: Completed 40-01-PLAN.md
-Resume file: .planning/phases/40-webgpu-canvas-ide-editor/40-02-PLAN.md
-Next action: Execute 40-02 plan (next in Phase 40 sequence)
+Last session: 2026-03-24T17:18:00Z
+Stopped at: Completed 40-04-PLAN.md
+Resume file: .planning/phases/40-webgpu-canvas-ide-editor/40-05-PLAN.md
+Next action: Execute 40-05 plan (next in Phase 40 sequence)
