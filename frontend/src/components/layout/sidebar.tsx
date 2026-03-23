@@ -219,9 +219,9 @@ export const SidebarUserControls = observer(function SidebarUserControls({
                   variant="ghost"
                   size="icon"
                   aria-label="Account"
-                  className="relative h-8 w-8 rounded-full"
+                  className="relative h-10 w-10 rounded-full"
                 >
-                  <Avatar className="h-6 w-6 border border-border">
+                  <Avatar className="h-7 w-7 border border-border">
                     <AvatarImage src={authStore.user?.avatarUrl ?? ''} alt="User" />
                     <AvatarFallback className="bg-primary/10 text-primary text-[10px] font-medium">
                       {initials}
@@ -244,7 +244,7 @@ export const SidebarUserControls = observer(function SidebarUserControls({
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
-            className="flex flex-1 items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-sidebar-accent/50"
+            className="flex flex-1 items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-sidebar-accent/50 outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-1 focus-visible:ring-offset-sidebar"
             aria-label="Account"
           >
             <Avatar className="h-7 w-7 shrink-0 border border-border">
@@ -429,7 +429,11 @@ export const Sidebar = observer(function Sidebar() {
               className={cn(sectionIndex > 0 && 'mt-4')}
             >
               {!collapsed ? (
-                <div className="mb-1 flex items-center gap-1.5 px-2.5" aria-hidden="true">
+                <div
+                  className="mb-1 flex items-center gap-1.5 px-2.5"
+                  role="heading"
+                  aria-level={3}
+                >
                   {section.icon && (
                     <section.icon className="h-2.5 w-2.5 text-sidebar-foreground/40" />
                   )}
@@ -463,8 +467,13 @@ export const Sidebar = observer(function Sidebar() {
                         href={item.href}
                         data-testid={item.testId}
                         aria-current={isActive ? 'page' : undefined}
+                        aria-label={
+                          collapsed && badgeCount > 0
+                            ? `${item.name} (${badgeCount} pending)`
+                            : undefined
+                        }
                         className={cn(
-                          'group relative flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all duration-200',
+                          'group relative flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors duration-200 outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-1 focus-visible:ring-offset-sidebar',
                           isActive
                             ? [
                                 'bg-sidebar-accent text-sidebar-primary font-semibold',
@@ -555,7 +564,7 @@ export const Sidebar = observer(function Sidebar() {
                           data-testid="note-item"
                           aria-current={isActive ? 'page' : undefined}
                           className={cn(
-                            'group relative flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs transition-colors',
+                            'group relative flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs transition-colors outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-1 focus-visible:ring-offset-sidebar',
                             isActive
                               ? 'bg-sidebar-accent text-sidebar-primary font-semibold before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-3.5 before:w-[3px] before:rounded-full before:bg-primary'
                               : 'text-sidebar-foreground hover:bg-sidebar-accent/50'
