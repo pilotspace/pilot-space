@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-03-20)
 ## Current Position
 
 Phase: 44 of 46 (Web Git Integration and Source Control Panel)
-Plan: 3 of 5 in current phase
+Plan: 2 of 5 in current phase
 Status: In progress
-Last activity: 2026-03-24 - Plan 44-03 complete: Frontend types, API service, and GitWebStore for SCM panel
+Last activity: 2026-03-24 - Plan 44-02 complete: Git proxy router with 8 endpoints, Pydantic schemas, and 16 unit tests
 
-Progress: [█████████░] 89% (Phase 44: 3/5 plans complete)
+Progress: [█████████░] 87% (Phase 44: 2/5 plans complete)
 
 ## Milestone History
 
@@ -157,6 +157,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 43]: [Phase 43-03]: usePythonLanguage uses derived loading state (useMemo) instead of synchronous setState in effect -- React 19 set-state-in-effect compliance
 - [Phase 43]: [Phase 43-03]: ensurePythonLanguage shares loading promise at module level to prevent duplicate Pyright WASM initializations
 - [Phase 44]: GitDataMixin pattern: extracted 12 Git Data API methods into mixin to keep GitHubClient under 700-line limit while preserving single-class API surface
+- [Phase 44-02]: NoReturn type on _handle_provider_error for pyright variable binding; StrEnum .value for provider type mapping (no GITLAB enum member yet)
 - [Phase 44-03]: GitWebStore is UI-only store: no direct API calls; TanStack Query hooks in components handle fetching
 - [Phase 44-03]: Client-side staging is a boolean flag on ChangedFile, not persisted to backend
 - [Phase 44-03]: apiClient already unwraps .data; API service functions return Promise<T> directly
@@ -187,7 +188,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-24T13:13:43.000Z
-Stopped at: Completed 44-03-PLAN.md
-Resume file: .planning/phases/44-web-git-integration-and-source-control-panel/44-04-PLAN.md
-Next action: Execute Plan 44-04 (SCM panel UI components).
+Last session: 2026-03-24T13:19:51Z
+Stopped at: Completed 44-02-PLAN.md
+Resume file: .planning/phases/44-web-git-integration-and-source-control-panel/44-03-PLAN.md
+Next action: Execute Plan 44-03 (SCM types and git proxy API service layer).
