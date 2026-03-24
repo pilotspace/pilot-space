@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Tauri Desktop Client
-status: executing
-stopped_at: Completed 44-04-PLAN.md
-last_updated: "2026-03-24T13:29:57.588Z"
-last_activity: "2026-03-24 - Plan 44-02 complete: Git proxy router with 8 endpoints, Pydantic schemas, and 16 unit tests"
+status: in-progress
+stopped_at: Completed 45-01-PLAN.md
+last_updated: "2026-03-24T14:39:26Z"
+last_activity: "2026-03-24 - Plan 45-01 complete: Plugin type system, EditorPlugin model, and CRUD API"
 progress:
   total_phases: 18
-  completed_phases: 14
+  completed_phases: 15
   total_plans: 55
-  completed_plans: 51
-  percent: 87
+  completed_plans: 53
+  percent: 96
 ---
 
 # Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-03-20)
 
 ## Current Position
 
-Phase: 44 of 46 (Web Git Integration and Source Control Panel)
-Plan: 5 of 5 in current phase
-Status: In progress
-Last activity: 2026-03-24 - Plan 44-04 complete: SCM panel UI with staged/unstaged files, branch selector, commit input, EditorLayout tab integration
+Phase: 45 of 46 (Editor Plugin API and Custom Block Types)
+Plan: 2 of 5 in current phase
+Status: Plan 45-01 complete
+Last activity: 2026-03-24 - Plan 45-01 complete: Plugin type system, EditorPlugin model, and CRUD API
 
-Progress: [█████████░] 93% (Phase 44: 4/5 plans complete)
+Progress: [█████████░] 96% (Phase 45: 2/5 plans complete)
 
 ## Milestone History
 
@@ -164,6 +164,18 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 44]: useRef<>() requires explicit undefined initial value for React 19 compatibility
 - [Phase 44]: SourceControlPanel reads repo config from GitWebStore; no-repo state shows setup prompt
 - [Phase 44]: isTauri() defined inline in EditorLayout (same pattern as FileTreeNode) to guard SCM tab
+- [Phase 44]: DiffViewer is plain component (not observer) -- receives data via props
+- [Phase 44]: useFileDiff uses dual TanStack queries for original/modified content with 30s staleTime
+- [Phase 44]: Inline diff default (renderSideBySide: false) per CONTEXT.md; PR form inline in SCM panel
+- [Phase 45]: PluginRegistry is plain module-level Map, not MobX -- consistent with ActionRegistry pattern
+- [Phase 45]: PluginSandbox is plain React component (NOT observer) -- React 19 flushSync constraint
+- [Phase 45]: iframe sandbox="allow-scripts" only (no allow-same-origin, no allow-forms) for maximum isolation
+- [Phase 45]: SDK proxy built via srcdoc inline script to avoid same-origin requirement
+- [Phase 45]: Plugin actions registered with "plugin:{pluginName}:{actionId}" prefix for namespace isolation
+- [Phase 45]: usePluginLoader uses TanStack Query dependent query pattern with 5-minute staleTime
+- [Phase 45-01]: EditorPlugin is separate model from WorkspacePlugin (Phase 19 GitHub skills vs Phase 45 JS bundles)
+- [Phase 45-01]: Direct instantiation pattern (no DI container) for editor plugins router -- follows workspace_plugins precedent
+- [Phase 45-01]: Partial unique index on (workspace_id, name) WHERE is_deleted=false for editor_plugins
 
 ### Roadmap Evolution
 
@@ -191,7 +203,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-24T13:29:57.585Z
-Stopped at: Completed 44-04-PLAN.md
-Resume file: None
-Next action: Execute Plan 44-03 (SCM types and git proxy API service layer).
+Last session: 2026-03-24T14:39:26Z
+Stopped at: Completed 45-01-PLAN.md
+Resume file: .planning/phases/45-editor-plugin-api-and-custom-block-types/45-01-SUMMARY.md
+Next action: Execute Plan 45-03 (custom block type rendering and registration).

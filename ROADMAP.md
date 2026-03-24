@@ -361,7 +361,7 @@ Plans:
   4. Monaco diff viewer shows syntax-highlighted inline diffs when clicking a changed file
   5. User can stage/unstage files, type a commit message, and commit via provider API from the browser
   6. User can create a pull request with title, description, base branch, and draft toggle directly from the SCM panel
-**Plans:** 4/5 plans executed
+**Plans:** 5/5 plans complete
 
 Plans:
 - [x] 44-01-PLAN.md — GitProvider interface, GitHub Git Data API extension, GitLab client, provider tests
@@ -373,22 +373,43 @@ Plans:
 ### Phase 45: Editor Plugin API and Custom Block Types
 
 **Goal:** Design and ship a plugin API so teams can register custom PM block types, slash commands, and editor actions without forking the core — includes plugin manifest format, sandboxed execution, a built-in plugin gallery, and 3 example plugins (changelog, standup, retro)
-**Requirements**: TBD
+**Requirements**: PLUG-01, PLUG-02, PLUG-03, PLUG-04, PLUG-05, PLUG-06
 **Depends on:** Phase 42
-**Plans:** 0 plans
+**Success Criteria** (what must be TRUE):
+  1. Plugin manifest format (JSON) defines name, version, permissions, blockTypes, slashCommands, and actions
+  2. Plugins execute in sandboxed iframes with permission-gated postMessage SDK
+  3. Backend stores plugin metadata per workspace with CRUD API and Supabase Storage for JS bundles
+  4. Plugin gallery in workspace settings allows admin upload, enable/disable, and delete
+  5. PM block types, slash commands, and command palette actions are dynamically extensible by plugins
+  6. Three example plugins (changelog, standup, retro) demonstrate all extension points
+**Plans:** 2/5 plans executed
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 45 to break down)
+- [x] 45-01-PLAN.md — Plugin type contracts, backend domain model, migration, repository, service, CRUD router
+- [x] 45-02-PLAN.md — Plugin SDK types, sandbox iframe, message protocol, PluginRegistry, plugin loader
+- [ ] 45-03-PLAN.md — Editor extensibility: dynamic PM blocks, slash commands, actions, plugin-editor bridge
+- [ ] 45-04-PLAN.md — Plugin API client, TanStack Query hooks, plugin gallery settings page
+- [ ] 45-05-PLAN.md — 3 example plugins, EditorLayout integration, end-to-end verification
 
 ### Phase 46: Multi-Theme System and Editor Customization
 
 **Goal:** Expand the Pilot Space theme into a full theme engine — light/dark/high-contrast modes, user-selectable accent colors, Monaco theme marketplace import (VS Code .tmTheme), and per-workspace theme settings synced across devices
-**Requirements**: TBD
+**Requirements**: THEME-01, THEME-02, THEME-03, THEME-04, THEME-05
 **Depends on:** Phase 40
-**Plans:** 0 plans
+**Success Criteria** (what must be TRUE):
+  1. User can switch between Light, Dark, and High Contrast modes from Settings > Appearance
+  2. User can select one of 8 accent colors and see it reflected across buttons, links, focus rings, cursor, and sidebar
+  3. User can import a VS Code .tmTheme or .json theme file and apply it to the Monaco editor
+  4. Theme preferences persist across page refreshes and sync to the server per workspace
+  5. System theme detection (prefers-color-scheme) works as default with user override
+  6. Theme switching feels instant — no page reload, CSS transitions only
+**Plans:** 4 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 46 to break down)
+- [ ] 46-01-PLAN.md — Theme types, accent color system, high-contrast CSS + Monaco theme, ThemeStore MobX
+- [ ] 46-02-PLAN.md — Backend workspace_member_preferences model, migration, repository, service, CRUD endpoints
+- [ ] 46-03-PLAN.md — .tmTheme/JSON parser, useThemePreferences hook, Appearance settings page with live preview
+- [ ] 46-04-PLAN.md — RootStore wiring, ThemeProvider upgrade, useMonacoTheme update, settings modal integration, human verification
 
 ---
 *v1.0 shipped: 2026-03-09 — 11 phases, 46 plans, 30/30 requirements*
