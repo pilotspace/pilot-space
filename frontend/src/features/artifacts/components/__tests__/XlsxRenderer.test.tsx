@@ -29,7 +29,9 @@ function makeWorkbook(sheets: Record<string, unknown[][]>) {
   const Sheets: Record<string, { '!ref': string }> = {};
   for (const name of sheetNames) {
     const sheetRows = sheets[name] ?? [];
-    Sheets[name] = { '!ref': `A1:${String.fromCharCode(64 + ((sheetRows[0] as unknown[])?.length ?? 1))}${sheetRows.length}` };
+    Sheets[name] = {
+      '!ref': `A1:${String.fromCharCode(64 + ((sheetRows[0] as unknown[])?.length ?? 1))}${sheetRows.length}`,
+    };
   }
   return { SheetNames: sheetNames, Sheets };
 }
@@ -248,4 +250,3 @@ describe('XlsxRenderer', () => {
     });
   });
 });
-
