@@ -32,8 +32,12 @@ from pilot_space.api.v1.schemas.attachments import (
     ExtractionMetadata,
     ExtractionResultResponse,
 )
+from pilot_space.dependencies.ai import QueueClientDep
 from pilot_space.dependencies.auth import CurrentUserId, DbSession
-from pilot_space.dependencies.services import AttachmentUploadServiceDep
+from pilot_space.dependencies.services import (
+    AttachmentUploadServiceDep,
+    ChatAttachmentRepositoryDep,
+)
 from pilot_space.dependencies.workspace import HeaderWorkspaceMemberId
 from pilot_space.domain.exceptions import ForbiddenError, NotFoundError
 from pilot_space.infrastructure.database.models.chat_attachment import ChatAttachment
@@ -244,54 +248,25 @@ async def get_extraction_result(
     attachment_id: UUID,
     user_id: CurrentUserId,
     db: DbSession,
+    attachment_repo: ChatAttachmentRepositoryDep,
 ) -> ExtractionResultResponse:
     """Return extraction metadata and pre-chunked content for an attachment.
 
-    Phase 41 (Office extraction) and Phase 42 (OCR) populate an extraction
-    cache keyed by attachment_id. This endpoint reads from that cache.
-    Returns 200 with extraction_source="none" when extraction has not yet run
-    (e.g., plain text files or extraction still in progress).
-
-    Returns 404 if the attachment_id is not found.
-
-    Args:
-        attachment_id: UUID of the attachment to fetch extraction for.
-        user_id: Authenticated user ID (injected by FastAPI).
-        db: Database session (injected by FastAPI).
-
-    Returns:
-        ExtractionResultResponse with extraction metadata and content.
-
-    Raises:
-        HTTPException 404: NOT_FOUND if attachment does not exist.
-
-    Note:
-        Phase 41/42 will wire the actual extraction cache lookup.
-        This stub returns a well-formed empty result so the frontend UI
-        can be developed and tested independently.
+    Reads from OCR results and Office extraction cache. Returns 200 with
+    extraction_source="none" when extraction has not yet run.
     """
-    from sqlalchemy import select as sa_select
-
     from pilot_space.application.services.note.markdown_chunker import (
         chunk_markdown_by_headings,
     )
-    from pilot_space.infrastructure.database.models.chat_attachment import (
-        ChatAttachment,
-    )
     from pilot_space.infrastructure.database.models.ocr_result import OcrResultModel
 
-    # Fetch attachment
-    att_result = await db.execute(
-        sa_select(ChatAttachment).where(ChatAttachment.id == attachment_id)
-    )
-    attachment = att_result.scalar()
+    attachment = await attachment_repo.get_by_id(attachment_id)
     if attachment is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"code": "NOT_FOUND", "message": "Attachment not found or expired"},
         )
 
-    # Resolve extraction: OCR result > Office extracted_text > none
     extracted_text: str | None = None
     extraction_source = "none"
     confidence: float | None = None
@@ -299,9 +274,8 @@ async def get_extraction_result(
     provider_name: str | None = None
     tables: list[str] = []
 
-    # Check OCR results first
     ocr_row = await db.execute(
-        sa_select(OcrResultModel)
+        select(OcrResultModel)
         .where(OcrResultModel.attachment_id == attachment_id)
         .order_by(OcrResultModel.created_at.desc())
         .limit(1)
@@ -321,7 +295,6 @@ async def get_extraction_result(
         extracted_text = attachment.extracted_text
         extraction_source = "office"
 
-    # Build chunks if we have text
     extraction_chunks: list[ExtractionChunk] = []
     word_count: int | None = None
     if extracted_text:
@@ -365,44 +338,20 @@ async def ingest_document(
     user_id: CurrentUserId,
     body: DocumentIngestRequest,
     db: DbSession,
+    attachment_repo: ChatAttachmentRepositoryDep,
+    queue_client: QueueClientDep,
 ) -> dict[str, str]:
-    """Enqueue the document for KG ingestion with optional chunk adjustments.
-
-    Phase 43 (KG Document Ingestion) will wire the actual queue enqueue call.
-    This stub accepts the request, validates the body, and returns 202.
-
-    Args:
-        attachment_id: UUID of the attachment to ingest.
-        user_id: Authenticated user ID (injected by FastAPI).
-        body: Workspace ID and optional chunk adjustments.
-        db: Database session (injected by FastAPI).
-
-    Returns:
-        Dict with status "queued" and the attachment_id.
-
-    Raises:
-        HTTPException 404: NOT_FOUND if attachment does not exist.
-
-    Note:
-        Phase 43 will replace this stub with actual MemoryWorker.enqueue() call.
-    """
-    from sqlalchemy import select as sa_select
-
+    """Enqueue the document for KG ingestion with optional chunk adjustments."""
     from pilot_space.ai.workers.memory_worker import TASK_DOCUMENT_INGESTION
-    from pilot_space.infrastructure.database.models.chat_attachment import (
-        ChatAttachment,
-    )
+    from pilot_space.infrastructure.queue.models import QueueName
 
-    # Validate attachment exists
-    result = await db.execute(sa_select(ChatAttachment).where(ChatAttachment.id == attachment_id))
-    attachment = result.scalar()
+    attachment = await attachment_repo.get_by_id(attachment_id)
     if attachment is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"code": "NOT_FOUND", "message": "Attachment not found or expired"},
         )
 
-    # Build queue payload
     excluded_indices = [adj.chunk_index for adj in body.chunk_adjustments if adj.excluded]
     payload = {
         "task_type": TASK_DOCUMENT_INGESTION,
@@ -411,15 +360,9 @@ async def ingest_document(
         "excluded_chunk_indices": excluded_indices,
     }
 
-    # Enqueue to AI_NORMAL queue (non-fatal — same pattern as kg_populate)
     try:
-        from pilot_space.container._factories import create_queue_client
-
-        queue = create_queue_client()
-        if queue:
-            from pilot_space.infrastructure.queue.models import QueueName
-
-            await queue.enqueue(QueueName.AI_NORMAL, payload)
+        if queue_client:
+            await queue_client.enqueue(QueueName.AI_NORMAL, payload)
             logger.info(
                 "document_ingest_enqueued",
                 attachment_id=str(attachment_id),

@@ -16,16 +16,11 @@ from __future__ import annotations
 import json
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel
 
-from pilot_space.ai.infrastructure.key_storage import SecureKeyStorage
-from pilot_space.application.services.ai.ocr_service import OcrService
-from pilot_space.config import get_settings
-from pilot_space.dependencies import CurrentUser, DbSession
-from pilot_space.infrastructure.database.repositories.workspace_repository import (
-    WorkspaceRepository,
-)
+from pilot_space.dependencies.ai import KeyStorageDep
+from pilot_space.dependencies.auth import CurrentUser, DbSession
 from pilot_space.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
@@ -76,21 +71,17 @@ class OcrTestResponse(BaseModel):
 # Helper
 # ---------------------------------------------------------------------------
 
-# Minimal 1x1 white PNG used for connection tests (base64-decoded at runtime)
-_TEST_PNG_B64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
-
 
 async def _get_admin_workspace(
     workspace_id: UUID,
     current_user: CurrentUser,
     session: DbSession,
 ) -> None:
-    """Resolve workspace and verify admin access.
+    """Verify workspace exists and user has admin access."""
+    from pilot_space.infrastructure.database.repositories.workspace_repository import (
+        WorkspaceRepository,
+    )
 
-    Raises:
-        HTTPException 404 if workspace not found.
-        HTTPException 403 if user is not an admin.
-    """
     workspace_repo = WorkspaceRepository(session=session)
     workspace = await workspace_repo.get_with_members(workspace_id)
     if not workspace:
@@ -110,6 +101,17 @@ async def _get_admin_workspace(
         )
 
 
+def _none_response(workspace_id: UUID) -> OcrSettingsResponse:
+    return OcrSettingsResponse(
+        workspace_id=workspace_id,
+        provider_type="none",
+        is_configured=False,
+        is_valid=None,
+        endpoint_url=None,
+        model_name=None,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -124,20 +126,11 @@ async def get_ocr_settings(
     workspace_id: UUID,
     current_user: CurrentUser,
     session: DbSession,
+    key_storage: KeyStorageDep,
 ) -> OcrSettingsResponse:
-    """Get current OCR provider configuration for a workspace.
-
-    Returns provider type, configuration status, and endpoint URL (no key material).
-    Requires workspace admin permission.
-    """
+    """Get current OCR provider configuration for a workspace."""
     await _get_admin_workspace(workspace_id, current_user, session)
 
-    settings = get_settings()
-    key_storage = SecureKeyStorage(
-        db=session, master_secret=settings.encryption_key.get_secret_value()
-    )
-
-    # Check dedicated OCR providers in priority order
     for ocr_provider in ("hunyuan_ocr", "tencent_ocr"):
         info = await key_storage.get_key_info(workspace_id, ocr_provider, "ocr")
         if info:
@@ -150,14 +143,7 @@ async def get_ocr_settings(
                 model_name=info.model_name,
             )
 
-    return OcrSettingsResponse(
-        workspace_id=workspace_id,
-        provider_type="none",
-        is_configured=False,
-        is_valid=None,
-        endpoint_url=None,
-        model_name=None,
-    )
+    return _none_response(workspace_id)
 
 
 @router.put(
@@ -170,12 +156,9 @@ async def update_ocr_settings(
     body: OcrSettingsUpdateRequest,
     current_user: CurrentUser,
     session: DbSession,
+    key_storage: KeyStorageDep,
 ) -> OcrSettingsResponse:
-    """Store or update OCR provider credentials for a workspace.
-
-    For provider_type="none", deletes all OCR provider keys.
-    Requires workspace admin permission.
-    """
+    """Store or update OCR provider credentials for a workspace."""
     await _get_admin_workspace(workspace_id, current_user, session)
 
     if body.provider_type not in _SUPPORTED_OCR_PROVIDERS:
@@ -185,25 +168,11 @@ async def update_ocr_settings(
             f"Allowed: {sorted(_SUPPORTED_OCR_PROVIDERS)}",
         )
 
-    settings = get_settings()
-    key_storage = SecureKeyStorage(
-        db=session, master_secret=settings.encryption_key.get_secret_value()
-    )
-
     if body.provider_type == "none":
-        # Delete all OCR provider keys for this workspace
         for ocr_provider in ("hunyuan_ocr", "tencent_ocr"):
             await key_storage.delete_api_key(workspace_id, ocr_provider, "ocr")
-
         logger.info("ocr_settings_cleared", workspace_id=str(workspace_id))
-        return OcrSettingsResponse(
-            workspace_id=workspace_id,
-            provider_type="none",
-            is_configured=False,
-            is_valid=None,
-            endpoint_url=None,
-            model_name=None,
-        )
+        return _none_response(workspace_id)
 
     if body.provider_type == "hunyuan_ocr":
         await key_storage.store_api_key(
@@ -229,8 +198,6 @@ async def update_ocr_settings(
             model_name=body.model_name or "tencent/HunyuanOCR",
         )
 
-    # tencent_ocr: encode secret_id + secret_key as JSON blob in encrypted_key;
-    # region stored in model_name column for retrieval.
     if body.provider_type == "tencent_ocr":
         credentials_json: str | None = None
         if body.secret_id and body.secret_key:
@@ -259,7 +226,6 @@ async def update_ocr_settings(
             model_name=body.region or "ap-guangzhou",
         )
 
-    # Should not be reachable but keeps pyright happy
     raise HTTPException(  # pragma: no cover
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         detail=f"Unhandled provider_type: {body.provider_type!r}",
@@ -276,13 +242,10 @@ async def test_ocr_connection(
     body: OcrSettingsUpdateRequest,
     current_user: CurrentUser,
     session: DbSession,
+    key_storage: KeyStorageDep,
+    request: Request,
 ) -> OcrTestResponse:
-    """Test OCR provider connection using a built-in 1x1 PNG.
-
-    Instantiates the provider with the supplied credentials (without storing them)
-    and calls validate_connection(). Returns success/error status.
-    Requires workspace admin permission.
-    """
+    """Test OCR provider connection using a built-in 1x1 PNG."""
     await _get_admin_workspace(workspace_id, current_user, session)
 
     if body.provider_type not in _SUPPORTED_OCR_PROVIDERS - {"none"}:
@@ -292,9 +255,10 @@ async def test_ocr_connection(
         )
 
     from pilot_space.ai.ocr.abstract_ocr_provider import OcrConfig
+    from pilot_space.application.services.ai.ocr_service import OcrService
 
-    settings = get_settings()
-    ocr_service = OcrService(master_secret=settings.encryption_key.get_secret_value())
+    container = request.app.state.container
+    ocr_service = OcrService(master_secret=container.encryption_key())
 
     if body.provider_type == "hunyuan_ocr":
         config = OcrConfig(
@@ -304,7 +268,6 @@ async def test_ocr_connection(
             model_name=body.model_name or "tencent/HunyuanOCR",
         )
     else:
-        # tencent_ocr — decode credentials
         config = OcrConfig(
             provider_type="tencent_ocr",
             secret_id=body.secret_id,
@@ -317,7 +280,7 @@ async def test_ocr_connection(
     return OcrTestResponse(
         success=is_valid,
         error=error_msg,
-        extracted_text=None,  # validate_connection() does not extract text
+        extracted_text=None,
     )
 
 

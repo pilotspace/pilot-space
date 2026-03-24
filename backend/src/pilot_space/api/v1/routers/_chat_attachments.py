@@ -13,11 +13,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from pilot_space.application.services.ai.attachment_content_service import (
     AttachmentContentService,
 )
-from pilot_space.application.services.ai.ocr_service import OcrService
-from pilot_space.application.services.document.office_extraction_service import (
-    OfficeExtractionService,
-)
-from pilot_space.config import get_settings
 from pilot_space.domain.exceptions import AppError, ForbiddenError
 from pilot_space.infrastructure.database.repositories.chat_attachment_repository import (
     ChatAttachmentRepository,
@@ -30,18 +25,11 @@ async def resolve_attachments(
     user_id: UUID,
     session: AsyncSession,
     storage_client: SupabaseStorageClient,
+    attachment_content_service: AttachmentContentService,
 ) -> tuple[list[Any], list[dict[str, Any]]]:
     """Fetch attachment records owned by *user_id* and build Claude content blocks.
 
-    Distinguishes between two failure modes:
-    - 403 ATTACHMENT_NOT_OWNED: one or more IDs do not exist or belong to another user.
-    - 400 ATTACHMENT_EXPIRED: all IDs are owned but one or more have passed their TTL.
-
-    Args:
-        attachment_ids: List of attachment UUIDs to resolve.
-        user_id: Authenticated user ID.
-        session: Async DB session.
-        storage_client: Injected storage client from the DI container.
+    All dependencies are injected by the caller (ai_chat.py) from the DI container.
 
     Raises:
         HTTPException 403 if any attachment is not owned by the user.
@@ -71,12 +59,5 @@ async def resolve_attachments(
             error_code="ATTACHMENT_EXPIRED",
         )
 
-    settings = get_settings()
-    ocr_service = OcrService(master_secret=settings.encryption_key.get_secret_value())
-    blocks = await AttachmentContentService(
-        storage_client=SupabaseStorageClient(),
-        office_extraction=OfficeExtractionService(),
-        ocr_service=ocr_service,
-        session=session,
-    ).build_content_blocks(valid_records)
+    blocks = await attachment_content_service.build_content_blocks(valid_records)
     return valid_records, blocks

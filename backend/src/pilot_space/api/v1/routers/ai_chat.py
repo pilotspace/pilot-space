@@ -292,11 +292,13 @@ async def chat(
     from pilot_space.api.v1.routers._chat_attachments import resolve_attachments
 
     ctx_attachment_ids = ctx.attachment_ids if ctx else []
+    container = fastapi_request.app.state.container
     attachments, attachment_content_blocks = await resolve_attachments(
         ctx_attachment_ids if ctx_workspace_id is not None else [],
         user_id,
         session,
-        storage_client=fastapi_request.app.state.container.storage_client(),
+        storage_client=container.storage_client(),
+        attachment_content_service=container.attachment_content_service(),
     )
 
     # Extract full AI context (loads Note/Issue objects if IDs provided)
