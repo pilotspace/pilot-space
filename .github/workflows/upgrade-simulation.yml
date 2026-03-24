@@ -164,6 +164,8 @@ jobs:
               RETURNS bigint LANGUAGE sql AS $$ SELECT 0::bigint $$;
             CREATE OR REPLACE FUNCTION pgmq.metrics(queue_name text)
               RETURNS SETOF pgmq.metrics_result LANGUAGE sql AS $$ SELECT NULL::pgmq.metrics_result LIMIT 0 $$;
+            CREATE OR REPLACE FUNCTION pgmq.set_vt(queue_name text, msg_id bigint, vt int)
+              RETURNS SETOF pgmq.message_record LANGUAGE sql AS $$ SELECT NULL::pgmq.message_record LIMIT 0 $$;
 
             -- pg_cron stub: migration 050 calls cron.schedule() / cron.unschedule()
             -- which requires the pg_cron extension (not present in pgvector/pgvector:pg15).

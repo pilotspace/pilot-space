@@ -1,7 +1,7 @@
 """Add public wrapper function for pgmq.set_vt (visibility timeout).
 
-Revision ID: 096_add_pgmq_set_vt_wrapper
-Revises: 22403cf6e40a
+Revision ID: 100_add_pgmq_set_vt_wrapper
+Revises: 099_tighten_mcp_rls_to_admin
 Create Date: 2026-03-24
 
 The nack(requeue=True) operation needs pgmq.set_vt to reschedule message
@@ -15,11 +15,12 @@ re-delivery.  Returns the updated message record.
 
 from __future__ import annotations
 
-from alembic import op
 from sqlalchemy import text
 
-revision = "096_add_pgmq_set_vt_wrapper"
-down_revision = "22403cf6e40a"  # pragma: allowlist secret
+from alembic import op
+
+revision = "100_add_pgmq_set_vt_wrapper"
+down_revision = "099_tighten_mcp_rls_to_admin"
 branch_labels = None
 depends_on = None
 
