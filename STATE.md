@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Tauri Desktop Client
 status: executing
-stopped_at: Completed 44-01-PLAN.md
-last_updated: "2026-03-24T13:06:09.593Z"
-last_activity: "2026-03-24 - Plan 44-01 complete: GitProvider abstraction with GitHub Git Data API and GitLab REST v4"
+stopped_at: Completed 44-04-PLAN.md
+last_updated: "2026-03-24T13:29:57.588Z"
+last_activity: "2026-03-24 - Plan 44-02 complete: Git proxy router with 8 endpoints, Pydantic schemas, and 16 unit tests"
 progress:
   total_phases: 18
   completed_phases: 14
   total_plans: 55
-  completed_plans: 50
-  percent: 89
+  completed_plans: 51
+  percent: 87
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-03-20)
 ## Current Position
 
 Phase: 44 of 46 (Web Git Integration and Source Control Panel)
-Plan: 2 of 5 in current phase
+Plan: 5 of 5 in current phase
 Status: In progress
-Last activity: 2026-03-24 - Plan 44-02 complete: Git proxy router with 8 endpoints, Pydantic schemas, and 16 unit tests
+Last activity: 2026-03-24 - Plan 44-04 complete: SCM panel UI with staged/unstaged files, branch selector, commit input, EditorLayout tab integration
 
-Progress: [█████████░] 87% (Phase 44: 2/5 plans complete)
+Progress: [█████████░] 93% (Phase 44: 4/5 plans complete)
 
 ## Milestone History
 
@@ -161,6 +161,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 44-03]: GitWebStore is UI-only store: no direct API calls; TanStack Query hooks in components handle fetching
 - [Phase 44-03]: Client-side staging is a boolean flag on ChangedFile, not persisted to backend
 - [Phase 44-03]: apiClient already unwraps .data; API service functions return Promise<T> directly
+- [Phase 44]: useRef<>() requires explicit undefined initial value for React 19 compatibility
+- [Phase 44]: SourceControlPanel reads repo config from GitWebStore; no-repo state shows setup prompt
+- [Phase 44]: isTauri() defined inline in EditorLayout (same pattern as FileTreeNode) to guard SCM tab
 
 ### Roadmap Evolution
 
@@ -188,7 +191,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-24T13:19:51Z
-Stopped at: Completed 44-02-PLAN.md
-Resume file: .planning/phases/44-web-git-integration-and-source-control-panel/44-03-PLAN.md
+Last session: 2026-03-24T13:29:57.585Z
+Stopped at: Completed 44-04-PLAN.md
+Resume file: None
 Next action: Execute Plan 44-03 (SCM types and git proxy API service layer).
