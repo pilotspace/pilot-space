@@ -10,15 +10,22 @@ application/problem+json responses automatically.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
-from pilot_space.api.v1.schemas.workspace import (
-    WorkspaceFeatureToggles,
-    WorkspaceFeatureTogglesUpdate,
-)
+# TYPE_CHECKING guard: importing schemas.workspace triggers the routers/__init__.py
+# import chain, which includes workspace_feature_toggles — creating a circular
+# dependency with workspace_feature_toggles → feature_toggle (this module).
+# At runtime these types are resolved lazily inside each function body.
+if TYPE_CHECKING:
+    from pilot_space.api.v1.schemas.workspace import (
+        WorkspaceFeatureToggles,
+        WorkspaceFeatureTogglesUpdate,
+    )
+
 from pilot_space.infrastructure.database.models.workspace import Workspace
 from pilot_space.infrastructure.database.repositories.workspace_repository import (
     WorkspaceRepository,
@@ -93,11 +100,15 @@ class EmptyUpdateError(FeatureToggleError):
 
 def _extract_toggles(workspace: Workspace) -> WorkspaceFeatureToggles:
     """Extract feature toggles from workspace settings, falling back to defaults."""
+    from pilot_space.api.v1.schemas.workspace import (
+        WorkspaceFeatureToggles as _WorkspaceFeatureToggles,
+    )
+
     if not workspace.settings or SETTINGS_KEY not in workspace.settings:
-        return WorkspaceFeatureToggles()
+        return _WorkspaceFeatureToggles()
 
     toggles_data = workspace.settings[SETTINGS_KEY]
-    return WorkspaceFeatureToggles(**toggles_data)
+    return _WorkspaceFeatureToggles(**toggles_data)
 
 
 class FeatureToggleService:

@@ -28,7 +28,6 @@ import {
   Moon,
   Monitor,
   CheckCircle2,
-  BookOpen,
   Network,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -90,12 +89,11 @@ const navigationSections: NavSection[] = [
     label: 'Main',
     items: [
       { name: 'Home', path: '', icon: Home, testId: 'nav-home' },
-      { name: 'Notes', path: 'notes', icon: FileText, testId: 'nav-notes' },
-      { name: 'Issues', path: 'issues', icon: LayoutGrid, testId: 'nav-issues' },
-      { name: 'Projects', path: 'projects', icon: FolderKanban, testId: 'nav-projects' },
-      { name: 'Members', path: 'members', icon: Users, testId: 'nav-members' },
-      { name: 'Knowledge', path: 'knowledge', icon: Network, testId: 'nav-knowledge' },
-      { name: 'Docs', path: 'docs', icon: BookOpen, testId: 'nav-docs' },
+      { name: 'Notes', path: 'notes', icon: FileText, testId: 'nav-notes', featureKey: 'notes' },
+      { name: 'Issues', path: 'issues', icon: LayoutGrid, testId: 'nav-issues', featureKey: 'issues' },
+      { name: 'Projects', path: 'projects', icon: FolderKanban, testId: 'nav-projects', featureKey: 'projects' },
+      { name: 'Members', path: 'members', icon: Users, testId: 'nav-members', featureKey: 'members' },
+      { name: 'Knowledge', path: 'knowledge', icon: Network, testId: 'nav-knowledge', featureKey: 'knowledge' },
     ],
   },
   {
