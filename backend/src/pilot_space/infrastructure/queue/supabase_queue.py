@@ -215,6 +215,13 @@ class SupabaseQueueClient:
         )
 
         # pgmq_send returns the message ID as a bigint
+        if result is None:
+            logger.warning(
+                "pgmq_send returned None — using pre-generated msg_id; "
+                "ack/nack may reference wrong ID",
+                queue=queue,
+                fallback_msg_id=msg_id,
+            )
         returned_id = str(result) if result is not None else msg_id
         logger.info("Enqueued message %s to %s", returned_id, queue)
         return returned_id
@@ -395,20 +402,21 @@ class SupabaseQueueClient:
             "dead_lettered_at": datetime.now(tz=UTC).isoformat(),
         }
 
-        # Delete from original queue
+        # Enqueue to dead letter FIRST — if this fails the original message
+        # remains in the source queue (safe).  Reverse order would lose messages.
+        dlq_msg_id = await self.enqueue(
+            QueueName.DEAD_LETTER,
+            dead_letter_payload,
+            max_attempts=1,  # No retries for DLQ
+        )
+
+        # Delete from original queue only after DLQ write succeeds
         await self._rpc_call(
             "pgmq_delete",
             {
                 "queue_name": str(queue_name),
                 "msg_id": int(msg_id) if msg_id.isdigit() else msg_id,
             },
-        )
-
-        # Enqueue to dead letter
-        dlq_msg_id = await self.enqueue(
-            QueueName.DEAD_LETTER,
-            dead_letter_payload,
-            max_attempts=1,  # No retries for DLQ
         )
 
         logger.warning(
