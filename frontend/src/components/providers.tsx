@@ -27,7 +27,7 @@ export function Providers({ children }: ProvidersProps) {
           attribute="class"
           defaultTheme="system"
           enableSystem
-          disableTransitionOnChange
+          themes={['light', 'dark', 'high-contrast', 'system']}
         >
           <TooltipProvider delayDuration={0}>
             {children}

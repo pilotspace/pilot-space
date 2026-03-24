@@ -15,6 +15,7 @@ export {
   useAIStore,
   useTaskStore,
   useArtifactStore,
+  useThemeStore,
 } from './RootStore';
 
 // Auth Store

@@ -132,6 +132,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.1.4",
     "jsdom": "^26.1.0",
+    "monaco-editor": "^0.55.1",
     "msw": "^2.9.0",
     "prettier": "^3.8.1",
     "tailwindcss": "^4",
