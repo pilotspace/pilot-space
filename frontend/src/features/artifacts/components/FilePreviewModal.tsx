@@ -390,7 +390,7 @@ export const FilePreviewModal = observer(function FilePreviewModal({
       <DialogContent
         className={cn(
           'flex flex-col p-0 gap-0 overflow-hidden transition-[width,height,max-width] duration-200 ease-out',
-          isMaximized ? 'w-[96vw] h-[94vh] max-w-none' : 'sm:max-w-3xl max-h-[85vh]'
+          isMaximized ? 'w-[96vw] h-[94vh] max-w-none sm:max-w-none' : 'sm:max-w-3xl max-h-[85vh]'
         )}
         showCloseButton={false}
         onPointerDownOutside={(e) => {
