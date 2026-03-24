@@ -104,7 +104,7 @@ class WorkspaceMcpServerCreate(BaseModel):
     # Auth fields
     auth_type: McpAuthType = Field(default=McpAuthType.NONE)
     auth_token: str | None = Field(
-        default=None, description="Bearer token (will be encrypted at rest)"
+        default=None, max_length=512, description="Bearer token (will be encrypted at rest)"
     )
     oauth_client_id: str | None = Field(default=None, max_length=256)
     oauth_auth_url: str | None = Field(default=None, max_length=512)
@@ -235,7 +235,7 @@ class WorkspaceMcpServerUpdate(BaseModel):
     auth_type: McpAuthType | None = Field(default=None)
 
     # Secret fields: only update if non-None and non-empty
-    auth_token: str | None = Field(default=None)
+    auth_token: str | None = Field(default=None, max_length=512)
     headers: dict[str, str] | None = Field(default=None)
     env_vars: dict[str, str] | None = Field(default=None)
 

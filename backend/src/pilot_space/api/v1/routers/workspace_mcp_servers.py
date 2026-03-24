@@ -801,8 +801,11 @@ async def get_mcp_oauth_url(
             detail="OAuth state storage (Redis) is unavailable; cannot initiate OAuth flow",
         )
 
-    nonce = secrets.token_urlsafe(32)
-    state = f"mcp_oauth_{server_id}_{nonce}"
+    # Use a fully opaque state token. server_id and workspace context are stored
+    # in Redis under the state key and do not need to be embedded in the state
+    # parameter — embedding them unnecessarily exposes the server UUID to third-party
+    # OAuth providers that may log or record the state parameter.
+    state = secrets.token_urlsafe(32)
 
     import json
 
@@ -811,7 +814,6 @@ async def get_mcp_oauth_url(
         "workspace_id": str(workspace_id),
         "workspace_slug": workspace.slug,
         "user_id": str(current_user.user_id),
-        "nonce": nonce,
     }
     try:
         await redis_client.client.set(
@@ -826,7 +828,11 @@ async def get_mcp_oauth_url(
             detail="Failed to persist OAuth state; cannot initiate OAuth flow",
         ) from exc
 
-    callback_url = str(request.base_url).rstrip("/") + "/api/v1/oauth2/mcp-callback"
+    # Use the configured backend_url instead of request.base_url (which relies on
+    # the Host header and can be spoofed in reverse-proxy configurations).
+    from pilot_space.config import get_settings as _get_settings
+
+    callback_url = _get_settings().backend_url.rstrip("/") + "/api/v1/oauth2/mcp-callback"
     params = {
         "response_type": "code",
         "client_id": server.oauth_client_id,
@@ -915,7 +921,9 @@ async def mcp_oauth_callback(
             if not server or not server.oauth_token_url:
                 return RedirectResponse(url=f"{redirect_base}?status=error&reason=server_not_found")
 
-            callback_url = str(request.base_url).rstrip("/") + "/api/v1/oauth2/mcp-callback"
+            from pilot_space.config import get_settings as _get_settings
+
+            callback_url = _get_settings().backend_url.rstrip("/") + "/api/v1/oauth2/mcp-callback"
             token_response = await _exchange_oauth_code(
                 token_url=server.oauth_token_url,
                 client_id=server.oauth_client_id or "",
@@ -967,7 +975,7 @@ async def _exchange_oauth_code(
 ) -> str | None:
     """Exchange authorization code for access token."""
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=10.0, follow_redirects=False) as client:
             response = await client.post(
                 token_url,
                 data={

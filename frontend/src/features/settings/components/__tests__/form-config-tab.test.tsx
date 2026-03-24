@@ -339,4 +339,115 @@ describe('FormConfigTab', () => {
     );
     expect(screen.getByText(/Full command:/)).toBeInTheDocument();
   });
+
+  it('shows URL validation error and blocks submit for invalid remote URL', async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn();
+    render(<FormConfigTab onSave={onSave} isSaving={false} />);
+
+    await user.type(screen.getByLabelText('Server Name'), 'Invalid URL Server');
+    await user.type(screen.getByLabelText('Server URL'), 'not-a-url');
+
+    expect(screen.getByText('Please enter a valid URL (must include https://)')).toBeInTheDocument();
+
+    const form = screen.getByLabelText('Server Name').closest('form')!;
+    form.dispatchEvent(new Event('submit', { bubbles: true }));
+
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it('accepts valid remote URL and allows submit', async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn();
+    render(<FormConfigTab onSave={onSave} isSaving={false} />);
+
+    await user.type(screen.getByLabelText('Server Name'), 'Valid URL Server');
+    await user.type(screen.getByLabelText('Server URL'), 'https://example.com/sse');
+
+    expect(screen.queryByText('Please enter a valid URL (must include https://)')).not.toBeInTheDocument();
+
+    const form = screen.getByLabelText('Server Name').closest('form')!;
+    form.dispatchEvent(new Event('submit', { bubbles: true }));
+
+    expect(onSave).toHaveBeenCalledTimes(1);
+  });
+
+  it('blocks submit when authType is oauth2 and required OAuth fields are empty', async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn();
+    render(<FormConfigTab onSave={onSave} isSaving={false} />);
+
+    await user.type(screen.getByLabelText('Server Name'), 'OAuth Server');
+    await user.type(screen.getByLabelText('Server URL'), 'https://example.com/sse');
+    await user.click(screen.getByLabelText('OAuth 2.0'));
+
+    expect(screen.getByText('Client ID is required')).toBeInTheDocument();
+    expect(screen.getByText('Authorization URL is required')).toBeInTheDocument();
+    expect(screen.getByText('Token URL is required')).toBeInTheDocument();
+
+    const form = screen.getByLabelText('Server Name').closest('form')!;
+    form.dispatchEvent(new Event('submit', { bubbles: true }));
+
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it('blocks submit when authType is oauth2 and only client ID is provided', async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn();
+    render(<FormConfigTab onSave={onSave} isSaving={false} />);
+
+    await user.type(screen.getByLabelText('Server Name'), 'OAuth Server');
+    await user.type(screen.getByLabelText('Server URL'), 'https://example.com/sse');
+    await user.click(screen.getByLabelText('OAuth 2.0'));
+    await user.type(screen.getByLabelText('Client ID'), 'client-123');
+
+    const form = screen.getByLabelText('Server Name').closest('form')!;
+    form.dispatchEvent(new Event('submit', { bubbles: true }));
+
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it('allows submit when authType is oauth2 and required fields are present', async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn();
+    render(<FormConfigTab onSave={onSave} isSaving={false} />);
+
+    await user.type(screen.getByLabelText('Server Name'), 'OAuth Server');
+    await user.type(screen.getByLabelText('Server URL'), 'https://example.com/sse');
+    await user.click(screen.getByLabelText('OAuth 2.0'));
+    await user.type(screen.getByLabelText('Client ID'), 'client-123');
+    await user.type(screen.getByLabelText('Authorization URL'), 'https://provider.com/oauth/authorize');
+    await user.type(screen.getByLabelText('Token URL'), 'https://provider.com/oauth/token');
+
+    const form = screen.getByLabelText('Server Name').closest('form')!;
+    form.dispatchEvent(new Event('submit', { bubbles: true }));
+
+    expect(onSave).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders auth radios inside a fieldset with legend Authentication', () => {
+    render(<FormConfigTab onSave={vi.fn()} isSaving={false} />);
+
+    expect(screen.getByRole('group', { name: 'Authentication' })).toBeInTheDocument();
+  });
+
+  it('renders indexed aria-labels for KV editor inputs', async () => {
+    const user = userEvent.setup();
+    render(<FormConfigTab onSave={vi.fn()} isSaving={false} />);
+
+    await user.click(screen.getByText('Add Header'));
+    await user.click(screen.getByText('Add Variable'));
+
+    expect(screen.getByLabelText('Headers key 1')).toBeInTheDocument();
+    expect(screen.getByLabelText('Headers value 1')).toBeInTheDocument();
+    expect(screen.getByLabelText('Environment Variables key 1')).toBeInTheDocument();
+    expect(screen.getByLabelText('Environment Variables value 1')).toBeInTheDocument();
+  });
+
+  it('renders keyboard-focusable tooltip help triggers', () => {
+    render(<FormConfigTab onSave={vi.fn()} isSaving={false} />);
+
+    expect(screen.getByRole('button', { name: 'Headers help' })).toHaveAttribute('tabIndex', '0');
+    expect(screen.getByRole('button', { name: 'Environment variables help' })).toHaveAttribute('tabIndex', '0');
+  });
 });

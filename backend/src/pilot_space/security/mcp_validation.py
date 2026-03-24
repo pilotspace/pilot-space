@@ -52,6 +52,16 @@ def validate_mcp_url(url: str) -> str:
     Runtime probes must use ``follow_redirects=False`` to prevent redirect-based
     bypass.
 
+    DNS rebinding accepted risk: There is an inherent window between validation
+    time and connection time during which a hostname could be rebinding to an
+    internal IP. This is an accepted risk: the project intentionally supports
+    internal-network MCP servers (private IP targets are valid for on-premises
+    deployments). The ``_BLOCKED_NETWORKS`` check mitigates opportunistic SSRF
+    against well-known public cloud metadata endpoints (169.254.169.254, etc.)
+    at registration time. Runtime connections always use ``follow_redirects=False``
+    which prevents redirect-based bypass. If zero-trust SSRF protection is needed,
+    deploy a network-level egress firewall instead of relying solely on DNS resolution.
+
     Args:
         url: URL string to validate.
 

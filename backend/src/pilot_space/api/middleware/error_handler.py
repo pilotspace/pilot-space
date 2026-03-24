@@ -5,6 +5,7 @@ Provides standardized error responses following RFC 7807 specification.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 from fastapi import HTTPException, Request, status
@@ -143,6 +144,33 @@ async def http_exception_handler(
     )
 
 
+def _sanitize_pydantic_errors(errors: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Ensure all values in Pydantic error dicts are JSON-serializable.
+
+    Pydantic v2 ``exc.errors()`` can include ``ctx["error"]`` entries that are
+    raw Python exceptions (e.g. ``ValueError``). These are not JSON-serializable
+    and cause ``JSONResponse`` to raise a 500. This helper converts any
+    non-primitive ``ctx["error"]`` value to its string representation.
+
+    Args:
+        errors: Raw list returned by ``RequestValidationError.errors()``.
+
+    Returns:
+        A new list of error dicts safe for JSON serialisation.
+    """
+    sanitized: list[dict[str, Any]] = []
+    _json_primitives = (str, int, float, bool, type(None))
+    for error in errors:
+        e: dict[str, Any] = dict(error)
+        if "ctx" in e and isinstance(e["ctx"], dict) and "error" in e["ctx"]:
+            ctx: dict[str, Any] = dict(e["ctx"])
+            if not isinstance(ctx["error"], _json_primitives):
+                ctx["error"] = str(ctx["error"])
+            e["ctx"] = ctx
+        sanitized.append(e)
+    return sanitized
+
+
 async def validation_exception_handler(
     request: Request,
     exc: Exception,
@@ -157,7 +185,7 @@ async def validation_exception_handler(
         Problem Details JSON response.
     """
     if isinstance(exc, RequestValidationError):
-        errors = exc.errors()
+        errors = _sanitize_pydantic_errors(exc.errors())
         detail = "Validation failed"
         extensions = {"errors": errors}
     else:

@@ -69,6 +69,15 @@ function getDefaultTransport(serverType: McpServerType): McpTransport {
   return serverType === 'remote' ? 'sse' : 'stdio';
 }
 
+function isValidUrl(s: string): boolean {
+  try {
+    new URL(s);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 const SECRET_MASK = '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022';
 
 function buildInitialState(server?: MCPServer): FormConfigData {
@@ -143,6 +152,12 @@ function KVEditor({
   const removePair = (idx: number) => onUpdate(pairs.filter((_, i) => i !== idx));
   const updatePair = (idx: number, field: 'key' | 'value', val: string) =>
     onUpdate(pairs.map((p, i) => (i === idx ? { ...p, [field]: val } : p)));
+  const ariaPrefix = label
+    || (addLabel.toLowerCase().includes('header')
+      ? 'Headers'
+      : addLabel.toLowerCase().includes('variable')
+        ? 'Environment Variables'
+        : 'Key-value');
 
   return (
     <div className="space-y-2">
@@ -154,6 +169,7 @@ function KVEditor({
             value={pair.key}
             onChange={(e) => updatePair(idx, 'key', e.target.value)}
             className="flex-1"
+            aria-label={`${ariaPrefix} key ${idx + 1}`}
           />
           <Input
             placeholder={maskValues && pair.key && !pair.value ? SECRET_MASK : 'Value'}
@@ -161,6 +177,7 @@ function KVEditor({
             value={pair.value}
             onChange={(e) => updatePair(idx, 'value', e.target.value)}
             className="flex-1"
+            aria-label={`${ariaPrefix} value ${idx + 1}`}
           />
           <Button
             type="button"
@@ -214,13 +231,20 @@ export function FormConfigTab({ initialData, onSave, isSaving, formId }: FormCon
 
   const hasRequiredValue =
     form.serverType === 'remote'
-      ? form.urlOrCommand.trim().length > 0
+      ? form.urlOrCommand.trim().length > 0 && isValidUrl(form.urlOrCommand.trim())
       : form.commandArgs.trim().length > 0;
+
+  const isOAuthValid =
+    form.authType !== 'oauth2' ||
+    (form.oauthClientId.trim().length > 0 &&
+      form.oauthAuthUrl.trim().length > 0 &&
+      form.oauthTokenUrl.trim().length > 0);
 
   const canSubmit =
     form.displayName.trim().length > 0 &&
     form.displayName.trim().length <= 128 &&
-    hasRequiredValue;
+    hasRequiredValue &&
+    isOAuthValid;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -406,6 +430,11 @@ export function FormConfigTab({ initialData, onSave, isSaving, formId }: FormCon
               disabled={isSaving}
               required
             />
+            {form.urlOrCommand.trim().length > 0 && !isValidUrl(form.urlOrCommand.trim()) && (
+              <p className="text-xs text-destructive">
+                Please enter a valid URL (must include https://)
+              </p>
+            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="fc-transport">Transport</Label>
@@ -429,8 +458,10 @@ export function FormConfigTab({ initialData, onSave, isSaving, formId }: FormCon
 
       {/* Auth Type (Remote only) */}
       {form.serverType === 'remote' && (
-        <div className="space-y-2">
-          <Label>Authentication</Label>
+        <fieldset className="space-y-2">
+          <legend className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+            Authentication
+          </legend>
           <div className="flex gap-4">
             <label className="flex cursor-pointer items-center gap-2">
               <input
@@ -469,7 +500,7 @@ export function FormConfigTab({ initialData, onSave, isSaving, formId }: FormCon
               <span className="text-sm">OAuth 2.0</span>
             </label>
           </div>
-        </div>
+        </fieldset>
       )}
 
       {/* Bearer token */}
@@ -506,7 +537,11 @@ export function FormConfigTab({ initialData, onSave, isSaving, formId }: FormCon
               onChange={(e) => setField('oauthClientId', e.target.value)}
               placeholder="your-client-id"
               disabled={isSaving}
+              required
             />
+            {form.oauthClientId.trim().length === 0 && (
+              <p className="text-xs text-destructive">Client ID is required</p>
+            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="fc-oauth-auth">Authorization URL</Label>
@@ -517,7 +552,11 @@ export function FormConfigTab({ initialData, onSave, isSaving, formId }: FormCon
               onChange={(e) => setField('oauthAuthUrl', e.target.value)}
               placeholder="https://provider.com/oauth/authorize"
               disabled={isSaving}
+              required
             />
+            {form.oauthAuthUrl.trim().length === 0 && (
+              <p className="text-xs text-destructive">Authorization URL is required</p>
+            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="fc-oauth-token">Token URL</Label>
@@ -528,7 +567,11 @@ export function FormConfigTab({ initialData, onSave, isSaving, formId }: FormCon
               onChange={(e) => setField('oauthTokenUrl', e.target.value)}
               placeholder="https://provider.com/oauth/token"
               disabled={isSaving}
+              required
             />
+            {form.oauthTokenUrl.trim().length === 0 && (
+              <p className="text-xs text-destructive">Token URL is required</p>
+            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="fc-oauth-scopes">Scopes (optional)</Label>
@@ -550,7 +593,14 @@ export function FormConfigTab({ initialData, onSave, isSaving, formId }: FormCon
             <Label>Headers</Label>
             <Tooltip>
               <TooltipTrigger asChild>
-                <HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                <button
+                  type="button"
+                  tabIndex={0}
+                  className="inline-flex cursor-help focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label="Headers help"
+                >
+                  <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
+                </button>
               </TooltipTrigger>
               <TooltipContent side="right" className="max-w-[280px]">
                 Custom HTTP headers sent with every request to the remote MCP server. Headers are stored in plaintext — do not put secrets here. Use the Bearer Token field or Environment Variables for sensitive values.
@@ -572,7 +622,14 @@ export function FormConfigTab({ initialData, onSave, isSaving, formId }: FormCon
           <Label>Environment Variables</Label>
           <Tooltip>
             <TooltipTrigger asChild>
-              <HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+              <button
+                type="button"
+                tabIndex={0}
+                className="inline-flex cursor-help focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label="Environment variables help"
+              >
+                <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
+              </button>
             </TooltipTrigger>
             <TooltipContent side="right" className="max-w-[280px]">
               Define environment variables passed to the command process. Use $VAR_NAME in command arguments to reference them (e.g. --api-key $API_KEY).

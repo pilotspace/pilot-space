@@ -752,19 +752,9 @@ def _build_server_config(  # noqa: PLR0911
 
         headers: dict[str, str] = {}
 
-        # Decrypt bearer token
-        if server.auth_token_encrypted:
-            try:
-                token = decrypt_fn(server.auth_token_encrypted)
-                headers["Authorization"] = f"Bearer {token}"
-            except Exception:
-                logger.warning(
-                    "mcp_token_decrypt_failed",
-                    server_id=str(server.id),
-                )
-                return None
-
-        # Load custom headers — prefer plaintext headers_json, fallback to encrypted
+        # Load custom headers first — prefer plaintext headers_json, fallback to encrypted.
+        # Custom headers are applied BEFORE the bearer token so that Authorization
+        # cannot be silently overwritten by user-supplied headers.
         if server.headers_json:
             try:
                 custom_headers = json.loads(server.headers_json)
@@ -785,6 +775,18 @@ def _build_server_config(  # noqa: PLR0911
                     "mcp_headers_decrypt_failed",
                     server_id=str(server.id),
                 )
+
+        # Decrypt bearer token and apply after custom headers so Authorization always wins.
+        if server.auth_token_encrypted:
+            try:
+                token = decrypt_fn(server.auth_token_encrypted)
+                headers["Authorization"] = f"Bearer {token}"
+            except Exception:
+                logger.warning(
+                    "mcp_token_decrypt_failed",
+                    server_id=str(server.id),
+                )
+                return None
 
         if server.transport == McpTransport.STREAMABLE_HTTP:
             return (

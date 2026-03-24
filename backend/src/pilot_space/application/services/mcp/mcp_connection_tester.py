@@ -192,6 +192,12 @@ class TestMcpConnectionService:
                 error_detail="Empty command",
             )
 
+        # Prepend the command runner (npx/uvx) so the package name is not
+        # treated as the executable. url_or_command stores only the package/args
+        # string (e.g. "@context7/mcp"), not the full binary path.
+        if server.command_runner is not None:
+            parts = [server.command_runner.value, *parts]
+
         # Extend with command_args if present, also tokenised with shlex
         if server.command_args:
             try:

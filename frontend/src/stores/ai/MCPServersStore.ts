@@ -119,7 +119,6 @@ export class MCPServersStore {
   servers: MCPServer[] = [];
   isLoading = false;
   isSaving = false;
-  isTesting = false;
   error: string | null = null;
   filter: McpFilterState = { serverType: 'all', status: 'all', search: '' };
 
@@ -242,10 +241,6 @@ export class MCPServersStore {
   // ── Test Connection ──────────────────────────────────────
 
   async testConnection(workspaceId: string, serverId: string): Promise<MCPServerTestResult> {
-    runInAction(() => {
-      this.isTesting = true;
-    });
-
     try {
       const result = await mcpServersApi.testConnection(workspaceId, serverId);
       runInAction(() => {
@@ -254,12 +249,10 @@ export class MCPServersStore {
             ? { ...s, last_status: result.status, last_status_checked_at: result.checked_at }
             : s
         );
-        this.isTesting = false;
       });
       return result;
     } catch (err) {
       runInAction(() => {
-        this.isTesting = false;
         this.error = err instanceof Error ? err.message : 'Connection test failed';
       });
       throw err;
@@ -273,7 +266,7 @@ export class MCPServersStore {
     const prev = this.servers.find((s) => s.id === serverId);
     runInAction(() => {
       this.servers = this.servers.map((s) =>
-        s.id === serverId ? { ...s, is_enabled: true, last_status: null } : s
+        s.id === serverId ? { ...s, is_enabled: true, last_status: 'enabled' as McpStatus } : s
       );
     });
 
@@ -376,7 +369,6 @@ export class MCPServersStore {
     this.servers = [];
     this.isLoading = false;
     this.isSaving = false;
-    this.isTesting = false;
     this.error = null;
     this.filter = { serverType: 'all', status: 'all', search: '' };
   }
