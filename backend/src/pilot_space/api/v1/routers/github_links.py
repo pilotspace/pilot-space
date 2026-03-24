@@ -29,7 +29,7 @@ from pilot_space.application.services.integration import (
     CreateBranchService,
 )
 from pilot_space.dependencies import CurrentUser, CurrentUserId, DbSession
-from pilot_space.domain.exceptions import AppError, NotFoundError, ServiceUnavailableError
+from pilot_space.domain.exceptions import NotFoundError, ServiceUnavailableError
 from pilot_space.infrastructure.database.repositories import (
     ActivityRepository,
     IntegrationLinkRepository,
@@ -112,7 +112,7 @@ async def link_commit_to_issue(
         )
     except Exception as e:
         logger.exception("Failed to link commit")
-        raise AppError(str(e)) from e
+        raise ServiceUnavailableError(str(e)) from e
 
     await session.commit()
     return IntegrationLinkResponse.model_validate(result.link)
@@ -164,7 +164,7 @@ async def link_pr_to_issue(
         )
     except Exception as e:
         logger.exception("Failed to link PR")
-        raise AppError(str(e)) from e
+        raise ServiceUnavailableError(str(e)) from e
 
     await session.commit()
     return IntegrationLinkResponse.model_validate(result.link)

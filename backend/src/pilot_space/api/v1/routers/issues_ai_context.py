@@ -40,7 +40,12 @@ from pilot_space.api.v1.schemas.ai_context import (
 from pilot_space.dependencies import RedisDep
 from pilot_space.dependencies.auth import SessionDep, get_current_user_id
 from pilot_space.dependencies.workspace import get_current_workspace_id
-from pilot_space.domain.exceptions import AppError, ForbiddenError, NotFoundError
+from pilot_space.domain.exceptions import (
+    AppError,
+    ForbiddenError,
+    NotFoundError,
+    ServiceUnavailableError,
+)
 from pilot_space.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
@@ -159,12 +164,12 @@ async def get_ai_context(
         raise  # Let domain exceptions propagate to global handler
     except Exception as e:
         logger.exception("Failed to generate AI context")
-        raise AppError(f"Failed to generate AI context: {e}") from e
+        raise ServiceUnavailableError(f"Failed to generate AI context: {e}") from e
 
     # Fetch and return the generated context
     context = await context_repo.get_by_issue_id(issue_id)
     if not context:
-        raise AppError("Failed to retrieve generated context")
+        raise ServiceUnavailableError("Failed to retrieve generated context")
 
     return AIContextResponse.from_model(context)
 
@@ -220,7 +225,7 @@ async def regenerate_ai_context(
         raise  # Let domain exceptions propagate to global handler
     except Exception as e:
         logger.exception("Failed to regenerate AI context")
-        raise AppError(f"Failed to regenerate AI context: {e}") from e
+        raise ServiceUnavailableError(f"Failed to regenerate AI context: {e}") from e
 
     return GenerateContextResponse(
         context_id=str(result.context_id),
@@ -289,7 +294,7 @@ async def refine_ai_context(
         raise  # Let domain exceptions propagate to global handler
     except Exception as e:
         logger.exception("Failed to refine AI context")
-        raise AppError(f"Failed to refine AI context: {e}") from e
+        raise ServiceUnavailableError(f"Failed to refine AI context: {e}") from e
 
     return RefineContextResponse(
         context_id=str(result.context_id),
@@ -549,7 +554,7 @@ async def generate_implementation_plan(
         raise  # Let domain exceptions propagate to global handler
     except Exception as e:
         logger.exception("Failed to generate implementation plan")
-        raise AppError(
+        raise ServiceUnavailableError(
             "Failed to generate implementation plan. Check server logs for details."
         ) from e
 

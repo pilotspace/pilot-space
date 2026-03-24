@@ -46,7 +46,6 @@ from pilot_space.dependencies import (
     DbSession,
 )
 from pilot_space.domain.exceptions import (
-    AppError,
     ConflictError,
     NotFoundError,
     ServiceUnavailableError,
@@ -756,9 +755,9 @@ async def get_mcp_oauth_url(
     if not server:
         raise NotFoundError("MCP server not found")
     if server.auth_type != McpAuthType.OAUTH2:
-        raise AppError("Server is not configured for OAuth2 auth_type")
+        raise ValidationError("Server is not configured for OAuth2 auth_type")
     if not server.oauth_auth_url or not server.oauth_client_id:
-        raise AppError("Server missing oauth_auth_url or oauth_client_id")
+        raise ValidationError("Server missing oauth_auth_url or oauth_client_id")
 
     redis_client = _get_redis_client(request)
     if redis_client is None:

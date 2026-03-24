@@ -15,7 +15,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from pilot_space.dependencies import CurrentUserId, DbSession, GhostTextServiceDep, RedisDep
-from pilot_space.domain.exceptions import AppError, ForbiddenError
+from pilot_space.domain.exceptions import AppError, ForbiddenError, ServiceUnavailableError
 from pilot_space.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
@@ -164,7 +164,7 @@ async def generate_ghost_text(
         raise
     except Exception as e:
         logger.exception("Ghost text generation failed: %s", e)
-        raise AppError("Failed to generate completion. Please try again.") from e
+        raise ServiceUnavailableError("Failed to generate completion. Please try again.") from e
 
 
 @router.delete("/cache/{workspace_id}")

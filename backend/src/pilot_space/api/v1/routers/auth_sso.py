@@ -40,10 +40,10 @@ from pilot_space.config import get_settings
 from pilot_space.dependencies import CurrentUser
 from pilot_space.dependencies.auth import SessionDep
 from pilot_space.domain.exceptions import (
-    AppError,
     ForbiddenError,
     NotFoundError,
     ServiceUnavailableError,
+    ValidationError as DomainValidationError,
 )
 from pilot_space.infrastructure.auth.saml_auth import SamlAuthProvider
 from pilot_space.infrastructure.database.permissions import check_permission
@@ -248,7 +248,7 @@ async def saml_callback(
         raise ServiceUnavailableError("SSO service unavailable")
     idp_config = await sso_service.get_saml_config(workspace_id)
     if not idp_config:
-        raise AppError("SAML not configured for this workspace")
+        raise NotFoundError("SAML not configured for this workspace")
     post_data = {"SAMLResponse": SAMLResponse, "RelayState": RelayState}
     provider = _get_saml_provider()
     result = provider.process_response(request, post_data, idp_config)
@@ -260,7 +260,7 @@ async def saml_callback(
     )
     email = (email_attrs[0] if email_attrs else None) or name_id
     if not email or "@" not in email:
-        raise AppError("SAML assertion missing email attribute")
+        raise DomainValidationError("SAML assertion missing email attribute")
     display_name_attrs = (
         attributes.get("displayName") or attributes.get("name") or attributes.get("cn") or []
     )
@@ -274,7 +274,7 @@ async def saml_callback(
         await session.commit()
     except RuntimeError as exc:
         logger.exception("saml_user_provision_failed", email=email, workspace_id=str(workspace_id))
-        raise AppError("Failed to provision user") from exc
+        raise ServiceUnavailableError("Failed to provision user") from exc
     _ip = (request.headers.get("X-Forwarded-For") or "").split(",")[0].strip() or None
     try:
         await set_rls_context(session, UUID(str(user_info["user_id"])), workspace_id)

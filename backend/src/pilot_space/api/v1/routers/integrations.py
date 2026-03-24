@@ -29,7 +29,11 @@ from pilot_space.api.v1.schemas.integration import (
 )
 from pilot_space.config import get_settings
 from pilot_space.dependencies import CurrentUser, CurrentUserId, DbSession
-from pilot_space.domain.exceptions import AppError, NotFoundError, ServiceUnavailableError
+from pilot_space.domain.exceptions import (
+    NotFoundError,
+    ServiceUnavailableError,
+    ValidationError as DomainValidationError,
+)
 from pilot_space.infrastructure.database.models import IntegrationProvider
 from pilot_space.infrastructure.database.repositories import (
     IntegrationRepository,
@@ -225,12 +229,12 @@ async def github_oauth_callback(
 
     # Parse workspace_id from state
     if not request.state:
-        raise AppError("Missing state parameter")
+        raise DomainValidationError("Missing state parameter")
 
     try:
         workspace_id = UUID(request.state.split(":")[0])
     except (ValueError, IndexError) as e:
-        raise AppError("Invalid state parameter") from e
+        raise DomainValidationError("Invalid state parameter") from e
 
     from pilot_space.application.services.integration import (
         ConnectGitHubPayload,
@@ -255,7 +259,7 @@ async def github_oauth_callback(
         )
     except Exception as e:
         logger.exception("GitHub OAuth failed")
-        raise AppError(str(e)) from e
+        raise ServiceUnavailableError(str(e)) from e
 
     await session.commit()
 
@@ -290,10 +294,10 @@ async def list_github_repos(
         raise NotFoundError("Integration not found")
 
     if integration.provider != IntegrationProvider.GITHUB:
-        raise AppError("Not a GitHub integration")
+        raise DomainValidationError("Not a GitHub integration")
 
     if not integration.is_active:
-        raise AppError("Integration is not active")
+        raise DomainValidationError("Integration is not active")
 
     from pilot_space.integrations.github import GitHubClient
 

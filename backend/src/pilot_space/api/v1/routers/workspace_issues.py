@@ -47,7 +47,11 @@ from pilot_space.api.v1.schemas.issue import (
 )
 from pilot_space.dependencies import DbSession, SyncedUserId
 from pilot_space.dependencies.auth import SessionDep
-from pilot_space.domain.exceptions import AppError, ForbiddenError, NotFoundError
+from pilot_space.domain.exceptions import (
+    ForbiddenError,
+    NotFoundError,
+    ValidationError as DomainValidationError,
+)
 from pilot_space.infrastructure.database.models.issue import Issue, IssuePriority
 from pilot_space.infrastructure.database.models.state import State
 from pilot_space.infrastructure.database.models.workspace import Workspace
@@ -329,7 +333,7 @@ async def create_workspace_issue(
         )
 
     if not issue_data.project_id:
-        raise AppError("project_id is required")
+        raise DomainValidationError("project_id is required")
 
     priority_map = {
         "urgent": IssuePriority.URGENT,
@@ -345,7 +349,7 @@ async def create_workspace_issue(
         try:
             label_uuids = [UUID(label) for label in issue_data.label_ids]
         except ValueError as e:
-            raise AppError(f"Invalid label UUID format: {e}") from e
+            raise DomainValidationError(f"Invalid label UUID format: {e}") from e
 
     payload = CreateIssuePayload(
         workspace_id=workspace.id,
@@ -447,7 +451,7 @@ async def update_workspace_issue(
         try:
             start_date_value = date_type.fromisoformat(issue_data.start_date)
         except ValueError as e:
-            raise AppError(f"Invalid start_date format: {e}") from e
+            raise DomainValidationError(f"Invalid start_date format: {e}") from e
 
     target_date_value = UNCHANGED
     if issue_data.clear_target_date:
@@ -456,7 +460,7 @@ async def update_workspace_issue(
         try:
             target_date_value = date_type.fromisoformat(issue_data.target_date)
         except ValueError as e:
-            raise AppError(f"Invalid target_date format: {e}") from e
+            raise DomainValidationError(f"Invalid target_date format: {e}") from e
 
     payload = UpdateIssuePayload(
         issue_id=issue_id,
@@ -568,7 +572,7 @@ async def update_workspace_issue_state(
     )
     new_state = state_result.scalar_one_or_none()
     if not new_state:
-        raise AppError(f"State '{state_name}' not found")
+        raise NotFoundError(f"State '{state_name}' not found")
 
     payload = UpdateIssuePayload(
         issue_id=issue_id,

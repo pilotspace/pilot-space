@@ -37,7 +37,7 @@ from pilot_space.application.services.note.update_note_service import (
 )
 from pilot_space.config import get_settings
 from pilot_space.dependencies.auth import CurrentUser, SessionDep
-from pilot_space.domain.exceptions import AppError, ForbiddenError, NotFoundError, ValidationError
+from pilot_space.domain.exceptions import ForbiddenError, NotFoundError, ValidationError
 from pilot_space.infrastructure.database.models import IssuePriority
 from pilot_space.infrastructure.database.models.audit_log import ActorType, AuditLog
 from pilot_space.infrastructure.database.permissions import check_permission
@@ -369,7 +369,7 @@ async def set_ai_policy(
         HTTPException: 400 if role is OWNER. 403 if user is not owner.
     """
     if role.upper() == "OWNER":
-        raise AppError("Owner role policy is not configurable.")
+        raise ValidationError("Owner role policy is not configurable.")
 
     workspace_id = await _resolve_workspace(workspace_slug, session)
     await _require_owner(session, current_user.user_id, workspace_id)
@@ -500,7 +500,7 @@ async def rollback_ai_artifact(
         raise NotFoundError("Audit entry not found.")
 
     if not _is_rollback_eligible(entry):
-        raise AppError(
+        raise ValidationError(
             "Entry is not rollback-eligible. "
             "Rollback applies only to AI create/update actions on supported resource types."
         )
@@ -509,7 +509,7 @@ async def rollback_ai_artifact(
     current_state: dict = (entry.payload or {}).get("after") or {}  # type: ignore[assignment]
 
     if entry.resource_id is None:
-        raise AppError("Audit entry has no resource_id — cannot rollback.")
+        raise ValidationError("Audit entry has no resource_id — cannot rollback.")
     await _dispatch_rollback(entry.resource_type, entry.resource_id, before_state, session)
 
     # Record the rollback as a new immutable audit entry

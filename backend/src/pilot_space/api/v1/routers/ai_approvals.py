@@ -26,7 +26,7 @@ from pilot_space.dependencies import (
     CurrentUserId,
     DbSession,
 )
-from pilot_space.domain.exceptions import AppError, ForbiddenError, NotFoundError
+from pilot_space.domain.exceptions import ConflictError, ForbiddenError, NotFoundError
 from pilot_space.infrastructure.database.rls import set_rls_context
 from pilot_space.infrastructure.logging import get_logger
 
@@ -276,7 +276,7 @@ async def resolve_approval(
         raise NotFoundError("Approval request not found")
 
     if approval_request.status != "pending":
-        raise AppError(f"Request already {approval_request.status}")
+        raise ConflictError(f"Request already {approval_request.status}")
 
     # Resolve the request
     await approval_service.resolve(
