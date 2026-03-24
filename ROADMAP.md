@@ -361,12 +361,12 @@ Plans:
   4. Monaco diff viewer shows syntax-highlighted inline diffs when clicking a changed file
   5. User can stage/unstage files, type a commit message, and commit via provider API from the browser
   6. User can create a pull request with title, description, base branch, and draft toggle directly from the SCM panel
-**Plans:** 1/5 plans executed
+**Plans:** 3/5 plans executed
 
 Plans:
-- [ ] 44-01-PLAN.md — GitProvider interface, GitHub Git Data API extension, GitLab client, provider tests
-- [ ] 44-02-PLAN.md — Backend git proxy router with Pydantic schemas, mounted at /api/v1/git/*, router tests
-- [ ] 44-03-PLAN.md — Frontend types, API service layer, GitWebStore MobX store, RootStore wiring
+- [x] 44-01-PLAN.md — GitProvider interface, GitHub Git Data API extension, GitLab client, provider tests
+- [x] 44-02-PLAN.md — Backend git proxy router with Pydantic schemas, mounted at /api/v1/git/*, router tests
+- [x] 44-03-PLAN.md — Frontend types, API service layer, GitWebStore MobX store, RootStore wiring
 - [ ] 44-04-PLAN.md — SCM panel components (ChangedFileList, CommitPanel, BranchSelector), EditorLayout tab integration
 - [ ] 44-05-PLAN.md — Monaco diff viewer, PR creation form, end-to-end human verification
 
