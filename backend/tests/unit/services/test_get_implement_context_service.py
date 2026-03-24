@@ -20,7 +20,7 @@ from pilot_space.application.services.issue.get_implement_context_service import
     _extract_text_blocks,
     _slugify,
 )
-from pilot_space.domain.exceptions import ForbiddenError, NotFoundError
+from pilot_space.domain.exceptions import ForbiddenError, NotFoundError, ValidationError
 from pilot_space.infrastructure.database.models import IssuePriority
 from pilot_space.infrastructure.database.models.state import StateGroup
 from pilot_space.infrastructure.database.models.workspace_member import WorkspaceRole
@@ -803,7 +803,7 @@ class TestGetImplementContextServiceValueErrors:
         note_link_repo.get_by_issue.return_value = []
         integration_repo.get_active_github.return_value = None  # no integration
 
-        with pytest.raises(NotFoundError, match="no_github_integration"):
+        with pytest.raises(ValidationError, match="no_github_integration"):
             await service.execute(
                 GetImplementContextPayload(
                     issue_id=issue.id,
