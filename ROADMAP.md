@@ -382,7 +382,7 @@ Plans:
   4. Plugin gallery in workspace settings allows admin upload, enable/disable, and delete
   5. PM block types, slash commands, and command palette actions are dynamically extensible by plugins
   6. Three example plugins (changelog, standup, retro) demonstrate all extension points
-**Plans:** 4/5 plans executed
+**Plans:** 5/5 plans complete
 
 Plans:
 - [x] 45-01-PLAN.md — Plugin type contracts, backend domain model, migration, repository, service, CRUD router

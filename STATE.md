@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Tauri Desktop Client
-status: in-progress
-stopped_at: Completed 45-04-PLAN.md
-last_updated: "2026-03-24T14:50:09Z"
-last_activity: "2026-03-24 - Plan 45-04 complete: Plugin gallery UI with TanStack Query hooks"
+status: completed
+stopped_at: Completed 45-05-PLAN.md
+last_updated: "2026-03-24T15:03:00.743Z"
+last_activity: "2026-03-24 - Plan 45-05 complete: Example plugins and EditorLayout integration"
 progress:
   total_phases: 18
-  completed_phases: 15
+  completed_phases: 16
   total_plans: 64
-  completed_plans: 56
-  percent: 87
+  completed_plans: 57
+  percent: 89
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-03-20)
 ## Current Position
 
 Phase: 45 of 46 (Editor Plugin API and Custom Block Types)
-Plan: 5 of 5 in current phase
-Status: Plan 45-04 complete
-Last activity: 2026-03-24 - Plan 45-04 complete: Plugin gallery UI with TanStack Query hooks and settings modal integration
+Plan: 5 of 5 in current phase (COMPLETE)
+Status: Phase 45 complete
+Last activity: 2026-03-24 - Plan 45-05 complete: Example plugins and EditorLayout integration
 
-Progress: [█████████░] 97% (Phase 45: 4/5 plans complete)
+Progress: [█████████░] 89% (Phase 45: 5/5 plans complete)
 
 ## Milestone History
 
@@ -180,6 +180,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 45-04]: PluginsSettingsPage is plain component (NOT observer) -- no MobX observables consumed directly
 - [Phase 45-04]: useRef<HTMLInputElement>(null) for file input ref -- React 19 ref type compatibility
 - [Phase 45]: ExtendedPMBlockType uses branded string intersection for autocomplete while allowing arbitrary plugin types
+- [Phase 45-05]: Example plugins use onActivate(sdk) convention with registerBlockRenderer, commands.register, and actions.register
+- [Phase 45-05]: usePluginEditorBridge called with null editor at layout level; bridge handles gracefully
+- [Phase 45-05]: workspaceId sourced from WorkspaceStore.currentWorkspaceId for usePluginLoader
 - [Phase 45]: Plugin blocks render as formatted JSON (no HTML from plugins) to prevent XSS
 - [Phase 45]: Bridge hook uses DOM CustomEvent pattern for plugin-to-editor communication, consistent with command-palette:toggle pattern
 
@@ -209,7 +212,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-24T14:50:09Z
-Stopped at: Completed 45-04-PLAN.md
-Resume file: .planning/phases/45-editor-plugin-api-and-custom-block-types/45-04-SUMMARY.md
-Next action: Execute Plan 45-05 (custom block rendering in editor).
+Last session: 2026-03-24T15:01:00Z
+Stopped at: Completed 45-05-PLAN.md
+Resume file: .planning/phases/45-editor-plugin-api-and-custom-block-types/45-05-SUMMARY.md
+Next action: Execute Phase 46 (Multi-Theme System and Editor Customization).
