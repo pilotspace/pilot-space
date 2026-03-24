@@ -18,7 +18,7 @@ from __future__ import annotations
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, File, Form, HTTPException, Response, UploadFile, status
+from fastapi import APIRouter, File, Form, HTTPException, Request, Response, UploadFile, status
 from sqlalchemy import select
 
 from pilot_space.api.v1.routers.workspace_quota import (
@@ -28,13 +28,13 @@ from pilot_space.api.v1.routers.workspace_quota import (
 from pilot_space.api.v1.schemas.attachments import AttachmentUploadResponse
 from pilot_space.dependencies.auth import CurrentUserId, DbSession
 from pilot_space.dependencies.services import AttachmentUploadServiceDep
+from pilot_space.dependencies.workspace import HeaderWorkspaceMemberId
 from pilot_space.infrastructure.database.models.chat_attachment import ChatAttachment
 from pilot_space.infrastructure.database.models.workspace_member import (
     WorkspaceMember,
     WorkspaceRole,
 )
 from pilot_space.infrastructure.logging import get_logger
-from pilot_space.infrastructure.storage.client import SupabaseStorageClient
 
 logger = get_logger(__name__)
 
@@ -76,7 +76,7 @@ async def upload_attachment(
     user_id: CurrentUserId,
     upload_service: AttachmentUploadServiceDep,
     db: DbSession,
-    workspace_id: Annotated[UUID, Form(...)],
+    workspace_id: HeaderWorkspaceMemberId,
     file: Annotated[UploadFile, File(...)],
     session_id: Annotated[str | None, Form()] = None,
     response: Response = Response(),
@@ -87,22 +87,25 @@ async def upload_attachment(
     per-type size limits before persisting to Supabase Storage.
     Guests are blocked at the router level (GUEST_NOT_ALLOWED).
 
+    Workspace membership is enforced by HeaderWorkspaceMemberId
+    (X-Workspace-Id header), which also sets RLS context.
+
     Args:
-        workspace_id: Workspace that owns the attachment.
-        session_id: Optional chat session to associate with the attachment.
+        workspace_id: Workspace UUID from X-Workspace-Id header (membership verified).
         file: Multipart file to upload.
         user_id: Authenticated user ID (injected by FastAPI).
         upload_service: AttachmentUploadService (injected by FastAPI).
         db: Database session (injected by FastAPI).
+        session_id: Optional chat session to associate with the attachment.
 
     Returns:
         AttachmentUploadResponse with attachment metadata.
 
     Raises:
         HTTPException 400: UNSUPPORTED_FILE_TYPE, FILE_TOO_LARGE, or EMPTY_FILE.
-        HTTPException 403: GUEST_NOT_ALLOWED.
+        HTTPException 403: NOT_A_MEMBER or GUEST_NOT_ALLOWED.
     """
-    # Guest check — must happen before reading file bytes
+    # Guest check — membership already verified by HeaderWorkspaceMemberId
     result = await db.execute(
         select(WorkspaceMember.role).where(
             WorkspaceMember.workspace_id == workspace_id,
@@ -161,15 +164,20 @@ async def get_attachment_url(
     attachment_id: UUID,
     user_id: CurrentUserId,
     db: DbSession,
+    request: Request,
+    _workspace_id: HeaderWorkspaceMemberId,
 ) -> dict[str, str | int]:
     """Get a 1-hour signed download URL for a chat attachment.
 
     Only the owning user can generate signed URLs for their attachments.
+    Workspace membership is enforced by HeaderWorkspaceMemberId.
 
     Args:
         attachment_id: UUID of the attachment.
         user_id: Authenticated user ID.
         db: Async DB session.
+        request: FastAPI request (used to access the DI container).
+        _workspace_id: Workspace UUID (membership verified by dependency).
 
     Returns:
         dict with url and expiresIn fields.
@@ -181,7 +189,7 @@ async def get_attachment_url(
     if attachment.user_id != user_id:
         raise HTTPException(status_code=403, detail="Not your attachment")
 
-    storage = SupabaseStorageClient()
+    storage = request.app.state.container.storage_client()
     signed_url = await storage.get_signed_url(
         bucket="chat-attachments",
         key=attachment.storage_key,
