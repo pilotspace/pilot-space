@@ -18,7 +18,7 @@ import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from pilot_space.domain.exceptions import ForbiddenError, NotFoundError
+from pilot_space.domain.exceptions import ForbiddenError, NotFoundError, ValidationError
 from pilot_space.infrastructure.database.models.workspace_member import WorkspaceRole
 from pilot_space.infrastructure.logging import get_logger
 
@@ -328,7 +328,7 @@ class GetImplementContextService:
                 "No active GitHub integration found for workspace",
                 extra={"workspace_id": str(payload.workspace_id)},
             )
-            raise NotFoundError("no_github_integration")
+            raise ValidationError("no_github_integration")
 
         repo_info = _derive_repo_info(integration)
 
