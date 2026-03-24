@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Tauri Desktop Client
 status: completed
-stopped_at: Completed 42-01-PLAN.md
-last_updated: "2026-03-24T10:17:15Z"
-last_activity: "2026-03-24 - Plan 42-01 complete: CommandPalette + ActionRegistry + 6 action modules, 20 tests green, tsc PASS"
+stopped_at: Completed 43-03-PLAN.md
+last_updated: "2026-03-24T11:43:54.058Z"
+last_activity: "2026-03-24 - Plan 43-03 complete: Lazy Pyright WASM Python IntelliSense + F12/Shift+F12 LSP navigation"
 progress:
   total_phases: 18
-  completed_phases: 12
-  total_plans: 44
-  completed_plans: 42
-  percent: 95
+  completed_phases: 14
+  total_plans: 50
+  completed_plans: 47
+  percent: 100
 ---
 
 # Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-03-20)
 
 ## Current Position
 
-Phase: 42 of 46 (Command Palette and Breadcrumb Navigation)
-Plan: 3 of 3 in current phase (COMPLETE)
-Status: Phase 42 complete
-Last activity: 2026-03-24 - Plan 42-01 complete: CommandPalette + ActionRegistry + 6 action modules, 20 tests green, tsc PASS
+Phase: 43 of 46 (LSP Integration and Code Intelligence)
+Plan: 3 of 3 in current phase
+Status: Phase complete
+Last activity: 2026-03-24 - Plan 43-03 complete: Lazy Pyright WASM Python IntelliSense + F12/Shift+F12 LSP navigation
 
-Progress: [█████████░] 95% (Phase 42: 3/3 plans complete)
+Progress: [██████████] 100% (Phase 43: 3/3 plans complete)
 
 ## Milestone History
 
@@ -147,6 +147,15 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 42-02]: React 19 compliant isLoading: batched state object { symbols, isLoading } instead of synchronous setState in effect body
 - [Phase 42-02]: Stack-based symbol hierarchy: pop until parent with lower level, PM blocks nest under most recent heading
 - [Phase 42-02]: EditorLike interface for useSymbolOutline to decouple from Monaco types
+- [Phase 42]: [Phase 42-03]: DOM CustomEvent bridge pattern for Monaco-to-React: command-palette:toggle, symbol-outline:toggle, symbol-outline:navigate
+- [Phase 43-01]: monaco.typescript namespace used instead of deprecated monaco.languages.typescript (Monaco 0.55+ API migration)
+- [Phase 43-01]: Module-level configured flag in useTypeScriptDefaults ensures one-time global setup across React StrictMode re-mounts
+- [Phase 43-02]: DiagnosticsPanel and DiagnosticRow are plain React components (NOT observer) -- no MobX state consumed; avoids React 19 flushSync constraint
+- [Phase 43-02]: Cross-file diagnostic navigation falls back to console.warn -- FileStore.openFile requires full OpenFile metadata not derivable from Monaco URI
+- [Phase 43-02]: Reuses symbol-outline:navigate CustomEvent with added uri field for diagnostic line navigation
+- [Phase 43]: [Phase 43-03]: monaco-pyright-lsp 0.1.7 types target monaco-editor 0.52; runtime compatible with 0.55.1 -- cast to any for init() call
+- [Phase 43]: [Phase 43-03]: usePythonLanguage uses derived loading state (useMemo) instead of synchronous setState in effect -- React 19 set-state-in-effect compliance
+- [Phase 43]: [Phase 43-03]: ensurePythonLanguage shares loading promise at module level to prevent duplicate Pyright WASM initializations
 
 ### Roadmap Evolution
 
@@ -174,7 +183,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-24T10:17:15Z
-Stopped at: Completed 42-01-PLAN.md
-Resume file: .planning/phases/42-command-palette-and-breadcrumb-navigation/42-03-PLAN.md
-Next action: Phase 42 complete (3/3 plans). Execute Plan 42-03 if not already done, or proceed to Phase 43.
+Last session: 2026-03-24T11:43:54.055Z
+Stopped at: Completed 43-03-PLAN.md
+Resume file: None
+Next action: Execute Plan 43-03 (Go to Definition, Find References).
