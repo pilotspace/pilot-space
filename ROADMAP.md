@@ -77,7 +77,7 @@ Full archive: `.planning/milestones/v1.0.0-alpha2-ROADMAP.md`
 - [x] **Phase 38: Packaging + Signing + Auto-Update** — Signed .dmg/.deb/.AppImage/.msi per platform, notarization, auto-update (completed 2026-03-20)
 - [x] **Phase 39: Tech Debt Cleanup** — Auto-update pubkey, stores barrel exports, dev CI sidecar download (completed 2026-03-20)
 - [x] **Phase 40: WebGPU Canvas IDE Editor** — Monaco editor migration, IDE file browser, markdown preview (completed 2026-03-24)
-- [ ] **Phase 41: Office Suite Preview Redesign** — Redesign Office document previews (XLSX, DOCX, PPTX) with Google Docs-level UX and CX
+- [x] **Phase 41: Office Suite Preview Redesign** — Redesign Office document previews (XLSX, DOCX, PPTX) with Google Docs-level UX and CX (completed 2026-03-24)
 
 ## Phase Details
 
@@ -275,7 +275,7 @@ Plans:
   4. Annotation panel is intuitive — per-slide notes with real-time persistence, clean edit/delete UX
   5. All previews work responsively in both normal and maximized modal states
   6. Keyboard navigation (arrows for slides, Escape to close) works seamlessly
-**Plans:** 7 plans (4 complete, 3 remaining)
+**Plans:** 7/7 plans complete
 
 Plans:
 - [x] 41-01-PLAN.md — Foundation: deps, mime-type router, binary fetch, backend allowlist, FilePreviewModal wiring
@@ -308,7 +308,7 @@ Note: Phase 34 and Phase 35 depend only on Phase 30, so they can run in parallel
 | 38. Packaging + Signing + Auto-Update | 3/3 | Complete    | 2026-03-20 | - |
 | 39. Tech Debt Cleanup | 1/1 | Complete    | 2026-03-20 | - |
 | 40. WebGPU Canvas IDE Editor | 8/8 | Complete    | 2026-03-24 | - |
-| 41. Office Suite Preview Redesign | 4/7 | In Progress|  | - |
+| 41. Office Suite Preview Redesign | 7/7 | Complete   | 2026-03-24 | - |
 
 **v1.1 total: 12 phases, ~39 plans, 30+ requirements**
 
