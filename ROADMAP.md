@@ -296,7 +296,7 @@ Plans:
   2. File path breadcrumbs appear above the editor with clickable segments and sibling dropdowns
   3. Cmd+Shift+O toggles a symbol outline panel showing heading hierarchy with click-to-navigate
   4. All keyboard shortcuts work both inside and outside Monaco editor (keybinding overrides)
-**Plans:** 3 plans
+**Plans:** 2/3 plans executed
 
 Plans:
 - [ ] 42-01-PLAN.md — ActionRegistry, CommandPalette component, 6 action modules, useRecentActions
@@ -326,7 +326,7 @@ Note: Phase 34 and Phase 35 depend only on Phase 30, so they can run in parallel
 | 39. Tech Debt Cleanup | 1/1 | Complete    | 2026-03-20 | - |
 | 40. WebGPU Canvas IDE Editor | 8/8 | Complete    | 2026-03-24 | - |
 | 41. Office Suite Preview Redesign | 7/7 | Complete   | 2026-03-24 | - |
-| 42. Command Palette + Breadcrumbs | 2/3 | Executing  | - | - |
+| 42. Command Palette + Breadcrumbs | 2/3 | In Progress|  | - |
 
 **v1.1 total: 12 phases, ~39 plans, 30+ requirements**
 
