@@ -25,8 +25,8 @@ from __future__ import annotations
 from alembic import op
 from sqlalchemy import text
 
-revision = "097_tighten_mcp_rls_to_admin"
-down_revision = "096_mcp_settings_redevelopment"
+revision = "099_tighten_mcp_rls_to_admin"
+down_revision = "098_mcp_settings_redevelopment"
 branch_labels = None
 depends_on = None
 

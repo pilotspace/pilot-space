@@ -44,8 +44,8 @@ from alembic import op
 from sqlalchemy import text
 
 # revision identifiers, used by Alembic.
-revision: str = "096_mcp_settings_redevelopment"
-down_revision: str = "096_add_note_chunk_node_type"
+revision: str = "098_mcp_settings_redevelopment"
+down_revision: str = "097_fix_artifact_annotations_rls"
 branch_labels: None = None
 depends_on: None = None
 
