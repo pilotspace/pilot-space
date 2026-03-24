@@ -352,12 +352,23 @@ Plans:
 ### Phase 44: Web Git Integration and Source Control Panel
 
 **Goal:** Bring git operations to the web app (not just Tauri desktop) via GitHub/GitLab API — source control panel showing changed files, inline diff viewer, commit from browser, branch switching, and PR creation without leaving the app
-**Requirements**: TBD
+**Requirements**: GIT-WEB-01, GIT-WEB-02, GIT-WEB-03, GIT-WEB-04, GIT-WEB-05, GIT-WEB-06
 **Depends on:** Phase 40
-**Plans:** 0 plans
+**Success Criteria** (what must be TRUE):
+  1. Backend git proxy endpoints proxy GitHub/GitLab API calls with OAuth token resolution and rate limit handling
+  2. GitProvider interface abstracts GitHub and GitLab behind a shared contract with auto-detection from remote URL
+  3. Source Control panel appears as a left sidebar tab alongside File Explorer (web only, hidden on Tauri)
+  4. Monaco diff viewer shows syntax-highlighted inline diffs when clicking a changed file
+  5. User can stage/unstage files, type a commit message, and commit via provider API from the browser
+  6. User can create a pull request with title, description, base branch, and draft toggle directly from the SCM panel
+**Plans:** 5 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 44 to break down)
+- [ ] 44-01-PLAN.md — GitProvider interface, GitHub Git Data API extension, GitLab client, provider tests
+- [ ] 44-02-PLAN.md — Backend git proxy router with Pydantic schemas, mounted at /api/v1/git/*, router tests
+- [ ] 44-03-PLAN.md — Frontend types, API service layer, GitWebStore MobX store, RootStore wiring
+- [ ] 44-04-PLAN.md — SCM panel components (ChangedFileList, CommitPanel, BranchSelector), EditorLayout tab integration
+- [ ] 44-05-PLAN.md — Monaco diff viewer, PR creation form, end-to-end human verification
 
 ### Phase 45: Editor Plugin API and Custom Block Types
 

@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Tauri Desktop Client
 status: completed
-stopped_at: Completed 43-03-PLAN.md
-last_updated: "2026-03-24T11:43:54.058Z"
+stopped_at: Phase 44 context gathered (auto)
+last_updated: "2026-03-24T12:35:26.354Z"
 last_activity: "2026-03-24 - Plan 43-03 complete: Lazy Pyright WASM Python IntelliSense + F12/Shift+F12 LSP navigation"
 progress:
   total_phases: 18
@@ -183,7 +183,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-24T11:43:54.055Z
-Stopped at: Completed 43-03-PLAN.md
-Resume file: None
+Last session: 2026-03-24T12:35:26.350Z
+Stopped at: Phase 44 context gathered (auto)
+Resume file: .planning/phases/44-web-git-integration-and-source-control-panel/44-CONTEXT.md
 Next action: Execute Plan 43-03 (Go to Definition, Find References).
