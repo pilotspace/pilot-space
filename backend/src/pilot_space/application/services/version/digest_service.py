@@ -21,6 +21,8 @@ from pilot_space.infrastructure.database.repositories.note_version_repository im
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
+    from pilot_space.ai.proxy.llm_gateway import LLMGateway
+
 
 @dataclass
 class DigestResult:
@@ -42,11 +44,11 @@ class VersionDigestService:
         self,
         session: AsyncSession,
         version_repo: NoteVersionRepository,
-        anthropic_api_key: str | None = None,
+        llm_gateway: LLMGateway | None = None,
     ) -> None:
         self._session = session
         self._version_repo = version_repo
-        self._anthropic_api_key = anthropic_api_key
+        self._llm_gateway = llm_gateway
 
     async def execute(
         self,
@@ -113,9 +115,9 @@ class VersionDigestService:
         workspace_id: UUID | None = None,
         user_id: UUID | None = None,
     ) -> str:
-        """Call Claude Sonnet to generate a change summary.
+        """Call LLMGateway to generate a change summary.
 
-        Falls back to a minimal description when the API key is unavailable.
+        Falls back to a minimal description when the gateway is unavailable.
 
         Args:
             new_content: TipTap JSON for the new version.
@@ -126,18 +128,11 @@ class VersionDigestService:
         Returns:
             Human-readable change summary (1-3 sentences).
         """
-        if not self._anthropic_api_key:
+        if self._llm_gateway is None or workspace_id is None:
             return self._minimal_digest(new_content, previous_content)
 
         try:
-            import anthropic  # type: ignore[import-untyped]
-
-            from pilot_space.ai.infrastructure.cost_tracker import (
-                extract_response_usage,
-                track_cost,
-            )
-
-            client = anthropic.AsyncAnthropic(api_key=self._anthropic_api_key)
+            from pilot_space.ai.providers.provider_selector import TaskType
 
             new_text = _tiptap_to_text(new_content)
             prev_text = (
@@ -152,31 +147,23 @@ class VersionDigestService:
                 "Be concise and specific. Focus on what was added, removed, or modified."
             )
 
-            _model = "claude-sonnet-4-20250514"
-            message = await client.messages.create(
-                model=_model,
-                max_tokens=200,
+            # System sentinel for background jobs without user context
+            _SYSTEM_USER = UUID("00000000-0000-0000-0000-000000000000")
+            effective_user = user_id if user_id is not None else _SYSTEM_USER
+
+            response = await self._llm_gateway.complete(
+                workspace_id=workspace_id,
+                user_id=effective_user,
+                task_type=TaskType.DOC_GENERATION,
                 messages=[{"role": "user", "content": prompt}],
+                max_tokens=200,
+                temperature=0.7,
+                agent_name="version_digest",
             )
-            input_tokens, output_tokens = extract_response_usage(message)
 
-            if workspace_id is not None and (input_tokens or output_tokens):
-                await track_cost(
-                    self._session,
-                    workspace_id=workspace_id,
-                    user_id=user_id,
-                    agent_name="version_digest",
-                    provider="anthropic",
-                    model=_model,
-                    input_tokens=input_tokens,
-                    output_tokens=output_tokens,
-                    operation_type="version_digest",
-                )
-
-            content = message.content[0]
-            if hasattr(content, "text"):
-                return content.text.strip()  # type: ignore[union-attr]
-            return self._minimal_digest(new_content, previous_content)
+            return response.text.strip() if response.text else self._minimal_digest(
+                new_content, previous_content
+            )
 
         except Exception:
             return self._minimal_digest(new_content, previous_content)

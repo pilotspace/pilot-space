@@ -692,6 +692,7 @@ class Container(SkillContainer, PluginContainer):
         VersionDigestService,
         session=providers.Callable(get_current_session),
         version_repo=InfraContainer.note_version_repository,
+        llm_gateway=llm_gateway,
     )
 
     version_restore_service = providers.Factory(

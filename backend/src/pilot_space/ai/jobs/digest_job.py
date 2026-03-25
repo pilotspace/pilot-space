@@ -14,7 +14,6 @@ References:
 
 from __future__ import annotations
 
-import asyncio
 import json
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -149,8 +148,8 @@ class DigestJobHandler:
     ) -> list[dict[str, Any]]:
         """Call LLM to generate digest suggestions.
 
-        Uses Claude Sonnet via direct Anthropic API call with workspace
-        BYOK key. Falls back to empty suggestions on failure.
+        Uses LLMGateway (which wraps LiteLLM with retry, cost tracking,
+        and BYOK key resolution). Falls back to empty suggestions on failure.
 
         Args:
             workspace_id: Workspace for API key lookup.
@@ -162,14 +161,11 @@ class DigestJobHandler:
         prompt = self._build_prompt(context_text)
 
         try:
-            from anthropic import APIConnectionError, AsyncAnthropic, RateLimitError
-
-            from pilot_space.ai.infrastructure.cost_tracker import (
-                extract_response_usage,
-                track_cost,
-            )
+            from pilot_space.ai.infrastructure.cost_tracker import CostTracker
             from pilot_space.ai.infrastructure.key_storage import SecureKeyStorage
-            from pilot_space.ai.sdk.config import MODEL_SONNET
+            from pilot_space.ai.infrastructure.resilience import ResilientExecutor
+            from pilot_space.ai.providers.provider_selector import TaskType
+            from pilot_space.ai.proxy.llm_gateway import LLMGateway
             from pilot_space.config import get_settings
 
             settings = get_settings()
@@ -178,72 +174,31 @@ class DigestJobHandler:
                 logger.warning("Encryption key not configured, using fallback")
                 return self._fallback_suggestions()
 
+            # Build LLMGateway manually for background job context
+            # (not request-scoped, so DI container is not available)
             key_storage = SecureKeyStorage(db=self._session, master_secret=encryption_key)
-            api_key = await key_storage.get_api_key(workspace_id, "anthropic", "llm")
-            if not api_key:
-                logger.warning(
-                    "Anthropic API key not configured for workspace %s",
-                    workspace_id,
-                )
-                return self._fallback_suggestions()
-
-            client = AsyncAnthropic(api_key=api_key)
-
-            # Retry up to 3 times for transient failures
-            max_retries = 3
-            last_exc: Exception | None = None
-            for attempt in range(max_retries):
-                try:
-                    response = await asyncio.wait_for(
-                        client.messages.create(
-                            model=MODEL_SONNET,
-                            max_tokens=2000,
-                            messages=[{"role": "user", "content": prompt}],
-                            timeout=LLM_TIMEOUT_SECONDS,
-                        ),
-                        timeout=LLM_TIMEOUT_SECONDS,
-                    )
-                    input_tokens, output_tokens = extract_response_usage(response)
-
-                    # Extract text content from response
-                    content = ""
-                    for block in response.content:
-                        if block.type == "text":
-                            content = block.text
-                            break
-
-                    if input_tokens or output_tokens:
-                        await track_cost(
-                            self._session,
-                            workspace_id=workspace_id,
-                            user_id=None,
-                            agent_name="digest_job",
-                            provider="anthropic",
-                            model=MODEL_SONNET,
-                            input_tokens=input_tokens,
-                            output_tokens=output_tokens,
-                            operation_type="digest",
-                        )
-
-                    return self._parse_suggestions(content)
-
-                except (RateLimitError, APIConnectionError, TimeoutError) as exc:
-                    last_exc = exc
-                    if attempt < max_retries - 1:
-                        delay = (2**attempt) + 1  # 1s, 3s, 5s
-                        logger.warning(
-                            "Transient LLM error (attempt %d/%d), retrying in %ds",
-                            attempt + 1,
-                            max_retries,
-                            delay,
-                            exc_info=True,
-                        )
-                        await asyncio.sleep(delay)
-
-            logger.exception(
-                "Digest LLM call failed after %d attempts", max_retries, exc_info=last_exc
+            cost_tracker = CostTracker(session=self._session)
+            executor = ResilientExecutor()
+            gateway = LLMGateway(
+                executor=executor,
+                cost_tracker=cost_tracker,
+                key_storage=key_storage,
             )
-            return self._fallback_suggestions()
+
+            # System sentinel for background jobs without user context
+            _SYSTEM_USER = uuid.UUID("00000000-0000-0000-0000-000000000000")
+
+            response = await gateway.complete(
+                workspace_id=workspace_id,
+                user_id=_SYSTEM_USER,
+                task_type=TaskType.DOC_GENERATION,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=2000,
+                temperature=0.7,
+                agent_name="digest_job",
+            )
+
+            return self._parse_suggestions(response.text)
 
         except Exception:
             logger.exception("Digest LLM call failed, using fallback")
