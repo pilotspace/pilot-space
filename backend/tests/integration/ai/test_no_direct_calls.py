@@ -4,11 +4,17 @@ This test scans all service and job files to ensure they use LLMGateway
 instead of direct AsyncAnthropic() or AsyncOpenAI() calls.
 
 All 8 direct-call services have been migrated (Plan 47-03/04).
+Phase 48 extended base_url support to LLMGateway, AnthropicClientPool,
+GhostTextService, and subagents.
 
 Exclusions:
 - key_storage.py: uses AsyncAnthropic for key validation (not LLM calls)
 - ai_configuration.py: uses AsyncAnthropic for test_configuration endpoint
-- ghost_text.py: uses AnthropicClientPool (separate streaming path)
+- ghost_text.py: uses AnthropicClientPool (latency-optimized streaming path,
+  DD-011 sub-500ms requirement). base_url is forwarded via
+  AnthropicClientPool.get_client(api_key, base_url=base_url).
+- anthropic_client_pool.py: the pool itself creates AsyncAnthropic instances
+  (this is the authorized factory, not a bypass)
 """
 
 from __future__ import annotations
