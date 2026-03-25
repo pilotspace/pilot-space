@@ -1,4 +1,4 @@
-"""IntentDetectionService: detect work intents from text via Sonnet structured output.
+"""IntentDetectionService: detect work intents from text via LLMGateway.
 
 T-008: detect(text, source) -> WorkIntent[]
 T-009: Intent detection LLM prompt with few-shot examples
@@ -15,25 +15,21 @@ from enum import StrEnum
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from pilot_space.ai.exceptions import ProviderUnavailableError
-from pilot_space.ai.infrastructure.resilience import ResilientExecutor, RetryConfig
-from pilot_space.ai.providers.provider_selector import (
-    ProviderSelector,
-    TaskType,
-    resolve_workspace_llm_config,
-)
+from pilot_space.ai.providers.provider_selector import TaskType
 from pilot_space.domain.work_intent import DedupStatus, IntentStatus, WorkIntent
 from pilot_space.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncSession
-
+    from pilot_space.ai.proxy.llm_gateway import LLMGateway
     from pilot_space.infrastructure.cache.redis import RedisClient
     from pilot_space.infrastructure.database.repositories.intent_repository import (
         WorkIntentRepository,
     )
 
 logger = get_logger(__name__)
+
+# Sentinel user ID for system-initiated detection (no real user context)
+_SYSTEM_USER_ID = UUID("00000000-0000-0000-0000-000000000000")
 
 # Chat-priority window: Redis key pattern and TTL
 _CHAT_LOCK_KEY_PREFIX = "intent_lock:"
@@ -275,7 +271,7 @@ def _parse_llm_response(
 
 
 class IntentDetectionService:
-    """Detects work intents from text via Claude Sonnet structured output.
+    """Detects work intents from text via LLMGateway.
 
     Implements:
     - T-008: detect(text, source) -> WorkIntent[]
@@ -288,13 +284,15 @@ class IntentDetectionService:
 
     def __init__(
         self,
-        session: AsyncSession,
+        session: object,
         intent_repository: WorkIntentRepository,
         redis_client: RedisClient,
+        llm_gateway: LLMGateway | None = None,
     ) -> None:
         self._session = session
         self._intent_repo = intent_repository
         self._redis = redis_client
+        self._llm_gateway = llm_gateway
 
     async def detect(self, payload: DetectIntentPayload) -> DetectIntentResult:
         """Detect work intents from text.
@@ -375,95 +373,37 @@ class IntentDetectionService:
         source: IntentSource,
         workspace_id: UUID,
     ) -> tuple[list[WorkIntent], str]:
-        """Call LLM for structured intent detection using workspace provider config.
+        """Call LLM for structured intent detection via LLMGateway.
 
         Returns:
             Tuple of (intents list, model name used).
         """
-        ws_config = await resolve_workspace_llm_config(self._session, workspace_id)
-        if ws_config is None:
-            logger.info("No LLM provider configured for intent detection")
+        if self._llm_gateway is None:
+            logger.info("No LLM gateway configured for intent detection")
             return [], "noop"
-
-        selector = ProviderSelector()
-        config = selector.select_with_config(
-            TaskType.ISSUE_EXTRACTION, workspace_override=ws_config
-        )
-        model = config.model
 
         prompt = _DETECTION_PROMPT.replace("{source}", source.value).replace("{text}", text[:8000])
 
-        executor = ResilientExecutor()
-        retry_config = RetryConfig(max_retries=2, base_delay_seconds=1.0)
-        # Cloud-proxied Ollama models relay to remote APIs and need longer timeouts
-        timeout_sec = 90.0 if ws_config.provider == "ollama" else 30.0
-
         try:
-            from anthropic import AsyncAnthropic
-
-            from pilot_space.ai.infrastructure.cost_tracker import (
-                extract_response_usage,
-                track_cost,
+            response = await self._llm_gateway.complete(
+                workspace_id=workspace_id,
+                user_id=_SYSTEM_USER_ID,
+                task_type=TaskType.INTENT_DETECTION,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=2048,
+                temperature=0.7,
+                agent_name="intent_detection",
             )
-
-            client = AsyncAnthropic(api_key=ws_config.api_key, base_url=ws_config.base_url or None)
-            _usage: tuple[int, int] = (0, 0)
-
-            async def _call_api() -> str:
-                nonlocal _usage
-                response = await client.messages.create(
-                    model=model,
-                    max_tokens=2048,
-                    messages=[{"role": "user", "content": prompt}],
-                )
-                _usage = extract_response_usage(response)
-                # Prefer text blocks, fall back to thinking blocks
-                # (some models like kimi via Ollama return only thinking blocks)
-                text_parts: list[str] = []
-                thinking_parts: list[str] = []
-                for block in response.content:
-                    if block.type == "text" and block.text:
-                        text_parts.append(block.text)
-                    elif block.type == "thinking" and getattr(block, "thinking", None):
-                        thinking_parts.append(block.thinking)
-                return "\n".join(text_parts) or "\n".join(thinking_parts) or "[]"
-
-            raw = await executor.execute(
-                provider=ws_config.provider,
-                operation=_call_api,
-                timeout_sec=timeout_sec,
-                retry_config=retry_config,
-            )
-
-            # Track cost (non-fatal)
-            if _usage != (0, 0):
-                await track_cost(
-                    self._session,
-                    workspace_id=workspace_id,
-                    user_id=None,
-                    agent_name="intent_detection",
-                    provider=ws_config.provider,
-                    model=model,
-                    input_tokens=_usage[0],
-                    output_tokens=_usage[1],
-                    operation_type="intent_detection",
-                )
 
             intents = _parse_llm_response(
-                raw,
+                response.text,
                 workspace_id=workspace_id,
                 source=source,
                 source_block_id=None,  # Set per-intent in caller
                 owner=None,
             )
-            return intents, model
+            return intents, response.model
 
-        except ProviderUnavailableError:
-            logger.warning(
-                "Provider unavailable for intent detection",
-                extra={"provider": ws_config.provider},
-            )
-            return [], "noop"
         except Exception:
             logger.exception("Intent detection LLM call failed")
             return [], "noop"

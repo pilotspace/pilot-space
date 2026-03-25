@@ -92,6 +92,7 @@ from pilot_space.application.services.onboarding import (
 )
 from pilot_space.application.services.pm_block_insight_service import PMBlockInsightService
 from pilot_space.application.services.rbac_service import RbacService
+from pilot_space.application.services.role_skill import GenerateRoleSkillService
 from pilot_space.application.services.sso_service import SsoService
 from pilot_space.application.services.task_service import TaskService
 from pilot_space.application.services.transcription import TranscriptionService
@@ -651,6 +652,14 @@ class Container(SkillContainer, PluginContainer):
         session=providers.Callable(get_current_session),
         intent_repository=InfraContainer.work_intent_repository,
         redis_client=InfraContainer.redis_client,
+        llm_gateway=llm_gateway,
+    )
+
+    # Override SkillContainer's generate_role_skill_service to inject llm_gateway
+    generate_role_skill_service = providers.Factory(
+        GenerateRoleSkillService,
+        session=providers.Callable(get_current_session),
+        llm_gateway=llm_gateway,
     )
 
     intent_service = providers.Factory(

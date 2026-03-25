@@ -1,6 +1,6 @@
 """GenerateRoleSkillService for AI-powered skill generation.
 
-Generates SKILL.md content using Claude Sonnet one-shot query with
+Generates SKILL.md content using LLMGateway one-shot query with
 template context and experience description. Falls back to template-based
 generation when AI is unavailable.
 
@@ -18,22 +18,19 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from pilot_space.ai.exceptions import ProviderUnavailableError
-from pilot_space.ai.infrastructure.resilience import ResilientExecutor, RetryConfig
 from pilot_space.ai.prompts.skill_generation import build_skill_generation_prompt
-from pilot_space.ai.providers.provider_selector import (
-    ProviderSelector,
-    TaskType,
-    resolve_workspace_llm_config,
-)
+from pilot_space.ai.providers.provider_selector import TaskType
 from pilot_space.application.services.role_skill.types import VALID_ROLE_TYPES
 from pilot_space.domain.exceptions import AppError, ValidationError
 from pilot_space.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncSession
+    from pilot_space.ai.proxy.llm_gateway import LLMGateway
 
 logger = get_logger(__name__)
+
+# Sentinel user ID for system-initiated generation (no real user context)
+_SYSTEM_USER_ID = UUID("00000000-0000-0000-0000-000000000000")
 
 # In-memory sliding window rate limiter: max 30 generations/hour/user (FR-003)
 _RATE_LIMIT_MAX = 30
@@ -110,18 +107,20 @@ def _check_rate_limit(user_id: UUID) -> None:
 class GenerateRoleSkillService:
     """Service for generating role skill content via AI.
 
-    Uses Claude Sonnet one-shot query with ResilientExecutor for retries
-    and CircuitBreaker for provider health. Falls back to template-based
-    generation when AI is unavailable (no API key, provider down, etc.).
+    Uses LLMGateway for provider-agnostic LLM completion with automatic
+    cost tracking, retry + circuit breaking, and Langfuse tracing.
+    Falls back to template-based generation when AI is unavailable
+    (no LLMGateway, no API key, provider down, etc.).
     """
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(self, session: object, llm_gateway: LLMGateway | None = None) -> None:
         self._session = session
+        self._llm_gateway = llm_gateway
 
     async def execute(self, payload: GenerateRoleSkillPayload) -> GenerateRoleSkillResult:
         """Generate role skill content.
 
-        Attempts AI generation via Claude Sonnet. Falls back to template
+        Attempts AI generation via LLMGateway. Falls back to template
         when AI is unavailable or fails.
 
         Args:
@@ -172,7 +171,7 @@ class GenerateRoleSkillService:
                 suggested_usage=suggested_usage,
             )
 
-        # Only reach here if no LLM provider configured — use template
+        # Only reach here if no LLM gateway configured -- use template
         skill_content = self._generate_content_from_template(
             template_content=template_content,
             display_name=display_name,
@@ -206,18 +205,18 @@ class GenerateRoleSkillService:
         workspace_id: UUID | None,
         user_id: UUID | None = None,
     ) -> tuple[str, str, str, list[str], str | None] | None:
-        """Attempt AI-powered generation using the workspace's configured LLM provider.
-
-        All providers use the Anthropic API format. Provider-specific
-        base_url and api_key are passed per-request from workspace config.
+        """Attempt AI-powered generation using LLMGateway.
 
         Returns:
             Tuple of (skill_content, suggested_role_name, model_name, suggested_tags,
             suggested_usage) or None.
         """
-        ws_config = await resolve_workspace_llm_config(self._session, workspace_id)
-        if ws_config is None:
-            logger.info("No LLM provider configured, using template fallback")
+        if self._llm_gateway is None:
+            logger.info("No LLM gateway configured, using template fallback")
+            return None
+
+        if workspace_id is None:
+            logger.info("No workspace_id provided, using template fallback")
             return None
 
         prompt = build_skill_generation_prompt(
@@ -228,120 +227,30 @@ class GenerateRoleSkillService:
             role_name=role_name,
         )
 
-        selector = ProviderSelector()
-        config = selector.select_with_config(
-            TaskType.TEMPLATE_FILLING, workspace_override=ws_config
-        )
-        model = config.model
-        api_key = ws_config.api_key
-        base_url = ws_config.base_url
-        provider = ws_config.provider
-
-        executor = ResilientExecutor()
-        retry_config = RetryConfig(max_retries=2, base_delay_seconds=1.0)
-        # Cloud-proxied models (e.g., kimi-k2.5:cloud via Ollama) need longer
-        # timeouts since they relay to remote APIs
-        timeout_sec = 90.0 if provider == "ollama" else 30.0
-
-        raw_response: str | None = None
         try:
-            raw_response = await self._call_llm(
-                api_key=api_key,
-                base_url=base_url,
-                model=model,
-                prompt=prompt,
-                provider=provider,
-                executor=executor,
-                retry_config=retry_config,
-                timeout_sec=timeout_sec,
+            response = await self._llm_gateway.complete(
                 workspace_id=workspace_id,
-                user_id=user_id,
-            )
-        except ProviderUnavailableError as e:
-            msg = f"{provider} provider unavailable: {e}"
-            raise SkillGenerationError(msg) from e
-        except Exception as e:
-            msg = f"AI skill generation failed ({provider}): {e}"
-            raise SkillGenerationError(msg) from e
-
-        result = self._parse_ai_response(raw_response or "", display_name, role_name, model)
-        if result is None:
-            msg = "AI returned invalid or insufficient content"
-            raise SkillGenerationError(msg)
-        return result
-
-    async def _call_llm(
-        self,
-        api_key: str,
-        base_url: str | None,
-        model: str,
-        prompt: str,
-        provider: str,
-        executor: ResilientExecutor,
-        retry_config: RetryConfig,
-        timeout_sec: float = 30.0,
-        workspace_id: UUID | None = None,
-        user_id: UUID | None = None,
-    ) -> str:
-        """Call LLM via Anthropic API format with provider-specific base_url/api_key."""
-        from anthropic import AsyncAnthropic
-
-        from pilot_space.ai.infrastructure.cost_tracker import (
-            extract_response_usage,
-            track_cost,
-        )
-
-        client = AsyncAnthropic(
-            api_key=api_key or None,
-            base_url=base_url or None,
-        )
-        _usage: tuple[int, int] = (0, 0)
-
-        async def _call_api() -> str:
-            nonlocal _usage
-            response = await client.messages.create(
-                model=model,
-                max_tokens=2048,
+                user_id=user_id or _SYSTEM_USER_ID,
+                task_type=TaskType.ROLE_SKILL_GENERATION,
                 messages=[{"role": "user", "content": prompt}],
-            )
-            _usage = extract_response_usage(response)
-            text_parts: list[str] = []
-            for block in response.content:
-                if block.type == "text" and block.text:
-                    text_parts.append(block.text)
-
-            return "\n".join(text_parts)
-
-        logger.info(
-            "Calling LLM for skill generation",
-            extra={"provider": provider, "model": model, "has_base_url": bool(base_url)},
-        )
-        result = await executor.execute(
-            provider=provider,
-            operation=_call_api,
-            timeout_sec=timeout_sec,
-            retry_config=retry_config,
-        )
-
-        # Track cost (non-fatal)
-        if _usage != (0, 0) and workspace_id:
-            await track_cost(
-                self._session,
-                workspace_id=workspace_id,
-                user_id=user_id,
+                max_tokens=2048,
+                temperature=0.7,
                 agent_name="role_skill_generation",
-                provider=provider,
-                model=model,
-                input_tokens=_usage[0],
-                output_tokens=_usage[1],
-                operation_type="role_skill_generation",
             )
 
-        logger.info(
-            "LLM response received",
-            extra={"provider": provider, "response_length": len(result)},
-        )
-        return result
+            result = self._parse_ai_response(
+                response.text, display_name, role_name, response.model
+            )
+            if result is None:
+                msg = "AI returned invalid or insufficient content"
+                raise SkillGenerationError(msg)
+            return result
+
+        except SkillGenerationError:
+            raise
+        except Exception as e:
+            msg = f"AI skill generation failed: {e}"
+            raise SkillGenerationError(msg) from e
 
     def _parse_ai_response(
         self,
@@ -371,7 +280,7 @@ class GenerateRoleSkillService:
 
         # Try JSON parse first (expected format)
         # strict=False allows literal control characters (newlines, tabs) inside
-        # JSON string values — common with Ollama/kimi models that don't escape them.
+        # JSON string values -- common with Ollama/kimi models that don't escape them.
         try:
             data = json.loads(text, strict=False)
             if isinstance(data, dict):

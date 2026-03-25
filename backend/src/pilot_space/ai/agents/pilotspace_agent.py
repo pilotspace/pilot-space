@@ -85,6 +85,7 @@ async def _background_graph_extraction(
     anthropic_api_key: str | None = None,
     base_url: str | None = None,
     model_name: str | None = None,
+    llm_gateway: Any | None = None,
 ) -> None:
     """Run graph extraction in a background task with its own DB session.
 
@@ -113,7 +114,7 @@ async def _background_graph_extraction(
 
         # Phase 1: LLM call — outside DB session to avoid holding a connection
         # for the full ~20-25s extraction round-trip.
-        extraction_svc = GraphExtractionService()
+        extraction_svc = GraphExtractionService(llm_gateway=llm_gateway)
         result = await extraction_svc.execute(
             ConversationExtractionPayload(
                 messages=messages,

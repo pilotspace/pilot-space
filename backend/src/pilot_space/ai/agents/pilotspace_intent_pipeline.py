@@ -577,7 +577,7 @@ async def extract_and_persist_to_graph(
                 workspace_id=workspace_id,
                 user_id=user_id,
                 issue_id=issue_id,
-                api_key=anthropic_api_key or "ollama",
+                api_key=anthropic_api_key or "ollama",  # deprecated, kept for compat
                 base_url=base_url,
                 model_name=model_name,
             )

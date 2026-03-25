@@ -1,13 +1,13 @@
-"""GraphExtractionService — extract structured graph data from AI conversations.
+"""GraphExtractionService -- extract structured graph data from AI conversations.
 
-Analyzes conversation messages using a lightweight Claude Haiku LLM call to
-identify decisions, patterns, user preferences, and entity references.
+Analyzes conversation messages using LLMGateway to identify decisions,
+patterns, user preferences, and entity references.
 Returns NodeInput + EdgeInput objects ready for GraphWriteService.
 
-BYOK: if no api_key is provided, returns empty ExtractionResult without
-making any API call.
+BYOK: if no LLMGateway is provided, returns empty ExtractionResult
+without making any API call.
 
-Feature 016: Knowledge Graph — Memory Engine replacement
+Feature 016: Knowledge Graph -- Memory Engine replacement
 """
 
 from __future__ import annotations
@@ -15,16 +15,21 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from pilot_space.application.services.memory.graph_write_service import EdgeInput, NodeInput
 from pilot_space.domain.graph_node import NodeType
 from pilot_space.infrastructure.logging import get_logger
 
+if TYPE_CHECKING:
+    from pilot_space.ai.proxy.llm_gateway import LLMGateway
+
 logger = get_logger(__name__)
 
-_EXTRACTION_MODEL = "claude-haiku-4-5-20251001"
+# Sentinel user ID for system-initiated extraction (no real user context)
+_SYSTEM_USER_ID = UUID("00000000-0000-0000-0000-000000000000")
+
 _MAX_TOKENS = 1024
 
 EXTRACTION_PROMPT_TEMPLATE = """\
@@ -58,8 +63,8 @@ class ConversationExtractionPayload:
         workspace_id: Owning workspace for all extracted nodes.
         user_id: Optional user whose conversation produced the messages.
         issue_id: Optional issue context UUID for this conversation.
-        api_key: LLM API key. None → skip extraction (BYOK pattern).
-        base_url: Optional base URL for Anthropic-compatible providers (e.g., Ollama).
+        api_key: Deprecated. Ignored when llm_gateway is used.
+        base_url: Deprecated. Ignored when llm_gateway is used.
     """
 
     messages: list[dict[str, str]]
@@ -206,7 +211,7 @@ def _parse_llm_response(raw: str) -> dict[str, Any]:
         parsed = json.loads(text)
         if isinstance(parsed, dict):
             return parsed
-        logger.warning("GraphExtractionService: LLM returned non-dict JSON — ignoring")
+        logger.warning("GraphExtractionService: LLM returned non-dict JSON -- ignoring")
         return {}
     except json.JSONDecodeError:
         pass
@@ -345,24 +350,28 @@ def _build_preference_nodes(
 class GraphExtractionService:
     """Extract structured knowledge graph data from AI conversation messages.
 
-    Makes a single lightweight LLM call to identify decisions, patterns,
-    user preferences, and entity references in the conversation. Returns
-    NodeInput objects suitable for passing to GraphWriteService.
+    Makes a single lightweight LLM call via LLMGateway to identify decisions,
+    patterns, user preferences, and entity references in the conversation.
+    Returns NodeInput objects suitable for passing to GraphWriteService.
 
-    Returns an empty ExtractionResult when api_key is None (BYOK pattern)
-    or when the LLM response cannot be parsed — never raises.
+    Returns an empty ExtractionResult when llm_gateway is None (BYOK pattern)
+    or when the LLM response cannot be parsed -- never raises.
 
     Example:
-        service = GraphExtractionService()
+        service = GraphExtractionService(llm_gateway=gateway)
         result = await service.execute(ConversationExtractionPayload(
             messages=[{"role": "user", "content": "We decided to use Redis..."}],
             workspace_id=workspace_id,
-            api_key=api_key,
         ))
     """
 
-    def __init__(self) -> None:
-        """Initialize service."""
+    def __init__(self, llm_gateway: LLMGateway | None = None) -> None:
+        """Initialize service.
+
+        Args:
+            llm_gateway: LLMGateway instance. If None, extraction returns empty results.
+        """
+        self._llm_gateway = llm_gateway
 
     async def execute(self, payload: ConversationExtractionPayload) -> ExtractionResult:
         """Extract graph nodes from conversation messages.
@@ -372,19 +381,17 @@ class GraphExtractionService:
 
         Returns:
             ExtractionResult with NodeInput/EdgeInput lists.
-            Returns empty result when api_key is None or on any error.
+            Returns empty result when llm_gateway is None or on any error.
         """
-        if not payload.api_key:
-            logger.debug("GraphExtractionService: no api_key provided — returning empty result")
+        if self._llm_gateway is None:
+            logger.debug("GraphExtractionService: no llm_gateway provided -- returning empty result")
             return _empty_result()
 
         if not payload.messages:
-            logger.debug("GraphExtractionService: empty messages list — returning empty result")
+            logger.debug("GraphExtractionService: empty messages list -- returning empty result")
             return _empty_result()
 
-        raw_response = await self._call_llm(
-            payload.api_key, payload.messages, payload.base_url, payload.model_name
-        )
+        raw_response = await self._call_llm(payload)
         if raw_response is None:
             return _empty_result()
 
@@ -400,47 +407,31 @@ class GraphExtractionService:
 
     async def _call_llm(
         self,
-        api_key: str,
-        messages: list[dict[str, str]],
-        base_url: str | None = None,
-        model_name: str | None = None,
+        payload: ConversationExtractionPayload,
     ) -> str | None:
-        """Call LLM for extraction via Anthropic-compatible API.
+        """Call LLM for extraction via LLMGateway.
 
         Args:
-            api_key: LLM API key.
-            messages: Conversation messages.
-            base_url: Optional base URL for Anthropic-compatible providers.
-            model_name: Model to use. Falls back to _EXTRACTION_MODEL.
+            payload: Conversation extraction payload.
 
         Returns:
             Raw LLM response text, or None on failure.
         """
-        try:
-            import anthropic  # type: ignore[import-untyped]
+        from pilot_space.ai.providers.provider_selector import TaskType
 
-            prompt = _build_prompt(messages)
-            client = anthropic.AsyncAnthropic(
-                api_key=api_key,
-                base_url=base_url or None,
-            )
-            message = await client.messages.create(
-                model=model_name or _EXTRACTION_MODEL,
-                max_tokens=_MAX_TOKENS,
+        try:
+            prompt = _build_prompt(payload.messages)
+            response = await self._llm_gateway.complete(  # type: ignore[union-attr]
+                workspace_id=payload.workspace_id,
+                user_id=payload.user_id or _SYSTEM_USER_ID,
+                task_type=TaskType.GRAPH_EXTRACTION,
                 messages=[{"role": "user", "content": prompt}],
+                max_tokens=_MAX_TOKENS,
+                temperature=0.7,
+                agent_name="graph_extraction",
             )
-            # Extract text or thinking blocks (some providers return thinking only)
-            if message.content:
-                for block in message.content:
-                    text_val = getattr(block, "text", None)
-                    if text_val and str(text_val).strip():
-                        return str(text_val).strip()
-                # Fallback to thinking blocks
-                for block in message.content:
-                    thinking_val = getattr(block, "thinking", None)
-                    if thinking_val and str(thinking_val).strip():
-                        return str(thinking_val).strip()
-            return None
+            text = response.text.strip()
+            return text if text else None
         except Exception:
             logger.warning(
                 "GraphExtractionService: LLM call failed",
