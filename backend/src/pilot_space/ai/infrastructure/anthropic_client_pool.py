@@ -13,6 +13,7 @@ only and is not stored anywhere else.
 from __future__ import annotations
 
 import hashlib
+from typing import Any
 
 import anthropic
 
@@ -38,21 +39,29 @@ class AnthropicClientPool:
         """Initialize empty client pool."""
         self._clients: dict[str, anthropic.AsyncAnthropic] = {}
 
-    def get_client(self, api_key: str) -> anthropic.AsyncAnthropic:
+    def get_client(
+        self, api_key: str, base_url: str | None = None
+    ) -> anthropic.AsyncAnthropic:
         """Return cached client for api_key, creating one if absent.
 
         Args:
             api_key: Workspace-specific Anthropic API key.
+            base_url: Optional custom base URL (for proxies / Ollama).
 
         Returns:
-            Reusable AsyncAnthropic client for that key.
+            Reusable AsyncAnthropic client for that key + endpoint.
         """
-        key_hash = hashlib.sha256(api_key.encode()).hexdigest()[:16]
+        key_hash = hashlib.sha256(
+            f"{api_key}:{base_url or ''}".encode()
+        ).hexdigest()[:16]
         if key_hash not in self._clients:
-            self._clients[key_hash] = anthropic.AsyncAnthropic(api_key=api_key)
+            kwargs: dict[str, Any] = {"api_key": api_key}
+            if base_url:
+                kwargs["base_url"] = base_url
+            self._clients[key_hash] = anthropic.AsyncAnthropic(**kwargs)
         return self._clients[key_hash]
 
-    def evict(self, api_key: str) -> bool:
+    def evict(self, api_key: str, base_url: str | None = None) -> bool:
         """Remove cached client for an API key.
 
         Call after key rotation to ensure the old client (and its httpx
@@ -60,12 +69,15 @@ class AnthropicClientPool:
 
         Args:
             api_key: The API key whose client should be evicted.
+            base_url: Optional custom base URL (must match get_client call).
 
         Returns:
             True if a client was found and removed, False if the key was
             not cached (already evicted or never used).
         """
-        key_hash = hashlib.sha256(api_key.encode()).hexdigest()[:16]
+        key_hash = hashlib.sha256(
+            f"{api_key}:{base_url or ''}".encode()
+        ).hexdigest()[:16]
         return self._clients.pop(key_hash, None) is not None
 
 
