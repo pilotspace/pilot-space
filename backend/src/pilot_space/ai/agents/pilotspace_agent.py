@@ -777,17 +777,35 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
             )
         )
 
-        # Build env with workspace provider's API key and base URL
+        # Build env with workspace provider's API key and base URL.
+        # When ai_proxy_enabled=True, route SDK calls through the built-in
+        # proxy endpoint for unified cost tracking and observability.
+        from pilot_space.config import get_settings
+
+        _settings = get_settings()
         provider_env: dict[str, str] = {
             "ANTHROPIC_API_KEY": provider_config.api_key,
         }
-        if provider_config.base_url:
+        if _settings.ai_proxy_enabled:
+            provider_env["ANTHROPIC_BASE_URL"] = _settings.ai_proxy_base_url
+            # Pass workspace context as custom headers so the proxy can
+            # attribute costs correctly. The SDK forwards env vars but
+            # custom headers need the HTTP_* prefix convention.
+            provider_env["X_WORKSPACE_ID"] = str(context.workspace_id)
+            if context.user_id:
+                provider_env["X_USER_ID"] = str(context.user_id)
+            logger.info(
+                "[SDK/Space] AI Proxy enabled: routing through %s",
+                _settings.ai_proxy_base_url,
+            )
+        elif provider_config.base_url:
             provider_env["ANTHROPIC_BASE_URL"] = provider_config.base_url
         logger.info(
-            "[SDK/Space] Provider: %s, has_base_url=%s, model=%s",
+            "[SDK/Space] Provider: %s, has_base_url=%s, model=%s, proxy=%s",
             provider_config.provider,
             bool(provider_config.base_url),
             provider_config.model_name or "default",
+            _settings.ai_proxy_enabled,
         )
 
         sdk_config = configure_sdk_for_space(

@@ -22,6 +22,7 @@ from pilot_space.api.v1.routers import (
     ai_attachments_router,
     ai_chat_router,
     ai_configuration_router,
+    ai_proxy_router,
     ai_costs_router,
     ai_drive_router,
     ai_extraction_router,
@@ -325,6 +326,7 @@ app.include_router(transcription_router, prefix=f"{API_V1_PREFIX}/ai")
 app.include_router(transcription_ws_router, prefix=f"{API_V1_PREFIX}/ai")
 app.include_router(ai_drive_router, prefix=f"{API_V1_PREFIX}/ai")
 app.include_router(ai_chat_router, prefix=f"{API_V1_PREFIX}/ai")
+app.include_router(ai_proxy_router, prefix=f"{API_V1_PREFIX}/ai/proxy")
 app.include_router(ai_configuration_router, prefix=API_V1_PREFIX)
 app.include_router(ai_costs_router, prefix=f"{API_V1_PREFIX}/ai")
 app.include_router(ai_extraction_router, prefix=API_V1_PREFIX)

@@ -118,6 +118,16 @@ class Settings(BaseSettings):
     ai_ghost_text_debounce_ms: int = Field(default=500, ge=100, le=2000)
     ai_ghost_text_max_tokens: int = Field(default=50, ge=10, le=200)
 
+    # Built-in AI Proxy — routes Claude Agent SDK through LLMGateway infrastructure
+    ai_proxy_enabled: bool = Field(
+        default=False,
+        description="Route Claude Agent SDK calls through built-in AI proxy for cost tracking and observability",
+    )
+    ai_proxy_base_url: str = Field(
+        default="http://localhost:8000/api/v1/ai/proxy",
+        description="Base URL of the built-in AI proxy endpoint (must match app host:port)",
+    )
+
     # Fake AI Mode (development only - no external API calls)
     ai_fake_mode: bool = Field(
         default=False,
