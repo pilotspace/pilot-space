@@ -190,9 +190,19 @@ class GhostTextService:
                     "cached": True,
                 }
 
-        # BYOK key resolution
-        api_key = await self._key_storage.get_api_key(workspace_id, "anthropic", "llm")
-        if not api_key:
+        # BYOK key resolution — also resolve base_url for custom proxy/Ollama support
+        base_url: str | None = None
+        workspace_api_key = await self._key_storage.get_api_key(
+            workspace_id, "anthropic", "llm"
+        )
+        if workspace_api_key:
+            api_key = workspace_api_key
+            key_info = await self._key_storage.get_key_info(
+                workspace_id, "anthropic", "llm"
+            )
+            if key_info and key_info.base_url:
+                base_url = key_info.base_url
+        else:
             settings = get_settings()
             api_key = (
                 settings.anthropic_api_key.get_secret_value()
@@ -209,7 +219,7 @@ class GhostTextService:
         _, model = self._provider_selector.select(TaskType.GHOST_TEXT)
 
         # Client from DI-managed pool — hashed key, reused connection pool
-        client = self._client_pool.get_client(api_key)
+        client = self._client_pool.get_client(api_key, base_url=base_url)
 
         # Block-type routing: select system prompt and user prompt
         system_prompt = self._resolve_system_prompt(block_type, note_title, linked_issues)
