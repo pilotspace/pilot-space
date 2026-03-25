@@ -94,18 +94,42 @@ class LLMGateway:
         self._anthropic_clients: dict[str, anthropic.AsyncAnthropic] = {}
         self._openai_clients: dict[str, openai.AsyncOpenAI] = {}
 
-    def _get_anthropic_client(self, api_key: str) -> anthropic.AsyncAnthropic:
-        """Get or create a cached AsyncAnthropic client for this API key."""
-        key_hash = hashlib.sha256(api_key.encode()).hexdigest()[:16]
+    def _get_anthropic_client(
+        self, api_key: str, base_url: str | None = None
+    ) -> anthropic.AsyncAnthropic:
+        """Get or create a cached AsyncAnthropic client for this API key.
+
+        Args:
+            api_key: Workspace-specific Anthropic API key.
+            base_url: Optional custom base URL (for proxies / Ollama).
+        """
+        key_hash = hashlib.sha256(
+            f"{api_key}:{base_url or ''}".encode()
+        ).hexdigest()[:16]
         if key_hash not in self._anthropic_clients:
-            self._anthropic_clients[key_hash] = anthropic.AsyncAnthropic(api_key=api_key)
+            kwargs: dict[str, Any] = {"api_key": api_key}
+            if base_url:
+                kwargs["base_url"] = base_url
+            self._anthropic_clients[key_hash] = anthropic.AsyncAnthropic(**kwargs)
         return self._anthropic_clients[key_hash]
 
-    def _get_openai_client(self, api_key: str) -> openai.AsyncOpenAI:
-        """Get or create a cached AsyncOpenAI client for this API key."""
-        key_hash = hashlib.sha256(api_key.encode()).hexdigest()[:16]
+    def _get_openai_client(
+        self, api_key: str, base_url: str | None = None
+    ) -> openai.AsyncOpenAI:
+        """Get or create a cached AsyncOpenAI client for this API key.
+
+        Args:
+            api_key: Workspace-specific OpenAI API key.
+            base_url: Optional custom base URL (for proxies / Ollama).
+        """
+        key_hash = hashlib.sha256(
+            f"{api_key}:{base_url or ''}".encode()
+        ).hexdigest()[:16]
         if key_hash not in self._openai_clients:
-            self._openai_clients[key_hash] = openai.AsyncOpenAI(api_key=api_key)
+            kwargs: dict[str, Any] = {"api_key": api_key}
+            if base_url:
+                kwargs["base_url"] = base_url
+            self._openai_clients[key_hash] = openai.AsyncOpenAI(**kwargs)
         return self._openai_clients[key_hash]
 
     @observe(name="llm_gateway.complete")  # type: ignore[misc]
@@ -152,9 +176,13 @@ class LLMGateway:
         if api_key is None:
             raise AINotConfiguredError(workspace_id=workspace_id)
 
+        key_info = await self._key_storage.get_key_info(workspace_id, provider, "llm")
+        base_url = key_info.base_url if key_info else None
+
         if provider == "anthropic":
             return await self._complete_anthropic(
                 api_key=api_key,
+                base_url=base_url,
                 provider=provider,
                 model=bare_model,
                 resolved_model=resolved,
@@ -168,6 +196,7 @@ class LLMGateway:
             )
         return await self._complete_openai(
                 api_key=api_key,
+                base_url=base_url,
                 provider=provider,
                 model=bare_model,
                 resolved_model=resolved,
@@ -184,6 +213,7 @@ class LLMGateway:
         self,
         *,
         api_key: str,
+        base_url: str | None = None,
         provider: str,
         model: str,
         resolved_model: str,
@@ -196,7 +226,7 @@ class LLMGateway:
         agent_name: str,
     ) -> LLMResponse:
         """Call Anthropic Messages API directly."""
-        client = self._get_anthropic_client(api_key)
+        client = self._get_anthropic_client(api_key, base_url=base_url)
 
         # Anthropic uses a separate `system` param, not a system message in the list
         anthropic_messages: list[dict[str, str]] = []
@@ -255,6 +285,7 @@ class LLMGateway:
         self,
         *,
         api_key: str,
+        base_url: str | None = None,
         provider: str,
         model: str,
         resolved_model: str,
@@ -267,7 +298,7 @@ class LLMGateway:
         agent_name: str,
     ) -> LLMResponse:
         """Call OpenAI Chat Completions API (also works for OpenAI-compatible providers)."""
-        client = self._get_openai_client(api_key)
+        client = self._get_openai_client(api_key, base_url=base_url)
 
         final_messages = list(messages)
         if system is not None:
@@ -342,7 +373,10 @@ class LLMGateway:
         if api_key is None:
             raise AINotConfiguredError(workspace_id=workspace_id)
 
-        client = self._get_openai_client(api_key)
+        key_info = await self._key_storage.get_key_info(workspace_id, provider, "llm")
+        base_url = key_info.base_url if key_info else None
+
+        client = self._get_openai_client(api_key, base_url=base_url)
 
         response = await self._executor.execute(
             provider=provider,
