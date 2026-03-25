@@ -14,6 +14,9 @@ import { RoleSkillStore } from './RoleSkillStore';
 import { TaskStore } from '@/stores/TaskStore';
 import { IssueViewStore } from './features/issues/IssueViewStore';
 import { ArtifactStore } from './features/artifacts/ArtifactStore';
+import { ThemeStore } from '@/features/theme';
+import { FileStore } from '@/features/file-browser/stores/FileStore';
+import { GitWebStore } from './features/git-web/GitWebStore';
 import { workspacesApi } from '@/services/api/workspaces';
 
 export class RootStore {
@@ -30,6 +33,9 @@ export class RootStore {
   tasks: TaskStore;
   issueView: IssueViewStore;
   artifacts: ArtifactStore;
+  theme: ThemeStore;
+  fileStore: FileStore;
+  gitWebStore: GitWebStore;
 
   constructor() {
     this.auth = new AuthStore();
@@ -45,6 +51,9 @@ export class RootStore {
     this.tasks = new TaskStore();
     this.issueView = new IssueViewStore();
     this.artifacts = new ArtifactStore();
+    this.theme = new ThemeStore();
+    this.fileStore = new FileStore();
+    this.gitWebStore = new GitWebStore();
 
     // Wire cross-store references
     this.workspace.setAuthStore(this.auth);
@@ -143,6 +152,21 @@ export function useArtifactStore(): ArtifactStore {
   return useStores().artifacts;
 }
 
+/** Hook to access the ThemeStore from context. */
+export function useThemeStore(): ThemeStore {
+  return useStores().theme;
+}
+
+/** Hook to access the FileStore from context. */
+export function useFileStore(): FileStore {
+  return useStores().fileStore;
+}
+
+/** Hook to access the GitWebStore from context. */
+export function useGitWebStore(): GitWebStore {
+  return useStores().gitWebStore;
+}
+
 /**
  * Convenient hook to access multiple stores at once.
  * Returns an object with named stores for destructuring.
@@ -163,5 +187,8 @@ export function useStore() {
     roleSkillStore: store.roleSkill,
     taskStore: store.tasks,
     issueViewStore: store.issueView,
+    themeStore: store.theme,
+    fileStore: store.fileStore,
+    gitWebStore: store.gitWebStore,
   };
 }
