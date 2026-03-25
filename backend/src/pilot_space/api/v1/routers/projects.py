@@ -23,11 +23,10 @@ from pilot_space.api.v1.schemas.project import (
     ProjectUpdate,
     StateResponse,
 )
-from pilot_space.config import get_settings
 from pilot_space.dependencies.auth import CurrentUser, SessionDep
 from pilot_space.infrastructure.database.models.project import Project
 from pilot_space.infrastructure.logging import get_logger
-from pilot_space.infrastructure.queue.supabase_queue import SupabaseQueueClient
+from pilot_space.infrastructure.queue.models import QueueName
 
 logger = get_logger(__name__)
 
@@ -37,26 +36,22 @@ router = APIRouter(prefix="/projects", tags=["projects"])
 async def _enqueue_kg_populate(project: Project) -> None:
     """Enqueue a KG populate job for a project (non-fatal)."""
     try:
-        settings = get_settings()
-        queue = SupabaseQueueClient(
-            supabase_url=settings.supabase_url,
-            service_key=settings.supabase_service_key.get_secret_value(),
-        )
-        from pilot_space.infrastructure.queue.models import QueueName
+        from pilot_space.container import get_container
 
-        try:
-            await queue.enqueue(
-                QueueName.AI_NORMAL,
-                {
-                    "task_type": "kg_populate",
-                    "entity_type": "project",
-                    "entity_id": str(project.id),
-                    "workspace_id": str(project.workspace_id),
-                    "project_id": str(project.id),
-                },
-            )
-        finally:
-            await queue.close()
+        queue = get_container().queue_client()
+        if queue is None:
+            return
+
+        await queue.enqueue(
+            QueueName.AI_NORMAL,
+            {
+                "task_type": "kg_populate",
+                "entity_type": "project",
+                "entity_id": str(project.id),
+                "workspace_id": str(project.workspace_id),
+                "project_id": str(project.id),
+            },
+        )
     except Exception as exc:
         logger.warning("projects router: failed to enqueue kg_populate: %s", exc)
 

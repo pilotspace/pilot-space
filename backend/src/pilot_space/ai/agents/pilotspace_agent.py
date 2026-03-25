@@ -35,7 +35,6 @@ from pilot_space.ai.agents.pilotspace_intent_pipeline import (
     run_intent_pipeline_step,
 )
 from pilot_space.ai.agents.pilotspace_stream_utils import (
-    _load_remote_mcp_servers,  # type: ignore[reportPrivateUsage]
     build_graph_search_service_for_session,
     build_graph_write_service_for_session,
     build_mcp_servers,
@@ -44,6 +43,7 @@ from pilot_space.ai.agents.pilotspace_stream_utils import (
     detect_skill_from_message,
     estimate_tokens,
     get_workspace_embedding_key,
+    load_workspace_mcp_servers,
     merge_sdk_and_queue,
     save_session_messages,
 )
@@ -632,7 +632,7 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
         )
 
         # MCP-04: pre-fetch async before sync build_mcp_servers, then merge
-        remote_servers = await _load_remote_mcp_servers(context.workspace_id, db_session)
+        remote_servers = await load_workspace_mcp_servers(context.workspace_id, db_session)
         mcp_servers, ref_map = build_mcp_servers(
             tool_event_queue, tool_context, input_data, feature_toggles=_feature_toggles
         )
