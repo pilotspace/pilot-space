@@ -40,6 +40,9 @@ export async function updateOcrSettings(
   return apiClient.put<OcrSettingsResponse>(`/workspaces/${workspaceId}/ocr/settings`, data);
 }
 
-export async function testOcrConnection(workspaceId: string): Promise<OcrConnectionTestResult> {
-  return apiClient.post<OcrConnectionTestResult>(`/workspaces/${workspaceId}/ocr/settings/test`);
+export async function testOcrConnection(
+  workspaceId: string,
+  data: UpdateOcrSettingsRequest,
+): Promise<OcrConnectionTestResult> {
+  return apiClient.post<OcrConnectionTestResult>(`/workspaces/${workspaceId}/ocr/settings/test`, data);
 }

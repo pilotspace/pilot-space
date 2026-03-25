@@ -39,7 +39,7 @@ describe('useDocumentIngest', () => {
 
   it('calls attachmentsApi.ingestDocument with artifactId and adjustments', async () => {
     const { result } = renderHook(
-      () => useDocumentIngest({ artifactId: 'art-1', workspaceId: 'ws-1' }),
+      () => useDocumentIngest({ artifactId: 'art-1', workspaceId: 'ws-1', projectId: 'proj-1' }),
       { wrapper: createWrapper() }
     );
 
@@ -49,13 +49,14 @@ describe('useDocumentIngest', () => {
 
     expect(attachmentsApi.ingestDocument).toHaveBeenCalledWith('art-1', {
       workspaceId: 'ws-1',
+      projectId: 'proj-1',
       chunkAdjustments: [{ chunkIndex: 0, excluded: true }],
     });
   });
 
   it('shows success toast on successful ingest', async () => {
     const { result } = renderHook(
-      () => useDocumentIngest({ artifactId: 'art-1', workspaceId: 'ws-1' }),
+      () => useDocumentIngest({ artifactId: 'art-1', workspaceId: 'ws-1', projectId: 'proj-1' }),
       { wrapper: createWrapper() }
     );
 
@@ -70,7 +71,7 @@ describe('useDocumentIngest', () => {
     vi.mocked(attachmentsApi.ingestDocument).mockRejectedValueOnce(new Error('Network error'));
 
     const { result } = renderHook(
-      () => useDocumentIngest({ artifactId: 'art-1', workspaceId: 'ws-1' }),
+      () => useDocumentIngest({ artifactId: 'art-1', workspaceId: 'ws-1', projectId: 'proj-1' }),
       { wrapper: createWrapper() }
     );
 

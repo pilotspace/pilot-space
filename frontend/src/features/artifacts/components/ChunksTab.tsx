@@ -88,6 +88,7 @@ export interface ChunksTabProps {
   isLoading: boolean;
   artifactId: string;
   workspaceId: string;
+  projectId: string;
   className?: string;
 }
 
@@ -96,6 +97,7 @@ export function ChunksTab({
   isLoading,
   artifactId,
   workspaceId,
+  projectId,
   className,
 }: ChunksTabProps) {
   const chunks = React.useMemo(() => extraction?.chunks ?? [], [extraction?.chunks]);
@@ -110,7 +112,7 @@ export function ChunksTab({
     }
   }, [chunks]);
 
-  const ingest = useDocumentIngest({ artifactId, workspaceId });
+  const ingest = useDocumentIngest({ artifactId, workspaceId, projectId });
 
   const handleToggle = (chunkIndex: number) => {
     dispatch({ type: 'TOGGLE', index: chunkIndex });

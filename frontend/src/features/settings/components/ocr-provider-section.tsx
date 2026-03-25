@@ -162,7 +162,19 @@ export const OcrProviderSection = observer(function OcrProviderSection({
     setIsTesting(true);
     setTestResult(null);
     try {
-      const result = await testOcrConnection(workspaceId);
+      const testPayload: Parameters<typeof testOcrConnection>[1] = {
+        provider_type: selectedType,
+      };
+      if (selectedType === 'hunyuan_ocr') {
+        testPayload.endpoint_url = endpointUrl.trim();
+        if (apiKey.trim()) testPayload.api_key = apiKey.trim();
+        testPayload.model_name = settings?.model_name || undefined;
+      } else if (selectedType === 'tencent_ocr') {
+        testPayload.secret_id = secretId.trim();
+        testPayload.secret_key = secretKey.trim();
+        testPayload.region = region;
+      }
+      const result = await testOcrConnection(workspaceId, testPayload);
       setTestResult(result);
       if (result.success) {
         toast.success('OCR connection successful');

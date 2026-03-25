@@ -136,12 +136,24 @@ class OcrService:
             info = await storage.get_key_info(workspace_id, ocr_provider, "ocr")
             if info:
                 api_key = await storage.get_api_key(workspace_id, ocr_provider, "ocr")
-                config = OcrConfig(
-                    provider_type=ocr_provider,
-                    endpoint_url=info.base_url,
-                    api_key=api_key,
-                    model_name=info.model_name or "tencent/HunyuanOCR",
-                )
+                if ocr_provider == "tencent_ocr" and api_key:
+                    # Tencent credentials stored as JSON: {"id": "...", "key": "..."}
+                    import json
+
+                    creds = json.loads(api_key)
+                    config = OcrConfig(
+                        provider_type=ocr_provider,
+                        secret_id=creds.get("id"),
+                        secret_key=creds.get("key"),
+                        region=info.model_name or "ap-guangzhou",
+                    )
+                else:
+                    config = OcrConfig(
+                        provider_type=ocr_provider,
+                        endpoint_url=info.base_url,
+                        api_key=api_key,
+                        model_name=info.model_name or "tencent/HunyuanOCR",
+                    )
                 chain.append(OcrProviderFactory.create(ocr_provider, config))
                 break  # Only one dedicated OCR provider active at a time
 

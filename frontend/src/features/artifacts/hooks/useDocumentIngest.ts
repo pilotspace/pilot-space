@@ -16,6 +16,7 @@ import type { ChunkAdjustment, DocumentIngestRequest } from '@/types/attachments
 export interface UseDocumentIngestOptions {
   artifactId: string;
   workspaceId: string;
+  projectId: string;
 }
 
 /**
@@ -26,11 +27,12 @@ export interface UseDocumentIngestOptions {
  *
  * Returns standard TanStack useMutation result.
  */
-export function useDocumentIngest({ artifactId, workspaceId }: UseDocumentIngestOptions) {
+export function useDocumentIngest({ artifactId, workspaceId, projectId }: UseDocumentIngestOptions) {
   return useMutation({
     mutationFn: (adjustments: ChunkAdjustment[]) => {
       const request: DocumentIngestRequest = {
         workspaceId,
+        projectId,
         chunkAdjustments: adjustments,
       };
       return attachmentsApi.ingestDocument(artifactId, request);

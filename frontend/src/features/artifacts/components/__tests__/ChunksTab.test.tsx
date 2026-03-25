@@ -54,6 +54,7 @@ function renderTab(overrides?: Partial<AttachmentExtractionResult>) {
       isLoading={false}
       artifactId="art-1"
       workspaceId="ws-1"
+      projectId="proj-1"
     />,
     { wrapper: Wrapper }
   );
@@ -66,7 +67,7 @@ describe('ChunksTab', () => {
 
   it('shows loading skeleton when isLoading is true', () => {
     render(
-      <ChunksTab extraction={undefined} isLoading={true} artifactId="art-1" workspaceId="ws-1" />,
+      <ChunksTab extraction={undefined} isLoading={true} artifactId="art-1" workspaceId="ws-1" projectId="proj-1" />,
       { wrapper: Wrapper }
     );
     expect(screen.getByText(/Extraction in progress/)).toBeInTheDocument();

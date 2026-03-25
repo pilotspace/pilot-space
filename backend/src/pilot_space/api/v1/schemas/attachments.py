@@ -163,6 +163,7 @@ class DocumentIngestRequest(BaseSchema):
     """Request body for POST /ai/attachments/{id}/ingest."""
 
     workspace_id: UUID
+    project_id: UUID
     chunk_adjustments: list[ChunkAdjustment] = Field(default_factory=list)  # Empty = use all chunks
 
 

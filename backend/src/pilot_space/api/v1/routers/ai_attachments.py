@@ -356,6 +356,7 @@ async def ingest_document(
     payload = {
         "task_type": TASK_DOCUMENT_INGESTION,
         "workspace_id": str(body.workspace_id),
+        "project_id": str(body.project_id),
         "attachment_id": str(attachment_id),
         "excluded_chunk_indices": excluded_indices,
     }

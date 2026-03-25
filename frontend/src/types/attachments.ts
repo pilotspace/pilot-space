@@ -174,6 +174,7 @@ export interface ChunkAdjustment {
  */
 export interface DocumentIngestRequest {
   workspaceId: string;
+  projectId: string;
   chunkAdjustments: ChunkAdjustment[];
 }
 
