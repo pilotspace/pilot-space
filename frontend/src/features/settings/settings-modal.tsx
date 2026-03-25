@@ -88,7 +88,7 @@ function BillingPlaceholder() {
         </div>
         <h3 className="mt-4 text-sm font-semibold text-foreground">Free &amp; open source</h3>
         <p className="mt-1.5 max-w-sm text-sm text-muted-foreground leading-relaxed">
-          Pilot Space is free and open source. Paid tiers with support SLAs will be available in a
+          TAD is free and open source. Paid tiers with support SLAs will be available in a
           future release.
         </p>
       </div>

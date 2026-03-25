@@ -3,7 +3,7 @@
 /**
  * CollapsedChatStrip - Thin strip shown when the AI panel is collapsed.
  *
- * Desktop: vertical strip on right edge with "PilotSpace Agent" text.
+ * Desktop: vertical strip on right edge with "TAD Agent" text.
  * Mobile: horizontal bar at bottom.
  */
 import { ChevronLeft, MessageSquare } from 'lucide-react';
@@ -37,12 +37,12 @@ export function CollapsedChatStrip({ onClick, className }: CollapsedChatStripPro
             >
               <ChevronLeft className="h-4 w-4 text-ai" />
               <span className="writing-mode-vertical text-[10px] font-medium text-ai">
-                PilotSpace Agent
+                TAD Agent
               </span>
               <MessageSquare className="h-4 w-4 text-ai mt-auto" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="left">Open PilotSpace Agent (⌘⇧P)</TooltipContent>
+          <TooltipContent side="left">Open TAD Agent (⌘⇧P)</TooltipContent>
         </Tooltip>
       </div>
 
@@ -56,7 +56,7 @@ export function CollapsedChatStrip({ onClick, className }: CollapsedChatStripPro
         >
           <div className="flex items-center gap-2">
             <MessageSquare className="h-4 w-4 text-ai" />
-            <span className="text-xs font-medium text-ai">PilotSpace Agent</span>
+            <span className="text-xs font-medium text-ai">TAD Agent</span>
           </div>
           <kbd className="hidden sm:inline-flex items-center gap-0.5 rounded border bg-muted px-1 py-0.5 text-[9px] font-mono text-muted-foreground">
             ⌘⇧P

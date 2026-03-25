@@ -271,10 +271,10 @@ function NoteDetailPage() {
   // Set page title
   useEffect(() => {
     if (note) {
-      document.title = `${note.title || 'Untitled'} - Pilot Space`;
+      document.title = `${note.title || 'Untitled'} - TAD`;
     }
     return () => {
-      document.title = 'Pilot Space';
+      document.title = 'TAD';
     };
   }, [note]);
 

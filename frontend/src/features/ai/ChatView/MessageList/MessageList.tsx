@@ -341,7 +341,7 @@ export const MessageList = observer<MessageListProps>(
                       <span className="inline-flex items-center gap-1.5">
                         <span className="h-2 w-2 rounded-full bg-primary" aria-hidden="true" />
                         <span className="text-[15px] font-semibold text-primary">
-                          PilotSpace Agent
+                          TAD Agent
                         </span>
                       </span>
                     </div>

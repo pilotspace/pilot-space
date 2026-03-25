@@ -19,7 +19,7 @@ export default function BillingSettingsPage() {
         </div>
         <h3 className="mt-4 text-sm font-medium text-foreground">Billing coming soon</h3>
         <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-          Pilot Space is free and open source. Paid tiers for support SLAs will be available in a
+          TAD is free and open source. Paid tiers for support SLAs will be available in a
           future release.
         </p>
       </div>

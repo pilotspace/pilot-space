@@ -3,7 +3,7 @@
 /**
  * IssueDescriptionEmptyState - Quick-start card shown when the issue
  * description editor is empty. Offers clickable writing prompts that insert
- * H3 headings and an AI CTA that asks Pilot Space to generate a description.
+ * H3 headings and an AI CTA that asks TAD to generate a description.
  *
  * Auto-hides once the editor contains real content (anything beyond
  * the propertyBlock node + empty paragraphs).

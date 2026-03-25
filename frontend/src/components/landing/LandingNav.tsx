@@ -38,13 +38,13 @@ export function LandingNav() {
         <Link
           href="/"
           className="flex items-center gap-2 transition-opacity hover:opacity-80"
-          aria-label="Pilot Space Home"
+          aria-label="TAD Home"
         >
           <div className="flex size-8 items-center justify-center rounded-lg bg-primary/10">
             <img src="/logo.svg" alt="Logo" className="size-4" />
           </div>
           <span className="font-display text-lg font-semibold tracking-tight text-foreground">
-            Pilot Space
+            TAD
           </span>
         </Link>
 

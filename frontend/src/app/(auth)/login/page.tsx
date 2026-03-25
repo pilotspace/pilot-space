@@ -162,17 +162,17 @@ const LoginPage = observer(function LoginPage() {
             // whileHover={{ rotate: 15 }}
             // transition={{ type: 'spring', stiffness: 400, damping: 10 }}
           >
-            <Image src="/logo.svg" alt="Pilot Space logo" width={100} height={100} priority />
+            <Image src="/logo.svg" alt="TAD logo" width={100} height={100} priority />
           </div>
           <CardTitle className="text-2xl">
-            {mode === 'login' ? 'Welcome to Pilot Space' : 'Create your account'}
+            {mode === 'login' ? 'Welcome to TAD' : 'Create your account'}
           </CardTitle>
           <CardDescription>
             {ssoRequired
               ? 'This workspace requires SSO login.'
               : mode === 'login'
                 ? 'Sign in to start collaborating with AI'
-                : 'Join Pilot Space to start collaborating'}
+                : 'Join TAD to start collaborating'}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -368,27 +368,29 @@ const LoginPage = observer(function LoginPage() {
             </div>
           )}
 
-          <p className="text-center text-xs text-muted-foreground">
-            By continuing, you agree to our{' '}
-            <a
-              href="#"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline underline-offset-2 hover:text-foreground"
-            >
-              Terms of Service
-            </a>{' '}
-            and{' '}
-            <a
-              href="#"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline underline-offset-2 hover:text-foreground"
-            >
-              Privacy Policy
-            </a>
-            .
-          </p>
+          {ENV.SHOW_LEGAL_LINKS && (
+            <p className="text-center text-xs text-muted-foreground">
+              By continuing, you agree to our{' '}
+              <a
+                href="#"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline underline-offset-2 hover:text-foreground"
+              >
+                Terms of Service
+              </a>{' '}
+              and{' '}
+              <a
+                href="#"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline underline-offset-2 hover:text-foreground"
+              >
+                Privacy Policy
+              </a>
+              .
+            </p>
+          )}
         </CardContent>
       </Card>
     </motion.div>

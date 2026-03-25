@@ -303,7 +303,7 @@ export const OnboardingChecklist = observer(function OnboardingChecklist({
                   <Sparkles className="h-5 w-5 text-primary" />
                 </div>
                 <div>
-                  <DialogTitle className="text-lg">Welcome to Pilot Space</DialogTitle>
+                  <DialogTitle className="text-lg">Welcome to TAD</DialogTitle>
                   <DialogDescription>Complete these steps to get started</DialogDescription>
                 </div>
               </div>

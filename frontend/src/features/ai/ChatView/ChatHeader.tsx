@@ -43,7 +43,7 @@ export const ChatHeader = observer<ChatHeaderProps>(
               <Bot className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-ai" />
             </div>
             <span className="text-foreground font-medium truncate max-w-[100px] sm:max-w-[140px] md:max-w-[180px]">
-              {title || 'PilotSpace Agent'}
+              {title || 'TAD Agent'}
             </span>
           </div>
 

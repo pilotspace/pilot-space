@@ -228,7 +228,7 @@ function AIStageCard({
             </p>
           </motion.div>
 
-          {/* With Pilot Space — cross-fades in with glow */}
+          {/* With TAD — cross-fades in with glow */}
           <motion.div
             initial={
               shouldReduce
@@ -264,7 +264,7 @@ function AIStageCard({
             <div className="mb-1.5 flex items-center gap-1.5">
               <Sparkles className="size-3 text-primary" />
               <span className="text-[11px] font-semibold uppercase tracking-wider text-primary">
-                With Pilot Space
+                With TAD
               </span>
             </div>
             <p className="text-xs leading-relaxed text-foreground/80">

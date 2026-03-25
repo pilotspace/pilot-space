@@ -50,7 +50,7 @@ export function useIssueApprovals(
         ?.filter((r) => r.affectedEntities.some((e) => e.type === 'issue' && e.id === issueId))
         .map((r) => ({
           id: r.requestId,
-          agentName: 'PilotSpace Agent',
+          agentName: 'TAD Agent',
           actionType: r.actionType,
           status: 'pending' as const,
           contextPreview: r.description,

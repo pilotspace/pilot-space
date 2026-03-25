@@ -164,7 +164,7 @@ export function LandingDemo() {
           </h2>
           <p className="mt-3 text-muted-foreground">
             Watch how the &ldquo;Auth Redesign&rdquo; feature flows through
-            Pilot Space
+            TAD
           </p>
         </motion.div>
 
@@ -190,7 +190,7 @@ export function LandingDemo() {
               <div className="size-2.5 rounded-full bg-primary/40" />
             </div>
             <span className="ml-2 text-xs text-muted-foreground">
-              Pilot Space — Auth Redesign Demo
+              TAD — Auth Redesign Demo
             </span>
           </div>
 

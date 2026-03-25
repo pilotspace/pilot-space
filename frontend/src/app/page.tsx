@@ -285,7 +285,7 @@ export default function HomePage() {
           variants={fadeUp}
           className="mb-2 text-center text-3xl font-semibold tracking-tight text-foreground"
         >
-          Welcome to Pilot Space
+          Welcome to TAD
         </motion.h1>
 
         <motion.p variants={fadeUp} className="mb-8 text-center text-muted-foreground">

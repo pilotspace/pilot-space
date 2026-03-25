@@ -23,7 +23,7 @@ export interface EditorToolbarProps {
 
 /**
  * EditorToolbar — AI status indicators only.
- * Content editing is handled by the Pilot Space Agent via content_update SSE events.
+ * Content editing is handled by the TAD Agent via content_update SSE events.
  * Text formatting is available through the floating SelectionToolbar.
  */
 export const EditorToolbar = observer(function EditorToolbar({

@@ -17,7 +17,7 @@ export function useApprovals(
   // SSE-triggered approvals (current session, in-memory).
   const sseApprovals: ApprovalRequest[] = store.pendingApprovals.map((req) => ({
     id: req.requestId,
-    agentName: 'PilotSpace Agent',
+    agentName: 'TAD Agent',
     actionType: req.actionType,
     status: 'pending' as const,
     contextPreview: req.description,

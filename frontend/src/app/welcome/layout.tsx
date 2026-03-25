@@ -5,28 +5,28 @@ import { LandingFooter } from '@/components/landing/LandingFooter';
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://pilotspace.dev'),
-  title: 'Pilot Space — Think first, structure later',
+  title: 'TAD — Think first, structure later',
   description:
     'AI-augmented SDLC platform with Note-First workflow. Ghost text, PR review, issue extraction, and AI context — all embedded in your development process.',
   openGraph: {
-    title: 'Pilot Space — Think first, structure later',
+    title: 'TAD — Think first, structure later',
     description:
       'The note-first platform where AI helps your ideas become structured issues naturally.',
     type: 'website',
     url: '/welcome',
-    siteName: 'Pilot Space',
+    siteName: 'TAD',
     images: [
       {
         url: '/og-image.png',
         width: 1200,
         height: 630,
-        alt: 'Pilot Space — AI-Augmented SDLC Platform',
+        alt: 'TAD — AI-Augmented SDLC Platform',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Pilot Space — Think first, structure later',
+    title: 'TAD — Think first, structure later',
     description:
       'The note-first platform where AI helps your ideas become structured issues naturally.',
   },

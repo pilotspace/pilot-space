@@ -182,7 +182,7 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          name: 'Pilot Space',
+          name: 'TAD',
           slug: 'workspace',
           description: 'E2E test workspace',
         }),

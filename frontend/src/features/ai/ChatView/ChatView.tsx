@@ -369,7 +369,7 @@ const ChatViewInternal = observer<ChatViewProps>(
       <div className={cn('flex flex-col h-full bg-background', className)} data-testid="chat-view">
         {/* Compact header */}
         <ChatHeader
-          title="PilotSpace Agent"
+          title="TAD Agent"
           isStreaming={store.isStreaming}
           onNewSession={handleNewSession}
           onClose={onClose}

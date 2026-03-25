@@ -21,8 +21,8 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: 'Pilot Space',
-    template: '%s | Pilot Space',
+    default: 'TAD',
+    template: '%s | TAD',
   },
   description: 'AI-Augmented SDLC Platform with Note-First Workflow',
   icons: {

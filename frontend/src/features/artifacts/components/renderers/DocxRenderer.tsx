@@ -12,7 +12,7 @@ import { DocxTocSidebar, type TocHeading } from './DocxTocSidebar';
  * Rendering strategy:
  * 1. PRIMARY: docx-preview 0.3.7 — renders DOCX directly into DOM container with
  *    full formatting (fonts, colors, tables, images). Output isolated in an iframe
- *    to prevent style leakage into the Pilot Space UI.
+ *    to prevent style leakage into the TAD UI.
  * 2. FALLBACK: mammoth.js — converts DOCX → HTML string. Output sanitized with
  *    DOCX_PURIFY_CONFIG (blocks javascript: hrefs via ALLOWED_URI_REGEXP) before
  *    rendering in a sandboxed iframe. Fallback is invisible to the user — no

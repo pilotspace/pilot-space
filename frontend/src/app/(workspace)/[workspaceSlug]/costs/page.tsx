@@ -14,7 +14,7 @@
 import { CostDashboardPage } from '@/features/costs/pages/cost-dashboard-page';
 
 export const metadata = {
-  title: 'AI Costs | Pilot Space',
+  title: 'AI Costs | TAD',
   description: 'Monitor AI usage and costs across your workspace',
 };
 

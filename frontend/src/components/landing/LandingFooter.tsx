@@ -35,7 +35,7 @@ export function LandingFooter() {
                 <img src="/logo.svg" alt="Logo" className="size-4" />
               </div>
               <span className="font-display text-lg font-semibold text-foreground">
-                Pilot Space
+                TAD
               </span>
             </div>
             <p className="text-sm leading-relaxed text-muted-foreground">

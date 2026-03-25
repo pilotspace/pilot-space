@@ -155,7 +155,7 @@ export const AssistantMessage = memo<AssistantMessageProps>(({ message, classNam
       <div className="flex items-baseline gap-2 mb-2.5">
         <span className="inline-flex items-center gap-1.5">
           <span className="h-2 w-2 rounded-full bg-primary" aria-hidden="true" />
-          <span className="text-[15px] font-semibold text-primary">PilotSpace Agent</span>
+          <span className="text-[15px] font-semibold text-primary">TAD Agent</span>
         </span>
         <time className="text-[11px] text-muted-foreground/70">
           {message.timestamp.toLocaleTimeString([], {
