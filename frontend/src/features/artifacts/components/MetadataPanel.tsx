@@ -145,8 +145,13 @@ export function MetadataPanel({
             </span>
           )}
           {metadata.extractionSource !== 'none' && (
-            <span className="capitalize" data-testid="metadata-source">
-              Extracted via {metadata.extractionSource === 'ocr' ? 'OCR' : 'Office parser'}
+            <span data-testid="metadata-source">
+              Extracted via{' '}
+              {metadata.extractionSource === 'ocr'
+                ? 'OCR'
+                : metadata.extractionSource === 'raw'
+                  ? 'Raw text'
+                  : 'Office parser'}
             </span>
           )}
         </div>

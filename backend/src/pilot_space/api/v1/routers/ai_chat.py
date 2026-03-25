@@ -297,7 +297,6 @@ async def chat(
         ctx_attachment_ids if ctx_workspace_id is not None else [],
         user_id,
         session,
-        storage_client=container.storage_client(),
         attachment_content_service=container.attachment_content_service(),
     )
 

@@ -18,6 +18,7 @@ from pilot_space.application.services.document.office_extraction_service import 
     ExtractionResult,
     OfficeExtractionService,
 )
+from pilot_space.domain.exceptions import ValidationError
 
 _DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 _XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -267,7 +268,7 @@ class TestMimeRouting:
     def test_unsupported_mime_raises_value_error(
         self, svc: OfficeExtractionService, docx_bytes: bytes
     ) -> None:
-        with pytest.raises(ValueError, match="Unsupported"):
+        with pytest.raises(ValidationError, match="Unsupported"):
             svc.extract(docx_bytes, "application/octet-stream", "file.bin")
 
     def test_office_mime_types_contains_all_three(self) -> None:

@@ -12,6 +12,8 @@ from __future__ import annotations
 import io
 from dataclasses import dataclass
 
+from pilot_space.domain.exceptions import ValidationError
+
 _MAX_ROWS_PER_SHEET = 500
 
 _DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -62,7 +64,7 @@ class OfficeExtractionService:
             ExtractionResult with extracted markdown text and format-specific metadata.
 
         Raises:
-            ValueError: If mime_type is not one of the three supported Office MIME types.
+            ValidationError: If mime_type is not one of the three supported Office MIME types.
         """
         if mime_type == _DOCX_MIME:
             return self._extract_docx(data)
@@ -71,7 +73,7 @@ class OfficeExtractionService:
         if mime_type == _PPTX_MIME:
             return self._extract_pptx(data)
         msg = f"Unsupported MIME type for Office extraction: {mime_type}"
-        raise ValueError(msg)
+        raise ValidationError(msg)
 
     # ------------------------------------------------------------------
     # OFFICE-01: DOCX extraction via mammoth
@@ -124,16 +126,15 @@ class OfficeExtractionService:
 
                     rows_iter = ws.iter_rows(values_only=True)
 
-                    # First row is the header
-                    try:
-                        header_row = next(rows_iter)
-                    except StopIteration:
-                        # Empty sheet — just append the section header
-                        sections.append("\n".join(section_lines))
-                        continue
+                    # Skip leading blank rows; first non-blank row is the header.
+                    header_row = None
+                    for candidate in rows_iter:
+                        if not all(v is None for v in candidate):
+                            header_row = candidate
+                            break
 
-                    if all(v is None for v in header_row):
-                        # Treat as empty — no table
+                    if header_row is None:
+                        # Sheet is entirely blank — no table
                         sections.append("\n".join(section_lines))
                         continue
 

@@ -67,9 +67,16 @@ class HunyuanOcrAdapter(AbstractOcrProvider):
         if self._config.api_key:
             headers["Authorization"] = f"Bearer {self._config.api_key}"
 
+        base_url = (self._config.endpoint_url or "").rstrip("/")
+        chat_url = (
+            f"{base_url}/chat/completions"
+            if base_url.endswith("/v1")
+            else f"{base_url}/v1/chat/completions"
+        )
+
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
-                f"{self._config.endpoint_url}/v1/chat/completions",
+                chat_url,
                 json=payload,
                 headers=headers,
             )

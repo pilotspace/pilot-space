@@ -99,11 +99,10 @@ class OcrService:
         """
         providers = await self._build_fallback_chain(workspace_id, session)
         for provider in providers:
+            result: OcrResult | None = None
             try:
                 result = await provider.extract(image_data, mime_type)
                 logger.debug("ocr_provider_used", provider=result.provider_used)
-                await self._persist_result(result, attachment_id, session)
-                return result
             except Exception as exc:
                 logger.debug(
                     "ocr_provider_failed",
@@ -111,6 +110,9 @@ class OcrService:
                     error=str(exc),
                 )
                 continue
+
+            await self._persist_result(result, attachment_id, session)
+            return result
 
         return OcrResult(text="", provider_used="none")
 
@@ -199,7 +201,7 @@ class OcrService:
                 if result.tables
                 else None
             ),
-            confidence=result.confidence if result.confidence else None,
+            confidence=result.confidence,
             language=result.language if result.language not in ("", "unknown") else None,
             provider_used=result.provider_used,
         )

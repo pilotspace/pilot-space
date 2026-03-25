@@ -16,7 +16,7 @@ import { RotateCcw, Database } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
-import { ChunkCard, ChunkDivider } from './ChunkCard';
+import { ChunkCard } from './ChunkCard';
 import { useDocumentIngest } from '../hooks/useDocumentIngest';
 import type {
   AttachmentExtractionResult,
@@ -27,35 +27,25 @@ import type {
 // ─── Reducer ──────────────────────────────────────────────────────────────────
 type ChunkState = {
   excluded: boolean;
-  /** Cumulative pixel delta applied to the divider ABOVE this chunk (i.e., between chunk[i-1] and chunk[i]) */
-  splitDeltaPx: number;
 };
 
 type ChunkAction =
   | { type: 'TOGGLE'; index: number }
-  | { type: 'DRAG'; dividerIndex: number; delta: number }
   | { type: 'RESET'; chunks: ExtractionChunk[] };
 
 function chunksReducer(state: ChunkState[], action: ChunkAction): ChunkState[] {
   switch (action.type) {
     case 'TOGGLE':
       return state.map((s, i) => (i === action.index ? { ...s, excluded: !s.excluded } : s));
-    case 'DRAG': {
-      // dividerIndex is the index of the chunk AFTER the divider (0-based)
-      // splitDeltaPx for chunk[dividerIndex] grows with drag
-      return state.map((s, i) =>
-        i === action.dividerIndex ? { ...s, splitDeltaPx: s.splitDeltaPx + action.delta } : s
-      );
-    }
     case 'RESET':
-      return action.chunks.map(() => ({ excluded: false, splitDeltaPx: 0 }));
+      return action.chunks.map(() => ({ excluded: false }));
     default:
       return state;
   }
 }
 
 function initState(chunks: ExtractionChunk[]): ChunkState[] {
-  return chunks.map(() => ({ excluded: false, splitDeltaPx: 0 }));
+  return chunks.map(() => ({ excluded: false }));
 }
 
 // ─── Summary bar ─────────────────────────────────────────────────────────────
@@ -169,9 +159,12 @@ export function ChunksTab({
         {chunks.map((chunk, i) => (
           <React.Fragment key={chunk.chunkIndex}>
             {i > 0 && (
-              <ChunkDivider
-                onDragDelta={(delta) => dispatch({ type: 'DRAG', dividerIndex: i, delta })}
-              />
+              <div
+                role="separator"
+                className="hidden md:flex items-center justify-center h-3"
+              >
+                <div className="h-0.5 w-full rounded-full bg-border" />
+              </div>
             )}
             <ChunkCard
               chunk={chunk}

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import copy
 import json
 import os
 import sys
@@ -224,7 +225,7 @@ def _build_multimodal_prompt(
     """
     # Copy eagerly here (regular function body) — before the async generator is entered.
     # This ensures the caller mutating 'blocks' after calling this function has no effect.
-    _blocks = list(blocks)
+    _blocks = copy.deepcopy(blocks)
     content: list[dict[str, Any]] = [{"type": "text", "text": enriched_message}]
     content.extend(_blocks)
 

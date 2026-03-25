@@ -31,37 +31,70 @@ export interface ChunkDividerProps {
  * Hidden on mobile (< md) — touch boundary adjustment is deferred.
  */
 export function ChunkDivider({ onDragDelta, className }: ChunkDividerProps) {
-  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+  const cleanupRef = React.useRef<(() => void) | null>(null);
+
+  React.useEffect(() => {
+    return () => {
+      cleanupRef.current?.();
+    };
+  }, []);
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
     e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
     const startY = e.clientY;
+
+    const cleanup = () => {
+      document.removeEventListener('pointermove', handleMove);
+      document.removeEventListener('pointerup', handleUp);
+      document.removeEventListener('pointercancel', handleUp);
+      cleanupRef.current = null;
+    };
 
     const handleMove = (ev: PointerEvent) => {
       onDragDelta(ev.clientY - startY);
     };
     const handleUp = () => {
-      document.removeEventListener('pointermove', handleMove);
+      cleanup();
     };
 
     document.addEventListener('pointermove', handleMove);
     document.addEventListener('pointerup', handleUp, { once: true });
+    document.addEventListener('pointercancel', handleUp, { once: true });
+    cleanupRef.current = cleanup;
+  };
+
+  const ARROW_STEP = 4;
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      onDragDelta(-ARROW_STEP);
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      onDragDelta(ARROW_STEP);
+    }
   };
 
   return (
-    <div
+    <button
+      type="button"
       role="separator"
       aria-label="Drag to adjust chunk boundary"
+      aria-orientation="horizontal"
+      aria-valuenow={0}
       className={cn(
         // Hidden on mobile — touch drag is a known limitation
-        'hidden md:flex items-center justify-center',
+        'hidden md:flex items-center justify-center w-full',
         'h-3 cursor-ns-resize select-none',
         'group',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 rounded-sm',
         className
       )}
       onPointerDown={handlePointerDown}
+      onKeyDown={handleKeyDown}
     >
-      <div className="h-0.5 w-full rounded-full bg-border transition-colors group-hover:bg-primary/50" />
-    </div>
+      <div className="h-0.5 w-full rounded-full bg-border transition-colors group-hover:bg-primary/50 group-focus-visible:bg-primary/50" />
+    </button>
   );
 }
 

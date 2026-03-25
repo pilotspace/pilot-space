@@ -241,7 +241,13 @@ export const OcrProviderSection = observer(function OcrProviderSection({
                 <Label htmlFor="ocr-endpoint-url">Endpoint URL</Label>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Info className="h-3.5 w-3.5 cursor-help text-muted-foreground" />
+                    <button
+                      type="button"
+                      className="inline-flex items-center justify-center rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                      aria-label="Endpoint URL help"
+                    >
+                      <Info className="h-3.5 w-3.5 cursor-help text-muted-foreground" />
+                    </button>
                   </TooltipTrigger>
                   <TooltipContent>
                     Requires 20GB VRAM. Deploy with: vllm serve tencent/HunyuanOCR

@@ -17,14 +17,12 @@ from pilot_space.domain.exceptions import AppError, ForbiddenError
 from pilot_space.infrastructure.database.repositories.chat_attachment_repository import (
     ChatAttachmentRepository,
 )
-from pilot_space.infrastructure.storage.client import SupabaseStorageClient
 
 
 async def resolve_attachments(
     attachment_ids: list[UUID],
     user_id: UUID,
     session: AsyncSession,
-    storage_client: SupabaseStorageClient,
     attachment_content_service: AttachmentContentService,
 ) -> tuple[list[Any], list[dict[str, Any]]]:
     """Fetch attachment records owned by *user_id* and build Claude content blocks.
@@ -32,8 +30,8 @@ async def resolve_attachments(
     All dependencies are injected by the caller (ai_chat.py) from the DI container.
 
     Raises:
-        HTTPException 403 if any attachment is not owned by the user.
-        HTTPException 400 if any owned attachment has expired.
+        ForbiddenError if any attachment is not owned by the user.
+        AppError if any owned attachment has expired.
 
     Returns:
         Tuple of (attachment ORM records, list of Claude content-block dicts).

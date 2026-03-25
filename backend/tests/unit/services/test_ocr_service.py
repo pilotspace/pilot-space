@@ -31,6 +31,7 @@ def _mock_session() -> MagicMock:
     """Create a mock AsyncSession."""
     session = MagicMock()
     session.add = MagicMock()
+    session.flush = AsyncMock()
     session.commit = AsyncMock()
     return session
 

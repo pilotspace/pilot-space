@@ -175,6 +175,11 @@ async def update_ocr_settings(
         return _none_response(workspace_id)
 
     if body.provider_type == "hunyuan_ocr":
+        if not body.endpoint_url:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="endpoint_url is required for hunyuan_ocr",
+            )
         await key_storage.store_api_key(
             workspace_id=workspace_id,
             provider="hunyuan_ocr",
@@ -199,6 +204,11 @@ async def update_ocr_settings(
         )
 
     if body.provider_type == "tencent_ocr":
+        if not body.secret_id or not body.secret_key:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="secret_id and secret_key are required for tencent_ocr",
+            )
         credentials_json: str | None = None
         if body.secret_id and body.secret_key:
             credentials_json = json.dumps({"id": body.secret_id, "key": body.secret_key})
