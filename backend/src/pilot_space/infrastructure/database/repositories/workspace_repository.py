@@ -292,7 +292,27 @@ class WorkspaceRepository(BaseRepository[Workspace]):
         )
         self.session.add(member)
         await self.session.flush()
-        await self.session.refresh(member)
+        # Refresh only column attributes to pick up server defaults (created_at,
+        # updated_at, etc.). Passing attribute_names prevents SQLAlchemy from
+        # attempting to load lazy="select" relationships (user, workspace, etc.)
+        # which would raise MissingGreenlet in async mode.
+        await self.session.refresh(
+            member,
+            attribute_names=[
+                "id",
+                "created_at",
+                "updated_at",
+                "user_id",
+                "workspace_id",
+                "role",
+                "weekly_available_hours",
+                "custom_role_id",
+                "is_active",
+                "last_active_project_id",
+                "is_deleted",
+                "deleted_at",
+            ],
+        )
         return member
 
     async def update_member_role(

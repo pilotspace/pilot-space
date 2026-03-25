@@ -1,20 +1,21 @@
 'use client';
 
-import { usePathname } from 'next/navigation';
-import Link from 'next/link';
-import {
-  LayoutDashboard,
-  ListTodo,
-  RefreshCw,
-  Brain,
-  MessageSquare,
-  Settings,
-  FolderKanban,
-  Paperclip,
-} from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import type { Project } from '@/types';
+import {
+  Brain,
+  FolderKanban,
+  LayoutDashboard,
+  ListTodo,
+  MessageSquare,
+  Paperclip,
+  RefreshCw,
+  Settings,
+  Users,
+} from 'lucide-react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { ProjectNotesPanel } from './ProjectNotesPanel';
 
 interface ProjectSidebarProps {
@@ -33,6 +34,7 @@ const NAV_ITEMS: readonly {
   { label: 'Cycles', icon: RefreshCw, segment: 'cycles' },
   { label: 'Knowledge', icon: Brain, segment: 'knowledge' },
   { label: 'Artifacts', icon: Paperclip, segment: 'artifacts' },
+  { label: 'Members', icon: Users, segment: 'members' },
   { label: 'Chat', icon: MessageSquare, segment: 'chat', badge: 'Soon' },
   { label: 'Settings', icon: Settings, segment: 'settings' },
 ];

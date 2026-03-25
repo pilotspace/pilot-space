@@ -4,8 +4,8 @@
  * T013b: Fetches members via apiClient directly (no dedicated API service).
  */
 
-import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/services/api';
+import { useQuery } from '@tanstack/react-query';
 
 export interface WorkspaceMember {
   userId: string;
@@ -20,6 +20,8 @@ export interface WorkspaceMember {
   custom_role?: { id: string; name: string } | null;
   /** Whether the member is active. Deprovisioned (SCIM) members have is_active=false. */
   is_active?: boolean;
+  /** Project chips — projects this member is assigned to (FR-02). */
+  projects?: Array<{ id: string; name: string; identifier: string }>;
 }
 
 export const workspaceMembersKeys = {

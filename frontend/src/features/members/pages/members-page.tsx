@@ -8,11 +8,6 @@
 
 'use client';
 
-import * as React from 'react';
-import { observer } from 'mobx-react-lite';
-import { useParams, useRouter } from 'next/navigation';
-import { AlertCircle, Clock, Loader2, Mail, Search, Trash2 } from 'lucide-react';
-import { toast } from 'sonner';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -26,22 +21,28 @@ import {
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useQueryClient } from '@tanstack/react-query';
-import { useStore } from '@/stores';
-import type { WorkspaceRole } from '@/stores/WorkspaceStore';
 import {
   useWorkspaceMembers,
   workspaceMembersKeys,
 } from '@/features/issues/hooks/use-workspace-members';
-import { workspacesApi } from '@/services/api/workspaces';
-import {
-  useWorkspaceInvitations,
-  useCancelInvitation,
-} from '@/features/members/hooks/use-workspace-invitations';
-import { ConfirmActionDialog } from '@/features/settings/components/confirm-action-dialog';
+import { EditAssignmentsDialog } from '@/features/members/components/edit-assignments-dialog';
 import { InviteMemberDialog } from '@/features/members/components/invite-member-dialog';
 import { MemberCard } from '@/features/members/components/member-card';
+import {
+  useCancelInvitation,
+  useWorkspaceInvitations,
+} from '@/features/members/hooks/use-workspace-invitations';
 import { ROLE_HIERARCHY } from '@/features/members/utils/member-utils';
+import { ConfirmActionDialog } from '@/features/settings/components/confirm-action-dialog';
+import { workspacesApi } from '@/services/api/workspaces';
+import { useStore } from '@/stores';
+import type { WorkspaceRole } from '@/stores/WorkspaceStore';
+import { useQueryClient } from '@tanstack/react-query';
+import { AlertCircle, Clock, Loader2, Mail, Search, Trash2 } from 'lucide-react';
+import { observer } from 'mobx-react-lite';
+import { useParams, useRouter } from 'next/navigation';
+import * as React from 'react';
+import { toast } from 'sonner';
 
 function MembersLoadingSkeleton() {
   return (
@@ -86,6 +87,12 @@ export const MembersPage = observer(function MembersPage() {
   const [searchQuery, setSearchQuery] = React.useState('');
   const [roleFilter, setRoleFilter] = React.useState<string>('all');
   const [updatingMemberId, setUpdatingMemberId] = React.useState<string | null>(null);
+  const [editAssignmentsTarget, setEditAssignmentsTarget] = React.useState<{
+    userId: string;
+    name: string;
+    role: WorkspaceRole;
+    projectIds: string[];
+  } | null>(null);
   const [confirmDialog, setConfirmDialog] = React.useState<{
     open: boolean;
     title: string;
@@ -283,6 +290,17 @@ export const MembersPage = observer(function MembersPage() {
     }
   };
 
+  const handleEditAssignments = (userId: string) => {
+    const member = members?.find((m) => m.userId === userId);
+    if (!member) return;
+    setEditAssignmentsTarget({
+      userId: member.userId,
+      name: member.fullName || member.email,
+      role: member.role as WorkspaceRole,
+      projectIds: member.projects?.map((p) => p.id) ?? [],
+    });
+  };
+
   const handleNavigate = (userId: string) => {
     router.push(`/${workspaceSlug}/members/${userId}`);
   };
@@ -380,6 +398,7 @@ export const MembersPage = observer(function MembersPage() {
                 onRemove={handleRemoveMember}
                 onTransferOwnership={handleTransferOwnership}
                 onAvailabilityChange={handleAvailabilityChange}
+                onEditAssignments={isAdmin ? handleEditAssignments : undefined}
                 isUpdating={updatingMemberId === member.userId}
                 onNavigate={handleNavigate}
               />
@@ -496,6 +515,20 @@ export const MembersPage = observer(function MembersPage() {
           confirmLabel={confirmDialog.confirmLabel}
           variant={confirmDialog.variant}
         />
+
+        {editAssignmentsTarget && (
+          <EditAssignmentsDialog
+            open={!!editAssignmentsTarget}
+            onOpenChange={(open) => {
+              if (!open) setEditAssignmentsTarget(null);
+            }}
+            workspaceId={workspaceId}
+            userId={editAssignmentsTarget.userId}
+            memberName={editAssignmentsTarget.name}
+            currentRole={editAssignmentsTarget.role}
+            currentProjectIds={editAssignmentsTarget.projectIds}
+          />
+        )}
       </div>
     </div>
   );

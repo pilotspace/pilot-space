@@ -22,9 +22,7 @@ from pilot_space.application.services.ai_context import (
     GenerateImplementationPlanService,
     RefineAIContextService,
 )
-from pilot_space.application.services.annotation import (
-    CreateAnnotationService,
-)
+from pilot_space.application.services.annotation import CreateAnnotationService
 from pilot_space.application.services.auth import AuthService
 from pilot_space.application.services.cycle import (
     AddIssueToCycleService,
@@ -33,9 +31,7 @@ from pilot_space.application.services.cycle import (
     RolloverCycleService,
     UpdateCycleService,
 )
-from pilot_space.application.services.discussion import (
-    CreateDiscussionService,
-)
+from pilot_space.application.services.discussion import CreateDiscussionService
 from pilot_space.application.services.homepage import (
     DismissSuggestionService,
     GetActivityService,
@@ -69,16 +65,17 @@ from pilot_space.application.services.note import (
     UpdateAnnotationService,
     UpdateNoteService,
 )
-from pilot_space.application.services.note.ai_update_service import (
-    NoteAIUpdateService,
-)
+from pilot_space.application.services.note.ai_update_service import NoteAIUpdateService
 from pilot_space.application.services.note.move_page_service import MovePageService
-from pilot_space.application.services.note.reorder_page_service import ReorderPageService
+from pilot_space.application.services.note.reorder_page_service import (
+    ReorderPageService,
+)
 from pilot_space.application.services.onboarding import (
     CreateGuidedNoteService,
     GetOnboardingService,
     UpdateOnboardingService,
 )
+from pilot_space.application.services.project_member import ProjectMemberService
 from pilot_space.application.services.rbac_service import RbacService
 from pilot_space.application.services.role_skill import (
     CreateRoleSkillService,
@@ -90,7 +87,9 @@ from pilot_space.application.services.role_skill import (
 from pilot_space.application.services.task_service import TaskService
 from pilot_space.application.services.transcription import TranscriptionService
 from pilot_space.application.services.workspace import WorkspaceService
-from pilot_space.application.services.workspace_invitation import WorkspaceInvitationService
+from pilot_space.application.services.workspace_invitation import (
+    WorkspaceInvitationService,
+)
 from pilot_space.application.services.workspace_member import (
     MemberProfileService,
     WorkspaceMemberService,
@@ -107,7 +106,9 @@ def _get_create_issue_service(
     return svc
 
 
-CreateIssueServiceDep = Annotated[CreateIssueService, Depends(_get_create_issue_service)]
+CreateIssueServiceDep = Annotated[
+    CreateIssueService, Depends(_get_create_issue_service)
+]
 
 
 @inject
@@ -117,7 +118,9 @@ def _get_update_issue_service(
     return svc
 
 
-UpdateIssueServiceDep = Annotated[UpdateIssueService, Depends(_get_update_issue_service)]
+UpdateIssueServiceDep = Annotated[
+    UpdateIssueService, Depends(_get_update_issue_service)
+]
 
 
 @inject
@@ -184,7 +187,9 @@ GetNoteServiceDep = Annotated[GetNoteService, Depends(_get_get_note_service)]
 
 @inject
 def _get_create_note_from_chat_service(
-    svc: CreateNoteFromChatService = Depends(Provide[Container.create_note_from_chat_service]),
+    svc: CreateNoteFromChatService = Depends(
+        Provide[Container.create_note_from_chat_service]
+    ),
 ) -> CreateNoteFromChatService:
     return svc
 
@@ -201,7 +206,9 @@ def _get_note_ai_update_service(
     return svc
 
 
-NoteAIUpdateServiceDep = Annotated[NoteAIUpdateService, Depends(_get_note_ai_update_service)]
+NoteAIUpdateServiceDep = Annotated[
+    NoteAIUpdateService, Depends(_get_note_ai_update_service)
+]
 
 
 @inject
@@ -248,7 +255,9 @@ ListAnnotationsServiceDep = Annotated[
 
 @inject
 def _get_update_annotation_service(
-    svc: UpdateAnnotationService = Depends(Provide[Container.update_annotation_service]),
+    svc: UpdateAnnotationService = Depends(
+        Provide[Container.update_annotation_service]
+    ),
 ) -> UpdateAnnotationService:
     return svc
 
@@ -267,7 +276,9 @@ def _get_delete_issue_service(
     return svc
 
 
-DeleteIssueServiceDep = Annotated[DeleteIssueService, Depends(_get_delete_issue_service)]
+DeleteIssueServiceDep = Annotated[
+    DeleteIssueService, Depends(_get_delete_issue_service)
+]
 
 
 # ===== Cycle Service Dependencies =====
@@ -280,7 +291,9 @@ def _get_create_cycle_service(
     return svc
 
 
-CreateCycleServiceDep = Annotated[CreateCycleService, Depends(_get_create_cycle_service)]
+CreateCycleServiceDep = Annotated[
+    CreateCycleService, Depends(_get_create_cycle_service)
+]
 
 
 @inject
@@ -290,7 +303,9 @@ def _get_update_cycle_service(
     return svc
 
 
-UpdateCycleServiceDep = Annotated[UpdateCycleService, Depends(_get_update_cycle_service)]
+UpdateCycleServiceDep = Annotated[
+    UpdateCycleService, Depends(_get_update_cycle_service)
+]
 
 
 @inject
@@ -305,7 +320,9 @@ GetCycleServiceDep = Annotated[GetCycleService, Depends(_get_get_cycle_service)]
 
 @inject
 def _get_add_issue_to_cycle_service(
-    svc: AddIssueToCycleService = Depends(Provide[Container.add_issue_to_cycle_service]),
+    svc: AddIssueToCycleService = Depends(
+        Provide[Container.add_issue_to_cycle_service]
+    ),
 ) -> AddIssueToCycleService:
     return svc
 
@@ -322,14 +339,18 @@ def _get_rollover_cycle_service(
     return svc
 
 
-RolloverCycleServiceDep = Annotated[RolloverCycleService, Depends(_get_rollover_cycle_service)]
+RolloverCycleServiceDep = Annotated[
+    RolloverCycleService, Depends(_get_rollover_cycle_service)
+]
 
 # ===== AI Context Service Dependencies =====
 
 
 @inject
 def _get_generate_ai_context_service(
-    svc: GenerateAIContextService = Depends(Provide[Container.generate_ai_context_service]),
+    svc: GenerateAIContextService = Depends(
+        Provide[Container.generate_ai_context_service]
+    ),
 ) -> GenerateAIContextService:
     return svc
 
@@ -341,7 +362,9 @@ GenerateAIContextServiceDep = Annotated[
 
 @inject
 def _get_generate_plan_service(
-    svc: GenerateImplementationPlanService = Depends(Provide[Container.generate_plan_service]),
+    svc: GenerateImplementationPlanService = Depends(
+        Provide[Container.generate_plan_service]
+    ),
 ) -> GenerateImplementationPlanService:
     return svc
 
@@ -379,7 +402,9 @@ ExportAIContextServiceDep = Annotated[
 
 @inject
 def _get_create_annotation_service(
-    svc: CreateAnnotationService = Depends(Provide[Container.create_annotation_service]),
+    svc: CreateAnnotationService = Depends(
+        Provide[Container.create_annotation_service]
+    ),
 ) -> CreateAnnotationService:
     return svc
 
@@ -393,7 +418,9 @@ CreateAnnotationServiceDep = Annotated[
 
 @inject
 def _get_create_discussion_service(
-    svc: CreateDiscussionService = Depends(Provide[Container.create_discussion_service]),
+    svc: CreateDiscussionService = Depends(
+        Provide[Container.create_discussion_service]
+    ),
 ) -> CreateDiscussionService:
     return svc
 
@@ -412,12 +439,16 @@ def _get_connect_github_service(
     return svc
 
 
-ConnectGitHubServiceDep = Annotated[ConnectGitHubService, Depends(_get_connect_github_service)]
+ConnectGitHubServiceDep = Annotated[
+    ConnectGitHubService, Depends(_get_connect_github_service)
+]
 
 
 @inject
 def _get_process_github_webhook_service(
-    svc: ProcessGitHubWebhookService = Depends(Provide[Container.process_github_webhook_service]),
+    svc: ProcessGitHubWebhookService = Depends(
+        Provide[Container.process_github_webhook_service]
+    ),
 ) -> ProcessGitHubWebhookService:
     return svc
 
@@ -444,14 +475,18 @@ def _get_auto_transition_service(
     return svc
 
 
-AutoTransitionServiceDep = Annotated[AutoTransitionService, Depends(_get_auto_transition_service)]
+AutoTransitionServiceDep = Annotated[
+    AutoTransitionService, Depends(_get_auto_transition_service)
+]
 
 # ===== Onboarding Service Dependencies =====
 
 
 @inject
 def _get_create_guided_note_service(
-    svc: CreateGuidedNoteService = Depends(Provide[Container.create_guided_note_service]),
+    svc: CreateGuidedNoteService = Depends(
+        Provide[Container.create_guided_note_service]
+    ),
 ) -> CreateGuidedNoteService:
     return svc
 
@@ -468,12 +503,16 @@ def _get_get_onboarding_service(
     return svc
 
 
-GetOnboardingServiceDep = Annotated[GetOnboardingService, Depends(_get_get_onboarding_service)]
+GetOnboardingServiceDep = Annotated[
+    GetOnboardingService, Depends(_get_get_onboarding_service)
+]
 
 
 @inject
 def _get_update_onboarding_service(
-    svc: UpdateOnboardingService = Depends(Provide[Container.update_onboarding_service]),
+    svc: UpdateOnboardingService = Depends(
+        Provide[Container.update_onboarding_service]
+    ),
 ) -> UpdateOnboardingService:
     return svc
 
@@ -528,12 +567,16 @@ def _get_list_role_skills_service(
     return svc
 
 
-ListRoleSkillsServiceDep = Annotated[ListRoleSkillsService, Depends(_get_list_role_skills_service)]
+ListRoleSkillsServiceDep = Annotated[
+    ListRoleSkillsService, Depends(_get_list_role_skills_service)
+]
 
 
 @inject
 def _get_generate_role_skill_service(
-    svc: GenerateRoleSkillService = Depends(Provide[Container.generate_role_skill_service]),
+    svc: GenerateRoleSkillService = Depends(
+        Provide[Container.generate_role_skill_service]
+    ),
 ) -> GenerateRoleSkillService:
     return svc
 
@@ -552,7 +595,9 @@ def _get_get_activity_service(
     return svc
 
 
-GetActivityServiceDep = Annotated[GetActivityService, Depends(_get_get_activity_service)]
+GetActivityServiceDep = Annotated[
+    GetActivityService, Depends(_get_get_activity_service)
+]
 
 
 @inject
@@ -567,7 +612,9 @@ GetDigestServiceDep = Annotated[GetDigestService, Depends(_get_get_digest_servic
 
 @inject
 def _get_dismiss_suggestion_service(
-    svc: DismissSuggestionService = Depends(Provide[Container.dismiss_suggestion_service]),
+    svc: DismissSuggestionService = Depends(
+        Provide[Container.dismiss_suggestion_service]
+    ),
 ) -> DismissSuggestionService:
     return svc
 
@@ -608,12 +655,16 @@ def _get_member_profile_service(
     return svc
 
 
-MemberProfileServiceDep = Annotated[MemberProfileService, Depends(_get_member_profile_service)]
+MemberProfileServiceDep = Annotated[
+    MemberProfileService, Depends(_get_member_profile_service)
+]
 
 
 @inject
 def _get_workspace_invitation_service(
-    svc: WorkspaceInvitationService = Depends(Provide[Container.workspace_invitation_service]),
+    svc: WorkspaceInvitationService = Depends(
+        Provide[Container.workspace_invitation_service]
+    ),
 ) -> WorkspaceInvitationService:
     return svc
 
@@ -676,14 +727,18 @@ def _get_reorder_page_service(
     return svc
 
 
-ReorderPageServiceDep = Annotated[ReorderPageService, Depends(_get_reorder_page_service)]
+ReorderPageServiceDep = Annotated[
+    ReorderPageService, Depends(_get_reorder_page_service)
+]
 
 # ===== Knowledge Graph Service Dependencies =====
 
 
 @inject
 def _get_knowledge_graph_query_service(
-    svc: KnowledgeGraphQueryService = Depends(Provide[Container.knowledge_graph_query_service]),
+    svc: KnowledgeGraphQueryService = Depends(
+        Provide[Container.knowledge_graph_query_service]
+    ),
 ) -> KnowledgeGraphQueryService:
     return svc
 
@@ -755,6 +810,8 @@ __all__ = [  # noqa: RUF022
     "MovePageServiceDep",
     "ReorderPageServiceDep",
     "TranscriptionServiceDep",
+    "ProjectMemberServiceDep",
+    "require_project_membership",
 ]
 
 
@@ -768,4 +825,76 @@ def _get_transcription_service(
     return svc
 
 
-TranscriptionServiceDep = Annotated[TranscriptionService, Depends(_get_transcription_service)]
+TranscriptionServiceDep = Annotated[
+    TranscriptionService, Depends(_get_transcription_service)
+]
+
+
+# ===== Project Member Service Dependencies =====
+
+
+@inject
+def _get_project_member_service(
+    svc: ProjectMemberService = Depends(Provide[Container.project_member_service]),
+) -> ProjectMemberService:
+    return svc
+
+
+ProjectMemberServiceDep = Annotated[
+    ProjectMemberService, Depends(_get_project_member_service)
+]
+
+
+# ===== require_project_membership dependency (US6 — T037) =====
+
+
+from uuid import UUID as _UUID
+
+from fastapi import (
+    HTTPException as _HTTPException,
+    status as _status,
+)
+
+from pilot_space.dependencies.auth import CurrentUserId as _CurrentUserId
+from pilot_space.infrastructure.database.models.workspace_member import (
+    WorkspaceRole as _WorkspaceRole,
+)
+from pilot_space.infrastructure.database.repositories.workspace_member_repository import (
+    WorkspaceMemberRepository,
+)
+
+
+@inject
+async def require_project_membership(
+    workspace_id: _UUID,
+    project_id: _UUID,
+    current_user_id: _CurrentUserId,
+    project_member_svc: ProjectMemberService = Depends(
+        Provide[Container.project_member_service]
+    ),
+    workspace_member_repo: WorkspaceMemberRepository = Depends(
+        Provide[Container.workspace_member_rbac_repository]
+    ),
+) -> None:
+    """FastAPI dependency — ensure current user is a project member OR admin/owner.
+
+    Raises HTTP 403 with code 'project_access_denied' when not authorized.
+    """
+    # Admins and Owners bypass project-level membership check
+    wm = await workspace_member_repo.get_by_user_workspace(
+        current_user_id, workspace_id
+    )
+    if wm and wm.role in (_WorkspaceRole.ADMIN, _WorkspaceRole.OWNER):
+        return
+
+    # Check explicit project membership
+    repo = project_member_svc._repo  # type: ignore[attr-defined]
+    membership = await repo.get_active_membership(project_id, current_user_id)
+    if not membership:
+        raise _HTTPException(
+            status_code=_status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "project_access_denied",
+                "message": "You do not have access to this project.",
+            },
+        )

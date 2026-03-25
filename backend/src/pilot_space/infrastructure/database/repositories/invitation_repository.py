@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 from uuid import UUID
 
 from sqlalchemy import and_, select
+from sqlalchemy.orm import lazyload
 
 from pilot_space.infrastructure.database.models.workspace_invitation import (
     InvitationStatus,
@@ -76,12 +77,21 @@ class InvitationRepository(BaseRepository[WorkspaceInvitation]):
         Returns:
             List of pending invitations for the email.
         """
-        query = select(WorkspaceInvitation).where(
-            and_(
-                WorkspaceInvitation.email == email,
-                WorkspaceInvitation.status == InvitationStatus.PENDING,
-                WorkspaceInvitation.is_deleted == False,  # noqa: E712
-                WorkspaceInvitation.expires_at > datetime.now(tz=UTC),
+        # lazyload("*") prevents the mapper-level lazy="joined" relationships
+        # (workspace, inviter) from being loaded, which would cascade into
+        # lazy="selectin" collections on Workspace and cause MissingGreenlet
+        # errors in async mode when objects are later accessed outside a
+        # SQLAlchemy greenlet context.  We only need scalar columns here.
+        query = (
+            select(WorkspaceInvitation)
+            .options(lazyload("*"))
+            .where(
+                and_(
+                    WorkspaceInvitation.email == email,
+                    WorkspaceInvitation.status == InvitationStatus.PENDING,
+                    WorkspaceInvitation.is_deleted == False,  # noqa: E712
+                    WorkspaceInvitation.expires_at > datetime.now(tz=UTC),
+                )
             )
         )
         result = await self.session.execute(query)
