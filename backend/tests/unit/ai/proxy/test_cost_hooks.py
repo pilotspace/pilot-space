@@ -1,12 +1,11 @@
 """Unit tests for cost_hooks.track_llm_cost.
 
-Verifies that cost tracking extracts tokens correctly and
+Verifies that cost tracking delegates correctly and
 swallows errors without propagating to the caller.
 """
 
 from __future__ import annotations
 
-from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
@@ -21,17 +20,14 @@ async def test_track_llm_cost_calls_tracker() -> None:
     mock_tracker = AsyncMock()
     mock_tracker.track = AsyncMock()
 
-    response = SimpleNamespace(
-        usage=SimpleNamespace(prompt_tokens=150, completion_tokens=75),
-    )
-
     await track_llm_cost(
         mock_tracker,
         workspace_id=WS_ID,
         user_id=USER_ID,
         model="anthropic/claude-sonnet-4-20250514",
         agent_name="test_agent",
-        response=response,
+        input_tokens=150,
+        output_tokens=75,
     )
 
     mock_tracker.track.assert_called_once()
@@ -50,10 +46,6 @@ async def test_track_llm_cost_swallows_errors() -> None:
     mock_tracker = AsyncMock()
     mock_tracker.track = AsyncMock(side_effect=RuntimeError("db connection failed"))
 
-    response = SimpleNamespace(
-        usage=SimpleNamespace(prompt_tokens=10, completion_tokens=5),
-    )
-
     # Should NOT raise
     await track_llm_cost(
         mock_tracker,
@@ -61,16 +53,15 @@ async def test_track_llm_cost_swallows_errors() -> None:
         user_id=USER_ID,
         model="openai/gpt-4o",
         agent_name="test",
-        response=response,
+        input_tokens=10,
+        output_tokens=5,
     )
 
 
-async def test_track_llm_cost_handles_missing_usage() -> None:
-    """track_llm_cost handles response with no usage attribute."""
+async def test_track_llm_cost_zero_tokens() -> None:
+    """track_llm_cost handles zero token counts gracefully."""
     mock_tracker = AsyncMock()
     mock_tracker.track = AsyncMock()
-
-    response = SimpleNamespace()  # No usage attribute
 
     await track_llm_cost(
         mock_tracker,
@@ -78,7 +69,8 @@ async def test_track_llm_cost_handles_missing_usage() -> None:
         user_id=USER_ID,
         model="anthropic/claude-3-5-haiku-20241022",
         agent_name="test",
-        response=response,
+        input_tokens=0,
+        output_tokens=0,
     )
 
     mock_tracker.track.assert_called_once()

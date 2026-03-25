@@ -1,8 +1,10 @@
-"""Model alias mapping and LiteLLM configuration.
+"""Model routing and provider configuration for LLMGateway.
 
-Maps each TaskType to a LiteLLM model string with provider prefix
+Maps each TaskType to a model string with provider prefix
 (e.g., "anthropic/claude-sonnet-4-20250514") and provides utilities
 for resolving model names and extracting provider prefixes.
+
+No external dependencies — pure Python routing table.
 """
 
 from __future__ import annotations
@@ -11,8 +13,8 @@ from typing import Final
 
 from pilot_space.ai.providers.provider_selector import TaskType
 
-# LiteLLM model strings per task type (DD-011 routing rules).
-# Format: "<provider>/<model>" — LiteLLM uses the prefix to select the SDK.
+# Model strings per task type (DD-011 routing rules).
+# Format: "<provider>/<model>" — gateway uses the prefix to select the SDK.
 TASK_TYPE_MODEL_MAP: Final[dict[TaskType, str]] = {
     # Code-intensive tasks -> Claude Sonnet 4
     TaskType.PR_REVIEW: "anthropic/claude-sonnet-4-20250514",
@@ -45,18 +47,18 @@ TASK_TYPE_MODEL_MAP: Final[dict[TaskType, str]] = {
 }
 
 
-def resolve_litellm_model(
+def resolve_model(
     task_type: TaskType,
     model_override: str | None = None,
 ) -> str:
-    """Resolve the LiteLLM model string for a task type.
+    """Resolve the model string for a task type.
 
     Args:
         task_type: The AI task type to resolve.
         model_override: Optional explicit model string that takes precedence.
 
     Returns:
-        LiteLLM model string (e.g., "anthropic/claude-sonnet-4-20250514").
+        Model string (e.g., "anthropic/claude-sonnet-4-20250514").
 
     Raises:
         ValueError: If task_type is not in the routing table and no override given.
@@ -70,21 +72,36 @@ def resolve_litellm_model(
 
 
 def extract_provider(model: str) -> str:
-    """Extract the provider prefix from a LiteLLM model string.
+    """Extract the provider prefix from a model string.
 
     Args:
-        model: LiteLLM model string (e.g., "anthropic/claude-sonnet-4-20250514").
+        model: Model string (e.g., "anthropic/claude-sonnet-4-20250514").
 
     Returns:
-        Provider name (e.g., "anthropic"). Returns the full string if no prefix.
+        Provider name (e.g., "anthropic"). Returns "anthropic" if no prefix.
     """
     if "/" in model:
         return model.split("/", 1)[0]
+    return "anthropic"
+
+
+def extract_model_name(model: str) -> str:
+    """Extract the bare model name without provider prefix.
+
+    Args:
+        model: Model string (e.g., "anthropic/claude-sonnet-4-20250514").
+
+    Returns:
+        Bare model name (e.g., "claude-sonnet-4-20250514").
+    """
+    if "/" in model:
+        return model.split("/", 1)[1]
     return model
 
 
 __all__ = [
     "TASK_TYPE_MODEL_MAP",
+    "extract_model_name",
     "extract_provider",
-    "resolve_litellm_model",
+    "resolve_model",
 ]

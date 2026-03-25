@@ -4,14 +4,14 @@ Verifies that:
 1. The @observe decorator is present on LLMGateway.complete()
 2. LLMGateway.complete() can be called without Langfuse crashing (graceful degradation)
 
-All LLM and Langfuse API calls are mocked -- no real external calls.
+All LLM calls are mocked -- no real external calls.
 """
 
 from __future__ import annotations
 
 import inspect
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
@@ -23,32 +23,20 @@ WS_ID = uuid4()
 USER_ID = uuid4()
 
 
-def _make_mock_response() -> SimpleNamespace:
+def _make_anthropic_response() -> SimpleNamespace:
     return SimpleNamespace(
-        choices=[SimpleNamespace(message=SimpleNamespace(content="traced response"))],
-        usage=SimpleNamespace(prompt_tokens=50, completion_tokens=25),
+        content=[SimpleNamespace(type="text", text="traced response")],
+        usage=SimpleNamespace(input_tokens=50, output_tokens=25),
     )
 
 
 @pytest.mark.integration
 def test_observe_decorator_present_on_complete() -> None:
-    """Verify LLMGateway.complete is decorated with @observe.
-
-    The langfuse @observe decorator wraps the original function.
-    We detect this by checking for the __wrapped__ attribute (set by
-    functools.wraps within the observe decorator) or by inspecting
-    the decorator chain.
-    """
+    """Verify LLMGateway.complete is decorated with @observe."""
     complete_method = LLMGateway.complete
-
-    # langfuse.decorators.observe sets __wrapped__ on the wrapper function
     has_wrapped = hasattr(complete_method, "__wrapped__")
-
-    # Alternative: check if the method's qualname differs from what we'd expect
-    # (decorator changes the function object)
     is_wrapper = complete_method.__qualname__ != "LLMGateway.complete"
 
-    # Alternative: check source for @observe in the source file
     try:
         source = inspect.getsource(LLMGateway)
         has_observe_in_source = "@observe(" in source
@@ -63,17 +51,10 @@ def test_observe_decorator_present_on_complete() -> None:
 
 
 @pytest.mark.integration
-@patch("pilot_space.ai.proxy.llm_gateway.litellm")
-async def test_complete_fires_langfuse_observe(
-    mock_litellm: AsyncMock,
-) -> None:
-    """LLMGateway.complete() succeeds when Langfuse is not configured.
-
-    The @observe decorator should degrade gracefully when Langfuse
-    keys are empty/not configured, allowing the underlying method
-    to execute normally.
-    """
-    mock_litellm.acompletion = AsyncMock(return_value=_make_mock_response())
+async def test_complete_fires_langfuse_observe() -> None:
+    """LLMGateway.complete() succeeds when Langfuse is not configured."""
+    mock_client = MagicMock()
+    mock_client.messages.create = AsyncMock(return_value=_make_anthropic_response())
 
     mock_executor = AsyncMock()
 
@@ -89,8 +70,8 @@ async def test_complete_fires_langfuse_observe(
     mock_key_storage.get_api_key = AsyncMock(return_value="sk-test-key")
 
     gateway = LLMGateway(mock_executor, mock_cost_tracker, mock_key_storage)
+    gateway._get_anthropic_client = MagicMock(return_value=mock_client)  # type: ignore[method-assign]  # noqa: SLF001
 
-    # This should succeed even without Langfuse configured
     result = await gateway.complete(
         workspace_id=WS_ID,
         user_id=USER_ID,
@@ -101,4 +82,4 @@ async def test_complete_fires_langfuse_observe(
     assert result.text == "traced response"
     assert result.input_tokens == 50
     assert result.output_tokens == 25
-    mock_litellm.acompletion.assert_called_once()
+    mock_client.messages.create.assert_called_once()

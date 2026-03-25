@@ -1,12 +1,12 @@
 """Unit tests for LLMGateway.
 
-All LiteLLM and infrastructure calls are mocked -- no real API calls.
+All Anthropic/OpenAI SDK calls are mocked -- no real API calls.
 """
 
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
@@ -15,24 +15,38 @@ from pilot_space.ai.exceptions import AINotConfiguredError
 from pilot_space.ai.proxy.llm_gateway import EmbeddingResponse, LLMGateway, LLMResponse
 from pilot_space.ai.proxy.provider_config import (
     TASK_TYPE_MODEL_MAP,
+    extract_model_name,
     extract_provider,
-    resolve_litellm_model,
+    resolve_model,
 )
 from pilot_space.ai.providers.provider_selector import TaskType
 
 
 # -- Fixtures ------------------------------------------------------------------
 
-def _make_mock_response(
+def _make_anthropic_response(
+    text: str = "test response",
+    input_tokens: int = 100,
+    output_tokens: int = 50,
+) -> SimpleNamespace:
+    """Create a mock Anthropic Message response."""
+    return SimpleNamespace(
+        content=[SimpleNamespace(type="text", text=text)],
+        usage=SimpleNamespace(
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+        ),
+    )
+
+
+def _make_openai_response(
     text: str = "test response",
     prompt_tokens: int = 100,
     completion_tokens: int = 50,
 ) -> SimpleNamespace:
-    """Create a mock LiteLLM ModelResponse."""
+    """Create a mock OpenAI ChatCompletion response."""
     return SimpleNamespace(
-        choices=[
-            SimpleNamespace(message=SimpleNamespace(content=text)),
-        ],
+        choices=[SimpleNamespace(message=SimpleNamespace(content=text))],
         usage=SimpleNamespace(
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
@@ -40,16 +54,16 @@ def _make_mock_response(
     )
 
 
-def _make_mock_embedding_response(
+def _make_embedding_response(
     embeddings: list[list[float]] | None = None,
-    prompt_tokens: int = 10,
+    total_tokens: int = 10,
 ) -> SimpleNamespace:
-    """Create a mock LiteLLM EmbeddingResponse."""
+    """Create a mock OpenAI Embedding response."""
     if embeddings is None:
         embeddings = [[0.1, 0.2, 0.3]]
     return SimpleNamespace(
-        data=[{"embedding": e} for e in embeddings],
-        usage=SimpleNamespace(prompt_tokens=prompt_tokens),
+        data=[SimpleNamespace(embedding=e) for e in embeddings],
+        usage=SimpleNamespace(total_tokens=total_tokens),
     )
 
 
@@ -90,24 +104,22 @@ def gateway(
     return LLMGateway(mock_executor, mock_cost_tracker, mock_key_storage)
 
 
-# -- LLMGateway.complete tests ------------------------------------------------
+# -- LLMGateway.complete (Anthropic) tests ------------------------------------
 
 WS_ID = uuid4()
 USER_ID = uuid4()
 
 
-@patch("pilot_space.ai.proxy.llm_gateway.litellm")
-async def test_complete_calls_litellm_acompletion(
-    mock_litellm: AsyncMock,
+async def test_complete_calls_anthropic_messages_create(
     gateway: LLMGateway,
     mock_executor: AsyncMock,
 ) -> None:
-    """LLMGateway.complete() calls litellm.acompletion with correct params."""
-    mock_litellm.acompletion = AsyncMock(return_value=_make_mock_response())
-    # Override executor to call the real lambda
-    async def _call_op(provider: str, operation: object, **kw: object) -> object:
-        return await operation()  # type: ignore[misc]
-    mock_executor.execute = AsyncMock(side_effect=_call_op)
+    """LLMGateway.complete() calls AsyncAnthropic.messages.create for anthropic models."""
+    mock_client = MagicMock()
+    mock_client.messages.create = AsyncMock(return_value=_make_anthropic_response())
+    gateway._anthropic_clients["test"] = mock_client  # noqa: SLF001
+    # Patch _get_anthropic_client to return our mock
+    gateway._get_anthropic_client = MagicMock(return_value=mock_client)  # type: ignore[method-assign]  # noqa: SLF001
 
     result = await gateway.complete(
         workspace_id=WS_ID,
@@ -118,20 +130,19 @@ async def test_complete_calls_litellm_acompletion(
 
     assert isinstance(result, LLMResponse)
     assert result.text == "test response"
-    mock_litellm.acompletion.assert_called_once()
-    call_kwargs = mock_litellm.acompletion.call_args
-    assert call_kwargs.kwargs["model"] == "anthropic/claude-sonnet-4-20250514"
-    assert call_kwargs.kwargs["api_key"] == "sk-test-key"
+    mock_client.messages.create.assert_called_once()
+    call_kwargs = mock_client.messages.create.call_args.kwargs
+    assert call_kwargs["model"] == "claude-sonnet-4-20250514"
 
 
-@patch("pilot_space.ai.proxy.llm_gateway.litellm")
 async def test_complete_wraps_in_executor(
-    mock_litellm: AsyncMock,
     gateway: LLMGateway,
     mock_executor: AsyncMock,
 ) -> None:
     """LLMGateway.complete() wraps call in self._executor.execute()."""
-    mock_litellm.acompletion = AsyncMock(return_value=_make_mock_response())
+    mock_client = MagicMock()
+    mock_client.messages.create = AsyncMock(return_value=_make_anthropic_response())
+    gateway._get_anthropic_client = MagicMock(return_value=mock_client)  # type: ignore[method-assign]  # noqa: SLF001
 
     await gateway.complete(
         workspace_id=WS_ID,
@@ -145,14 +156,14 @@ async def test_complete_wraps_in_executor(
     assert call_kwargs.kwargs["provider"] == "anthropic"
 
 
-@patch("pilot_space.ai.proxy.llm_gateway.litellm")
 async def test_complete_tracks_cost(
-    mock_litellm: AsyncMock,
     gateway: LLMGateway,
     mock_cost_tracker: AsyncMock,
 ) -> None:
     """LLMGateway.complete() calls track_llm_cost after successful completion."""
-    mock_litellm.acompletion = AsyncMock(return_value=_make_mock_response())
+    mock_client = MagicMock()
+    mock_client.messages.create = AsyncMock(return_value=_make_anthropic_response())
+    gateway._get_anthropic_client = MagicMock(return_value=mock_client)  # type: ignore[method-assign]  # noqa: SLF001
 
     await gateway.complete(
         workspace_id=WS_ID,
@@ -169,14 +180,14 @@ async def test_complete_tracks_cost(
     assert call_kwargs.kwargs["output_tokens"] == 50
 
 
-@patch("pilot_space.ai.proxy.llm_gateway.litellm")
 async def test_complete_resolves_byok_key(
-    mock_litellm: AsyncMock,
     gateway: LLMGateway,
     mock_key_storage: AsyncMock,
 ) -> None:
     """LLMGateway.complete() resolves BYOK key from SecureKeyStorage."""
-    mock_litellm.acompletion = AsyncMock(return_value=_make_mock_response())
+    mock_client = MagicMock()
+    mock_client.messages.create = AsyncMock(return_value=_make_anthropic_response())
+    gateway._get_anthropic_client = MagicMock(return_value=mock_client)  # type: ignore[method-assign]  # noqa: SLF001
 
     await gateway.complete(
         workspace_id=WS_ID,
@@ -204,23 +215,13 @@ async def test_complete_raises_when_no_key(
         )
 
 
-@patch("pilot_space.ai.proxy.llm_gateway.litellm")
 async def test_complete_with_system_message(
-    mock_litellm: AsyncMock,
     gateway: LLMGateway,
-    mock_executor: AsyncMock,
 ) -> None:
-    """system param prepends system message to messages list."""
-    mock_litellm.acompletion = AsyncMock(return_value=_make_mock_response())
-
-    # Track what messages are passed to acompletion
-    captured_messages: list[object] = []
-
-    async def _capture_op(provider: str, operation: object, **kw: object) -> object:
-        result = await operation()  # type: ignore[misc]
-        return result
-
-    mock_executor.execute = AsyncMock(side_effect=_capture_op)
+    """system param is passed as separate Anthropic system param."""
+    mock_client = MagicMock()
+    mock_client.messages.create = AsyncMock(return_value=_make_anthropic_response())
+    gateway._get_anthropic_client = MagicMock(return_value=mock_client)  # type: ignore[method-assign]  # noqa: SLF001
 
     await gateway.complete(
         workspace_id=WS_ID,
@@ -230,21 +231,21 @@ async def test_complete_with_system_message(
         system="You are helpful.",
     )
 
-    call_kwargs = mock_litellm.acompletion.call_args
-    messages = call_kwargs.kwargs["messages"]
-    assert messages[0] == {"role": "system", "content": "You are helpful."}
-    assert messages[1] == {"role": "user", "content": "hello"}
+    call_kwargs = mock_client.messages.create.call_args.kwargs
+    assert call_kwargs["system"] == "You are helpful."
+    # User message should NOT include system message in the messages list
+    assert all(m["role"] != "system" for m in call_kwargs["messages"])
 
 
-@patch("pilot_space.ai.proxy.llm_gateway.litellm")
 async def test_complete_returns_correct_response(
-    mock_litellm: AsyncMock,
     gateway: LLMGateway,
 ) -> None:
     """LLMGateway.complete() returns LLMResponse with correct data."""
-    mock_litellm.acompletion = AsyncMock(
-        return_value=_make_mock_response("hello world", 200, 100)
+    mock_client = MagicMock()
+    mock_client.messages.create = AsyncMock(
+        return_value=_make_anthropic_response("hello world", 200, 100)
     )
+    gateway._get_anthropic_client = MagicMock(return_value=mock_client)  # type: ignore[method-assign]  # noqa: SLF001
 
     result = await gateway.complete(
         workspace_id=WS_ID,
@@ -261,16 +262,15 @@ async def test_complete_returns_correct_response(
 
 # -- LLMGateway.embed tests ---------------------------------------------------
 
-@patch("pilot_space.ai.proxy.llm_gateway.litellm")
-async def test_embed_calls_litellm_aembedding(
-    mock_litellm: AsyncMock,
+async def test_embed_calls_openai_embeddings_create(
     gateway: LLMGateway,
-    mock_executor: AsyncMock,
 ) -> None:
-    """LLMGateway.embed() calls litellm.aembedding."""
-    mock_litellm.aembedding = AsyncMock(
-        return_value=_make_mock_embedding_response([[0.1, 0.2]])
+    """LLMGateway.embed() calls AsyncOpenAI.embeddings.create."""
+    mock_client = MagicMock()
+    mock_client.embeddings.create = AsyncMock(
+        return_value=_make_embedding_response([[0.1, 0.2]])
     )
+    gateway._get_openai_client = MagicMock(return_value=mock_client)  # type: ignore[method-assign]  # noqa: SLF001
 
     result = await gateway.embed(
         workspace_id=WS_ID,
@@ -280,24 +280,24 @@ async def test_embed_calls_litellm_aembedding(
 
     assert isinstance(result, EmbeddingResponse)
     assert result.embeddings == [[0.1, 0.2]]
-    mock_litellm.aembedding.assert_called_once()
+    mock_client.embeddings.create.assert_called_once()
 
 
-# -- resolve_litellm_model tests ----------------------------------------------
+# -- resolve_model tests ------------------------------------------------------
 
-def test_resolve_litellm_model_default() -> None:
+def test_resolve_model_default() -> None:
     """TaskType.GHOST_TEXT maps to haiku model."""
-    result = resolve_litellm_model(TaskType.GHOST_TEXT)
+    result = resolve_model(TaskType.GHOST_TEXT)
     assert result == "anthropic/claude-3-5-haiku-20241022"
 
 
-def test_resolve_litellm_model_override() -> None:
+def test_resolve_model_override() -> None:
     """Override ignores task_type mapping."""
-    result = resolve_litellm_model(TaskType.GHOST_TEXT, model_override="openai/gpt-4o")
+    result = resolve_model(TaskType.GHOST_TEXT, model_override="openai/gpt-4o")
     assert result == "openai/gpt-4o"
 
 
-def test_resolve_litellm_model_all_task_types_mapped() -> None:
+def test_resolve_model_all_task_types_mapped() -> None:
     """Every TaskType has a mapping."""
     for task_type in TaskType:
         assert task_type in TASK_TYPE_MODEL_MAP
@@ -314,4 +314,15 @@ def test_extract_provider_openai() -> None:
 
 
 def test_extract_provider_no_prefix() -> None:
-    assert extract_provider("claude-sonnet-4") == "claude-sonnet-4"
+    """No prefix defaults to anthropic (primary provider)."""
+    assert extract_provider("claude-sonnet-4") == "anthropic"
+
+
+# -- extract_model_name tests --------------------------------------------------
+
+def test_extract_model_name_with_prefix() -> None:
+    assert extract_model_name("anthropic/claude-sonnet-4-20250514") == "claude-sonnet-4-20250514"
+
+
+def test_extract_model_name_no_prefix() -> None:
+    assert extract_model_name("claude-sonnet-4") == "claude-sonnet-4"

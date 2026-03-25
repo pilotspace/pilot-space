@@ -1,23 +1,34 @@
-"""Unified LLM entry point using LiteLLM with resilience and cost tracking.
+"""Unified LLM entry point with direct Anthropic/OpenAI SDK calls.
 
 LLMGateway is the single entry point for all LLM completions in Pilot Space.
-It routes through LiteLLM (library mode), wraps calls with ResilientExecutor,
-auto-tracks costs via CostTracker, and emits Langfuse traces.
+It uses the native Anthropic and OpenAI SDKs directly (no LiteLLM dependency),
+wraps calls with ResilientExecutor, auto-tracks costs via CostTracker, and
+emits Langfuse traces.
+
+Supports two provider APIs:
+- Anthropic Messages API (primary — used by Claude Agent SDK)
+- OpenAI Chat Completions / Embeddings API (for embeddings + OpenAI-compatible providers)
 
 Replaces 8+ scattered direct AsyncAnthropic() instantiations.
 """
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
-import litellm
+import anthropic
+import openai
 
 from pilot_space.ai.exceptions import AINotConfiguredError
 from pilot_space.ai.proxy.cost_hooks import track_llm_cost
-from pilot_space.ai.proxy.provider_config import extract_provider, resolve_litellm_model
+from pilot_space.ai.proxy.provider_config import (
+    extract_model_name,
+    extract_provider,
+    resolve_model,
+)
 from pilot_space.ai.proxy.tracing import observe  # pyright: ignore[reportAttributeAccessIssue]
 from pilot_space.infrastructure.logging import get_logger
 
@@ -53,11 +64,12 @@ class EmbeddingResponse:
 class LLMGateway:
     """Unified gateway for LLM completions and embeddings.
 
-    Wraps LiteLLM with:
+    Uses native Anthropic and OpenAI SDKs with:
     - BYOK key resolution from SecureKeyStorage
     - ResilientExecutor for retry + circuit breaking
     - Automatic cost tracking via CostTracker
     - Langfuse @observe tracing
+    - Per-API-key client pooling (avoids TCP pool churn)
 
     Usage:
         gateway = LLMGateway(executor, cost_tracker, key_storage)
@@ -75,16 +87,26 @@ class LLMGateway:
         cost_tracker: CostTracker,
         key_storage: SecureKeyStorage,
     ) -> None:
-        """Initialize LLMGateway.
-
-        Args:
-            executor: ResilientExecutor for retry and circuit breaking.
-            cost_tracker: CostTracker for persistent cost recording.
-            key_storage: SecureKeyStorage for BYOK key resolution.
-        """
         self._executor = executor
         self._cost_tracker = cost_tracker
         self._key_storage = key_storage
+        # Per-API-key client pools (same pattern as AnthropicClientPool)
+        self._anthropic_clients: dict[str, anthropic.AsyncAnthropic] = {}
+        self._openai_clients: dict[str, openai.AsyncOpenAI] = {}
+
+    def _get_anthropic_client(self, api_key: str) -> anthropic.AsyncAnthropic:
+        """Get or create a cached AsyncAnthropic client for this API key."""
+        key_hash = hashlib.sha256(api_key.encode()).hexdigest()[:16]
+        if key_hash not in self._anthropic_clients:
+            self._anthropic_clients[key_hash] = anthropic.AsyncAnthropic(api_key=api_key)
+        return self._anthropic_clients[key_hash]
+
+    def _get_openai_client(self, api_key: str) -> openai.AsyncOpenAI:
+        """Get or create a cached AsyncOpenAI client for this API key."""
+        key_hash = hashlib.sha256(api_key.encode()).hexdigest()[:16]
+        if key_hash not in self._openai_clients:
+            self._openai_clients[key_hash] = openai.AsyncOpenAI(api_key=api_key)
+        return self._openai_clients[key_hash]
 
     @observe(name="llm_gateway.complete")  # type: ignore[misc]
     async def complete(
@@ -100,17 +122,20 @@ class LLMGateway:
         system: str | None = None,
         agent_name: str = "llm_gateway",
     ) -> LLMResponse:
-        """Execute an LLM completion via LiteLLM.
+        """Execute an LLM completion via native provider SDK.
+
+        Routes to Anthropic Messages API or OpenAI Chat Completions API
+        based on the provider prefix in the resolved model string.
 
         Args:
             workspace_id: Workspace UUID for BYOK key lookup.
             user_id: User UUID who initiated the call.
             task_type: AI task type for model routing.
-            messages: Chat messages in OpenAI format.
-            model: Optional model override (LiteLLM format).
+            messages: Chat messages in OpenAI format [{"role": ..., "content": ...}].
+            model: Optional model override ("provider/model-name" format).
             max_tokens: Maximum tokens to generate.
             temperature: Sampling temperature.
-            system: Optional system message to prepend.
+            system: Optional system message.
             agent_name: Agent/service name for cost tracking.
 
         Returns:
@@ -119,52 +144,169 @@ class LLMGateway:
         Raises:
             AINotConfiguredError: If no BYOK API key is configured.
         """
-        resolved_model = resolve_litellm_model(task_type, model)
-        provider = extract_provider(resolved_model)
+        resolved = resolve_model(task_type, model)
+        provider = extract_provider(resolved)
+        bare_model = extract_model_name(resolved)
 
-        # Resolve BYOK key
         api_key = await self._key_storage.get_api_key(workspace_id, provider, "llm")
         if api_key is None:
             raise AINotConfiguredError(workspace_id=workspace_id)
 
-        # Prepend system message if provided
-        final_messages = list(messages)
-        if system is not None:
-            final_messages = [{"role": "system", "content": system}, *final_messages]
-
-        # Wrap LiteLLM call in ResilientExecutor
-        response = await self._executor.execute(
-            provider=provider,
-            operation=lambda: litellm.acompletion(
-                model=resolved_model,
-                messages=final_messages,
+        if provider == "anthropic":
+            return await self._complete_anthropic(
                 api_key=api_key,
+                provider=provider,
+                model=bare_model,
+                resolved_model=resolved,
+                messages=messages,
                 max_tokens=max_tokens,
                 temperature=temperature,
-            ),
+                system=system,
+                workspace_id=workspace_id,
+                user_id=user_id,
+                agent_name=agent_name,
+            )
+        return await self._complete_openai(
+                api_key=api_key,
+                provider=provider,
+                model=bare_model,
+                resolved_model=resolved,
+                messages=messages,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                system=system,
+                workspace_id=workspace_id,
+                user_id=user_id,
+                agent_name=agent_name,
+            )
+
+    async def _complete_anthropic(
+        self,
+        *,
+        api_key: str,
+        provider: str,
+        model: str,
+        resolved_model: str,
+        messages: list[dict[str, str]],
+        max_tokens: int,
+        temperature: float,
+        system: str | None,
+        workspace_id: UUID,
+        user_id: UUID,
+        agent_name: str,
+    ) -> LLMResponse:
+        """Call Anthropic Messages API directly."""
+        client = self._get_anthropic_client(api_key)
+
+        # Anthropic uses a separate `system` param, not a system message in the list
+        anthropic_messages: list[dict[str, str]] = []
+        effective_system = system
+        for msg in messages:
+            if msg["role"] == "system":
+                # Merge system messages (first one wins, or concatenate)
+                if effective_system is None:
+                    effective_system = msg["content"]
+                else:
+                    effective_system = f"{effective_system}\n\n{msg['content']}"
+            else:
+                anthropic_messages.append(msg)
+
+        kwargs: dict[str, Any] = {
+            "model": model,
+            "messages": anthropic_messages,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+        }
+        if effective_system is not None:
+            kwargs["system"] = effective_system
+
+        response = await self._executor.execute(
+            provider=provider,
+            operation=lambda: client.messages.create(**kwargs),
         )
 
-        # Track cost (fire-and-forget, never crashes)
+        text = ""
+        for block in response.content:
+            if block.type == "text":
+                text += block.text
+
+        input_tokens = response.usage.input_tokens
+        output_tokens = response.usage.output_tokens
+
         await track_llm_cost(
             self._cost_tracker,
             workspace_id=workspace_id,
             user_id=user_id,
             model=resolved_model,
             agent_name=agent_name,
-            response=response,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
         )
-
-        # LiteLLM ModelResponse has dynamic attributes; use getattr for type safety
-        choices = getattr(response, "choices", [])
-        usage = getattr(response, "usage", None)
-        text = ""
-        if choices:
-            text = getattr(choices[0].message, "content", "") or ""
 
         return LLMResponse(
             text=text,
-            input_tokens=getattr(usage, "prompt_tokens", 0) or 0 if usage else 0,
-            output_tokens=getattr(usage, "completion_tokens", 0) or 0 if usage else 0,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            model=resolved_model,
+            raw=response,
+        )
+
+    async def _complete_openai(
+        self,
+        *,
+        api_key: str,
+        provider: str,
+        model: str,
+        resolved_model: str,
+        messages: list[dict[str, str]],
+        max_tokens: int,
+        temperature: float,
+        system: str | None,
+        workspace_id: UUID,
+        user_id: UUID,
+        agent_name: str,
+    ) -> LLMResponse:
+        """Call OpenAI Chat Completions API (also works for OpenAI-compatible providers)."""
+        client = self._get_openai_client(api_key)
+
+        final_messages = list(messages)
+        if system is not None:
+            final_messages = [{"role": "system", "content": system}, *final_messages]
+
+        response = await self._executor.execute(
+            provider=provider,
+            operation=lambda: client.chat.completions.create(
+                model=model,
+                messages=final_messages,  # type: ignore[arg-type]
+                max_tokens=max_tokens,
+                temperature=temperature,
+            ),
+        )
+
+        text = ""
+        if response.choices:
+            text = response.choices[0].message.content or ""
+
+        input_tokens = 0
+        output_tokens = 0
+        if response.usage:
+            input_tokens = response.usage.prompt_tokens or 0
+            output_tokens = response.usage.completion_tokens or 0
+
+        await track_llm_cost(
+            self._cost_tracker,
+            workspace_id=workspace_id,
+            user_id=user_id,
+            model=resolved_model,
+            agent_name=agent_name,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+        )
+
+        return LLMResponse(
+            text=text,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
             model=resolved_model,
             raw=response,
         )
@@ -178,13 +320,13 @@ class LLMGateway:
         model: str = "openai/text-embedding-3-large",
         agent_name: str = "llm_gateway",
     ) -> EmbeddingResponse:
-        """Generate embeddings via LiteLLM.
+        """Generate embeddings via OpenAI Embeddings API.
 
         Args:
             workspace_id: Workspace UUID for BYOK key lookup.
             user_id: User UUID who initiated the call.
             texts: List of texts to embed.
-            model: LiteLLM model string (default: openai/text-embedding-3-large).
+            model: Model string ("provider/model-name" format).
             agent_name: Agent/service name for cost tracking.
 
         Returns:
@@ -194,25 +336,24 @@ class LLMGateway:
             AINotConfiguredError: If no BYOK API key is configured.
         """
         provider = extract_provider(model)
+        bare_model = extract_model_name(model)
 
         api_key = await self._key_storage.get_api_key(workspace_id, provider, "llm")
         if api_key is None:
             raise AINotConfiguredError(workspace_id=workspace_id)
 
+        client = self._get_openai_client(api_key)
+
         response = await self._executor.execute(
             provider=provider,
-            operation=lambda: litellm.aembedding(
-                model=model,
+            operation=lambda: client.embeddings.create(
+                model=bare_model,
                 input=texts,
-                api_key=api_key,
             ),
         )
 
-        # Extract embeddings from response (LiteLLM EmbeddingResponse)
-        data = getattr(response, "data", [])
-        embeddings = [item["embedding"] for item in data]
-        usage = getattr(response, "usage", None)
-        input_tokens = getattr(usage, "prompt_tokens", 0) or 0 if usage else 0
+        embeddings = [item.embedding for item in response.data]
+        input_tokens = response.usage.total_tokens if response.usage else 0
 
         return EmbeddingResponse(
             embeddings=embeddings,

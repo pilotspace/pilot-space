@@ -1,13 +1,12 @@
 """Post-call cost tracking hook for LLMGateway.
 
-Extracts token usage from LiteLLM ModelResponse and delegates to
-CostTracker for persistent cost recording. Failures are logged
-but never propagated to the caller.
+Accepts pre-extracted token counts and delegates to CostTracker for
+persistent cost recording. Failures are logged but never propagated.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from pilot_space.ai.proxy.provider_config import extract_provider
@@ -26,28 +25,22 @@ async def track_llm_cost(
     user_id: UUID,
     model: str,
     agent_name: str,
-    response: Any,
+    input_tokens: int,
+    output_tokens: int = 0,
 ) -> None:
     """Track cost for an LLM completion call.
-
-    Extracts usage from a LiteLLM ModelResponse and persists via CostTracker.
-    Wraps in try/except so cost tracking failures never crash the caller.
 
     Args:
         cost_tracker: CostTracker instance for DB persistence.
         workspace_id: Workspace UUID for billing.
         user_id: User UUID who initiated the call.
-        model: LiteLLM model string (e.g., "anthropic/claude-sonnet-4-20250514").
+        model: Model string (e.g., "anthropic/claude-sonnet-4-20250514").
         agent_name: Name of the agent/service making the call.
-        response: LiteLLM ModelResponse with usage data.
+        input_tokens: Number of input tokens consumed.
+        output_tokens: Number of output tokens generated.
     """
     try:
-        usage = getattr(response, "usage", None)
-        input_tokens = getattr(usage, "prompt_tokens", 0) or 0 if usage else 0
-        output_tokens = getattr(usage, "completion_tokens", 0) or 0 if usage else 0
-
         provider = extract_provider(model)
-        # Strip provider prefix for CostTracker (it expects bare model name)
         bare_model = model.split("/", 1)[-1] if "/" in model else model
 
         await cost_tracker.track(

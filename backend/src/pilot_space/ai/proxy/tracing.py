@@ -1,12 +1,9 @@
 """Langfuse wrapper utilities for LLM observability.
 
-Configures Langfuse for LiteLLM tracing and provides lifecycle
-functions for startup/shutdown. Re-exports the @observe decorator
-for convenience.
+Provides lifecycle functions for Langfuse startup/shutdown and
+re-exports the @observe decorator for convenience.
 
-IMPORTANT: litellm.success_callback is NOT set to ["langfuse"] to
-avoid double cost tracking (Pitfall 4). Instead, we use the
-@observe decorator from langfuse.decorators directly on methods.
+No LiteLLM dependency — uses Langfuse directly.
 """
 
 from __future__ import annotations
@@ -19,20 +16,11 @@ logger = get_logger(__name__)
 def configure_langfuse() -> None:
     """Configure Langfuse for LLM observability.
 
-    Reads LANGFUSE_* env vars (set via Settings / .env). Explicitly
-    sets litellm.success_callback to empty list to prevent the
-    litellm-langfuse integration from double-tracking costs.
-
+    Reads LANGFUSE_* env vars (set via Settings / .env).
     Safe to call when Langfuse is not configured (empty keys) --
     the @observe decorator degrades gracefully.
     """
     try:
-        import litellm
-
-        # CRITICAL: Do NOT add "langfuse" to success_callback.
-        # We use @observe decorator directly, which avoids double cost tracking.
-        litellm.success_callback = []
-
         logger.info("langfuse_configured", callback_mode="decorator_only")
     except Exception:
         logger.warning("langfuse_configure_failed", exc_info=True)
