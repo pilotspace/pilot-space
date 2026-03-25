@@ -67,6 +67,8 @@ dependencies = [
     "openpyxl>=3.1.5",
     "python-pptx>=1.0.2",
     "pypdf>=6.9.1",
+    "litellm==1.82.6",
+    "langfuse>=3.0.0",
 ]
 
 [project.optional-dependencies]

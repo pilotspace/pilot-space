@@ -107,6 +107,11 @@ class Settings(BaseSettings):
         description="Default Google AI API key (Gemini)",
     )
 
+    # Langfuse LLM Observability (optional -- leave empty to disable)
+    langfuse_secret_key: str = ""
+    langfuse_public_key: str = ""
+    langfuse_host: str = "http://localhost:3001"
+
     # AI Configuration
     ai_timeout_seconds: int = Field(default=300, ge=30, le=600)
     ai_max_retries: int = Field(default=3, ge=1, le=10)

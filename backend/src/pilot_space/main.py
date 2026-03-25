@@ -216,6 +216,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     question_adapter = get_question_adapter()
     await question_adapter.start_cleanup_task(interval_seconds=60.0)
 
+    # Configure Langfuse LLM observability (safe when not configured)
+    from pilot_space.ai.proxy.tracing import configure_langfuse
+
+    configure_langfuse()
+
     # Log startup completion
     logger.info(
         "application_ready",
@@ -226,6 +231,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Shutdown: Clean up workers and connections
     logger.info("application_shutdown_start")
+
+    # Flush Langfuse pending events
+    from pilot_space.ai.proxy.tracing import flush_langfuse
+
+    flush_langfuse()
     await question_adapter.stop_cleanup_task()
     if digest_worker:
         await digest_worker.stop()
