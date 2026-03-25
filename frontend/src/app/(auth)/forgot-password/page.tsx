@@ -12,7 +12,7 @@ import { observer } from 'mobx-react-lite';
 import { motion } from 'motion/react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Compass, Loader2, Mail } from 'lucide-react';
+import { ArrowLeft, Loader2, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -115,7 +115,7 @@ const ForgotPasswordPage = observer(function ForgotPasswordPage() {
             whileHover={{ rotate: 15 }}
             transition={{ type: 'spring', stiffness: 400, damping: 10 }}
           >
-            <Compass className="h-7 w-7 text-primary" />
+            <img src="/logo.svg" alt="Logo" className="h-7 w-7" />
           </motion.div>
           <CardTitle className="text-2xl">Forgot your password?</CardTitle>
           <CardDescription>

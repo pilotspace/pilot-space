@@ -16,7 +16,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Plus,
-  Compass,
   PinIcon,
   Loader2,
   LogOut,
@@ -405,7 +404,7 @@ export const Sidebar = observer(function Sidebar() {
             whileHover={shouldReduceMotion ? undefined : { rotate: 15 }}
             transition={{ type: 'spring', stiffness: 400, damping: 10 }}
           >
-            <Compass className="h-5 w-5 text-primary" />
+            <img src="/logo.svg" alt="Logo" className="h-5 w-5" />
           </motion.div>
           {collapsed ? (
             <WorkspaceSwitcher currentSlug={workspaceSlug} collapsed />

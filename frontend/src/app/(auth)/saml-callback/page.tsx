@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Compass } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { apiClient } from '@/services/api';
 
@@ -69,9 +68,9 @@ export default function SamlCallbackPage() {
     <div className="flex flex-col items-center justify-center space-y-4 text-center">
       <div className="relative">
         <div className="absolute inset-0 animate-ping">
-          <Compass className="h-12 w-12 text-primary/30" />
+          <img src="/logo.svg" alt="Logo" className="h-12 w-12 opacity-30" />
         </div>
-        <Compass className="h-12 w-12 text-primary animate-ai-pulse" />
+        <img src="/logo.svg" alt="Logo" className="h-12 w-12 animate-ai-pulse" />
       </div>
       <div className="space-y-2">
         {error ? (

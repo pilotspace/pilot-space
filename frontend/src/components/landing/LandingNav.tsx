@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
-import { Compass, Menu, X, Github } from 'lucide-react';
+import { Menu, X, Github } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { GITHUB_URL } from './constants';
 
@@ -41,7 +41,7 @@ export function LandingNav() {
           aria-label="Pilot Space Home"
         >
           <div className="flex size-8 items-center justify-center rounded-lg bg-primary/10">
-            <Compass className="size-4 text-primary" strokeWidth={1.5} />
+            <img src="/logo.svg" alt="Logo" className="size-4" />
           </div>
           <span className="font-display text-lg font-semibold tracking-tight text-foreground">
             Pilot Space

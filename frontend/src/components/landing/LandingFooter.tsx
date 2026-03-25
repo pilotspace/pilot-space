@@ -1,4 +1,4 @@
-import { Compass, Github } from 'lucide-react';
+import { Github } from 'lucide-react';
 import { GITHUB_URL } from './constants';
 
 interface FooterLink {
@@ -32,7 +32,7 @@ export function LandingFooter() {
           <div>
             <div className="mb-4 flex items-center gap-2">
               <div className="flex size-8 items-center justify-center rounded-lg bg-primary/10">
-                <Compass className="size-4 text-primary" strokeWidth={1.5} />
+                <img src="/logo.svg" alt="Logo" className="size-4" />
               </div>
               <span className="font-display text-lg font-semibold text-foreground">
                 Pilot Space

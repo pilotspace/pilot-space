@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'motion/react';
-import { Compass, Loader2, Plus, Building2, ArrowLeft, Check, AlertCircle } from 'lucide-react';
+import { Loader2, Plus, Building2, ArrowLeft, Check, AlertCircle } from 'lucide-react';
 import { WorkspaceSelector, addRecentWorkspace } from '@/components/workspace-selector';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -275,7 +275,7 @@ export default function HomePage() {
               <div className="h-20 w-20 rounded-full bg-primary/20" />
             </div>
             <div className="relative flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-ai/20 shadow-warm-lg">
-              <Compass className="h-10 w-10 text-primary" strokeWidth={1.5} />
+              <img src="/logo.svg" alt="Logo" className="h-10 w-10" />
             </div>
           </motion.div>
         </motion.div>

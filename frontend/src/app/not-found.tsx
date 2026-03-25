@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Compass, Home, ArrowLeft } from 'lucide-react';
+import { Home, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export default function NotFound() {
@@ -11,7 +11,7 @@ export default function NotFound() {
             <div className="h-24 w-24 rounded-full bg-muted" />
           </div>
           <div className="relative flex h-24 w-24 items-center justify-center rounded-2xl bg-muted">
-            <Compass className="h-12 w-12 text-muted-foreground" strokeWidth={1.5} />
+            <img src="/logo.svg" alt="Logo" className="h-12 w-12 opacity-50" />
           </div>
         </div>
         <div className="space-y-2">

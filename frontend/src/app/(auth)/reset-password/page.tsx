@@ -12,7 +12,7 @@ import { useState, useEffect, type FormEvent } from 'react';
 import { motion } from 'motion/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, CheckCircle2, Compass, Eye, EyeOff, Loader2, Lock } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Eye, EyeOff, Loader2, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -212,7 +212,7 @@ export default function ResetPasswordPage() {
             whileHover={{ rotate: 15 }}
             transition={{ type: 'spring', stiffness: 400, damping: 10 }}
           >
-            <Compass className="h-7 w-7 text-primary" />
+            <img src="/logo.svg" alt="Logo" className="h-7 w-7" />
           </motion.div>
           <CardTitle className="text-2xl">Set new password</CardTitle>
           <CardDescription>
