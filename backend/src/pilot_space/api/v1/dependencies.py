@@ -847,6 +847,8 @@ __all__ = [  # noqa: RUF022
     "RateLimitServiceDep",
     "FeatureToggleServiceDep",
     "ScimServiceDep",
+    "McpServerServiceDep",
+    "McpOAuthServiceDep",
 ]
 
 
@@ -861,3 +863,26 @@ def _get_transcription_service(
 
 
 TranscriptionServiceDep = Annotated[TranscriptionService, Depends(_get_transcription_service)]
+
+
+# ===== MCP Server Service Dependencies =====
+
+
+@inject
+def _get_mcp_server_service(
+    svc: McpServerService = Depends(Provide[Container.mcp_server_service]),
+) -> McpServerService:
+    return svc
+
+
+McpServerServiceDep = Annotated[McpServerService, Depends(_get_mcp_server_service)]
+
+
+@inject
+def _get_mcp_oauth_service(
+    svc: McpOAuthService = Depends(Provide[Container.mcp_oauth_service]),
+) -> McpOAuthService:
+    return svc
+
+
+McpOAuthServiceDep = Annotated[McpOAuthService, Depends(_get_mcp_oauth_service)]
