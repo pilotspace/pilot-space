@@ -313,20 +313,28 @@ class AttachmentContentService:
         filename: str,
         attachment: ChatAttachment,
     ) -> dict[str, Any]:
-        """Convert image bytes to a native image content block.
+        """Convert image bytes to a content block.
 
-        Modern LLMs (Claude, GPT-4o) read text from images natively via their
-        vision capabilities — no pre-processing OCR needed. The image is sent
-        as a base64 image block and the model extracts text directly.
-
-        TODO: When supporting LLM providers that lack native vision/image input
-        (e.g. open-source text-only models), add an OCR fallback path here:
-        check if the resolved model supports image input; if not, run
-        ``self._ocr_service.extract_with_fallback()`` to convert the image to
-        a text block before sending. OCR infrastructure (HunyuanOCR, Tencent
-        Cloud, Claude vision adapter) is already wired and ready in
-        ``pilot_space.application.services.ai.ocr_service.OcrService``.
+        Attempts OCR text extraction first (when configured) so that
+        text-only LLM providers (Ollama, open-source models) can still
+        process image uploads. Falls back to a native image block for
+        vision-capable models (Claude, GPT-4o).
         """
+        if self._ocr_service and self._session:
+            try:
+                ocr_result = await self._ocr_service.extract_with_fallback(
+                    data,
+                    mime_type,
+                    attachment.workspace_id,
+                    attachment.id,
+                    self._session,
+                )
+                if ocr_result.text:
+                    return _build_text_block(ocr_result.text.encode(), filename)
+            except Exception:
+                logger.debug("image_ocr_fallback_failed", filename=filename, exc_info=True)
+
+        # Native image block — works with vision-capable models
         return _build_image_block(data, mime_type)
 
 
