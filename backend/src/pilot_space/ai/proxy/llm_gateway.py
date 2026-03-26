@@ -300,9 +300,15 @@ class LLMGateway:
         """Call OpenAI Chat Completions API (also works for OpenAI-compatible providers)."""
         client = self._get_openai_client(api_key, base_url=base_url)
 
-        final_messages = list(messages)
+        # Filter system messages from list to avoid duplicates when system param is set
+        final_messages = [m for m in messages if m["role"] != "system"]
         if system is not None:
             final_messages = [{"role": "system", "content": system}, *final_messages]
+        else:
+            # Preserve any system messages from the original list
+            system_msgs = [m for m in messages if m["role"] == "system"]
+            if system_msgs:
+                final_messages = [*system_msgs, *final_messages]
 
         response = await self._executor.execute(
             provider=provider,
@@ -342,6 +348,7 @@ class LLMGateway:
             raw=response,
         )
 
+    @observe(name="llm_gateway.embed")  # type: ignore[misc]
     async def embed(
         self,
         *,
@@ -349,6 +356,7 @@ class LLMGateway:
         user_id: UUID,
         texts: list[str],
         model: str = "openai/text-embedding-3-large",
+        dimensions: int | None = None,
         agent_name: str = "llm_gateway",
     ) -> EmbeddingResponse:
         """Generate embeddings via OpenAI Embeddings API.
@@ -358,6 +366,7 @@ class LLMGateway:
             user_id: User UUID who initiated the call.
             texts: List of texts to embed.
             model: Model string ("provider/model-name" format).
+            dimensions: Output embedding dimensions (e.g. 768 for pgvector).
             agent_name: Agent/service name for cost tracking.
 
         Returns:
@@ -378,16 +387,30 @@ class LLMGateway:
 
         client = self._get_openai_client(api_key, base_url=base_url)
 
+        embed_kwargs: dict[str, Any] = {
+            "model": bare_model,
+            "input": texts,
+        }
+        if dimensions is not None:
+            embed_kwargs["dimensions"] = dimensions
+
         response = await self._executor.execute(
             provider=provider,
-            operation=lambda: client.embeddings.create(
-                model=bare_model,
-                input=texts,
-            ),
+            operation=lambda: client.embeddings.create(**embed_kwargs),
         )
 
         embeddings = [item.embedding for item in response.data]
         input_tokens = response.usage.total_tokens if response.usage else 0
+
+        await track_llm_cost(
+            self._cost_tracker,
+            workspace_id=workspace_id,
+            user_id=user_id,
+            model=model,
+            agent_name=agent_name,
+            input_tokens=input_tokens,
+            output_tokens=0,
+        )
 
         return EmbeddingResponse(
             embeddings=embeddings,

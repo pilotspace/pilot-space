@@ -171,30 +171,42 @@ Format with proper Markdown:
             },
         ]
 
-    async def _get_provider_config(self, workspace_id: UUID | None) -> tuple[str, str | None]:
-        """Resolve API key and base_url from workspace BYOK storage.
+    async def _get_provider_config(
+        self, workspace_id: UUID | None
+    ) -> tuple[str, str | None, str | None]:
+        """Resolve API key, base_url, and model_name from workspace BYOK storage.
 
         AIGOV-05 BYOK enforcement:
-        - workspace_id provided + key_storage available -> BYOK key + base_url from SecureKeyStorage
+        - workspace_id provided + key_storage available -> BYOK key + base_url + model_name
         - workspace_id provided + no key_storage -> raise AINotConfiguredError
         - workspace_id=None -> system agent; env key permitted, no base_url
+
+        Returns:
+            (api_key, base_url, model_name) — base_url/model_name may be None.
         """
         from pilot_space.ai.exceptions import AINotConfiguredError
 
         if workspace_id is not None:
             if self._key_storage is not None:
-                api_key = await self._key_storage.get_api_key(workspace_id, "anthropic", "llm")
-                if api_key:
-                    key_info = await self._key_storage.get_key_info(workspace_id, "anthropic", "llm")
-                    base_url = key_info.base_url if key_info else None
-                    return api_key, base_url
+                key_info = await self._key_storage.get_key_info(
+                    workspace_id, "anthropic", "llm"
+                )
+                api_key = await self._key_storage.get_api_key(
+                    workspace_id, "anthropic", "llm"
+                )
+                if key_info and (api_key or key_info.base_url):
+                    return (
+                        api_key or "no-key-required",
+                        key_info.base_url,
+                        getattr(key_info, "model_name", None),
+                    )
             raise AINotConfiguredError(workspace_id=workspace_id)
 
         # System-only: env key permitted
         api_key = os.getenv("ANTHROPIC_API_KEY")
         if not api_key:
             raise AINotConfiguredError(workspace_id=None)
-        return api_key, None
+        return api_key, None, None
 
     def _build_prompt(self, input_data: DocGeneratorInput) -> str:
         """Build documentation generation prompt from input data.
@@ -322,13 +334,15 @@ Use available tools to:
         """
         try:
             # Get API key and base_url from workspace BYOK storage
-            api_key, base_url = await self._get_provider_config(context.workspace_id)
+            api_key, base_url, model_name = await self._get_provider_config(context.workspace_id)
 
             # Build prompt specific to doc generation
             prompt = self._build_prompt(input_data)
 
             # Create SDK options with env parameter (no os.environ mutation)
             sdk_options = self._create_agent_options(context)
+            if model_name:
+                sdk_options.model = model_name
             sdk_options.env = build_sdk_env(api_key, base_url=base_url)
 
             # Set context for observability

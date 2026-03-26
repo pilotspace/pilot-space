@@ -125,7 +125,7 @@ async def _background_graph_extraction(
 
             _bg_key_session_cm = get_db_session()
             bg_key_session = await _bg_key_session_cm.__aenter__()
-            await set_rls_context(bg_key_session, workspace_id, user_id)
+            await set_rls_context(bg_key_session, user_id, workspace_id)
             bg_key_storage = SecureKeyStorage(db=bg_key_session, master_secret=encryption_key)
             bg_cost_tracker = CostTracker(session=bg_key_session)
             llm_gateway = LLMGateway(

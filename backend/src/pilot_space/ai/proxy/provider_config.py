@@ -13,10 +13,20 @@ from typing import Final
 
 from pilot_space.ai.providers.provider_selector import TaskType
 
-# Model strings per task type (DD-011 routing rules).
+# Model strings per task type for LLMGateway single-shot completions.
+# NOTE: This is the GATEWAY-LEVEL routing table for services that call
+# LLMGateway.complete() directly. It intentionally uses Sonnet for all tasks
+# (cost-efficient for single-shot calls without tool use).
+#
+# The ORCHESTRATOR-LEVEL routing table in provider_selector.py uses Opus for
+# complex tasks (PR_REVIEW, AI_CONTEXT, etc.) that go through the Claude Agent
+# SDK with multi-turn tool use. These two tables serve different code paths:
+# - provider_config.py → LLMGateway.complete() (single-shot, no tools)
+# - provider_selector.py → PilotSpaceAgent/subagents (multi-turn, tools, SDK)
+#
 # Format: "<provider>/<model>" — gateway uses the prefix to select the SDK.
 TASK_TYPE_MODEL_MAP: Final[dict[TaskType, str]] = {
-    # Code-intensive tasks -> Claude Sonnet 4
+    # Code-intensive tasks -> Claude Sonnet 4 (single-shot gateway path)
     TaskType.PR_REVIEW: "anthropic/claude-sonnet-4-20250514",
     TaskType.AI_CONTEXT: "anthropic/claude-sonnet-4-20250514",
     TaskType.TASK_DECOMPOSITION: "anthropic/claude-sonnet-4-20250514",

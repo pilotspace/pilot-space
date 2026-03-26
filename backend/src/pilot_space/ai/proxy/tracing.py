@@ -47,7 +47,8 @@ try:
     from langfuse.decorators import observe  # pyright: ignore[reportMissingImports]
 except ImportError:  # pragma: no cover
     # Provide a no-op fallback so code with @observe doesn't crash
-    # if langfuse somehow isn't installed.
+    # if langfuse somehow isn't installed. Supports both sync and async.
+    import asyncio
     from functools import wraps
     from typing import Any, TypeVar
 
@@ -58,8 +59,11 @@ except ImportError:  # pragma: no cover
 
         def decorator(func: _F) -> _F:
             @wraps(func)  # type: ignore[arg-type]
-            async def wrapper(*args: Any, **kw: Any) -> Any:
-                return await func(*args, **kw)  # type: ignore[misc]
+            def wrapper(*args: Any, **kw: Any) -> Any:
+                result = func(*args, **kw)  # type: ignore[misc]
+                if asyncio.iscoroutine(result):
+                    return result  # Let caller await it
+                return result
 
             return wrapper  # type: ignore[return-value]
 

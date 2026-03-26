@@ -205,9 +205,17 @@ def build_sdk_env(api_key: str, base_url: str | None = None) -> dict[str, str]:
     if app_base_url:
         env["ANTHROPIC_BASE_URL"] = app_base_url
 
-    # Explicit base_url takes priority over app-level setting
+    # Explicit base_url takes priority over app-level setting.
+    # Validate to prevent SSRF / key exfiltration to arbitrary hosts.
     if base_url:
-        env["ANTHROPIC_BASE_URL"] = base_url
+        try:
+            env["ANTHROPIC_BASE_URL"] = validate_base_url(base_url)
+        except ValueError:
+            # Allow localhost for Ollama local dev (HTTPS-only for remote)
+            if base_url.startswith(("http://localhost", "http://127.0.0.1")):
+                env["ANTHROPIC_BASE_URL"] = base_url
+            else:
+                raise
 
     return env
 
