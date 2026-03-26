@@ -79,6 +79,7 @@ from pilot_space.application.services.onboarding import (
     GetOnboardingService,
     UpdateOnboardingService,
 )
+from pilot_space.application.services.rate_limit import RateLimitService
 from pilot_space.application.services.rbac_service import RbacService
 from pilot_space.application.services.role_skill import (
     CreateRoleSkillService,
@@ -692,6 +693,18 @@ KnowledgeGraphQueryServiceDep = Annotated[
     KnowledgeGraphQueryService, Depends(_get_knowledge_graph_query_service)
 ]
 
+# ===== Rate Limit Service Dependencies =====
+
+
+@inject
+def _get_rate_limit_service(
+    svc: RateLimitService = Depends(Provide[Container.rate_limit_service]),
+) -> RateLimitService:
+    return svc
+
+
+RateLimitServiceDep = Annotated[RateLimitService, Depends(_get_rate_limit_service)]
+
 __all__ = [  # noqa: RUF022
     "ActivityRepositoryDep",
     "CycleRepositoryDep",
@@ -755,6 +768,7 @@ __all__ = [  # noqa: RUF022
     "MovePageServiceDep",
     "ReorderPageServiceDep",
     "TranscriptionServiceDep",
+    "RateLimitServiceDep",
 ]
 
 

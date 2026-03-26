@@ -91,6 +91,7 @@ from pilot_space.application.services.onboarding import (
     UpdateOnboardingService,
 )
 from pilot_space.application.services.pm_block_insight_service import PMBlockInsightService
+from pilot_space.application.services.rate_limit import RateLimitService
 from pilot_space.application.services.rbac_service import RbacService
 from pilot_space.application.services.sso_service import SsoService
 from pilot_space.application.services.task_service import TaskService
@@ -211,6 +212,12 @@ class Container(SkillContainer, PluginContainer):
     audit_log_repository = providers.Factory(
         AuditLogRepository,
         session=providers.Callable(get_current_session),
+    )
+
+    # Rate Limit Service — Redis-backed INCR+EXPIRE
+    rate_limit_service = providers.Factory(
+        RateLimitService,
+        redis=InfraContainer.redis_client,
     )
 
     # ===== Service Factories =====
