@@ -299,7 +299,7 @@ export const OnboardingChecklist = observer(function OnboardingChecklist({
           <>
             <DialogHeader>
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                <div className="flex h-10 w-10 items-center justify-center">
                   <Sparkles className="h-5 w-5 text-primary" />
                 </div>
                 <div>

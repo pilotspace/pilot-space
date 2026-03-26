@@ -97,7 +97,7 @@ export function ProjectCard({ project, variant = 'grid', onClick, index = 0 }: P
           {...cardA11y}
         >
           <div className="flex items-center gap-4 px-4 py-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 flex-shrink-0">
+            <div className="flex h-8 w-8 items-center justify-center flex-shrink-0">
               {project.icon ? (
                 <span className="text-sm">{project.icon}</span>
               ) : (
@@ -151,7 +151,7 @@ export function ProjectCard({ project, variant = 'grid', onClick, index = 0 }: P
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+              <div className="flex h-10 w-10 items-center justify-center">
                 {project.icon ? (
                   <span className="text-lg">{project.icon}</span>
                 ) : (

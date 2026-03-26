@@ -343,7 +343,7 @@ function FeatureCard({
       <div className="border-b border-border-subtle p-5">
         <div className="mb-3 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10">
+            <div className="flex size-9 items-center justify-center">
               <feature.icon className="size-4.5 text-primary" />
             </div>
             <div>

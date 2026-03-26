@@ -51,7 +51,7 @@ export function ProjectSidebar({ project, workspaceSlug }: ProjectSidebarProps) 
       <aside className="hidden md:flex md:w-56 md:flex-col md:border-r md:border-border">
         {/* Project header */}
         <div className="flex items-center gap-3 border-b border-border px-4 py-4">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 flex-shrink-0">
+          <div className="flex h-9 w-9 items-center justify-center flex-shrink-0">
             {project.icon ? (
               <span className="text-base">{project.icon}</span>
             ) : (

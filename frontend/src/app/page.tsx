@@ -274,9 +274,7 @@ export default function HomePage() {
             <div className="absolute inset-0 blur-2xl">
               <div className="h-20 w-20 rounded-full bg-primary/20" />
             </div>
-            <div className="relative flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-ai/20 shadow-warm-lg">
               <img src="/logo.svg" alt="Logo" className="h-10 w-10" />
-            </div>
           </motion.div>
         </motion.div>
 
@@ -301,7 +299,7 @@ export default function HomePage() {
               <CardContent className="p-6">
                 {/* Step indicator */}
                 <div className="mb-5 flex items-center gap-3">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center">
                     <Building2 className="h-6 w-6 text-primary" />
                   </div>
                   <div>
@@ -387,7 +385,7 @@ export default function HomePage() {
               <CardContent className="p-6">
                 {/* Step indicator */}
                 <div className="mb-5 flex items-center gap-3">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center">
                     <Check className="h-6 w-6 text-primary" />
                   </div>
                   <div>

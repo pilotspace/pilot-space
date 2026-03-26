@@ -404,7 +404,7 @@ export const Sidebar = observer(function Sidebar() {
             whileHover={shouldReduceMotion ? undefined : { rotate: 15 }}
             transition={{ type: 'spring', stiffness: 400, damping: 10 }}
           >
-            <img src="/logo.svg" alt="Logo" className="h-5 w-5" />
+            <img src="/logo.svg" alt="Logo" className="h-8 w-8" />
           </motion.div>
           {collapsed ? (
             <WorkspaceSwitcher currentSlug={workspaceSlug} collapsed />

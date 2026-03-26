@@ -52,8 +52,8 @@ export function LandingProblem() {
           {/* TAD */}
           <FadeIn className="rounded-xl border border-primary/20 bg-primary/5 p-6 lg:p-8">
             <div className="mb-5 flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-lg bg-primary/10">
-                <img src="/logo.svg" alt="Logo" className="size-5" />
+              <div className="flex size-10 items-center justify-center">
+                <img src="/logo.svg" alt="Logo" className="size-10" />
               </div>
               <h3 className="text-lg font-semibold text-foreground">TAD</h3>
             </div>
