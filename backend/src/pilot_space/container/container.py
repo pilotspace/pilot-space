@@ -92,6 +92,7 @@ from pilot_space.application.services.onboarding import (
 )
 from pilot_space.application.services.pm_block_insight_service import PMBlockInsightService
 from pilot_space.application.services.feature_toggle import FeatureToggleService
+from pilot_space.application.services.block_ownership import BlockOwnershipService
 from pilot_space.application.services.rate_limit import RateLimitService
 from pilot_space.application.services.rbac_service import RbacService
 from pilot_space.application.services.scim_service import ScimService
@@ -213,6 +214,12 @@ class Container(SkillContainer, PluginContainer):
     # Audit Log Repository (AUDIT-01) — Factory per request
     audit_log_repository = providers.Factory(
         AuditLogRepository,
+        session=providers.Callable(get_current_session),
+    )
+
+    # Block Ownership Service
+    block_ownership_service = providers.Factory(
+        BlockOwnershipService,
         session=providers.Callable(get_current_session),
     )
 

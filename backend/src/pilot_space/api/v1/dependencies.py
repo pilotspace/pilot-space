@@ -25,6 +25,7 @@ from pilot_space.application.services.ai_context import (
 from pilot_space.application.services.annotation import (
     CreateAnnotationService,
 )
+from pilot_space.application.services.block_ownership import BlockOwnershipService
 from pilot_space.application.services.auth import AuthService
 from pilot_space.application.services.cycle import (
     AddIssueToCycleService,
@@ -99,6 +100,20 @@ from pilot_space.application.services.workspace_member import (
     WorkspaceMemberService,
 )
 from pilot_space.container import Container
+
+# ===== Block Ownership Service Dependencies =====
+
+
+@inject
+def _get_block_ownership_service(
+    svc: BlockOwnershipService = Depends(Provide[Container.block_ownership_service]),
+) -> BlockOwnershipService:
+    return svc
+
+
+BlockOwnershipServiceDep = Annotated[
+    BlockOwnershipService, Depends(_get_block_ownership_service)
+]
 
 # ===== Issue Service Dependencies =====
 
@@ -743,6 +758,7 @@ __all__ = [  # noqa: RUF022
     "WorkspaceRepositoryDep",
     "AuthServiceDep",
     "ActivityServiceDep",
+    "BlockOwnershipServiceDep",
     "AddIssueToCycleServiceDep",
     "AutoTransitionServiceDep",
     "ConnectGitHubServiceDep",
