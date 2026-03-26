@@ -7,16 +7,23 @@ Supports issue and note resource types for v1.
 from __future__ import annotations
 
 import uuid
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pilot_space.domain.exceptions import ForbiddenError, NotFoundError, ValidationError
+
+if TYPE_CHECKING:
+    from pilot_space.application.services.issue.update_issue_service import UpdateIssueService
+    from pilot_space.application.services.note.update_note_service import UpdateNoteService
 from pilot_space.infrastructure.database.models.audit_log import ActorType, AuditLog
 from pilot_space.infrastructure.database.permissions import check_permission
 from pilot_space.infrastructure.database.repositories.audit_log_repository import (
     AuditLogRepository,
+)
+from pilot_space.infrastructure.database.repositories.workspace_ai_policy_repository import (
+    WorkspaceAIPolicyRepository,
 )
 from pilot_space.infrastructure.database.repositories.workspace_repository import (
     WorkspaceRepository,
@@ -38,10 +45,26 @@ class GovernanceRollbackService:
 
     Args:
         session: Request-scoped async database session.
+        workspace_repository: Repository for workspace lookups.
+        audit_log_repository: Repository for audit log operations.
+        workspace_ai_policy_repository: Repository for AI policy CRUD.
     """
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        workspace_repository: WorkspaceRepository,
+        audit_log_repository: AuditLogRepository,
+        workspace_ai_policy_repository: WorkspaceAIPolicyRepository,
+        update_issue_service: UpdateIssueService,
+        update_note_service: UpdateNoteService,
+    ) -> None:
         self._session = session
+        self._workspace_repo = workspace_repository
+        self._audit_repo = audit_log_repository
+        self._policy_repo = workspace_ai_policy_repository
+        self._update_issue_svc = update_issue_service
+        self._update_note_svc = update_note_service
 
     async def _resolve_workspace(self, workspace_slug: str) -> UUID:
         """Resolve workspace slug (or UUID string) to workspace.id.
@@ -49,12 +72,11 @@ class GovernanceRollbackService:
         Raises:
             NotFoundError: If workspace not found.
         """
-        workspace_repo = WorkspaceRepository(self._session)
         try:
             as_uuid = UUID(workspace_slug)
-            workspace = await workspace_repo.get_by_id_scalar(as_uuid)
+            workspace = await self._workspace_repo.get_by_id_scalar(as_uuid)
         except ValueError:
-            workspace = await workspace_repo.get_by_slug_scalar(workspace_slug)
+            workspace = await self._workspace_repo.get_by_slug_scalar(workspace_slug)
 
         if workspace is None:
             raise NotFoundError("Workspace not found")
@@ -141,14 +163,8 @@ class GovernanceRollbackService:
         from pilot_space.application.services.issue.update_issue_service import (
             UNCHANGED,
             UpdateIssuePayload,
-            UpdateIssueService,
         )
         from pilot_space.infrastructure.database.models import IssuePriority
-        from pilot_space.infrastructure.database.repositories import (
-            ActivityRepository,
-            IssueRepository,
-            LabelRepository,
-        )
 
         priority_map: dict[str, IssuePriority] = {
             "urgent": IssuePriority.URGENT,
@@ -172,13 +188,7 @@ class GovernanceRollbackService:
             state_id=uuid.UUID(raw_state_id) if raw_state_id else UNCHANGED,
         )
 
-        svc = UpdateIssueService(
-            session=self._session,
-            issue_repository=IssueRepository(self._session),
-            activity_repository=ActivityRepository(self._session),
-            label_repository=LabelRepository(self._session),
-        )
-        await svc.execute(payload)
+        await self._update_issue_svc.execute(payload)
 
     async def _rollback_note(
         self,
@@ -186,11 +196,7 @@ class GovernanceRollbackService:
         before_state: dict[str, Any],
     ) -> None:
         """Restore a note to its before_state via UpdateNoteService."""
-        from pilot_space.application.services.note.update_note_service import (
-            UpdateNotePayload,
-            UpdateNoteService,
-        )
-        from pilot_space.infrastructure.database.repositories import NoteRepository
+        from pilot_space.application.services.note.update_note_service import UpdateNotePayload
 
         payload = UpdateNotePayload(
             note_id=resource_id,
@@ -199,11 +205,7 @@ class GovernanceRollbackService:
             summary=before_state.get("summary"),
         )
 
-        svc = UpdateNoteService(
-            session=self._session,
-            note_repository=NoteRepository(self._session),
-        )
-        await svc.execute(payload)
+        await self._update_note_svc.execute(payload)
 
     async def execute_rollback(
         self,
@@ -221,8 +223,7 @@ class GovernanceRollbackService:
         workspace_id = await self._resolve_workspace(workspace_slug)
         await self._require_owner(user_id, workspace_id)
 
-        audit_repo = AuditLogRepository(self._session)
-        entry = await audit_repo.get_by_id(entry_id)
+        entry = await self._audit_repo.get_by_id(entry_id)
         if entry is None:
             raise NotFoundError("Audit entry not found.")
 
@@ -240,7 +241,7 @@ class GovernanceRollbackService:
         await self._dispatch_rollback(entry.resource_type, entry.resource_id, before_state)
 
         # Record the rollback as a new immutable audit entry
-        await audit_repo.create(
+        await self._audit_repo.create(
             workspace_id=workspace_id,
             actor_id=user_id,
             actor_type=ActorType.USER,
@@ -292,15 +293,10 @@ class GovernanceRollbackService:
         user_id: UUID,
     ) -> list[GovernanceAction]:
         """Return all policy rows for the workspace."""
-        from pilot_space.infrastructure.database.repositories.workspace_ai_policy_repository import (
-            WorkspaceAIPolicyRepository,
-        )
-
         workspace_id = await self._resolve_workspace(workspace_slug)
         await self._require_admin_or_owner(user_id, workspace_id)
 
-        repo = WorkspaceAIPolicyRepository(self._session)
-        rows = await repo.list_for_workspace(workspace_id)
+        rows = await self._policy_repo.list_for_workspace(workspace_id)
         return [
             GovernanceAction(
                 role=r.role,
@@ -324,18 +320,13 @@ class GovernanceRollbackService:
             ValidationError: If role is OWNER.
             ForbiddenError: If user is not owner.
         """
-        from pilot_space.infrastructure.database.repositories.workspace_ai_policy_repository import (
-            WorkspaceAIPolicyRepository,
-        )
-
         if role.upper() == "OWNER":
             raise ValidationError("Owner role policy is not configurable.")
 
         workspace_id = await self._resolve_workspace(workspace_slug)
         await self._require_owner(user_id, workspace_id)
 
-        repo = WorkspaceAIPolicyRepository(self._session)
-        policy = await repo.upsert(
+        policy = await self._policy_repo.upsert(
             workspace_id, role.upper(), action_type, requires_approval
         )
         return GovernanceAction(
@@ -356,12 +347,7 @@ class GovernanceRollbackService:
         Raises:
             ForbiddenError: If user is not owner.
         """
-        from pilot_space.infrastructure.database.repositories.workspace_ai_policy_repository import (
-            WorkspaceAIPolicyRepository,
-        )
-
         workspace_id = await self._resolve_workspace(workspace_slug)
         await self._require_owner(user_id, workspace_id)
 
-        repo = WorkspaceAIPolicyRepository(self._session)
-        await repo.delete(workspace_id, role.upper(), action_type)
+        await self._policy_repo.delete(workspace_id, role.upper(), action_type)

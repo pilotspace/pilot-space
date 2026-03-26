@@ -12,6 +12,15 @@ from typing import TYPE_CHECKING
 from uuid import UUID
 
 from pilot_space.domain.exceptions import NotFoundError
+from pilot_space.infrastructure.database.repositories.skill_action_button_repository import (
+    SkillActionButtonRepository,
+)
+from pilot_space.infrastructure.database.repositories.workspace_github_credential_repository import (
+    WorkspaceGithubCredentialRepository,
+)
+from pilot_space.infrastructure.database.repositories.workspace_plugin_repository import (
+    WorkspacePluginRepository,
+)
 from pilot_space.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
@@ -45,11 +54,24 @@ class PluginLifecycleService:
     Args:
         session: Request-scoped async database session.
         redis: Redis client for caching HEAD SHAs.
+        workspace_github_credential_repository: Repository for GitHub credentials.
+        workspace_plugin_repository: Repository for workspace plugins.
+        skill_action_button_repository: Repository for skill action buttons.
     """
 
-    def __init__(self, session: AsyncSession, redis: Redis) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        redis: Redis,
+        workspace_github_credential_repository: WorkspaceGithubCredentialRepository,
+        workspace_plugin_repository: WorkspacePluginRepository,
+        skill_action_button_repository: SkillActionButtonRepository,
+    ) -> None:
         self._session = session
         self._redis = redis
+        self._cred_repo = workspace_github_credential_repository
+        self._plugin_repo = workspace_plugin_repository
+        self._button_repo = skill_action_button_repository
 
     # ------------------------------------------------------------------
     # GitHub token helpers
@@ -57,13 +79,9 @@ class PluginLifecycleService:
 
     async def get_workspace_token(self, workspace_id: UUID) -> str | None:
         """Get decrypted workspace GitHub PAT, or None for system token fallback."""
-        from pilot_space.infrastructure.database.repositories.workspace_github_credential_repository import (
-            WorkspaceGithubCredentialRepository,
-        )
         from pilot_space.infrastructure.encryption import decrypt_api_key
 
-        cred_repo = WorkspaceGithubCredentialRepository(self._session)
-        credential = await cred_repo.get_by_workspace(workspace_id)
+        credential = await self._cred_repo.get_by_workspace(workspace_id)
         if credential is None:
             return None
         try:
@@ -76,26 +94,17 @@ class PluginLifecycleService:
         self, workspace_id: UUID, pat: str, created_by: UUID
     ) -> None:
         """Encrypt and store a GitHub PAT for a workspace."""
-        from pilot_space.infrastructure.database.repositories.workspace_github_credential_repository import (
-            WorkspaceGithubCredentialRepository,
-        )
         from pilot_space.infrastructure.encryption import encrypt_api_key
 
         pat_encrypted = encrypt_api_key(pat)
-        cred_repo = WorkspaceGithubCredentialRepository(self._session)
-        await cred_repo.upsert(
+        await self._cred_repo.upsert(
             workspace_id=workspace_id, pat_encrypted=pat_encrypted, created_by=created_by
         )
         logger.info("[Plugins] GitHub PAT saved for workspace %s", workspace_id)
 
     async def has_github_credential(self, workspace_id: UUID) -> bool:
         """Check if a GitHub PAT is configured for a workspace."""
-        from pilot_space.infrastructure.database.repositories.workspace_github_credential_repository import (
-            WorkspaceGithubCredentialRepository,
-        )
-
-        cred_repo = WorkspaceGithubCredentialRepository(self._session)
-        credential = await cred_repo.get_by_workspace(workspace_id)
+        credential = await self._cred_repo.get_by_workspace(workspace_id)
         return credential is not None
 
     # ------------------------------------------------------------------
@@ -141,17 +150,12 @@ class PluginLifecycleService:
         self, workspace_id: UUID, plugin_id: UUID, is_active: bool
     ) -> object:
         """Toggle a single plugin active/inactive. Returns the updated plugin model."""
-        from pilot_space.infrastructure.database.repositories.workspace_plugin_repository import (
-            WorkspacePluginRepository,
-        )
-
-        repo = WorkspacePluginRepository(self._session)
-        plugin = await repo.get_by_id(plugin_id)
+        plugin = await self._plugin_repo.get_by_id(plugin_id)
         if plugin is None or plugin.workspace_id != workspace_id or plugin.is_deleted:
             raise NotFoundError("Plugin not found")
 
         plugin.is_active = is_active
-        updated = await repo.update(plugin)
+        updated = await self._plugin_repo.update(plugin)
         logger.info(
             "[Plugins] Toggled %s to %s", plugin_id, "active" if is_active else "inactive"
         )
@@ -161,20 +165,16 @@ class PluginLifecycleService:
         self, workspace_id: UUID, repo_url: str, is_active: bool
     ) -> list[object]:
         """Toggle all plugins from a repo. Returns updated plugin models."""
-        from pilot_space.infrastructure.database.repositories.workspace_plugin_repository import (
-            WorkspacePluginRepository,
-        )
         from pilot_space.integrations.github.plugin_service import parse_github_url
 
         owner, repo = parse_github_url(repo_url)
 
-        plugin_repo = WorkspacePluginRepository(self._session)
-        plugins = await plugin_repo.get_by_workspace_and_repo(workspace_id, owner, repo)
+        plugins = await self._plugin_repo.get_by_workspace_and_repo(workspace_id, owner, repo)
         if not plugins:
             raise NotFoundError("No plugins from this repo.")
 
         plugin_ids = [p.id for p in plugins]
-        await plugin_repo.bulk_set_active(plugin_ids, is_active)
+        await self._plugin_repo.bulk_set_active(plugin_ids, is_active)
 
         for plugin in plugins:
             await self._session.refresh(plugin)
@@ -190,28 +190,20 @@ class PluginLifecycleService:
 
     async def uninstall_repo_plugins(self, workspace_id: UUID, repo_url: str) -> int:
         """Soft-delete all plugins from a repo. Returns count of uninstalled plugins."""
-        from pilot_space.infrastructure.database.repositories.skill_action_button_repository import (
-            SkillActionButtonRepository,
-        )
-        from pilot_space.infrastructure.database.repositories.workspace_plugin_repository import (
-            WorkspacePluginRepository,
-        )
         from pilot_space.integrations.github.plugin_service import parse_github_url
 
         owner, repo = parse_github_url(repo_url)
 
-        plugin_repo = WorkspacePluginRepository(self._session)
-        plugins = await plugin_repo.get_by_workspace_and_repo(workspace_id, owner, repo)
+        plugins = await self._plugin_repo.get_by_workspace_and_repo(workspace_id, owner, repo)
         if not plugins:
             raise NotFoundError("No plugins from this repo.")
 
         plugin_ids = [p.id for p in plugins]
 
         # Bulk deactivate associated action buttons (non-fatal)
-        button_repo = SkillActionButtonRepository(self._session)
         for plugin_id in plugin_ids:
             try:
-                await button_repo.deactivate_by_plugin_id(
+                await self._button_repo.deactivate_by_plugin_id(
                     workspace_id=workspace_id,
                     plugin_id=str(plugin_id),
                 )
@@ -224,7 +216,7 @@ class PluginLifecycleService:
                 )
 
         # Bulk soft-delete all plugins
-        await plugin_repo.bulk_soft_delete(plugin_ids)
+        await self._plugin_repo.bulk_soft_delete(plugin_ids)
 
         logger.info(
             "[Plugins] Uninstalled %d from %s/%s in workspace %s",
@@ -350,13 +342,9 @@ class PluginLifecycleService:
         self, workspace_id: UUID
     ) -> list[tuple[object, bool]]:
         """Check installed plugins for updates. Returns list of (plugin, has_update) tuples."""
-        from pilot_space.infrastructure.database.repositories.workspace_plugin_repository import (
-            WorkspacePluginRepository,
-        )
         from pilot_space.integrations.github.plugin_service import GitHubPluginService
 
-        repo = WorkspacePluginRepository(self._session)
-        plugins = await repo.get_installed_by_workspace(workspace_id)
+        plugins = await self._plugin_repo.get_installed_by_workspace(workspace_id)
         token = await self.get_workspace_token(workspace_id)
 
         repo_shas: dict[tuple[str, str], str | None] = {}

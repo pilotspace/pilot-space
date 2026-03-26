@@ -64,9 +64,9 @@ class BlockOwnershipService:
     Owns tree traversal, block lookup, and state mutation of TipTap content.
     """
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(self, session: AsyncSession, note_repository: NoteRepository) -> None:
         self._session = session
-        self._note_repo = NoteRepository(session)
+        self._note_repo = note_repository
 
     # -- Public API ------------------------------------------------------------
 

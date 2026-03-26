@@ -52,9 +52,13 @@ class McpServerService:
     validation, encryption of secrets, status probing, and enable/disable.
     """
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        workspace_mcp_server_repository: WorkspaceMcpServerRepository,
+    ) -> None:
         self._session = session
-        self._repo = WorkspaceMcpServerRepository(session=session)
+        self._repo = workspace_mcp_server_repository
 
     # ------------------------------------------------------------------
     # CREATE

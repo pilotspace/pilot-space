@@ -52,16 +52,16 @@ class AttachmentManagementService:
     def __init__(
         self,
         session: AsyncSession,
-        storage_client: Any = None,
-        workspace_member_repository: WorkspaceMemberRepository | None = None,
-        chat_attachment_repository: ChatAttachmentRepository | None = None,
-        ocr_result_repository: OcrResultRepository | None = None,
+        storage_client: Any,
+        workspace_member_repository: WorkspaceMemberRepository,
+        chat_attachment_repository: ChatAttachmentRepository,
+        ocr_result_repository: OcrResultRepository,
     ) -> None:
         self._session = session
         self._storage_client = storage_client
-        self._member_repo = workspace_member_repository or WorkspaceMemberRepository(session)
-        self._attachment_repo = chat_attachment_repository or ChatAttachmentRepository(session)
-        self._ocr_repo = ocr_result_repository or OcrResultRepository(session)
+        self._member_repo = workspace_member_repository
+        self._attachment_repo = chat_attachment_repository
+        self._ocr_repo = ocr_result_repository
 
     # ------------------------------------------------------------------
     # GUEST CHECK

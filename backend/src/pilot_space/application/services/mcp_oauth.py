@@ -60,10 +60,15 @@ class McpOAuthService:
     - Handle callbacks: validate state, exchange code for token, encrypt and store
     """
 
-    def __init__(self, session: AsyncSession, redis: Any) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        redis: Any,
+        workspace_mcp_server_repository: WorkspaceMcpServerRepository,
+    ) -> None:
         self._session = session
         self._redis = redis
-        self._repo = WorkspaceMcpServerRepository(session=session)
+        self._repo = workspace_mcp_server_repository
 
     async def initiate_oauth(
         self,
