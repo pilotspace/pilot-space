@@ -18,6 +18,9 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from pilot_space.infrastructure.database.models.workspace import Workspace
+    from pilot_space.infrastructure.database.repositories.workspace_repository import (
+        WorkspaceRepository,
+    )
 
 logger = get_logger(__name__)
 
@@ -29,8 +32,13 @@ class WorkspaceAISettingsService:
     API key validation, and feature toggles.
     """
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        workspace_repository: WorkspaceRepository,
+    ) -> None:
         self._session = session
+        self._workspace_repo = workspace_repository
 
     async def get_ai_settings(
         self,
@@ -115,9 +123,6 @@ class WorkspaceAISettingsService:
             WorkspaceAISettingsUpdateResponse,
         )
         from pilot_space.config import get_settings
-        from pilot_space.infrastructure.database.repositories.workspace_repository import (
-            WorkspaceRepository,
-        )
 
         settings = get_settings()
         key_storage = SecureKeyStorage(
@@ -125,7 +130,7 @@ class WorkspaceAISettingsService:
             master_secret=settings.encryption_key.get_secret_value(),
         )
 
-        workspace_repo = WorkspaceRepository(session=self._session)
+        workspace_repo = self._workspace_repo
         validation_results: list[KeyValidationResult] = []
         updated_providers: list[str] = []
 

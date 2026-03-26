@@ -17,6 +17,10 @@ from pilot_space.schemas.capacity_plan import CapacityPlanResponse, MemberCapaci
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
+    from pilot_space.infrastructure.database.repositories.pm_block_queries_repository import (
+        PMBlockQueriesRepository,
+    )
+
 logger = get_logger(__name__)
 
 
@@ -26,8 +30,13 @@ class CapacityPlanService:
     Computes member-level and team-level utilization for a cycle.
     """
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        pm_block_queries_repository: PMBlockQueriesRepository,
+    ) -> None:
         self._session = session
+        self._repo = pm_block_queries_repository
 
     async def get_capacity(
         self,
@@ -46,12 +55,8 @@ class CapacityPlanService:
         Raises:
             NotFoundError: If cycle not found.
         """
-        from pilot_space.infrastructure.database.repositories.pm_block_queries_repository import (
-            PMBlockQueriesRepository,
-        )
-
         cycle_uuid = UUID(cycle_id)
-        repo = PMBlockQueriesRepository(self._session)
+        repo = self._repo
 
         cycle = await repo.get_cycle(cycle_uuid, workspace_id)
         if not cycle:

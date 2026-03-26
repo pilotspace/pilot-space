@@ -263,6 +263,7 @@ class Container(SkillContainer, PluginContainer):
     block_ownership_service = providers.Factory(
         BlockOwnershipService,
         session=providers.Callable(get_current_session),
+        note_repository=InfraContainer.note_repository,
     )
 
     # Repositories required by refactored services
@@ -307,24 +308,29 @@ class Container(SkillContainer, PluginContainer):
         RelatedIssuesSuggestionService,
         session=providers.Callable(get_current_session),
         issue_repository=InfraContainer.issue_repository,
+        knowledge_graph_repository=InfraContainer.knowledge_graph_repository,
+        issue_suggestion_dismissal_repository=InfraContainer.issue_suggestion_dismissal_repository,
     )
 
     # Workspace AI Settings Service
     workspace_ai_settings_service = providers.Factory(
         WorkspaceAISettingsService,
         session=providers.Callable(get_current_session),
+        workspace_repository=InfraContainer.workspace_repository,
     )
 
     # Sprint Board Service
     sprint_board_service = providers.Factory(
         SprintBoardService,
         session=providers.Callable(get_current_session),
+        pm_block_queries_repository=InfraContainer.pm_block_queries_repository,
     )
 
     # Capacity Plan Service
     capacity_plan_service = providers.Factory(
         CapacityPlanService,
         session=providers.Callable(get_current_session),
+        pm_block_queries_repository=InfraContainer.pm_block_queries_repository,
     )
 
     # Rate Limit Service — Redis-backed INCR+EXPIRE
@@ -337,6 +343,7 @@ class Container(SkillContainer, PluginContainer):
     mcp_server_service = providers.Factory(
         McpServerService,
         session=providers.Callable(get_current_session),
+        workspace_mcp_server_repository=InfraContainer.workspace_mcp_server_repository,
     )
 
     # MCP Tool Execution Service — tool discovery and execution
@@ -358,6 +365,7 @@ class Container(SkillContainer, PluginContainer):
         McpOAuthService,
         session=providers.Callable(get_current_session),
         redis=InfraContainer.redis_client,
+        workspace_mcp_server_repository=InfraContainer.workspace_mcp_server_repository,
     )
 
     # Attachment Management Service — quota, extraction, ingest
@@ -925,12 +933,21 @@ class Container(SkillContainer, PluginContainer):
         CreateExtractedIssuesService,
         session=providers.Callable(get_current_session),
         project_repository=InfraContainer.project_repository,
+        issue_repository=InfraContainer.issue_repository,
+        activity_repository=InfraContainer.activity_repository,
+        label_repository=InfraContainer.label_repository,
+        note_issue_link_repository=InfraContainer.note_issue_link_repository,
     )
 
     # AI Governance Service — rollback, policy CRUD, BYOK status
     governance_rollback_service = providers.Factory(
         GovernanceRollbackService,
         session=providers.Callable(get_current_session),
+        workspace_repository=InfraContainer.workspace_repository,
+        audit_log_repository=audit_log_repository,
+        workspace_ai_policy_repository=workspace_ai_policy_repository,
+        update_issue_service=update_issue_service,
+        update_note_service=update_note_service,
     )
 
     # Plugin Lifecycle Service — browse, toggle, uninstall, update checks
@@ -938,6 +955,9 @@ class Container(SkillContainer, PluginContainer):
         PluginLifecycleService,
         session=providers.Callable(get_current_session),
         redis=InfraContainer.redis_client,
+        workspace_github_credential_repository=InfraContainer.workspace_github_credential_repository,
+        workspace_plugin_repository=InfraContainer.workspace_plugin_repository,
+        skill_action_button_repository=InfraContainer.skill_action_button_repository,
     )
 
     # AI Configuration Service — workspace-level LLM provider management

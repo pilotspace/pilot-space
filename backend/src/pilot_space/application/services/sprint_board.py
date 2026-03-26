@@ -22,6 +22,10 @@ from pilot_space.schemas.sprint_board import (
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
+    from pilot_space.infrastructure.database.repositories.pm_block_queries_repository import (
+        PMBlockQueriesRepository,
+    )
+
 logger = get_logger(__name__)
 
 STATE_GROUP_ORDER = ["backlog", "todo", "in_progress", "in_review", "done", "cancelled"]
@@ -33,8 +37,13 @@ class SprintBoardService:
     Provides lane grouping for cycle issues and AI transition proposals.
     """
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        pm_block_queries_repository: PMBlockQueriesRepository,
+    ) -> None:
         self._session = session
+        self._repo = pm_block_queries_repository
 
     async def get_board(
         self,
@@ -53,12 +62,8 @@ class SprintBoardService:
         Raises:
             NotFoundError: If cycle not found.
         """
-        from pilot_space.infrastructure.database.repositories.pm_block_queries_repository import (
-            PMBlockQueriesRepository,
-        )
-
         cycle_uuid = UUID(cycle_id)
-        repo = PMBlockQueriesRepository(self._session)
+        repo = self._repo
 
         cycle = await repo.get_cycle(cycle_uuid, workspace_id)
         if not cycle:

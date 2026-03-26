@@ -58,9 +58,13 @@ class RelatedIssuesSuggestionService:
         self,
         session: AsyncSession,
         issue_repository: IssueRepository,
+        knowledge_graph_repository: KnowledgeGraphRepository,
+        issue_suggestion_dismissal_repository: IssueSuggestionDismissalRepository,
     ) -> None:
         self._session = session
         self._issue_repo = issue_repository
+        self._kg_repo = knowledge_graph_repository
+        self._dismissal_repo = issue_suggestion_dismissal_repository
 
     async def suggest_related(
         self,
@@ -75,8 +79,8 @@ class RelatedIssuesSuggestionService:
         Returns empty list when the issue has no KG node yet.
         Dismissed suggestions are excluded. Never returns the source issue itself.
         """
-        kg_repo = KnowledgeGraphRepository(self._session)
-        dismissal_repo = IssueSuggestionDismissalRepository(self._session)
+        kg_repo = self._kg_repo
+        dismissal_repo = self._dismissal_repo
 
         # Find the issue's KG node
         node = await kg_repo._find_node_by_external(  # pyright: ignore[reportPrivateUsage]  # noqa: SLF001

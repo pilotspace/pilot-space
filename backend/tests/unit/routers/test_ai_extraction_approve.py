@@ -77,10 +77,25 @@ def _make_payload(
 pytestmark = pytest.mark.asyncio
 
 
+def _make_service(
+    session: AsyncMock | None = None,
+    project_repository: AsyncMock | MagicMock | None = None,
+) -> CreateExtractedIssuesService:
+    """Build a CreateExtractedIssuesService with mock dependencies."""
+    return CreateExtractedIssuesService(
+        session=session or AsyncMock(),
+        project_repository=project_repository or MagicMock(),
+        issue_repository=MagicMock(),
+        activity_repository=MagicMock(),
+        label_repository=MagicMock(),
+        note_issue_link_repository=MagicMock(),
+    )
+
+
 async def test_empty_issues_raises_validation_error() -> None:
     """Should raise ValidationError when no issues provided."""
     payload = _make_payload(issues=[], project_id=str(TEST_PROJECT_ID))
-    svc = CreateExtractedIssuesService(session=AsyncMock(), project_repository=MagicMock())
+    svc = _make_service()
 
     with pytest.raises(DomainValidationError) as exc_info:
         await svc.execute(payload)
@@ -95,7 +110,7 @@ async def test_missing_project_id_raises_validation_error() -> None:
         issues=[ExtractedIssueInput(title="Test")],
         project_id=None,
     )
-    svc = CreateExtractedIssuesService(session=AsyncMock(), project_repository=MagicMock())
+    svc = _make_service()
 
     with pytest.raises(DomainValidationError) as exc_info:
         await svc.execute(payload)
@@ -110,7 +125,7 @@ async def test_invalid_project_id_raises_validation_error() -> None:
         issues=[ExtractedIssueInput(title="Test")],
         project_id="not-a-uuid",
     )
-    svc = CreateExtractedIssuesService(session=AsyncMock(), project_repository=MagicMock())
+    svc = _make_service()
 
     with pytest.raises(DomainValidationError) as exc_info:
         await svc.execute(payload)
@@ -126,7 +141,7 @@ async def test_project_not_found_raises_not_found() -> None:
         issues=[ExtractedIssueInput(title="Test")],
         project_id=str(TEST_PROJECT_ID),
     )
-    svc = CreateExtractedIssuesService(session=AsyncMock(), project_repository=project_repo)
+    svc = _make_service(project_repository=project_repo)
 
     with pytest.raises(NotFoundError) as exc_info:
         await svc.execute(payload)
@@ -144,14 +159,9 @@ async def test_creates_issues_successfully() -> None:
         issues=[ExtractedIssueInput(title="Fix bug", priority=1)],
         project_id=str(TEST_PROJECT_ID),
     )
-    svc = CreateExtractedIssuesService(session=AsyncMock(), project_repository=project_repo)
+    svc = _make_service(project_repository=project_repo)
 
-    with (
-        patch(_SVC_PATH) as MockService,
-        patch(_ISSUE_REPO),
-        patch(_ACTIVITY_REPO),
-        patch(_LABEL_REPO),
-    ):
+    with patch(_SVC_PATH) as MockService:
         mock_svc = MagicMock()
         mock_svc.execute = AsyncMock(return_value=MockIssueResult(issue=mock_issue_obj))
         MockService.return_value = mock_svc
@@ -168,27 +178,22 @@ async def test_note_issue_link_failure_does_not_crash() -> None:
     project_repo = _mock_project_repo(identifier="PILOT")
     mock_issue_obj = _mock_issue(sequence_id=1)
 
+    # Build a mock link_repo that raises on find_existing
+    mock_link_repo = AsyncMock()
+    mock_link_repo.find_existing.side_effect = RuntimeError("DB connection lost")
+
     payload = _make_payload(
         issues=[ExtractedIssueInput(title="Fix bug", priority=1)],
         project_id=str(TEST_PROJECT_ID),
         note_id=str(TEST_NOTE_ID),
     )
-    svc = CreateExtractedIssuesService(session=AsyncMock(), project_repository=project_repo)
+    svc = _make_service(project_repository=project_repo)
+    svc._note_issue_link_repo = mock_link_repo  # type: ignore[attr-defined]
 
-    with (
-        patch(_SVC_PATH) as MockService,
-        patch(_ISSUE_REPO),
-        patch(_ACTIVITY_REPO),
-        patch(_LABEL_REPO),
-        patch(_LINK_REPO) as MockLinkRepo,
-    ):
+    with patch(_SVC_PATH) as MockService:
         mock_svc = MagicMock()
         mock_svc.execute = AsyncMock(return_value=MockIssueResult(issue=mock_issue_obj))
         MockService.return_value = mock_svc
-
-        mock_link_repo = AsyncMock()
-        mock_link_repo.find_existing.side_effect = RuntimeError("DB connection lost")
-        MockLinkRepo.return_value = mock_link_repo
 
         result = await svc.execute(payload)
 
@@ -209,14 +214,9 @@ async def test_issue_creation_failure_continues() -> None:
         ],
         project_id=str(TEST_PROJECT_ID),
     )
-    svc = CreateExtractedIssuesService(session=AsyncMock(), project_repository=project_repo)
+    svc = _make_service(project_repository=project_repo)
 
-    with (
-        patch(_SVC_PATH) as MockService,
-        patch(_ISSUE_REPO),
-        patch(_ACTIVITY_REPO),
-        patch(_LABEL_REPO),
-    ):
+    with patch(_SVC_PATH) as MockService:
         mock_svc = MagicMock()
         mock_svc.execute = AsyncMock(
             side_effect=[

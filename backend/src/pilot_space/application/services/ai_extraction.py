@@ -19,6 +19,18 @@ from pilot_space.infrastructure.logging import get_logger
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
+    from pilot_space.infrastructure.database.repositories.activity_repository import (
+        ActivityRepository,
+    )
+    from pilot_space.infrastructure.database.repositories.issue_repository import (
+        IssueRepository,
+    )
+    from pilot_space.infrastructure.database.repositories.label_repository import (
+        LabelRepository,
+    )
+    from pilot_space.infrastructure.database.repositories.note_issue_link_repository import (
+        NoteIssueLinkRepository,
+    )
     from pilot_space.infrastructure.database.repositories.project_repository import (
         ProjectRepository,
     )
@@ -84,9 +96,17 @@ class CreateExtractedIssuesService:
         self,
         session: AsyncSession,
         project_repository: ProjectRepository,
+        issue_repository: IssueRepository,
+        activity_repository: ActivityRepository,
+        label_repository: LabelRepository,
+        note_issue_link_repository: NoteIssueLinkRepository,
     ) -> None:
         self._session = session
         self._project_repo = project_repository
+        self._issue_repo = issue_repository
+        self._activity_repo = activity_repository
+        self._label_repo = label_repository
+        self._note_issue_link_repo = note_issue_link_repository
 
     async def execute(
         self, payload: CreateExtractedIssuesPayload
@@ -105,12 +125,6 @@ class CreateExtractedIssuesService:
         from pilot_space.infrastructure.database.models.note_issue_link import (
             NoteIssueLink,
             NoteLinkType,
-        )
-        from pilot_space.infrastructure.database.repositories import (
-            ActivityRepository,
-            IssueRepository,
-            LabelRepository,
-            NoteIssueLinkRepository,
         )
 
         if not payload.issues:
@@ -138,11 +152,11 @@ class CreateExtractedIssuesService:
 
         issue_service = CreateIssueService(
             session=self._session,
-            issue_repository=IssueRepository(self._session),
-            activity_repository=ActivityRepository(self._session),
-            label_repository=LabelRepository(self._session),
+            issue_repository=self._issue_repo,
+            activity_repository=self._activity_repo,
+            label_repository=self._label_repo,
         )
-        link_repo = NoteIssueLinkRepository(self._session) if note_uuid else None
+        link_repo = self._note_issue_link_repo if note_uuid else None
 
         priority_map = {
             0: IssuePriority.URGENT,
