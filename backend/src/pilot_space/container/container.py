@@ -93,6 +93,7 @@ from pilot_space.application.services.onboarding import (
 from pilot_space.application.services.pm_block_insight_service import PMBlockInsightService
 from pilot_space.application.services.feature_toggle import FeatureToggleService
 from pilot_space.application.services.block_ownership import BlockOwnershipService
+from pilot_space.application.services.dependency_graph import DependencyGraphService
 from pilot_space.application.services.rate_limit import RateLimitService
 from pilot_space.application.services.rbac_service import RbacService
 from pilot_space.application.services.scim_service import ScimService
@@ -220,6 +221,12 @@ class Container(SkillContainer, PluginContainer):
     # Block Ownership Service
     block_ownership_service = providers.Factory(
         BlockOwnershipService,
+        session=providers.Callable(get_current_session),
+    )
+
+    # Dependency Graph Service
+    dependency_graph_service = providers.Factory(
+        DependencyGraphService,
         session=providers.Callable(get_current_session),
     )
 

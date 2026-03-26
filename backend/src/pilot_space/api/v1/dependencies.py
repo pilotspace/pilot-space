@@ -26,6 +26,7 @@ from pilot_space.application.services.annotation import (
     CreateAnnotationService,
 )
 from pilot_space.application.services.block_ownership import BlockOwnershipService
+from pilot_space.application.services.dependency_graph import DependencyGraphService
 from pilot_space.application.services.auth import AuthService
 from pilot_space.application.services.cycle import (
     AddIssueToCycleService,
@@ -113,6 +114,20 @@ def _get_block_ownership_service(
 
 BlockOwnershipServiceDep = Annotated[
     BlockOwnershipService, Depends(_get_block_ownership_service)
+]
+
+# ===== Dependency Graph Service Dependencies =====
+
+
+@inject
+def _get_dependency_graph_service(
+    svc: DependencyGraphService = Depends(Provide[Container.dependency_graph_service]),
+) -> DependencyGraphService:
+    return svc
+
+
+DependencyGraphServiceDep = Annotated[
+    DependencyGraphService, Depends(_get_dependency_graph_service)
 ]
 
 # ===== Issue Service Dependencies =====
@@ -759,6 +774,7 @@ __all__ = [  # noqa: RUF022
     "AuthServiceDep",
     "ActivityServiceDep",
     "BlockOwnershipServiceDep",
+    "DependencyGraphServiceDep",
     "AddIssueToCycleServiceDep",
     "AutoTransitionServiceDep",
     "ConnectGitHubServiceDep",
