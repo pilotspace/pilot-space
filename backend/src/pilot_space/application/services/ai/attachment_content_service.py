@@ -61,6 +61,29 @@ def _encode_base64(data: bytes) -> str:
     return base64.b64encode(data).decode()
 
 
+def _extract_pdf_text(data: bytes) -> str:
+    """Extract embedded text from a PDF using pypdf.
+
+    Returns extracted text, or empty string if extraction fails or yields
+    no meaningful content. Used to make PDF content available to non-Claude
+    providers (Ollama, OpenAI-compat) that don't support document blocks.
+    """
+    try:
+        import io
+
+        from pypdf import PdfReader
+
+        reader = PdfReader(io.BytesIO(data))
+        pages: list[str] = []
+        for i, page in enumerate(reader.pages):
+            text = page.extract_text() or ""
+            if text.strip():
+                pages.append(f"--- Page {i + 1} ---\n{text}")
+        return "\n\n".join(pages)
+    except Exception:
+        return ""
+
+
 def _build_document_block(data: bytes) -> dict[str, Any]:
     """Build a Claude document content block from PDF bytes.
 
@@ -258,7 +281,8 @@ class AttachmentContentService:
         """Convert PDF bytes to a content block.
 
         OCR-01: Runs OCR on scanned PDFs (< 100 chars of embedded text).
-        Falls back to document block if OCR is unavailable or yields no text.
+        For non-scanned PDFs, extracts text via pypdf so the content works
+        with any LLM provider (Ollama, OpenAI-compat) — not just Claude.
         """
         if self._ocr_service and self._session:
             from pilot_space.application.services.ai.ocr_service import is_scanned_pdf
@@ -273,6 +297,13 @@ class AttachmentContentService:
                 )
                 if ocr_result.text:
                     return _build_text_block(ocr_result.text.encode(), filename)
+
+        # Extract text from PDF so it works with any LLM provider
+        extracted = _extract_pdf_text(data)
+        if extracted:
+            return _build_text_block(extracted.encode(), filename)
+
+        # Last resort: raw document block (Claude-only, may fail on other providers)
         return _build_document_block(data)
 
     async def _convert_image(
