@@ -7,7 +7,7 @@ T058-T059: Issue extraction and approval.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Annotated, Any
+from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request
@@ -15,19 +15,17 @@ from pydantic import BaseModel, Field
 
 from pilot_space.api.middleware.request_context import CorrelationId, WorkspaceId
 from pilot_space.api.utils.sse import SSEResponse, SSEStreamBuilder
+from pilot_space.application.services.ai_extraction import (
+    CreateExtractedIssuesPayload,
+    CreateExtractedIssuesService,
+    ExtractedIssueInput,
+)
 from pilot_space.dependencies import (
     CurrentUserId,
     DbSession,
 )
 from pilot_space.dependencies.auth import require_workspace_member
-from pilot_space.domain.exceptions import (
-    NotFoundError,
-    ValidationError as DomainValidationError,
-)
 from pilot_space.infrastructure.logging import get_logger
-
-if TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = get_logger(__name__)
 
@@ -91,7 +89,7 @@ class ExtractIssuesResponse(BaseModel):
     processing_time_ms: float = Field(description="Processing time")
 
 
-class ExtractedIssueInput(BaseModel):
+class ExtractedIssueInputSchema(BaseModel):
     """Single issue to create from extraction."""
 
     title: str = Field(..., min_length=1, max_length=255)
@@ -100,10 +98,10 @@ class ExtractedIssueInput(BaseModel):
     source_block_id: str | None = None
 
 
-class CreateExtractedIssuesRequest(BaseModel):
+class CreateExtractedIssuesRequestSchema(BaseModel):
     """Request to create extracted issues (auto-approve, DD-003 non-destructive)."""
 
-    issues: list[ExtractedIssueInput] = Field(default_factory=list)
+    issues: list[ExtractedIssueInputSchema] = Field(default_factory=list)
     project_id: str | None = Field(default=None, description="Project UUID to assign issues to")
     note_id: str | None = Field(
         default=None, description="Source note ID (for no-note extraction route)"
@@ -145,26 +143,7 @@ async def extract_issues_stream(
 ) -> SSEResponse:
     """Extract issues from note content with confidence tags.
 
-    Returns SSE stream with:
-    - progress: Extraction progress updates
-    - issue: Each extracted issue as found
-    - complete: Final summary with approval_id
-    - error: If extraction fails
-
-    Issues require approval before creation (DD-003).
-
-    Args:
-        workspace_id: Workspace UUID from request context.
-        correlation_id: Correlation ID for tracing.
-        note_id: Note ID to extract from.
-        extract_request: Extraction request.
-        current_user_id: Current user ID.
-        request: FastAPI request.
-        approval_service: Approval service for human-in-the-loop.
-        session: Database session.
-
-    Returns:
-        SSE stream of extraction events.
+    Returns SSE stream with progress, issue, complete, and error events.
     """
     _ = correlation_id  # Used for tracing
 
@@ -176,7 +155,6 @@ async def extract_issues_stream(
 
         builder = SSEStreamBuilder()
 
-        # Progress: starting
         yield builder.event(
             "progress", {"stage": "analyzing", "message": "Analyzing note content..."}
         )
@@ -201,7 +179,6 @@ async def extract_issues_stream(
 
             result = await service.extract(payload)
 
-            # Stream each extracted issue
             for idx, issue in enumerate(result.issues):
                 yield builder.event(
                     "issue",
@@ -218,7 +195,6 @@ async def extract_issues_stream(
                     },
                 )
 
-            # Complete event with summary
             yield builder.event(
                 "complete",
                 {
@@ -239,145 +215,6 @@ async def extract_issues_stream(
     return SSEResponse(generate_events())
 
 
-async def _create_extracted_issues(
-    workspace_id: UUID,
-    note_id: str | None,
-    body: CreateExtractedIssuesRequest,
-    current_user_id: UUID,
-    session: AsyncSession,
-) -> CreateExtractedIssuesResponse:
-    """Shared logic for creating extracted issues.
-
-    Returns enriched response with identifier and title per created issue.
-
-    Raises:
-        HTTPException: 400 for validation errors (RFC 7807 via error handler).
-    """
-    from sqlalchemy import select as sa_select
-
-    from pilot_space.application.services.issue import CreateIssuePayload, CreateIssueService
-    from pilot_space.infrastructure.database.models.issue import IssuePriority
-    from pilot_space.infrastructure.database.models.note_issue_link import (
-        NoteIssueLink,
-        NoteLinkType,
-    )
-    from pilot_space.infrastructure.database.models.project import Project
-    from pilot_space.infrastructure.database.repositories import (
-        ActivityRepository,
-        IssueRepository,
-        LabelRepository,
-        NoteIssueLinkRepository,
-    )
-
-    if not body.issues:
-        raise DomainValidationError("No issues to create")
-
-    if not body.project_id:
-        raise DomainValidationError("project_id is required to create issues")
-
-    try:
-        project_id = UUID(body.project_id)
-    except (ValueError, AttributeError):
-        raise DomainValidationError("Invalid project_id format") from None
-
-    # Pre-fetch project identifier for constructing issue identifiers
-    project_row = await session.execute(
-        sa_select(Project.identifier).where(Project.id == project_id)
-    )
-    project_identifier = project_row.scalar_one_or_none()
-    if not project_identifier:
-        raise NotFoundError(f"Project not found for id {project_id}")
-
-    note_uuid: UUID | None = None
-    if note_id:
-        try:
-            note_uuid = UUID(note_id)
-        except (ValueError, AttributeError):
-            raise DomainValidationError("Invalid note_id format") from None
-
-    issue_service = CreateIssueService(
-        session=session,
-        issue_repository=IssueRepository(session),
-        activity_repository=ActivityRepository(session),
-        label_repository=LabelRepository(session),
-    )
-    link_repo = NoteIssueLinkRepository(session) if note_uuid else None
-
-    priority_map = {
-        0: IssuePriority.URGENT,
-        1: IssuePriority.HIGH,
-        2: IssuePriority.MEDIUM,
-        3: IssuePriority.LOW,
-        4: IssuePriority.NONE,
-    }
-
-    created_issues_data: list[CreatedIssueData] = []
-    for issue_data in body.issues:
-        payload = CreateIssuePayload(
-            workspace_id=workspace_id,
-            project_id=project_id,
-            reporter_id=current_user_id,
-            name=issue_data.title,
-            description=issue_data.description,
-            priority=priority_map.get(issue_data.priority, IssuePriority.NONE),
-        )
-        try:
-            result = await issue_service.execute(payload)
-            if result.issue:
-                issue_id = result.issue.id
-                identifier = f"{project_identifier}-{result.issue.sequence_id}"
-                created_issues_data.append(
-                    CreatedIssueData(
-                        id=str(issue_id),
-                        identifier=identifier,
-                        title=result.issue.name,
-                    )
-                )
-
-                # Create NoteIssueLink when note_id is provided
-                if note_uuid and link_repo:
-                    try:
-                        existing = await link_repo.find_existing(
-                            note_id=note_uuid,
-                            issue_id=issue_id,
-                            link_type=NoteLinkType.EXTRACTED,
-                            workspace_id=workspace_id,
-                        )
-                        if not existing:
-                            link = NoteIssueLink(
-                                note_id=note_uuid,
-                                issue_id=issue_id,
-                                link_type=NoteLinkType.EXTRACTED,
-                                block_id=issue_data.source_block_id,
-                                workspace_id=workspace_id,
-                            )
-                            await link_repo.create(link)
-                    except Exception:
-                        logger.warning(
-                            "Failed to create NoteIssueLink, issue was still created",
-                            extra={
-                                "note_id": str(note_uuid),
-                                "issue_id": str(issue_id),
-                            },
-                        )
-        except Exception:
-            logger.warning(
-                "Failed to create issue",
-                extra={"title": issue_data.title},
-                exc_info=True,
-            )
-            continue
-
-    await session.commit()
-
-    return CreateExtractedIssuesResponse(
-        created_issues=created_issues_data,
-        created_count=len(created_issues_data),
-        source_note_id=note_id,
-        message=f"Successfully created {len(created_issues_data)} issues",
-    )
-
-
 @router.post(
     "/notes/{note_id}/extract-issues/approve",
     summary="Create extracted issues from note",
@@ -387,18 +224,37 @@ async def _create_extracted_issues(
 async def approve_extracted_issues(
     workspace_id: WorkspaceId,
     note_id: str,
-    body: CreateExtractedIssuesRequest,
+    body: CreateExtractedIssuesRequestSchema,
     current_user_id: CurrentUserId,
     session: DbSession,
     _member: Annotated[UUID, Depends(require_workspace_member)],
 ) -> CreateExtractedIssuesResponse:
     """Create extracted issues from a note (auto-approve)."""
-    return await _create_extracted_issues(
+    service = CreateExtractedIssuesService(session=session)
+    payload = CreateExtractedIssuesPayload(
         workspace_id=workspace_id,
         note_id=note_id,
-        body=body,
-        current_user_id=current_user_id,
-        session=session,
+        issues=[
+            ExtractedIssueInput(
+                title=i.title,
+                description=i.description,
+                priority=i.priority,
+                source_block_id=i.source_block_id,
+            )
+            for i in body.issues
+        ],
+        project_id=body.project_id,
+        user_id=current_user_id,
+    )
+    result = await service.execute(payload)
+    return CreateExtractedIssuesResponse(
+        created_issues=[
+            CreatedIssueData(id=ci.id, identifier=ci.identifier, title=ci.title)
+            for ci in result.created_issues
+        ],
+        created_count=result.created_count,
+        source_note_id=result.source_note_id,
+        message=result.message,
     )
 
 
@@ -410,18 +266,37 @@ async def approve_extracted_issues(
 )
 async def approve_extracted_issues_no_note(
     workspace_id: WorkspaceId,
-    body: CreateExtractedIssuesRequest,
+    body: CreateExtractedIssuesRequestSchema,
     current_user_id: CurrentUserId,
     session: DbSession,
     _member: Annotated[UUID, Depends(require_workspace_member)],
 ) -> CreateExtractedIssuesResponse:
     """Create extracted issues without note context (auto-approve)."""
-    return await _create_extracted_issues(
+    service = CreateExtractedIssuesService(session=session)
+    payload = CreateExtractedIssuesPayload(
         workspace_id=workspace_id,
         note_id=body.note_id,
-        body=body,
-        current_user_id=current_user_id,
-        session=session,
+        issues=[
+            ExtractedIssueInput(
+                title=i.title,
+                description=i.description,
+                priority=i.priority,
+                source_block_id=i.source_block_id,
+            )
+            for i in body.issues
+        ],
+        project_id=body.project_id,
+        user_id=current_user_id,
+    )
+    result = await service.execute(payload)
+    return CreateExtractedIssuesResponse(
+        created_issues=[
+            CreatedIssueData(id=ci.id, identifier=ci.identifier, title=ci.title)
+            for ci in result.created_issues
+        ],
+        created_count=result.created_count,
+        source_note_id=result.source_note_id,
+        message=result.message,
     )
 
 
