@@ -14,11 +14,10 @@ Manual linking and dismissal remain in router (thin CRUD, no complex business lo
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Annotated
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, HTTPException, Path, status
-from pydantic import BaseModel
 from sqlalchemy.exc import IntegrityError
 
 from pilot_space.api.v1.dependencies import (
@@ -26,6 +25,11 @@ from pilot_space.api.v1.dependencies import (
     WorkspaceRepositoryDep,
 )
 from pilot_space.api.v1.repository_deps import IssueLinkRepositoryDep
+from pilot_space.api.v1.schemas.related_issues import (
+    IssueLinkCreateRequest,
+    IssueLinkCreateResponse,
+    RelatedSuggestion,
+)
 from pilot_space.dependencies import SyncedUserId
 from pilot_space.dependencies.auth import SessionDep
 from pilot_space.infrastructure.database.models.issue_link import IssueLink, IssueLinkType
@@ -35,37 +39,6 @@ router = APIRouter(tags=["related-issues"])
 
 WorkspaceIdOrSlug = Annotated[str, Path(description="Workspace UUID or slug")]
 IssueIdPath = Annotated[UUID, Path(description="Issue UUID")]
-
-
-# ---------------------------------------------------------------------------
-# Pydantic schemas
-# ---------------------------------------------------------------------------
-
-
-class RelatedSuggestion(BaseModel):
-    """Semantic suggestion for a related issue."""
-
-    id: UUID
-    title: str
-    identifier: str
-    similarity_score: float
-    reason: str
-
-
-class IssueLinkCreateRequest(BaseModel):
-    """Request body for creating an issue relation."""
-
-    target_issue_id: UUID
-    link_type: Literal["related"] = "related"
-
-
-class IssueLinkCreateResponse(BaseModel):
-    """Response schema for a newly created issue relation."""
-
-    id: UUID
-    source_issue_id: UUID
-    target_issue_id: UUID
-    link_type: str
 
 
 # ---------------------------------------------------------------------------

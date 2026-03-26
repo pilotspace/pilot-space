@@ -10,13 +10,17 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Path, status
-from pydantic import BaseModel, Field
 
 from pilot_space.api.v1.dependencies import (
     NoteAIUpdateServiceDep,
     WorkspaceRepositoryDep,
 )
 from pilot_space.api.v1.schemas.note import AIUpdateRequest, AIUpdateResponse
+from pilot_space.api.v1.schemas.workspace_notes_ai import (
+    CreateExtractedIssuesRequest,
+    CreateExtractedIssuesResponse,
+    ExtractedIssueInput,  # noqa: F401  # re-exported: tests import from this module
+)
 from pilot_space.dependencies.auth import CurrentUserId, SessionDep
 from pilot_space.domain.exceptions import NotFoundError
 from pilot_space.infrastructure.database.repositories.note_repository import (
@@ -134,29 +138,6 @@ async def ai_update_workspace_note(
         affected_block_ids=result.affected_block_ids,
         conflict=result.conflict,
     )
-
-
-class ExtractedIssueInput(BaseModel):
-    """Single extracted issue to create."""
-
-    title: str = Field(..., min_length=1, max_length=255)
-    description: str | None = None
-    priority: str = "medium"
-    type: str = "task"
-    source_block_id: str | None = None
-
-
-class CreateExtractedIssuesRequest(BaseModel):
-    """Request to create multiple extracted issues from a note."""
-
-    issues: list[ExtractedIssueInput] = Field(..., min_length=1, max_length=50)
-
-
-class CreateExtractedIssuesResponse(BaseModel):
-    """Response with created issue IDs."""
-
-    created_issue_ids: list[str]
-    count: int
 
 
 @router.post(

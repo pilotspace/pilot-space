@@ -15,7 +15,6 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Path, Query, Response, status
-from pydantic import BaseModel
 from sqlalchemy import select
 
 from pilot_space.api.v1.dependencies import (
@@ -40,6 +39,7 @@ from pilot_space.api.v1.schemas.issue import (
     IssueResponse,
     NoteIssueLinkBriefSchema,
     StateBriefSchema,
+    StateUpdateRequest,
     UserBriefSchema,
     WorkspaceIssueCreateRequest,
     WorkspaceIssueResponse,
@@ -63,13 +63,6 @@ from pilot_space.infrastructure.logging import get_logger
 logger = get_logger(__name__)
 
 router = APIRouter()
-
-
-class StateUpdateRequest(BaseModel):
-    """Request body for state update."""
-
-    state: str
-
 
 # Accept string to support both UUID and slug
 WorkspaceIdOrSlug = Annotated[str, Path(description="Workspace ID (UUID) or slug")]
