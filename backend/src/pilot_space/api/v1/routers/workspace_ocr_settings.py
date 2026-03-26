@@ -1,9 +1,11 @@
 """Workspace OCR settings router for Pilot Space API.
 
+Thin HTTP shell delegating to OcrConfigurationService for business logic.
+
 Provides endpoints for managing workspace OCR provider configuration:
-- GET  /workspaces/{workspace_id}/ocr/settings — current provider info
-- PUT  /workspaces/{workspace_id}/ocr/settings — store/update provider credentials
-- POST /workspaces/{workspace_id}/ocr/settings/test — test connection
+- GET  /workspaces/{workspace_id}/ocr/settings -- current provider info
+- PUT  /workspaces/{workspace_id}/ocr/settings -- store/update provider credentials
+- POST /workspaces/{workspace_id}/ocr/settings/test -- test connection
 
 BYOK pattern: credentials are encrypted at rest via SecureKeyStorage.
 Supports hunyuan_ocr (vLLM self-hosted) and tencent_ocr (Tencent Cloud SDK).
@@ -13,13 +15,16 @@ OCR-01, OCR-02, OCR-05
 
 from __future__ import annotations
 
-import json
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
 from pilot_space.api.v1.routers._workspace_admin import get_admin_workspace
+from pilot_space.application.services.ocr_configuration import (
+    OcrConfigurationService,
+    OcrUpdatePayload,
+)
 from pilot_space.dependencies.ai import KeyStorageDep
 from pilot_space.dependencies.auth import CurrentUser, DbSession
 from pilot_space.infrastructure.logging import get_logger
@@ -31,8 +36,6 @@ router = APIRouter()
 # ---------------------------------------------------------------------------
 # Schemas
 # ---------------------------------------------------------------------------
-
-_SUPPORTED_OCR_PROVIDERS = frozenset({"hunyuan_ocr", "tencent_ocr", "none"})
 
 
 class OcrSettingsResponse(BaseModel):
@@ -69,22 +72,6 @@ class OcrTestResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Helper
-# ---------------------------------------------------------------------------
-
-
-def _none_response(workspace_id: UUID) -> OcrSettingsResponse:
-    return OcrSettingsResponse(
-        workspace_id=workspace_id,
-        provider_type="none",
-        is_configured=False,
-        is_valid=None,
-        endpoint_url=None,
-        model_name=None,
-    )
-
-
-# ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
 
@@ -103,19 +90,16 @@ async def get_ocr_settings(
     """Get current OCR provider configuration for a workspace."""
     await get_admin_workspace(workspace_id, current_user, session)
 
-    for ocr_provider in ("hunyuan_ocr", "tencent_ocr"):
-        info = await key_storage.get_key_info(workspace_id, ocr_provider, "ocr")
-        if info:
-            return OcrSettingsResponse(
-                workspace_id=workspace_id,
-                provider_type=ocr_provider,
-                is_configured=True,
-                is_valid=info.is_valid,
-                endpoint_url=info.base_url,
-                model_name=info.model_name,
-            )
-
-    return _none_response(workspace_id)
+    svc = OcrConfigurationService(key_storage=key_storage)
+    result = await svc.get_ocr_config(workspace_id)
+    return OcrSettingsResponse(
+        workspace_id=result.workspace_id,
+        provider_type=result.provider_type,
+        is_configured=result.is_configured,
+        is_valid=result.is_valid,
+        endpoint_url=result.endpoint_url,
+        model_name=result.model_name,
+    )
 
 
 @router.put(
@@ -133,84 +117,24 @@ async def update_ocr_settings(
     """Store or update OCR provider credentials for a workspace."""
     await get_admin_workspace(workspace_id, current_user, session)
 
-    if body.provider_type not in _SUPPORTED_OCR_PROVIDERS:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Unsupported provider_type: {body.provider_type!r}. "
-            f"Allowed: {sorted(_SUPPORTED_OCR_PROVIDERS)}",
-        )
-
-    if body.provider_type == "none":
-        for ocr_provider in ("hunyuan_ocr", "tencent_ocr"):
-            await key_storage.delete_api_key(workspace_id, ocr_provider, "ocr")
-        logger.info("ocr_settings_cleared", workspace_id=str(workspace_id))
-        return _none_response(workspace_id)
-
-    if body.provider_type == "hunyuan_ocr":
-        if not body.endpoint_url:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="endpoint_url is required for hunyuan_ocr",
-            )
-        await key_storage.store_api_key(
-            workspace_id=workspace_id,
-            provider="hunyuan_ocr",
-            service_type="ocr",
-            api_key=body.api_key,
-            base_url=body.endpoint_url,
-            model_name=body.model_name or "tencent/HunyuanOCR",
-        )
-        logger.info(
-            "ocr_settings_updated",
-            workspace_id=str(workspace_id),
-            provider="hunyuan_ocr",
-        )
-        info = await key_storage.get_key_info(workspace_id, "hunyuan_ocr", "ocr")
-        return OcrSettingsResponse(
-            workspace_id=workspace_id,
-            provider_type="hunyuan_ocr",
-            is_configured=True,
-            is_valid=info.is_valid if info else None,
-            endpoint_url=body.endpoint_url,
-            model_name=body.model_name or "tencent/HunyuanOCR",
-        )
-
-    if body.provider_type == "tencent_ocr":
-        if not body.secret_id or not body.secret_key:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="secret_id and secret_key are required for tencent_ocr",
-            )
-        credentials_json: str | None = None
-        if body.secret_id and body.secret_key:
-            credentials_json = json.dumps({"id": body.secret_id, "key": body.secret_key})
-
-        await key_storage.store_api_key(
-            workspace_id=workspace_id,
-            provider="tencent_ocr",
-            service_type="ocr",
-            api_key=credentials_json,
-            base_url=None,
-            model_name=body.region or "ap-guangzhou",
-        )
-        logger.info(
-            "ocr_settings_updated",
-            workspace_id=str(workspace_id),
-            provider="tencent_ocr",
-        )
-        info = await key_storage.get_key_info(workspace_id, "tencent_ocr", "ocr")
-        return OcrSettingsResponse(
-            workspace_id=workspace_id,
-            provider_type="tencent_ocr",
-            is_configured=True,
-            is_valid=info.is_valid if info else None,
-            endpoint_url=None,
-            model_name=body.region or "ap-guangzhou",
-        )
-
-    raise HTTPException(  # pragma: no cover
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        detail=f"Unhandled provider_type: {body.provider_type!r}",
+    svc = OcrConfigurationService(key_storage=key_storage)
+    payload = OcrUpdatePayload(
+        provider_type=body.provider_type,
+        endpoint_url=body.endpoint_url,
+        api_key=body.api_key,
+        model_name=body.model_name,
+        secret_id=body.secret_id,
+        secret_key=body.secret_key,
+        region=body.region,
+    )
+    result = await svc.update_ocr_config(workspace_id, payload)
+    return OcrSettingsResponse(
+        workspace_id=result.workspace_id,
+        provider_type=result.provider_type,
+        is_configured=result.is_configured,
+        is_valid=result.is_valid,
+        endpoint_url=result.endpoint_url,
+        model_name=result.model_name,
     )
 
 
@@ -228,16 +152,19 @@ async def test_ocr_connection(
     request: Request,
 ) -> OcrTestResponse:
     """Test OCR provider connection using a built-in 1x1 PNG."""
+    from fastapi import HTTPException, status
+
+    from pilot_space.ai.ocr.abstract_ocr_provider import OcrConfig
+    from pilot_space.application.services.ai.ocr_service import OcrService
+
     await get_admin_workspace(workspace_id, current_user, session)
 
-    if body.provider_type not in _SUPPORTED_OCR_PROVIDERS - {"none"}:
+    _SUPPORTED_TEST_PROVIDERS = frozenset({"hunyuan_ocr", "tencent_ocr"})
+    if body.provider_type not in _SUPPORTED_TEST_PROVIDERS:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Cannot test provider_type={body.provider_type!r}",
         )
-
-    from pilot_space.ai.ocr.abstract_ocr_provider import OcrConfig
-    from pilot_space.application.services.ai.ocr_service import OcrService
 
     container = request.app.state.container
     ocr_service = OcrService(master_secret=container.encryption_key())
