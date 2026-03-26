@@ -79,8 +79,10 @@ from pilot_space.application.services.onboarding import (
     GetOnboardingService,
     UpdateOnboardingService,
 )
+from pilot_space.application.services.feature_toggle import FeatureToggleService
 from pilot_space.application.services.rate_limit import RateLimitService
 from pilot_space.application.services.rbac_service import RbacService
+from pilot_space.application.services.scim_service import ScimService
 from pilot_space.application.services.role_skill import (
     CreateRoleSkillService,
     DeleteRoleSkillService,
@@ -705,6 +707,30 @@ def _get_rate_limit_service(
 
 RateLimitServiceDep = Annotated[RateLimitService, Depends(_get_rate_limit_service)]
 
+# ===== Feature Toggle Service Dependencies =====
+
+
+@inject
+def _get_feature_toggle_service(
+    svc: FeatureToggleService = Depends(Provide[Container.feature_toggle_service]),
+) -> FeatureToggleService:
+    return svc
+
+
+FeatureToggleServiceDep = Annotated[FeatureToggleService, Depends(_get_feature_toggle_service)]
+
+# ===== SCIM Service Dependencies =====
+
+
+@inject
+def _get_scim_service(
+    svc: ScimService = Depends(Provide[Container.scim_service]),
+) -> ScimService:
+    return svc
+
+
+ScimServiceDep = Annotated[ScimService, Depends(_get_scim_service)]
+
 __all__ = [  # noqa: RUF022
     "ActivityRepositoryDep",
     "CycleRepositoryDep",
@@ -769,6 +795,8 @@ __all__ = [  # noqa: RUF022
     "ReorderPageServiceDep",
     "TranscriptionServiceDep",
     "RateLimitServiceDep",
+    "FeatureToggleServiceDep",
+    "ScimServiceDep",
 ]
 
 

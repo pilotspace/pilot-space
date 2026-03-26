@@ -14,10 +14,10 @@ Source: Phase 20, P20-05
 
 from __future__ import annotations
 
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, status
 
 from pilot_space.api.middleware.request_context import WorkspaceId
 from pilot_space.api.v1.schemas.skill_template import (
@@ -26,15 +26,11 @@ from pilot_space.api.v1.schemas.skill_template import (
     SkillTemplateUpdate,
 )
 from pilot_space.dependencies import CurrentUserId, DbSession
+from pilot_space.dependencies.auth import require_workspace_admin, require_workspace_member
 from pilot_space.domain.exceptions import ForbiddenError, NotFoundError
-from pilot_space.infrastructure.database.models.workspace_member import (
-    WorkspaceMember,
-    WorkspaceRole,
-)
 from pilot_space.infrastructure.database.repositories.skill_template_repository import (
     SkillTemplateRepository,
 )
-from pilot_space.infrastructure.database.rls import set_rls_context
 from pilot_space.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
@@ -43,37 +39,6 @@ router = APIRouter(
     prefix="/{workspace_id}/skill-templates",
     tags=["Skill Templates"],
 )
-
-
-async def _require_admin(
-    user_id: UUID,
-    workspace_id: UUID,
-    session: DbSession,
-) -> None:
-    """Verify user is ADMIN or OWNER in the workspace.
-
-    Args:
-        user_id: Authenticated user UUID.
-        workspace_id: Workspace UUID.
-        session: Database session.
-
-    Raises:
-        HTTPException: 403 if not admin/owner.
-    """
-    stmt = select(WorkspaceMember.role).where(
-        WorkspaceMember.workspace_id == workspace_id,
-        WorkspaceMember.user_id == user_id,
-    )
-    result = await session.execute(stmt)
-    row = result.scalar()
-
-    if row is None:
-        raise ForbiddenError("Not a member of this workspace")
-
-    role = row.value if hasattr(row, "value") else str(row)
-
-    if role not in (WorkspaceRole.ADMIN.value, WorkspaceRole.OWNER.value):
-        raise ForbiddenError("Admin or owner role required")
 
 
 @router.get(
@@ -87,6 +52,7 @@ async def list_skill_templates(
     workspace_id: WorkspaceId,
     session: DbSession,
     current_user_id: CurrentUserId,
+    _: Annotated[UUID, Depends(require_workspace_member)],
 ) -> list[SkillTemplateSchema]:
     """List all non-deleted skill templates in a workspace.
 
@@ -98,7 +64,6 @@ async def list_skill_templates(
     Returns:
         List of SkillTemplateSchema ordered by sort_order.
     """
-    await set_rls_context(session, current_user_id, workspace_id)
     repo = SkillTemplateRepository(session)
     templates = await repo.get_by_workspace(workspace_id)
     return [SkillTemplateSchema.model_validate(t) for t in templates]
@@ -116,6 +81,7 @@ async def create_skill_template(
     body: SkillTemplateCreate,
     session: DbSession,
     current_user_id: CurrentUserId,
+    _: Annotated[UUID, Depends(require_workspace_admin)],
 ) -> SkillTemplateSchema:
     """Create a new workspace skill template.
 
@@ -131,8 +97,6 @@ async def create_skill_template(
     Raises:
         HTTPException: 403 if not admin/owner.
     """
-    await set_rls_context(session, current_user_id, workspace_id)
-    await _require_admin(current_user_id, workspace_id, session)
 
     repo = SkillTemplateRepository(session)
     template = await repo.create(
@@ -173,6 +137,7 @@ async def update_skill_template(
     body: SkillTemplateUpdate,
     session: DbSession,
     current_user_id: CurrentUserId,
+    _: Annotated[UUID, Depends(require_workspace_admin)],
 ) -> SkillTemplateSchema:
     """Update a skill template.
 
@@ -193,8 +158,6 @@ async def update_skill_template(
         HTTPException: 403 if not admin or trying to edit built-in fields.
         HTTPException: 404 if template not found.
     """
-    await set_rls_context(session, current_user_id, workspace_id)
-    await _require_admin(current_user_id, workspace_id, session)
 
     repo = SkillTemplateRepository(session)
     template = await repo.get_by_id(template_id)
@@ -237,6 +200,7 @@ async def delete_skill_template(
     template_id: UUID,
     session: DbSession,
     current_user_id: CurrentUserId,
+    _: Annotated[UUID, Depends(require_workspace_admin)],
 ) -> None:
     """Soft-delete a skill template.
 
@@ -250,8 +214,6 @@ async def delete_skill_template(
         HTTPException: 403 if not admin/owner.
         HTTPException: 404 if template not found.
     """
-    await set_rls_context(session, current_user_id, workspace_id)
-    await _require_admin(current_user_id, workspace_id, session)
 
     repo = SkillTemplateRepository(session)
     result = await repo.soft_delete(template_id)

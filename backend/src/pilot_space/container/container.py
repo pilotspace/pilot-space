@@ -91,8 +91,10 @@ from pilot_space.application.services.onboarding import (
     UpdateOnboardingService,
 )
 from pilot_space.application.services.pm_block_insight_service import PMBlockInsightService
+from pilot_space.application.services.feature_toggle import FeatureToggleService
 from pilot_space.application.services.rate_limit import RateLimitService
 from pilot_space.application.services.rbac_service import RbacService
+from pilot_space.application.services.scim_service import ScimService
 from pilot_space.application.services.sso_service import SsoService
 from pilot_space.application.services.task_service import TaskService
 from pilot_space.application.services.transcription import TranscriptionService
@@ -218,6 +220,20 @@ class Container(SkillContainer, PluginContainer):
     rate_limit_service = providers.Factory(
         RateLimitService,
         redis=InfraContainer.redis_client,
+    )
+
+    # Feature Toggle Service
+    feature_toggle_service = providers.Factory(
+        FeatureToggleService,
+        session=providers.Callable(get_current_session),
+    )
+
+    # SCIM Service (AUTH-07)
+    scim_service = providers.Factory(
+        ScimService,
+        workspace_repo=InfraContainer.workspace_repository,
+        user_repo=InfraContainer.user_repository,
+        supabase_admin_client=InfraContainer.supabase_auth,
     )
 
     # ===== Service Factories =====

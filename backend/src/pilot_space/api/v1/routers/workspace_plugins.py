@@ -9,10 +9,11 @@ Source: Phase 19, SKRG-01..05
 from __future__ import annotations
 
 import asyncio
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query, status
-from sqlalchemy import select, update
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import update
 
 from pilot_space.api.middleware.request_context import WorkspaceId
 from pilot_space.api.v1.schemas.workspace_plugin import (
@@ -27,12 +28,8 @@ from pilot_space.api.v1.schemas.workspace_plugin import (
     WorkspacePluginUpdateCheckResponse,
 )
 from pilot_space.dependencies import CurrentUserId, DbSession, RedisDep
-from pilot_space.domain.exceptions import ForbiddenError, NotFoundError
-from pilot_space.infrastructure.database.models.workspace_member import (
-    WorkspaceMember,
-    WorkspaceRole,
-)
-from pilot_space.infrastructure.database.rls import set_rls_context
+from pilot_space.dependencies.auth import require_workspace_admin
+from pilot_space.domain.exceptions import NotFoundError
 from pilot_space.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
@@ -43,22 +40,6 @@ router = APIRouter(
 )
 
 _PLUGIN_SHA_CACHE_TTL = 300
-
-
-async def _require_admin(user_id: UUID, workspace_id: UUID, session: DbSession) -> None:
-    """Verify user is ADMIN or OWNER. Raises 403 if not."""
-    stmt = select(WorkspaceMember.role).where(
-        WorkspaceMember.workspace_id == workspace_id,
-        WorkspaceMember.user_id == user_id,
-        WorkspaceMember.is_deleted == False,  # noqa: E712
-    )
-    result = await session.execute(stmt)
-    row = result.scalar()
-    if row is None:
-        raise ForbiddenError("Not a member")
-    role = row.value if hasattr(row, "value") else str(row).upper()
-    if role not in (WorkspaceRole.ADMIN.value, WorkspaceRole.OWNER.value):
-        raise ForbiddenError("Admin required")
 
 
 async def _get_workspace_token(workspace_id: UUID, session: DbSession) -> str | None:
@@ -110,11 +91,12 @@ async def _get_cached_head_sha(
     summary="List installed plugins",
 )
 async def list_installed_plugins(
-    workspace_id: WorkspaceId, session: DbSession, current_user_id: CurrentUserId
+    workspace_id: WorkspaceId,
+    session: DbSession,
+    current_user_id: CurrentUserId,
+    _: Annotated[UUID, Depends(require_workspace_admin)],
 ) -> list[WorkspacePluginResponse]:
     """Return all installed (non-deleted) plugins for this workspace."""
-    await set_rls_context(session, current_user_id, workspace_id)
-    await _require_admin(current_user_id, workspace_id, session)
 
     from pilot_space.infrastructure.database.repositories.workspace_plugin_repository import (
         WorkspacePluginRepository,
@@ -134,11 +116,10 @@ async def browse_repo(
     workspace_id: WorkspaceId,
     session: DbSession,
     current_user_id: CurrentUserId,
+    _: Annotated[UUID, Depends(require_workspace_admin)],
     repo_url: str = Query(description="GitHub repository URL to browse"),
 ) -> list[SkillListItem]:
     """Fetch available skills from a GitHub repository URL."""
-    await set_rls_context(session, current_user_id, workspace_id)
-    await _require_admin(current_user_id, workspace_id, session)
 
     from pilot_space.integrations.github.plugin_service import (
         GitHubPluginService,
@@ -180,10 +161,9 @@ async def install_plugin(
     request: WorkspacePluginInstallRequest,
     session: DbSession,
     current_user_id: CurrentUserId,
+    _: Annotated[UUID, Depends(require_workspace_admin)],
 ) -> WorkspacePluginResponse:
     """Install one skill from a GitHub repository into this workspace."""
-    await set_rls_context(session, current_user_id, workspace_id)
-    await _require_admin(current_user_id, workspace_id, session)
 
     from pilot_space.application.services.workspace_plugin.install_plugin_service import (
         InstallPluginService,
@@ -228,10 +208,9 @@ async def install_all_from_repo(
     request: WorkspacePluginInstallAllRequest,
     session: DbSession,
     current_user_id: CurrentUserId,
+    _: Annotated[UUID, Depends(require_workspace_admin)],
 ) -> list[WorkspacePluginResponse]:
     """Browse a GitHub repo and install all discovered skills at once."""
-    await set_rls_context(session, current_user_id, workspace_id)
-    await _require_admin(current_user_id, workspace_id, session)
 
     from pilot_space.application.services.workspace_plugin.install_plugin_service import (
         InstallPluginService,
@@ -324,10 +303,9 @@ async def toggle_plugin(
     request: WorkspacePluginToggleRequest,
     session: DbSession,
     current_user_id: CurrentUserId,
+    _: Annotated[UUID, Depends(require_workspace_admin)],
 ) -> WorkspacePluginResponse:
     """Activate or deactivate a single plugin skill."""
-    await set_rls_context(session, current_user_id, workspace_id)
-    await _require_admin(current_user_id, workspace_id, session)
 
     from pilot_space.infrastructure.database.repositories.workspace_plugin_repository import (
         WorkspacePluginRepository,
@@ -356,10 +334,9 @@ async def toggle_repo_plugins(
     request: WorkspacePluginToggleRepoRequest,
     session: DbSession,
     current_user_id: CurrentUserId,
+    _: Annotated[UUID, Depends(require_workspace_admin)],
 ) -> list[WorkspacePluginResponse]:
     """Activate or deactivate all plugin skills from a specific repository."""
-    await set_rls_context(session, current_user_id, workspace_id)
-    await _require_admin(current_user_id, workspace_id, session)
 
     from pilot_space.infrastructure.database.models.workspace_plugin import WorkspacePlugin
     from pilot_space.infrastructure.database.repositories.workspace_plugin_repository import (
@@ -403,11 +380,10 @@ async def uninstall_repo_plugins(
     workspace_id: WorkspaceId,
     session: DbSession,
     current_user_id: CurrentUserId,
+    _: Annotated[UUID, Depends(require_workspace_admin)],
     repo_url: str = Query(description="GitHub repository URL to uninstall"),
 ) -> None:
     """Soft-delete all installed plugins from a specific repository."""
-    await set_rls_context(session, current_user_id, workspace_id)
-    await _require_admin(current_user_id, workspace_id, session)
 
     from pilot_space.infrastructure.database.models.skill_action_button import SkillActionButton
     from pilot_space.infrastructure.database.models.workspace_plugin import WorkspacePlugin
@@ -471,10 +447,9 @@ async def uninstall_plugin(
     plugin_id: UUID,
     session: DbSession,
     current_user_id: CurrentUserId,
+    _: Annotated[UUID, Depends(require_workspace_admin)],
 ) -> None:
     """Soft-delete an installed plugin."""
-    await set_rls_context(session, current_user_id, workspace_id)
-    await _require_admin(current_user_id, workspace_id, session)
 
     from pilot_space.application.services.workspace_plugin.install_plugin_service import (
         InstallPluginService,
@@ -502,11 +477,10 @@ async def check_updates(
     workspace_id: WorkspaceId,
     session: DbSession,
     current_user_id: CurrentUserId,
+    _: Annotated[UUID, Depends(require_workspace_admin)],
     redis: RedisDep,
 ) -> WorkspacePluginUpdateCheckResponse:
     """Check if installed plugins have newer versions available."""
-    await set_rls_context(session, current_user_id, workspace_id)
-    await _require_admin(current_user_id, workspace_id, session)
 
     from pilot_space.infrastructure.database.repositories.workspace_plugin_repository import (
         WorkspacePluginRepository,
@@ -554,10 +528,9 @@ async def save_github_credential(
     request: WorkspaceGithubCredentialRequest,
     session: DbSession,
     current_user_id: CurrentUserId,
+    _: Annotated[UUID, Depends(require_workspace_admin)],
 ) -> WorkspaceGithubCredentialResponse:
     """Encrypt and store a GitHub PAT for this workspace."""
-    await set_rls_context(session, current_user_id, workspace_id)
-    await _require_admin(current_user_id, workspace_id, session)
 
     from pilot_space.infrastructure.database.repositories.workspace_github_credential_repository import (
         WorkspaceGithubCredentialRepository,
@@ -582,10 +555,9 @@ async def get_github_credential(
     workspace_id: WorkspaceId,
     session: DbSession,
     current_user_id: CurrentUserId,
+    _: Annotated[UUID, Depends(require_workspace_admin)],
 ) -> WorkspaceGithubCredentialResponse:
     """Check if a GitHub PAT is configured for this workspace."""
-    await set_rls_context(session, current_user_id, workspace_id)
-    await _require_admin(current_user_id, workspace_id, session)
 
     from pilot_space.infrastructure.database.repositories.workspace_github_credential_repository import (
         WorkspaceGithubCredentialRepository,
