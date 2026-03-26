@@ -212,7 +212,7 @@ def _get_cached_client(
 # ---------------------------------------------------------------------------
 
 
-@router.post("/v1/messages")
+@router.post("/v1/messages", response_model=None)
 @observe(name="ai_proxy.messages")  # type: ignore[misc]
 async def proxy_messages(
     request: Request,
