@@ -562,6 +562,13 @@ export const StructuredResultCard = memo<StructuredResultCardProps>(
         case 'context_issues_result':
           return <ContextIssuesResultCard data={data} />;
         case 'skill_generation_result': {
+          if (!workspaceSlug) {
+            return (
+              <div className="text-xs text-muted-foreground">
+                Workspace context required for skill actions
+              </div>
+            );
+          }
           const { experienceDescription, ...skillData } = data as Record<string, unknown> & {
             experienceDescription: string;
           };
@@ -569,7 +576,7 @@ export const StructuredResultCard = memo<StructuredResultCardProps>(
             <SkillPreviewCard
               generatedSkill={skillData as unknown as GenerateSkillResponse}
               experienceDescription={experienceDescription}
-              workspaceId={workspaceSlug ?? ''}
+              workspaceSlug={workspaceSlug}
             />
           );
         }

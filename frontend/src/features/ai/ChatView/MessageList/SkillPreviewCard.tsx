@@ -24,18 +24,18 @@ export interface SkillPreviewCardProps {
   generatedSkill: GenerateSkillResponse;
   /** Experience description used for generation (for regeneration) */
   experienceDescription: string;
-  /** Workspace ID for API calls */
-  workspaceId: string;
+  /** Workspace slug for API calls */
+  workspaceSlug: string;
   /** Called when skill data is updated (after regeneration) */
   onSkillUpdated?: (skill: GenerateSkillResponse) => void;
   className?: string;
 }
 
 export const SkillPreviewCard = memo<SkillPreviewCardProps>(
-  ({ generatedSkill, experienceDescription, workspaceId, onSkillUpdated, className }) => {
+  ({ generatedSkill, experienceDescription, workspaceSlug, onSkillUpdated, className }) => {
     const [saved, setSaved] = useState(false);
-    const createSkill = useCreateUserSkill(workspaceId);
-    const generateSkill = useGenerateSkill({ workspaceId });
+    const createSkill = useCreateUserSkill(workspaceSlug);
+    const generateSkill = useGenerateSkill({ workspaceId: workspaceSlug });
 
     const handlePreview = useCallback(() => {
       const detail: SkillPreviewDetail = {
