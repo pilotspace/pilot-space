@@ -84,6 +84,7 @@ from pilot_space.application.services.onboarding import (
     UpdateOnboardingService,
 )
 from pilot_space.application.services.feature_toggle import FeatureToggleService
+from pilot_space.application.services.attachment_management import AttachmentManagementService
 from pilot_space.application.services.mcp_oauth import McpOAuthService
 from pilot_space.application.services.mcp_server import McpServerService
 from pilot_space.application.services.rate_limit import RateLimitService
@@ -867,6 +868,7 @@ __all__ = [  # noqa: RUF022
     "ScimServiceDep",
     "McpServerServiceDep",
     "McpOAuthServiceDep",
+    "AttachmentManagementServiceDep",
 ]
 
 
@@ -904,3 +906,20 @@ def _get_mcp_oauth_service(
 
 
 McpOAuthServiceDep = Annotated[McpOAuthService, Depends(_get_mcp_oauth_service)]
+
+
+# ===== Attachment Management Service Dependencies =====
+
+
+@inject
+def _get_attachment_management_service(
+    svc: AttachmentManagementService = Depends(
+        Provide[Container.attachment_management_service]
+    ),
+) -> AttachmentManagementService:
+    return svc
+
+
+AttachmentManagementServiceDep = Annotated[
+    AttachmentManagementService, Depends(_get_attachment_management_service)
+]

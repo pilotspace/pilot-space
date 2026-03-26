@@ -94,6 +94,7 @@ from pilot_space.application.services.pm_block_insight_service import PMBlockIns
 from pilot_space.application.services.feature_toggle import FeatureToggleService
 from pilot_space.application.services.block_ownership import BlockOwnershipService
 from pilot_space.application.services.dependency_graph import DependencyGraphService
+from pilot_space.application.services.attachment_management import AttachmentManagementService
 from pilot_space.application.services.mcp_oauth import McpOAuthService
 from pilot_space.application.services.note_template import NoteTemplateService
 from pilot_space.application.services.related_issues import RelatedIssuesSuggestionService
@@ -263,6 +264,13 @@ class Container(SkillContainer, PluginContainer):
         McpOAuthService,
         session=providers.Callable(get_current_session),
         redis=InfraContainer.redis_client,
+    )
+
+    # Attachment Management Service — quota, extraction, ingest
+    attachment_management_service = providers.Factory(
+        AttachmentManagementService,
+        session=providers.Callable(get_current_session),
+        storage_client=InfraContainer.storage_client,
     )
 
     # Feature Toggle Service
