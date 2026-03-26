@@ -105,7 +105,8 @@ async def get_current_user_profile(
     # workspace domain logic, consistent with how ai_settings is fetched separately.
     memberships_result = await session.execute(
         select(WorkspaceMember).where(
-            WorkspaceMember.user_id == UUID(str(current_user.user_id))
+            WorkspaceMember.user_id == UUID(str(current_user.user_id)),
+            WorkspaceMember.is_deleted == False,  # noqa: E712
         )
     )
     memberships = memberships_result.scalars().all()

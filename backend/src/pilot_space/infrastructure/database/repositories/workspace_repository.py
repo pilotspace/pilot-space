@@ -101,7 +101,11 @@ class WorkspaceRepository(BaseRepository[Workspace]):
         """
         query = (
             select(Workspace)
-            .options(joinedload(Workspace.members).joinedload(WorkspaceMember.user))
+            .options(
+                joinedload(Workspace.members.and_(WorkspaceMember.is_deleted == False)).joinedload(  # noqa: E712
+                    WorkspaceMember.user
+                )
+            )
             .where(Workspace.slug == slug)
         )
         if not include_deleted:
@@ -194,7 +198,11 @@ class WorkspaceRepository(BaseRepository[Workspace]):
         """
         query = (
             select(Workspace)
-            .options(joinedload(Workspace.members).joinedload(WorkspaceMember.user))
+            .options(
+                joinedload(Workspace.members.and_(WorkspaceMember.is_deleted == False)).joinedload(  # noqa: E712
+                    WorkspaceMember.user
+                )
+            )
             .where(Workspace.id == workspace_id)
         )
         if not include_deleted:
