@@ -45,7 +45,7 @@ class AIStatus(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     byok_configured: bool
-    providers: list[str]
+    providers: tuple[str, ...]
 
 
 __all__ = [

@@ -338,6 +338,7 @@ class ProjectRepository(BaseRepository[Project]):
     async def get_identifier_by_id(
         self,
         project_id: UUID,
+        workspace_id: UUID,
     ) -> str | None:
         """Return only the short identifier string for a project.
 
@@ -347,6 +348,7 @@ class ProjectRepository(BaseRepository[Project]):
 
         Args:
             project_id: The project UUID.
+            workspace_id: The workspace UUID (tenant scope guard).
 
         Returns:
             The identifier string (e.g. "PILOT") or None if not found.
@@ -354,6 +356,7 @@ class ProjectRepository(BaseRepository[Project]):
         result = await self.session.execute(
             select(Project.identifier).where(
                 Project.id == project_id,
+                Project.workspace_id == workspace_id,
                 Project.is_deleted == False,  # noqa: E712
             )
         )

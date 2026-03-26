@@ -244,7 +244,7 @@ class WorkspacePluginRepository(BaseRepository[WorkspacePlugin]):
         stmt = (
             update(WorkspacePlugin)
             .where(WorkspacePlugin.id.in_(plugin_ids))
-            .values(is_deleted=True, is_active=False)
+            .values(is_deleted=True, is_active=False, deleted_at=datetime.now(tz=UTC))
         )
         result = await self.session.execute(stmt)
         await self.session.flush()

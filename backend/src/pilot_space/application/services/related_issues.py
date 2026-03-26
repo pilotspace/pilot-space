@@ -122,14 +122,10 @@ class RelatedIssuesSuggestionService:
             workspace_id,
         )
 
-        # Map node_id -> set of connected node_ids for edge lookup
+        # Map node_id -> set of connected node_ids for RELATES_TO edge lookup
         shared_note_node_ids: set[UUID] = set()
-        same_project_node_ids: set[UUID] = set()
         for edge in edges:
-            if edge.edge_type == EdgeType.BELONGS_TO:
-                same_project_node_ids.add(edge.source_id)
-                same_project_node_ids.add(edge.target_id)
-            elif edge.edge_type == EdgeType.RELATES_TO:
+            if edge.edge_type == EdgeType.RELATES_TO:
                 shared_note_node_ids.add(edge.source_id)
                 shared_note_node_ids.add(edge.target_id)
 
@@ -144,9 +140,7 @@ class RelatedIssuesSuggestionService:
 
             # Determine reason
             node_id = scored_node.node.id
-            if node_id in same_project_node_ids:
-                reason = "same project"
-            elif node_id in shared_note_node_ids:
+            if node_id in shared_note_node_ids:
                 reason = "shared note"
             else:
                 reason = f"Semantic match ({round(scored_node.score * 100)}%)"

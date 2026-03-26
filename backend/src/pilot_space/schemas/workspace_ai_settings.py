@@ -1,12 +1,7 @@
-"""Domain schemas for WorkspaceAISettingsService return types.
+"""Domain-layer schemas for WorkspaceAISettingsService.
 
-WorkspaceAISettingsResponse and WorkspaceAISettingsUpdateResponse live in
-``api/v1/schemas/workspace`` and are returned directly by the service.  This
-module exposes thin domain aliases so the service layer can reference domain
-types without importing from the API layer in the future.
-
-Currently these are thin wrappers that re-export the API-level schemas, which
-already carry ``from_attributes=True`` and are stable contracts.
+These mirror API-level counterparts structurally so the service layer can work
+with domain types without importing from the API layer.
 """
 
 from __future__ import annotations

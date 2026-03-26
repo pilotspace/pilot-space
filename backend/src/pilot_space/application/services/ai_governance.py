@@ -284,7 +284,7 @@ class GovernanceRollbackService:
 
         return AIStatus(
             byok_configured=len(configured_providers) > 0,
-            providers=configured_providers,
+            providers=tuple(configured_providers),
         )
 
     async def list_policies(

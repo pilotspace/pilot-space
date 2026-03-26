@@ -14,7 +14,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
-from pilot_space.infrastructure.database.models.skill_action_button import BindingType
+from pilot_space.domain.enums import BindingType
 
 
 class ActionButtonResult(BaseModel):
