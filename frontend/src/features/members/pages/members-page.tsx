@@ -43,7 +43,6 @@ import {
   useCancelInvitation,
   useWorkspaceInvitations,
 } from '@/features/members/hooks/use-workspace-invitations';
-import { ROLE_HIERARCHY } from '@/features/members/utils/member-utils';
 import { selectAllProjects, useProjects } from '@/features/projects/hooks/useProjects';
 import { ConfirmActionDialog } from '@/features/settings/components/confirm-action-dialog';
 import { useStore } from '@/stores';
@@ -127,18 +126,31 @@ export const MembersPage = observer(function MembersPage() {
   const [projectFilter, setProjectFilter] = React.useState<string | null>(null);
   const [membersPage, setMembersPage] = React.useState(1);
   const [invitationsPage, setInvitationsPage] = React.useState(1);
+  const [debouncedSearch, setDebouncedSearch] = React.useState('');
+
+  // Debounce search by 300ms
+  React.useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchQuery), 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const {
-    data: members,
+    data: membersData,
     isLoading: membersLoading,
     error: membersError,
-  } = useWorkspaceMembers(workspaceId, { projectId: projectFilter });
+  } = useWorkspaceMembers(workspaceId, {
+    projectId: projectFilter,
+    search: debouncedSearch,
+    page: membersPage,
+    pageSize: ITEMS_PER_PAGE,
+  });
 
   const { data: projectsData } = useProjects({ workspaceId, enabled: isAdmin });
 
-  const { data: invitations, isLoading: invitationsLoading } = useWorkspaceInvitations(
+  const { data: invitationsData, isLoading: invitationsLoading } = useWorkspaceInvitations(
     workspaceId,
-    isAdmin
+    isAdmin,
+    { page: invitationsPage, pageSize: ITEMS_PER_PAGE }
   );
   const cancelInvitation = useCancelInvitation(workspaceId);
   const [updatingMemberId, setUpdatingMemberId] = React.useState<string | null>(null);
@@ -168,62 +180,36 @@ export const MembersPage = observer(function MembersPage() {
     setConfirmDialog((prev) => ({ ...prev, open: false }));
   }, []);
 
-  const sortedMembers = React.useMemo(() => {
-    if (!members) return [];
-    return [...members].sort((a, b) => {
-      const roleA = ROLE_HIERARCHY[a.role] ?? 99;
-      const roleB = ROLE_HIERARCHY[b.role] ?? 99;
-      if (roleA !== roleB) return roleA - roleB;
-      return new Date(a.joinedAt).getTime() - new Date(b.joinedAt).getTime();
-    });
-  }, [members]);
-
-  const filteredMembers = React.useMemo(() => {
-    let result = sortedMembers;
-
-    if (roleFilter !== 'all') {
-      result = result.filter((m) => m.role === roleFilter);
-    }
-
-    if (searchQuery.trim()) {
-      const q = searchQuery.trim().toLowerCase();
-      result = result.filter(
-        (m) => (m.fullName?.toLowerCase().includes(q) ?? false) || m.email.toLowerCase().includes(q)
-      );
-    }
-
-    return result;
-  }, [sortedMembers, roleFilter, searchQuery]);
-
   // Reset page when filters change
   React.useEffect(() => {
     setMembersPage(1);
-  }, [roleFilter, searchQuery, projectFilter]);
+  }, [roleFilter, debouncedSearch, projectFilter]);
 
-  const membersTotalPages = Math.max(1, Math.ceil(filteredMembers.length / ITEMS_PER_PAGE));
-  const pagedMembers = filteredMembers.slice(
-    (membersPage - 1) * ITEMS_PER_PAGE,
-    membersPage * ITEMS_PER_PAGE
+  const members = membersData?.items ?? [];
+  const membersTotalPages = Math.max(1, Math.ceil((membersData?.total ?? 0) / ITEMS_PER_PAGE));
+
+  const filteredMembers = React.useMemo(() => {
+    if (roleFilter === 'all') return members;
+    return members.filter((m) => m.role === roleFilter);
+  }, [members, roleFilter]);
+
+  const adminCount = React.useMemo(
+    () => filteredMembers.filter((m) => m.role === 'admin' || m.role === 'owner').length,
+    [filteredMembers]
   );
 
-  const adminCount = React.useMemo(() => {
-    if (!sortedMembers) return 0;
-    return sortedMembers.filter((m) => m.role === 'admin' || m.role === 'owner').length;
-  }, [sortedMembers]);
-
-  const pendingInvitations = React.useMemo(() => {
-    if (!invitations) return [];
-    return invitations.filter((inv) => inv.status === 'pending');
-  }, [invitations]);
-
-  const invitationsTotalPages = Math.max(1, Math.ceil(pendingInvitations.length / ITEMS_PER_PAGE));
-  const pagedInvitations = pendingInvitations.slice(
-    (invitationsPage - 1) * ITEMS_PER_PAGE,
-    invitationsPage * ITEMS_PER_PAGE
+  const invitations = invitationsData?.items ?? [];
+  const pendingInvitations = React.useMemo(
+    () => invitations.filter((inv) => inv.status === 'pending'),
+    [invitations]
+  );
+  const invitationsTotalPages = Math.max(
+    1,
+    Math.ceil((invitationsData?.total ?? 0) / ITEMS_PER_PAGE)
   );
 
   const handleRoleChange = (userId: string, role: WorkspaceRole) => {
-    const member = members?.find((m) => m.userId === userId);
+    const member = filteredMembers.find((m) => m.userId === userId);
     if (!member) return;
 
     const displayName = member.fullName || member.email;
@@ -259,12 +245,12 @@ export const MembersPage = observer(function MembersPage() {
   };
 
   const handleRemoveMember = (userId: string) => {
-    const member = members?.find((m) => m.userId === userId);
+    const member = filteredMembers.find((m) => m.userId === userId);
     if (!member) return;
 
     const isLastAdminCheck =
       (member.role === 'admin' || member.role === 'owner') &&
-      (members?.filter((m) => m.role === 'admin' || m.role === 'owner').length ?? 0) <= 1;
+      (filteredMembers.filter((m) => m.role === 'admin' || m.role === 'owner').length ?? 0) <= 1;
     if (isLastAdminCheck) {
       toast.error('Cannot remove the only admin', {
         description: 'This workspace must have at least one admin.',
@@ -321,7 +307,7 @@ export const MembersPage = observer(function MembersPage() {
   };
 
   const handleTransferOwnership = (userId: string) => {
-    const member = members?.find((m) => m.userId === userId);
+    const member = filteredMembers.find((m) => m.userId === userId);
     if (!member) return;
 
     const displayName = member.fullName || member.email;
@@ -352,7 +338,7 @@ export const MembersPage = observer(function MembersPage() {
   };
 
   const handleEditAssignments = (userId: string) => {
-    const member = members?.find((m) => m.userId === userId);
+    const member = filteredMembers.find((m) => m.userId === userId);
     if (!member) return;
     setEditAssignmentsTarget({
       userId: member.userId,
@@ -453,7 +439,7 @@ export const MembersPage = observer(function MembersPage() {
       </div>
 
       {/* Members Table */}
-      {filteredMembers.length === 0 ? (
+          {filteredMembers.length === 0 ? (
         <div className="flex flex-col items-center gap-2 py-12 text-center">
           <Search className="h-8 w-8 text-muted-foreground/40" aria-hidden="true" />
           <p className="text-sm text-muted-foreground">
@@ -481,6 +467,7 @@ export const MembersPage = observer(function MembersPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Member</TableHead>
+                <TableHead className="hidden sm:table-cell">Email</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead className="hidden md:table-cell">Projects</TableHead>
                 <TableHead className="hidden sm:table-cell">Joined</TableHead>
@@ -488,7 +475,7 @@ export const MembersPage = observer(function MembersPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {pagedMembers.map((member) => (
+              {filteredMembers.map((member) => (
                 <MemberTableRow
                   key={member.userId}
                   member={member}
@@ -543,7 +530,7 @@ export const MembersPage = observer(function MembersPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {pagedInvitations.map((invitation) => (
+                {pendingInvitations.map((invitation) => (
                   <TableRow key={invitation.id}>
                     <td className="p-3 align-middle text-sm font-medium">
                       <div className="flex items-center gap-2">
@@ -617,17 +604,17 @@ export const MembersPage = observer(function MembersPage() {
             <TabsList>
               <TabsTrigger value="members" className="gap-1.5">
                 Members
-                {(members?.length ?? 0) > 0 && (
+                {(membersData?.total ?? 0) > 0 && (
                   <Badge variant="secondary" className="h-5 min-w-5 px-1 text-xs">
-                    {members?.length ?? 0}
+                    {membersData?.total ?? 0}
                   </Badge>
                 )}
               </TabsTrigger>
               <TabsTrigger value="invitations" className="gap-1.5">
                 Invitations
-                {pendingInvitations.length > 0 && (
+                {(invitationsData?.total ?? 0) > 0 && (
                   <Badge variant="secondary" className="h-5 min-w-5 px-1 text-xs">
-                    {pendingInvitations.length}
+                    {invitationsData?.total ?? 0}
                   </Badge>
                 )}
               </TabsTrigger>

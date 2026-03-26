@@ -12,6 +12,7 @@ import type {
 } from '@/types';
 import { DEFAULT_FEATURE_TOGGLES } from '@/types';
 import type { AuthStore } from './AuthStore';
+import { ro } from 'date-fns/locale';
 
 export type {
   WorkspaceRole,
@@ -28,7 +29,7 @@ interface WorkspaceApi {
   update(id: string, data: UpdateWorkspaceData): Promise<Workspace>;
   delete(id: string): Promise<void>;
   getMembers(workspaceId: string): Promise<WorkspaceMember[]>;
-  inviteMember(workspaceId: string, data: InviteMemberData): Promise<WorkspaceMember>;
+  inviteMember(workspaceId: string, data: InviteMemberData): Promise<WorkspaceMember | null>;
   removeMember(workspaceId: string, memberId: string): Promise<void>;
   updateMemberRole(
     workspaceId: string,
@@ -106,7 +107,7 @@ export class WorkspaceStore {
   }
 
   get isAdmin(): boolean {
-    const role = this.currentUserRole;
+    const role = this.currentUserRole;    
     return role === 'admin' || role === 'owner';
   }
 
@@ -364,11 +365,14 @@ export class WorkspaceStore {
       const member = await this.api.inviteMember(workspaceId, data);
 
       runInAction(() => {
-        const currentMembers = this.members.get(workspaceId) || [];
-        this.members.set(workspaceId, [...currentMembers, member]);
+        if (member) {
+          const currentMembers = this.members.get(workspaceId) || [];
+          this.members.set(workspaceId, [...currentMembers, member]);
+        }
         this.isSaving = false;
       });
 
+      // null = pending invitation (magic link sent); callers should refresh invitation list
       return member;
     } catch (err) {
       runInAction(() => {

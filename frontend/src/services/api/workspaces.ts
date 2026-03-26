@@ -29,7 +29,7 @@ interface WorkspaceResponse {
   updatedAt: string;
 }
 
-/** Flat response from GET /workspaces/{id}/members — camelCase because backend uses BaseSchema. */
+/** Single member entry inside PaginatedResponse from GET /workspaces/{id}/members — camelCase because backend uses BaseSchema. */
 interface WorkspaceMemberResponse {
   userId: string;
   email: string;
@@ -42,6 +42,16 @@ interface WorkspaceMemberResponse {
 
 interface PaginatedWorkspaceResponse {
   items: WorkspaceResponse[];
+  total: number;
+  hasNext: boolean;
+  hasPrev: boolean;
+  nextCursor: string | null;
+  prevCursor: string | null;
+  pageSize: number;
+}
+
+interface PaginatedMemberResponse {
+  items: WorkspaceMemberResponse[];
   total: number;
   hasNext: boolean;
   hasPrev: boolean;
@@ -136,21 +146,35 @@ export const workspacesApi = {
    * Get workspace members.
    */
   async getMembers(workspaceId: string): Promise<WorkspaceMember[]> {
-    const response = await apiClient.get<WorkspaceMemberResponse[]>(
+    const response = await apiClient.get<PaginatedMemberResponse>(
       `/workspaces/${workspaceId}/members`
     );
-    return response.map(transformWorkspaceMember);
+    return response.items.map(transformWorkspaceMember);
   },
 
   /**
    * Invite a new member to the workspace.
+   *
+   * Returns the created WorkspaceMember for immediate invites (existing Supabase user),
+   * or null for pending invitations (new user — magic link sent via Supabase).
    */
-  async inviteMember(workspaceId: string, data: InviteMemberData): Promise<WorkspaceMember> {
-    const response = await apiClient.post<WorkspaceMemberResponse>(
+  async inviteMember(workspaceId: string, data: InviteMemberData): Promise<WorkspaceMember | null> {
+    interface InvitationApiResponse {
+      id: string;
+      email: string;
+      role: string;
+      status: string;
+      created_at: string;
+    }
+    const response = await apiClient.post<WorkspaceMemberResponse | InvitationApiResponse>(
       `/workspaces/${workspaceId}/members`,
       { ...data, role: data.role.toUpperCase() }
     );
-    return transformWorkspaceMember(response);
+    // Pending invitation path: backend returns { id, email, role, status, created_at }
+    if ('userId' in response) {
+      return transformWorkspaceMember(response as WorkspaceMemberResponse);
+    }
+    return null;
   },
 
   /**

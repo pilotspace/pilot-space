@@ -10,13 +10,14 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from dependency_injector.wiring import Provide, inject
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import and_, select
 
 from pilot_space.api.v1.dependencies import (
     WorkspaceInvitationServiceDep,
     WorkspaceServiceDep,
 )
+from pilot_space.api.v1.schemas.base import PaginatedResponse
 from pilot_space.api.v1.schemas.workspace import (
     InvitationCreateRequest,
     InvitationResponse,
@@ -204,7 +205,7 @@ async def add_workspace_member(
 
 @router.get(
     "/{workspace_id}/invitations",
-    response_model=list[InvitationResponse],
+    response_model=PaginatedResponse[InvitationResponse],
     tags=["workspaces", "invitations"],
 )
 async def list_workspace_invitations(
@@ -212,7 +213,9 @@ async def list_workspace_invitations(
     session: SessionDep,
     current_user: CurrentUser,
     service: WorkspaceInvitationServiceDep,
-) -> list[InvitationResponse]:
+    page: int = Query(default=1, ge=1, description="Page number (1-based)"),
+    page_size: int = Query(default=20, ge=1, le=100, description="Items per page"),
+) -> PaginatedResponse[InvitationResponse]:
     """List invitations for a workspace.
 
     Requires admin or owner role.
@@ -225,7 +228,7 @@ async def list_workspace_invitations(
         )
     )
 
-    return [
+    all_items = [
         InvitationResponse(
             id=inv.id,
             email=inv.email,
@@ -238,6 +241,18 @@ async def list_workspace_invitations(
         )
         for inv in result.invitations
     ]
+
+    total = len(all_items)
+    offset = (page - 1) * page_size
+    items = all_items[offset : offset + page_size]
+
+    return PaginatedResponse(
+        items=items,
+        total=total,
+        has_next=offset + page_size < total,
+        has_prev=page > 1,
+        page_size=page_size,
+    )
 
 
 @router.delete(

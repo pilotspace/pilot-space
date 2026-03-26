@@ -2,6 +2,7 @@
  * useWorkspaceMembers - TanStack Query hook for workspace members.
  *
  * T013b: Fetches members via apiClient directly (no dedicated API service).
+ * A4-E05: Returns PaginatedResponse<WorkspaceMember> from server-side pagination endpoint.
  */
 
 import { apiClient } from '@/services/api';
@@ -24,6 +25,14 @@ export interface WorkspaceMember {
   projects?: Array<{ id: string; name: string; identifier: string }>;
 }
 
+export interface PaginatedWorkspaceMembers {
+  items: WorkspaceMember[];
+  total: number;
+  hasNext: boolean;
+  hasPrev: boolean;
+  pageSize: number;
+}
+
 export const workspaceMembersKeys = {
   all: (workspaceId: string) => ['workspaces', workspaceId, 'members'] as const,
   filtered: (workspaceId: string, projectId: string | null) =>
@@ -32,23 +41,43 @@ export const workspaceMembersKeys = {
 
 interface UseWorkspaceMembersOptions {
   projectId?: string | null;
+  search?: string;
+  page?: number;
+  pageSize?: number;
 }
 
 export function useWorkspaceMembers(workspaceId: string, options?: UseWorkspaceMembersOptions) {
   const projectId = options?.projectId ?? null;
-  return useQuery<WorkspaceMember[]>({
-    queryKey: projectId
-      ? workspaceMembersKeys.filtered(workspaceId, projectId)
-      : workspaceMembersKeys.all(workspaceId),
+  const search = options?.search ?? '';
+  const page = options?.page ?? 1;
+  const pageSize = options?.pageSize ?? 20;
+
+  return useQuery<PaginatedWorkspaceMembers>({
+    queryKey: [...workspaceMembersKeys.all(workspaceId), { projectId, search, page, pageSize }],
     queryFn: async () => {
-      const params = projectId ? `?project_id=${projectId}` : '';
-      const members = await apiClient.get<WorkspaceMember[]>(
-        `/workspaces/${workspaceId}/members${params}`
-      );
-      return members.map((m) => ({
-        ...m,
-        role: m.role.toLowerCase() as WorkspaceMember['role'],
-      }));
+      const params = new URLSearchParams();
+      if (projectId) params.set('project_id', projectId);
+      if (search) params.set('search', search);
+      params.set('page', String(page));
+      params.set('page_size', String(pageSize));
+      const qs = `?${params.toString()}`;
+      const response = await apiClient.get<{
+        items: WorkspaceMember[];
+        total: number;
+        has_next: boolean;
+        has_prev: boolean;
+        page_size: number;
+      }>(`/workspaces/${workspaceId}/members${qs}`);
+      return {
+        items: response.items.map((m) => ({
+          ...m,
+          role: m.role.toLowerCase() as WorkspaceMember['role'],
+        })),
+        total: response.total,
+        hasNext: response.has_next,
+        hasPrev: response.has_prev,
+        pageSize: response.page_size,
+      };
     },
     enabled: !!workspaceId,
     staleTime: 60_000,

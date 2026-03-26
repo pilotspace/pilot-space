@@ -17,6 +17,7 @@ from pilot_space.api.v1.dependencies import (
     MemberProfileServiceDep,
     WorkspaceMemberServiceDep,
 )
+from pilot_space.api.v1.schemas.base import PaginatedResponse
 from pilot_space.api.v1.schemas.project_member import (
     BulkAssignmentRequest,
     BulkAssignmentResponse,
@@ -67,7 +68,7 @@ def _strip_html(value: str | None) -> str | None:
 
 @router.get(
     "/{workspace_id}/members",
-    response_model=list[WorkspaceMemberResponse],
+    response_model=PaginatedResponse[WorkspaceMemberResponse],
     tags=["workspaces"],
 )
 @inject
@@ -79,10 +80,15 @@ async def list_workspace_members(
     project_id: UUID | None = Query(
         default=None, description="Filter to members of this project"
     ),
+    search: str | None = Query(
+        default=None, description="Case-insensitive filter on full_name and email"
+    ),
+    page: int = Query(default=1, ge=1, description="Page number (1-based)"),
+    page_size: int = Query(default=20, ge=1, le=100, description="Items per page"),
     wm_repo: WorkspaceMemberRepository = Depends(
         Provide[Container.workspace_member_rbac_repository]
     ),
-) -> list[WorkspaceMemberResponse]:
+) -> PaginatedResponse[WorkspaceMemberResponse]:
     """List workspace members, optionally filtered by project membership.
 
     Args:
@@ -91,10 +97,13 @@ async def list_workspace_members(
         current_user_id: Authenticated user ID.
         service: Workspace member service.
         project_id: Optional filter — only return members assigned to this project.
+        search: Optional case-insensitive filter on full_name and email.
+        page: Page number (1-based).
+        page_size: Items per page.
         wm_repo: WorkspaceMember repository (DI).
 
     Returns:
-        List of workspace members with their project chips.
+        Paginated list of workspace members with their project chips.
     """
     await set_rls_context(session, current_user_id, workspace_id)
     result = await service.list_members(
@@ -125,13 +134,26 @@ async def list_workspace_members(
         }
         members = [m for m in members if m.user_id in project_user_ids]
 
-    # Build project chips per user
+    if search:
+        q = search.lower()
+        members = [
+            m
+            for m in members
+            if q in (m.user.full_name or "").lower() or q in (m.user.email or "").lower()
+            if m.user
+        ]
+
+    total = len(members)
+    offset = (page - 1) * page_size
+    page_members = members[offset : offset + page_size]
+
+    # Build project chips per user (only for the current page)
     project_chips_by_user: dict[UUID, list[dict[str, Any]]] = {}
-    for member in members:
+    for member in page_members:
         chips = await _get_project_chips_for_user(pm_repo, workspace_id, member.user_id)
         project_chips_by_user[member.user_id] = chips
 
-    return [
+    items = [
         WorkspaceMemberResponse(
             user_id=member.user_id,
             email=member.user.email if member.user else "",
@@ -142,8 +164,16 @@ async def list_workspace_members(
             weekly_available_hours=float(member.weekly_available_hours),
             projects=project_chips_by_user.get(member.user_id, []),
         )
-        for member in members
+        for member in page_members
     ]
+
+    return PaginatedResponse(
+        items=items,
+        total=total,
+        has_next=offset + page_size < total,
+        has_prev=page > 1,
+        page_size=page_size,
+    )
 
 
 async def _get_project_chips_for_user(

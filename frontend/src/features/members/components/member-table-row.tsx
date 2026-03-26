@@ -14,9 +14,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { TableCell, TableRow } from '@/components/ui/table';
@@ -28,8 +25,6 @@ import {
   FolderKanban,
   Loader2,
   MoreHorizontal,
-  Shield,
-  ShieldAlert,
   Trash2,
 } from 'lucide-react';
 import { MemberRoleBadge } from './member-role-badge';
@@ -53,7 +48,6 @@ export function MemberTableRow({
   currentUserRole,
   isCurrentUser,
   isLastAdmin = false,
-  onRoleChange,
   onRemove,
   onTransferOwnership,
   isUpdating = false,
@@ -63,12 +57,11 @@ export function MemberTableRow({
   const isAdmin = currentUserRole === 'admin' || currentUserRole === 'owner';
   const isOwner = currentUserRole === 'owner';
   const isMemberOwner = member.role === 'owner';
-  const canEditRole = isAdmin && !isMemberOwner && !isCurrentUser;
   const canRemove = isAdmin && !isMemberOwner && !isCurrentUser;
   const removeDisabled = isLastAdmin;
   const canTransferOwnership = isOwner && !isCurrentUser && !isMemberOwner;
-  const canEditAssignments = isAdmin && !isMemberOwner && !isCurrentUser && !!onEditAssignments;
-  const showActions = canEditRole || canRemove || canTransferOwnership || canEditAssignments;
+  const canEditAssignments = isAdmin && !isCurrentUser && !!onEditAssignments;
+  const showActions = canRemove || canTransferOwnership || canEditAssignments;
 
   const initials = getInitials(member.fullName, member.email);
   const displayName = member.fullName || member.email.split('@')[0] || member.email;
@@ -80,7 +73,7 @@ export function MemberTableRow({
       data-testid={`member-row-${member.userId}`}
       onClick={() => onNavigate(member.userId)}
     >
-      {/* Avatar + Name/Email */}
+      {/* Avatar + Name */}
       <TableCell>
         <div className="flex items-center gap-3">
           <Avatar className="h-8 w-8 shrink-0">
@@ -98,11 +91,13 @@ export function MemberTableRow({
                 </span>
               )}
             </div>
-            {member.fullName && (
-              <p className="truncate text-xs text-muted-foreground">{member.email}</p>
-            )}
           </div>
         </div>
+      </TableCell>
+
+      {/* Email */}
+      <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">
+        {member.email}
       </TableCell>
 
       {/* Role */}
@@ -152,29 +147,10 @@ export function MemberTableRow({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              {canEditRole && (
-                <DropdownMenuSub>
-                  <DropdownMenuSubTrigger>
-                    <Shield className="mr-2 h-4 w-4" />
-                    Change Role
-                  </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent>
-                    {(['admin', 'member', 'guest'] as WorkspaceRole[])
-                      .filter((r) => r !== member.role)
-                      .map((r) => (
-                        <DropdownMenuItem key={r} onClick={() => onRoleChange(member.userId, r)}>
-                          {r === 'admin' && <ShieldAlert className="mr-2 h-3.5 w-3.5" />}
-                          {r === 'member' && <Shield className="mr-2 h-3.5 w-3.5" />}
-                          <span className="capitalize">{r}</span>
-                        </DropdownMenuItem>
-                      ))}
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
-              )}
               {canEditAssignments && (
                 <DropdownMenuItem onClick={() => onEditAssignments!(member.userId)}>
                   <FolderKanban className="mr-2 h-4 w-4" />
-                  Edit Assignments
+                  Edit Permissions
                 </DropdownMenuItem>
               )}
               {canTransferOwnership && onTransferOwnership && (
@@ -183,7 +159,7 @@ export function MemberTableRow({
                   Transfer Ownership
                 </DropdownMenuItem>
               )}
-              {(canEditRole || canTransferOwnership) && canRemove && <DropdownMenuSeparator />}
+              {canTransferOwnership && canRemove && <DropdownMenuSeparator />}
               {canRemove && (
                 <DropdownMenuItem
                   className="text-destructive focus:text-destructive"

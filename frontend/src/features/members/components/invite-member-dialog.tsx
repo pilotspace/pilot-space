@@ -107,7 +107,7 @@ export const InviteMemberDialog = observer(function InviteMemberDialog({
 
     setIsSubmitting(true);
 
-    const result = await workspaceStore.inviteMember(workspaceId, {
+    await workspaceStore.inviteMember(workspaceId, {
       email: email.trim(),
       role,
       project_assignments: selectedProjectIds.map((id) => ({ project_id: id })),
@@ -115,21 +115,23 @@ export const InviteMemberDialog = observer(function InviteMemberDialog({
 
     setIsSubmitting(false);
 
-    if (result) {
-      toast.success('Invitation sent', {
-        description: `An invitation has been sent to ${email.trim()}.`,
-      });
-      queryClient.invalidateQueries({ queryKey: workspaceMembersKeys.all(workspaceId) });
-      queryClient.invalidateQueries({ queryKey: workspaceInvitationsKeys.all(workspaceId) });
-      resetForm();
-    } else {
-      const errorMsg = workspaceStore.error ?? 'Failed to send invitation.';
+    if (workspaceStore.error) {
+      const errorMsg = workspaceStore.error;
       if (errorMsg.toLowerCase().includes('already') || errorMsg.includes('409')) {
         setEmailError('This email has already been invited or is an existing member.');
       } else {
         toast.error('Invitation failed', { description: errorMsg });
       }
+      return;
     }
+
+    // Both immediate member (result !== null) and pending invite (result === null, no error) are success
+    toast.success('Invitation sent', {
+      description: `An invitation has been sent to ${email.trim()}.`,
+    });
+    queryClient.invalidateQueries({ queryKey: workspaceMembersKeys.all(workspaceId) });
+    queryClient.invalidateQueries({ queryKey: workspaceInvitationsKeys.all(workspaceId) });
+    resetForm();
   };
 
   const handleOpenChange = (nextOpen: boolean) => {

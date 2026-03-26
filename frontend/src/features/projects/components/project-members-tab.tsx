@@ -43,7 +43,7 @@ export function ProjectMembersTab({ workspaceId, projectId, isAdmin }: ProjectMe
   const [addOpen, setAddOpen] = React.useState(false);
 
   const { data: projectMembersData, isLoading } = useProjectMembers(workspaceId, projectId);
-  const { data: workspaceMembers } = useWorkspaceMembers(workspaceId);
+  const { data: workspaceMembersData } = useWorkspaceMembers(workspaceId);
 
   const addMember = useAddProjectMember(workspaceId, projectId);
   const removeMember = useRemoveProjectMember(workspaceId, projectId);
@@ -53,7 +53,7 @@ export function ProjectMembersTab({ workspaceId, projectId, isAdmin }: ProjectMe
 
   // Workspace members not yet in this project (for the add picker)
   const addableCandidates =
-    workspaceMembers?.filter((wm) => !projectMemberIds.has(wm.userId)) ?? [];
+    (workspaceMembersData?.items ?? []).filter((wm) => !projectMemberIds.has(wm.userId));
 
   const filtered = search
     ? projectMembers.filter(
