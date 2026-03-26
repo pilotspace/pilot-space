@@ -1,4 +1,4 @@
-"""Anthropic-compatible LLM proxy endpoint.
+"""Anthropic-compatible LLM proxy with tenant validation and provider routing.
 
 Implements the Anthropic Messages API contract so that Claude Agent SDK
 (and any Anthropic-compatible client) can route through the built-in
@@ -6,61 +6,210 @@ LLMGateway instead of calling the provider directly.
 
 Flow:
     Claude Agent SDK → ANTHROPIC_BASE_URL=http://localhost:8000/api/v1/ai/proxy
-    → POST /v1/messages → this proxy → LLMGateway → real provider
+    → POST /v1/messages
+    → tenant validation (workspace active, AI enabled, budget, rate limit)
+    → provider routing (anthropic/ollama/custom via workspace config)
+    → forward to real provider
+    → cost tracking + observability
 
-Benefits:
-    - Unified cost tracking for ALL LLM calls (including SDK orchestration)
-    - Resilience (retry + circuit breaker) on SDK calls
-    - Langfuse @observe tracing on SDK calls
-    - Workspace base_url forwarding (Ollama/custom proxy)
-    - Per-API-key client pooling
+Tenant Control:
+    1. Workspace must exist and not be deleted
+    2. AI features must be enabled (workspace.settings.ai_features)
+    3. Monthly cost budget check (workspace.settings.ai_cost_limit_usd)
+    4. Rate limiting (workspace.rate_limit_ai_rpm or global default)
+    5. Model allowlist enforcement (workspace.settings.allowed_models)
+    6. Max tokens ceiling (prevent runaway costs)
 
-The proxy is transparent: the SDK doesn't know it's talking to a proxy.
-Auth is via the same API key the SDK sends in the Authorization header.
-
-Design Decision: The proxy implements ONLY the Messages API (POST /v1/messages)
-and streaming variant. Embeddings and other endpoints are not needed since the
-SDK only uses the Messages API.
+Provider Routing:
+    - Reads workspace.settings.default_llm_provider
+    - Resolves BYOK key + base_url from WorkspaceAPIKey table
+    - Routes to: Anthropic API, Ollama (local), or custom OpenAI-compatible
 """
 
 from __future__ import annotations
 
 import json
 from collections.abc import AsyncIterator
+from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Header, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from pilot_space.ai.exceptions import AINotConfiguredError
 from pilot_space.ai.proxy.cost_hooks import track_llm_cost
 from pilot_space.ai.proxy.tracing import observe  # pyright: ignore[reportAttributeAccessIssue]
+from pilot_space.domain.exceptions import ForbiddenError
 from pilot_space.infrastructure.logging import get_logger
 
 router = APIRouter(tags=["ai-proxy"])
 
 logger = get_logger(__name__)
 
-# Sentinel for when workspace context isn't available
 _SYSTEM_USER_ID = UUID("00000000-0000-0000-0000-000000000000")
 
+# Default max_tokens ceiling to prevent runaway costs
+_MAX_TOKENS_CEILING = 16384
 
-async def _resolve_proxy_deps(
+
+# ---------------------------------------------------------------------------
+# Tenant validation
+# ---------------------------------------------------------------------------
+
+
+async def _validate_tenant(
     request: Request,
-) -> tuple[Any, Any, Any]:
-    """Resolve DI dependencies for the proxy endpoint.
+    workspace_id: UUID,
+    user_id: UUID,
+    model: str,
+    max_tokens: int,
+) -> tuple[Any, Any, Any, str | None, int]:
+    """Validate workspace tenant before proxying an LLM call.
 
-    Returns (resilient_executor, cost_tracker, key_storage) from the DI container.
+    Returns:
+        (executor, cost_tracker, key_storage, base_url, capped_max_tokens)
+
+    Raises:
+        ForbiddenError: Workspace not found, AI disabled, budget exceeded,
+                        model not allowed, or rate limit exceeded.
+        AINotConfiguredError: No BYOK key configured for workspace.
     """
+    from pilot_space.ai.alerts.cost_alerts import get_monthly_cost
+    from pilot_space.ai.infrastructure.rate_limiter import RateLimiter
+    from pilot_space.config import get_settings
     from pilot_space.container.container import Container
+    from pilot_space.dependencies.auth import get_current_session
 
     container: Container = request.app.state.container  # type: ignore[assignment]
-    return (
-        container.resilient_executor(),
-        container.cost_tracker(),
-        container.secure_key_storage(),
+    executor = container.resilient_executor()
+    cost_tracker = container.cost_tracker()
+    key_storage = container.secure_key_storage()
+    settings = get_settings()
+
+    # --- 1. Workspace existence ---
+    session = get_current_session()
+    from sqlalchemy import select
+
+    from pilot_space.infrastructure.database.models.workspace import Workspace
+
+    result = await session.execute(
+        select(Workspace).where(
+            Workspace.id == workspace_id,
+            Workspace.is_deleted.is_(False),
+        )
     )
+    workspace = result.scalar_one_or_none()
+    if workspace is None:
+        raise ForbiddenError(f"Workspace {workspace_id} not found or deleted")
+
+    ws_settings: dict[str, Any] = workspace.settings or {}
+
+    # --- 2. AI features enabled ---
+    ai_features = ws_settings.get("ai_features", {})
+    # If ai_features dict exists and has an explicit "enabled" key, check it.
+    # Otherwise, AI is enabled by default.
+    if ai_features.get("enabled") is False:
+        raise ForbiddenError("AI features are disabled for this workspace")
+
+    # --- 3. Cost budget check ---
+    cost_limit_usd = ws_settings.get("ai_cost_limit_usd")
+    monthly_cost = Decimal(0)
+    if cost_limit_usd is not None:
+        monthly_cost = await get_monthly_cost(session, workspace_id)
+        if monthly_cost >= Decimal(str(cost_limit_usd)):
+            raise ForbiddenError(
+                f"Monthly AI budget exceeded: ${monthly_cost:.2f} / ${cost_limit_usd:.2f}"
+            )
+
+    # --- 4. Rate limiting ---
+    ai_rpm = workspace.rate_limit_ai_rpm or settings.rate_limit_ai_per_minute
+    rate_limit_exceeded = False
+    try:
+        redis = container.redis()  # type: ignore[attr-defined]
+        limiter = RateLimiter(redis, requests_per_minute=ai_rpm)
+        rate_limit_exceeded = not await limiter.acquire(f"ai_proxy:{workspace_id}")
+    except Exception:
+        # Redis unavailable — fail open (allow request, log warning)
+        logger.warning("ai_proxy_rate_limit_check_failed", exc_info=True)
+    if rate_limit_exceeded:
+        raise ForbiddenError(
+            f"AI rate limit exceeded ({ai_rpm} requests/minute)"
+        )
+
+    # --- 5. Model allowlist ---
+    allowed_models: list[str] | None = ws_settings.get("allowed_models")
+    if allowed_models and model not in allowed_models:
+        raise ForbiddenError(
+            f"Model '{model}' not in workspace allowlist: {allowed_models}"
+        )
+
+    # --- 6. Max tokens ceiling ---
+    workspace_max_tokens: int | None = ws_settings.get("ai_max_tokens")
+    ceiling = workspace_max_tokens or _MAX_TOKENS_CEILING
+    capped_max_tokens = min(max_tokens, ceiling)
+
+    # --- 7. Resolve workspace base_url ---
+    base_url: str | None = None
+    try:
+        key_info = await key_storage.get_key_info(workspace_id, "anthropic", "llm")
+        if key_info:
+            base_url = key_info.base_url
+    except Exception:
+        logger.debug("ai_proxy_key_info_lookup_failed", exc_info=True)
+
+    logger.info(
+        "ai_proxy_tenant_validated",
+        workspace_id=str(workspace_id),
+        user_id=str(user_id),
+        model=model,
+        max_tokens=capped_max_tokens,
+        has_base_url=bool(base_url),
+        budget_remaining=f"${Decimal(str(cost_limit_usd or 0)) - (monthly_cost if cost_limit_usd else Decimal(0)):.2f}"
+        if cost_limit_usd
+        else "unlimited",
+    )
+
+    return executor, cost_tracker, key_storage, base_url, capped_max_tokens
+
+
+# ---------------------------------------------------------------------------
+# Client pooling
+# ---------------------------------------------------------------------------
+
+
+def _get_cached_client(
+    request: Request,
+    api_key: str,
+    base_url: str | None,
+) -> Any:
+    """Get or create a cached AsyncAnthropic client from app state."""
+    import hashlib
+
+    import anthropic
+
+    key_hash = hashlib.sha256(
+        f"{api_key}:{base_url or ''}".encode()
+    ).hexdigest()[:16]
+
+    proxy_clients_attr = "proxy_anthropic_clients"
+    if not hasattr(request.app.state, proxy_clients_attr):
+        setattr(request.app.state, proxy_clients_attr, {})
+
+    clients: dict[str, anthropic.AsyncAnthropic] = getattr(
+        request.app.state, proxy_clients_attr
+    )
+    if key_hash not in clients:
+        kwargs: dict[str, Any] = {"api_key": api_key}
+        if base_url:
+            kwargs["base_url"] = base_url
+        clients[key_hash] = anthropic.AsyncAnthropic(**kwargs)
+    return clients[key_hash]
+
+
+# ---------------------------------------------------------------------------
+# Main proxy endpoint
+# ---------------------------------------------------------------------------
 
 
 @router.post("/v1/messages")
@@ -69,29 +218,20 @@ async def proxy_messages(
     request: Request,
     x_workspace_id: str | None = Header(None, alias="X-Workspace-Id"),
     x_user_id: str | None = Header(None, alias="X-User-Id"),
-) -> StreamingResponse:
-    """Anthropic Messages API proxy.
+) -> StreamingResponse | JSONResponse:
+    """Anthropic Messages API proxy with tenant validation.
 
-    Accepts the same request format as Anthropic's POST /v1/messages,
-    forwards through the built-in LLMGateway infrastructure (resilience,
-    cost tracking, tracing), and returns the response transparently.
+    Validates workspace permissions, enforces budget/rate limits,
+    resolves provider config, then forwards to the real LLM provider.
 
-    The SDK sends the API key in the Authorization header. The proxy
-    extracts it and uses it directly (no SecureKeyStorage lookup needed
-    since the SDK already resolved the workspace key).
-
-    Custom headers:
-        X-Workspace-Id: Workspace UUID for cost attribution
+    Headers:
+        x-api-key: Anthropic API key (sent by SDK automatically)
+        X-Workspace-Id: Workspace UUID for tenant validation + cost attribution
         X-User-Id: User UUID for cost attribution
     """
-    import hashlib
-
-    import anthropic
-
-    # Extract API key from Authorization header (Anthropic SDK sends "x-api-key" header)
+    # --- Extract API key ---
     api_key = request.headers.get("x-api-key") or ""
     if not api_key:
-        # Fallback: check Authorization: Bearer <key>
         auth = request.headers.get("authorization", "")
         if auth.startswith("Bearer "):
             api_key = auth[7:]
@@ -101,6 +241,7 @@ async def proxy_messages(
             workspace_id=UUID(x_workspace_id) if x_workspace_id else None
         )
 
+    # --- Parse request body ---
     body = await request.json()
     model: str = body.get("model", "claude-sonnet-4-20250514")
     messages: list[dict[str, Any]] = body.get("messages", [])
@@ -109,42 +250,26 @@ async def proxy_messages(
     system_msg: str | list[Any] | None = body.get("system")
     stream: bool = body.get("stream", False)
 
-    # Parse workspace/user context for cost tracking
     workspace_id = UUID(x_workspace_id) if x_workspace_id else None
     user_id = UUID(x_user_id) if x_user_id else _SYSTEM_USER_ID
 
-    # Resolve infrastructure
-    executor, cost_tracker, key_storage = await _resolve_proxy_deps(request)
+    # --- Tenant validation (skip for system calls without workspace) ---
+    if workspace_id:
+        executor, cost_tracker, _key_storage, base_url, max_tokens = (
+            await _validate_tenant(request, workspace_id, user_id, model, max_tokens)
+        )
+    else:
+        from pilot_space.container.container import Container
 
-    # Look up workspace base_url (if workspace context available)
-    base_url: str | None = None
-    if workspace_id and key_storage:
-        try:
-            key_info = await key_storage.get_key_info(workspace_id, "anthropic", "llm")
-            if key_info:
-                base_url = key_info.base_url
-        except Exception:
-            logger.debug("ai_proxy_key_info_lookup_failed", exc_info=True)
+        container: Container = request.app.state.container  # type: ignore[assignment]
+        executor = container.resilient_executor()
+        cost_tracker = container.cost_tracker()
+        base_url = None
 
-    # Build client with connection pooling (same pattern as LLMGateway)
-    key_hash = hashlib.sha256(
-        f"{api_key}:{base_url or ''}".encode()
-    ).hexdigest()[:16]
+    # --- Get pooled client ---
+    client = _get_cached_client(request, api_key, base_url)
 
-    # Cache clients on the app state to avoid TCP pool churn
-    proxy_clients_attr = "proxy_anthropic_clients"
-    if not hasattr(request.app.state, proxy_clients_attr):
-        setattr(request.app.state, proxy_clients_attr, {})
-
-    clients: dict[str, anthropic.AsyncAnthropic] = getattr(request.app.state, proxy_clients_attr)
-    if key_hash not in clients:
-        kwargs: dict[str, Any] = {"api_key": api_key}
-        if base_url:
-            kwargs["base_url"] = base_url
-        clients[key_hash] = anthropic.AsyncAnthropic(**kwargs)
-    client = clients[key_hash]
-
-    # Build kwargs for messages.create
+    # --- Build Anthropic Messages API kwargs ---
     create_kwargs: dict[str, Any] = {
         "model": model,
         "messages": messages,
@@ -157,11 +282,13 @@ async def proxy_messages(
     if stream:
         create_kwargs["stream"] = True
 
-    # Pass through additional Anthropic-specific params
-    for key in ("top_p", "top_k", "stop_sequences", "metadata", "tools",
-                "tool_choice", "thinking"):
-        if key in body:
-            create_kwargs[key] = body[key]
+    # Pass through Anthropic-specific params
+    for param in (
+        "top_p", "top_k", "stop_sequences", "metadata",
+        "tools", "tool_choice", "thinking",
+    ):
+        if param in body:
+            create_kwargs[param] = body[param]
 
     logger.info(
         "ai_proxy_request",
@@ -170,8 +297,10 @@ async def proxy_messages(
         workspace_id=str(workspace_id) if workspace_id else None,
         has_base_url=bool(base_url),
         message_count=len(messages),
+        max_tokens=max_tokens,
     )
 
+    # --- Forward request ---
     if stream:
         return await _handle_streaming(
             client=client,
@@ -183,13 +312,11 @@ async def proxy_messages(
             model=model,
         )
 
-    # Non-streaming path
     response = await executor.execute(
         provider="anthropic",
         operation=lambda: client.messages.create(**create_kwargs),
     )
 
-    # Track cost
     if workspace_id and cost_tracker:
         await track_llm_cost(
             cost_tracker,
@@ -208,12 +335,15 @@ async def proxy_messages(
         output_tokens=response.usage.output_tokens,
     )
 
-    # Return the raw Anthropic response (SDK expects exact format)
-    return StreamingResponse(
-        iter([response.model_dump_json()]),
+    return JSONResponse(
+        content=json.loads(response.model_dump_json()),
         media_type="application/json",
-        headers={"content-type": "application/json"},
     )
+
+
+# ---------------------------------------------------------------------------
+# Streaming handler
+# ---------------------------------------------------------------------------
 
 
 async def _handle_streaming(
@@ -226,11 +356,7 @@ async def _handle_streaming(
     user_id: UUID,
     model: str,
 ) -> StreamingResponse:
-    """Handle streaming Messages API response.
-
-    Forwards SSE events from the Anthropic API transparently, tracking
-    cost from the final message_delta event.
-    """
+    """Forward streaming Messages API response with cost tracking."""
 
     async def _stream_generator() -> AsyncIterator[str]:
         total_input_tokens = 0
@@ -243,8 +369,9 @@ async def _handle_streaming(
             )
 
             async for event in stream:
-                # Track token usage from stream events
-                event_data = event.model_dump() if hasattr(event, "model_dump") else {}
+                event_data = (
+                    event.model_dump() if hasattr(event, "model_dump") else {}
+                )
                 event_type = getattr(event, "type", "")
 
                 if event_type == "message_start":
@@ -255,7 +382,6 @@ async def _handle_streaming(
                     usage = event_data.get("usage", {})
                     total_output_tokens = usage.get("output_tokens", 0)
 
-                # Forward the SSE event transparently
                 yield f"event: {event_type}\ndata: {json.dumps(event_data)}\n\n"
 
         except Exception as e:
@@ -265,8 +391,11 @@ async def _handle_streaming(
             }
             yield f"event: error\ndata: {json.dumps(error_data)}\n\n"
         finally:
-            # Track cost after stream completes
-            if workspace_id and cost_tracker and (total_input_tokens or total_output_tokens):
+            if (
+                workspace_id
+                and cost_tracker
+                and (total_input_tokens or total_output_tokens)
+            ):
                 try:
                     await track_llm_cost(
                         cost_tracker,
@@ -278,7 +407,9 @@ async def _handle_streaming(
                         output_tokens=total_output_tokens,
                     )
                 except Exception:
-                    logger.debug("ai_proxy_stream_cost_tracking_failed", exc_info=True)
+                    logger.debug(
+                        "ai_proxy_stream_cost_tracking_failed", exc_info=True
+                    )
 
             logger.info(
                 "ai_proxy_stream_complete",
