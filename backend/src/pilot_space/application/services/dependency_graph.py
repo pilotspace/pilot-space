@@ -3,8 +3,8 @@
 T-237: Project-scoped issue dependency graph.
 Feature 017: Note Versioning / PM Block Engine -- Phase 2c.
 
-Extracts all DB queries, graph algorithms, and DAG construction from the
-dependency_graph router into a proper service layer.
+All DB access is delegated to ProjectRepository, IssueRepository, and
+IssueLinkRepository. Graph algorithms remain as pure module-level functions.
 """
 
 from __future__ import annotations
@@ -14,16 +14,18 @@ from dataclasses import dataclass, field
 from itertools import pairwise
 from uuid import UUID
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from pilot_space.domain.exceptions import NotFoundError
-from pilot_space.infrastructure.database.models import Issue
-from pilot_space.infrastructure.database.models.issue_link import (
-    IssueLink,
-    IssueLinkType,
+from pilot_space.infrastructure.database.models.issue_link import IssueLinkType
+from pilot_space.infrastructure.database.repositories.issue_link_repository import (
+    IssueLinkRepository,
 )
-from pilot_space.infrastructure.database.models.project import Project
+from pilot_space.infrastructure.database.repositories.issue_repository import (
+    IssueFilters,
+    IssueRepository,
+)
+from pilot_space.infrastructure.database.repositories.project_repository import (
+    ProjectRepository,
+)
 from pilot_space.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
@@ -69,12 +71,20 @@ class DependencyGraphResult:
 class DependencyGraphService:
     """Business logic for project dependency graph construction and analysis.
 
-    Owns DB queries for projects/issues/links, DAG construction, cycle
-    detection via DFS, and critical path computation via topological sort.
+    Delegates DB queries for projects/issues/links to their respective
+    repositories. Graph algorithms (cycle detection, critical path) remain
+    as pure module-level functions.
     """
 
-    def __init__(self, session: AsyncSession) -> None:
-        self._session = session
+    def __init__(
+        self,
+        project_repository: ProjectRepository,
+        issue_repository: IssueRepository,
+        issue_link_repository: IssueLinkRepository,
+    ) -> None:
+        self._projects = project_repository
+        self._issues = issue_repository
+        self._links = issue_link_repository
 
     async def get_project_graph(
         self,
@@ -85,27 +95,18 @@ class DependencyGraphService:
 
         Returns nodes, edges, critical path, and circular dependency cycles.
         """
-        # Verify project exists
-        project_result = await self._session.execute(
-            select(Project).where(
-                Project.id == project_id,
-                Project.workspace_id == workspace_id,
-                Project.is_deleted == False,  # noqa: E712
-            )
-        )
-        project = project_result.scalar_one_or_none()
-        if not project:
+        # Verify project exists in this workspace
+        project = await self._projects.get_by_id(project_id)
+        if not project or project.workspace_id != workspace_id or project.is_deleted:
             raise NotFoundError("Project not found")
 
         # Load all non-deleted issues in the project
-        issues_result = await self._session.execute(
-            select(Issue).where(
-                Issue.project_id == project_id,
-                Issue.workspace_id == workspace_id,
-                Issue.is_deleted == False,  # noqa: E712
-            )
+        issues_page = await self._issues.get_workspace_issues(
+            workspace_id,
+            filters=IssueFilters(project_id=project_id),
+            page_size=10_000,  # effectively unbounded for graph construction
         )
-        issues = issues_result.scalars().all()
+        issues = list(issues_page.items)
         issue_ids = {str(i.id) for i in issues}
 
         nodes = [
@@ -123,25 +124,25 @@ class DependencyGraphService:
             for i in issues
         ]
 
-        # Load BLOCKS-type links where source is in this project
-        links_result = await self._session.execute(
-            select(IssueLink).where(
-                IssueLink.source_issue_id.in_([UUID(iid) for iid in issue_ids]),
-                IssueLink.workspace_id == workspace_id,
-                IssueLink.link_type == IssueLinkType.BLOCKS,
-            )
-        )
-        links = links_result.scalars().all()
-
+        # Load BLOCKS-type links for all issues in the project.
+        # IssueLinkRepository.find_by_source is per-issue. We iterate over
+        # all project issues (acceptable for typical project sizes < 500;
+        # each call is a single indexed DB lookup via the same connection).
         edges: list[DependencyEdge] = []
         adj: dict[str, list[str]] = defaultdict(list)
 
-        for link in links:
-            src = str(link.source_issue_id)
-            tgt = str(link.target_issue_id)
-            if src in issue_ids and tgt in issue_ids:
-                edges.append(DependencyEdge(source_id=src, target_id=tgt))
-                adj[src].append(tgt)
+        for issue in issues:
+            src_links = await self._links.find_by_source(
+                issue_id=issue.id,
+                workspace_id=workspace_id,
+                link_type=IssueLinkType.BLOCKS,
+            )
+            for link in src_links:
+                src = str(link.source_issue_id)
+                tgt = str(link.target_issue_id)
+                if src in issue_ids and tgt in issue_ids:
+                    edges.append(DependencyEdge(source_id=src, target_id=tgt))
+                    adj[src].append(tgt)
 
         # Detect circular dependencies via DFS
         circular_deps = _find_cycles(issue_ids, adj)

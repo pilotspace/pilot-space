@@ -2,19 +2,17 @@
 
 T-144, Feature 016 M8.
 
-Extracts raw SQL CRUD, auth checks, and template management logic
-from the note_templates router into a proper service layer.
+Extracts auth checks and template management logic from the note_templates
+router into a proper service layer. All DB access is delegated to
+NoteTemplateRepository.
 """
 
 from __future__ import annotations
 
-import json
-import uuid
 from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
-import sqlalchemy as sa
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,16 +21,12 @@ from pilot_space.infrastructure.database.models.workspace_member import (
     WorkspaceMember,
     WorkspaceRole,
 )
+from pilot_space.infrastructure.database.repositories.note_template_repository import (
+    NoteTemplateRepository,
+)
 from pilot_space.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
-
-# Allowlist of columns permitted in UPDATE SET clause.
-_ALLOWED_UPDATE_COLUMNS: frozenset[str] = frozenset({"name", "description", "content"})
-
-_SELECT_COLS = (
-    "id, workspace_id, name, description, content, is_system, created_by, created_at, updated_at"
-)
 
 
 # -- Payloads / Results --------------------------------------------------------
@@ -70,123 +64,103 @@ class DeleteTemplatePayload:
 class NoteTemplateService:
     """Business logic for note template CRUD.
 
-    Owns raw SQL queries, workspace access checks, and template lifecycle.
+    Owns workspace access checks and template lifecycle.
+    All DB access is delegated to NoteTemplateRepository.
     """
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        note_template_repository: NoteTemplateRepository,
+    ) -> None:
         self._session = session
+        self._repo = note_template_repository
 
     async def list_templates(self, workspace_id: UUID) -> list[dict[str, Any]]:
         """List system templates + workspace custom templates."""
-        result = await self._session.execute(
-            sa.text(
-                f"SELECT {_SELECT_COLS} FROM note_templates "
-                "WHERE is_system = true OR workspace_id = :ws_id "
-                "ORDER BY is_system DESC, created_at ASC"
-            ),
-            {"ws_id": str(workspace_id)},
-        )
-        return [dict(r) for r in result.mappings()]
+        templates = await self._repo.list_for_workspace(workspace_id)
+        return [self._to_dict(t) for t in templates]
 
     async def get_template(
         self, template_id: UUID, workspace_id: UUID
     ) -> dict[str, Any]:
         """Get a template by ID. Validates workspace access."""
-        row = await self._get_template_row(template_id)
-        if not row:
+        template = await self._repo.get_by_id(template_id)
+        if not template:
             raise NotFoundError("Template not found.")
-        if not row["is_system"] and row["workspace_id"] != workspace_id:
+        if not template.is_system and template.workspace_id != workspace_id:
             raise ForbiddenError("Access denied.")
-        return row
+        return self._to_dict(template)
 
     async def create_template(self, payload: CreateTemplatePayload) -> dict[str, Any]:
         """Create a custom workspace template."""
-        new_id = uuid.uuid4()
-
-        await self._session.execute(
-            sa.text(
-                "INSERT INTO note_templates "
-                "(id, workspace_id, name, description, content, is_system, created_by) "
-                "VALUES (:id, :ws_id, :name, :description, :content::jsonb, false, :created_by)"
-            ),
-            {
-                "id": str(new_id),
-                "ws_id": str(payload.workspace_id),
-                "name": payload.name,
-                "description": payload.description,
-                "content": json.dumps(payload.content),
-                "created_by": str(payload.created_by),
-            },
+        template = await self._repo.create(
+            workspace_id=payload.workspace_id,
+            name=payload.name,
+            description=payload.description,
+            content=payload.content,
+            created_by=payload.created_by,
         )
         await self._session.commit()
 
-        row = await self._get_template_row(new_id)
-        if not row:
-            raise NotFoundError("Template creation failed.")
+        # Refresh after commit to get server-side timestamps
+        await self._session.refresh(template)
 
         logger.info(
             "note_template_created",
-            template_id=str(new_id),
+            template_id=str(template.id),
             workspace_id=str(payload.workspace_id),
         )
-        return row
+        return self._to_dict(template)
 
     async def update_template(self, payload: UpdateTemplatePayload) -> dict[str, Any]:
         """Update a custom template. Admin/owner or creator."""
-        row = await self._get_template_row(payload.template_id)
-        if not row:
+        template = await self._repo.get_by_id(payload.template_id)
+        if not template:
             raise NotFoundError("Template not found.")
-        if row["is_system"]:
+        if template.is_system:
             raise ForbiddenError("System templates are read-only.")
-        if row["workspace_id"] != payload.workspace_id:
+        if template.workspace_id != payload.workspace_id:
             raise ForbiddenError("Access denied.")
 
         await self._require_creator_or_admin(
-            row, payload.current_user_id, payload.workspace_id
+            created_by=template.created_by,
+            current_user_id=payload.current_user_id,
+            workspace_id=payload.workspace_id,
         )
 
-        updates: dict[str, Any] = {}
-        if payload.name is not None:
-            updates["name"] = payload.name
-        if payload.description is not None:
-            updates["description"] = payload.description
-        if payload.content is not None:
-            updates["content"] = json.dumps(payload.content)
-
-        if updates:
-            for key in updates:
-                if key not in _ALLOWED_UPDATE_COLUMNS:
-                    raise ValueError(f"Invalid update column: {key}")
-            set_clause = ", ".join(f"{k} = :{k}" for k in updates)
-            updates["id"] = str(payload.template_id)
-            await self._session.execute(
-                sa.text(
-                    f"UPDATE note_templates SET {set_clause}, updated_at = now() WHERE id = :id"
-                ),
-                updates,
+        has_changes = any(
+            v is not None for v in (payload.name, payload.description, payload.content)
+        )
+        if has_changes:
+            template = await self._repo.update(
+                template,
+                name=payload.name,
+                description=payload.description,
+                content=payload.content,
             )
             await self._session.commit()
+            await self._session.refresh(template)
 
-        return await self._get_template_row(payload.template_id)  # type: ignore[return-value]
+        return self._to_dict(template)
 
     async def delete_template(self, payload: DeleteTemplatePayload) -> None:
         """Delete a custom template. Admin/owner or creator."""
-        row = await self._get_template_row(payload.template_id)
-        if not row:
+        template = await self._repo.get_by_id(payload.template_id)
+        if not template:
             raise NotFoundError("Template not found.")
-        if row["is_system"]:
+        if template.is_system:
             raise ForbiddenError("System templates cannot be deleted.")
-        if row["workspace_id"] != payload.workspace_id:
+        if template.workspace_id != payload.workspace_id:
             raise ForbiddenError("Access denied.")
 
         await self._require_creator_or_admin(
-            row, payload.current_user_id, payload.workspace_id
+            created_by=template.created_by,
+            current_user_id=payload.current_user_id,
+            workspace_id=payload.workspace_id,
         )
 
-        await self._session.execute(
-            sa.text("DELETE FROM note_templates WHERE id = :id"),
-            {"id": str(payload.template_id)},
-        )
+        await self._repo.delete(template)
         await self._session.commit()
         logger.info(
             "note_template_deleted",
@@ -196,25 +170,29 @@ class NoteTemplateService:
 
     # -- Private helpers -------------------------------------------------------
 
-    async def _get_template_row(self, template_id: UUID) -> dict[str, Any] | None:
-        result = await self._session.execute(
-            sa.text(f"SELECT {_SELECT_COLS} FROM note_templates WHERE id = :id"),
-            {"id": str(template_id)},
-        )
-        row = result.mappings().first()
-        return dict(row) if row else None
+    @staticmethod
+    def _to_dict(template: Any) -> dict[str, Any]:
+        """Convert a NoteTemplate ORM instance to a plain dict."""
+        return {
+            "id": str(template.id),
+            "workspace_id": str(template.workspace_id) if template.workspace_id else None,
+            "name": template.name,
+            "description": template.description,
+            "content": template.content,
+            "is_system": template.is_system,
+            "created_by": str(template.created_by) if template.created_by else None,
+            "created_at": template.created_at,
+            "updated_at": template.updated_at,
+        }
 
     async def _require_creator_or_admin(
         self,
-        row: dict[str, Any],
+        created_by: UUID | None,
         current_user_id: UUID,
         workspace_id: UUID,
     ) -> None:
         """Verify the user is the template creator or an admin/owner."""
-        is_creator = (
-            str(row["created_by"]) == str(current_user_id) if row["created_by"] else False
-        )
-        if is_creator:
+        if created_by is not None and created_by == current_user_id:
             return
 
         result = await self._session.execute(

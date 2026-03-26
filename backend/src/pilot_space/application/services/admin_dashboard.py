@@ -2,6 +2,7 @@
 
 Provides read-only cross-workspace metrics for super-admin operator dashboard.
 Uses service_role DB connection (bypasses RLS) for cross-workspace queries.
+All SQL is encapsulated in AdminDashboardRepository.
 """
 
 from __future__ import annotations
@@ -10,10 +11,12 @@ import contextlib
 import logging
 from typing import Any
 
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from pilot_space.config import get_settings
+from pilot_space.infrastructure.database.repositories.admin_dashboard_repository import (
+    AdminDashboardRepository,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -38,108 +41,6 @@ class _AdminSessionFactory:
 
 
 _get_admin_session_factory = _AdminSessionFactory()
-
-
-# ---------------------------------------------------------------------------
-# SQL Queries
-# ---------------------------------------------------------------------------
-
-_LIST_WORKSPACES_SQL = text("""
-SELECT
-    w.id,
-    w.name,
-    w.slug,
-    w.created_at,
-    COALESCE(m.member_count, 0) AS member_count,
-    ou.email AS owner_email,
-    al_agg.last_active,
-    w.storage_used_bytes,
-    COALESCE(al_agg.ai_action_count, 0) AS ai_action_count
-FROM workspaces w
-LEFT JOIN (
-    SELECT workspace_id, COUNT(*) FILTER (WHERE is_active = true AND is_deleted = false) AS member_count
-    FROM workspace_members
-    GROUP BY workspace_id
-) m ON m.workspace_id = w.id
-LEFT JOIN users ou ON ou.id = w.owner_id
-LEFT JOIN (
-    SELECT
-        workspace_id,
-        MAX(created_at) AS last_active,
-        COUNT(*) FILTER (WHERE actor_type = 'AI') AS ai_action_count
-    FROM audit_log
-    GROUP BY workspace_id
-) al_agg ON al_agg.workspace_id = w.id
-WHERE w.is_deleted = false
-ORDER BY w.created_at DESC
-LIMIT :limit OFFSET :offset
-""")
-
-_WORKSPACE_DETAIL_SQL = text("""
-SELECT
-    w.id,
-    w.name,
-    w.slug,
-    w.created_at,
-    COALESCE(m.member_count, 0) AS member_count,
-    ou.email AS owner_email,
-    al_agg.last_active,
-    w.storage_used_bytes,
-    COALESCE(al_agg.ai_action_count, 0) AS ai_action_count,
-    w.rate_limit_standard_rpm,
-    w.rate_limit_ai_rpm,
-    w.storage_quota_mb
-FROM workspaces w
-LEFT JOIN (
-    SELECT workspace_id, COUNT(*) FILTER (WHERE is_active = true AND is_deleted = false) AS member_count
-    FROM workspace_members
-    GROUP BY workspace_id
-) m ON m.workspace_id = w.id
-LEFT JOIN users ou ON ou.id = w.owner_id
-LEFT JOIN (
-    SELECT
-        workspace_id,
-        MAX(created_at) AS last_active,
-        COUNT(*) FILTER (WHERE actor_type = 'AI') AS ai_action_count
-    FROM audit_log
-    GROUP BY workspace_id
-) al_agg ON al_agg.workspace_id = w.id
-WHERE w.slug = :slug AND w.is_deleted = false
-""")
-
-_TOP_MEMBERS_SQL = text("""
-SELECT
-    wm.user_id,
-    u.email,
-    u.full_name,
-    wm.role,
-    COUNT(al.id) AS action_count
-FROM workspace_members wm
-JOIN users u ON u.id = wm.user_id
-LEFT JOIN audit_log al ON al.workspace_id = wm.workspace_id AND al.actor_id = wm.user_id
-WHERE wm.workspace_id = :workspace_id
-  AND wm.is_active = true
-  AND wm.is_deleted = false
-GROUP BY wm.user_id, u.email, u.full_name, wm.role
-ORDER BY action_count DESC
-LIMIT 5
-""")
-
-_RECENT_AI_ACTIONS_SQL = text("""
-SELECT
-    id,
-    action,
-    resource_type,
-    resource_id,
-    actor_id,
-    ai_model,
-    ai_token_cost,
-    created_at
-FROM audit_log
-WHERE workspace_id = :workspace_id AND actor_type = 'AI'
-ORDER BY created_at DESC
-LIMIT 10
-""")
 
 
 class AdminDashboardService:
@@ -190,10 +91,8 @@ class AdminDashboardService:
         session_factory = _get_admin_session_factory()
 
         async with session_factory() as session:
-            result = await session.execute(
-                _LIST_WORKSPACES_SQL, {"limit": limit, "offset": offset}
-            )
-            rows = result.mappings().all()
+            repo = AdminDashboardRepository(session)
+            rows = await repo.list_workspaces(limit=limit, offset=offset)
 
         workspaces = []
         for row in rows:
@@ -235,25 +134,16 @@ class AdminDashboardService:
         session_factory = _get_admin_session_factory()
 
         async with session_factory() as session:
-            ws_result = await session.execute(
-                _WORKSPACE_DETAIL_SQL, {"slug": workspace_slug}
-            )
-            ws_row = ws_result.mappings().one_or_none()
+            repo = AdminDashboardRepository(session)
 
+            ws_row = await repo.get_workspace_by_slug(workspace_slug)
             if ws_row is None:
                 raise NotFoundError(f"Workspace '{workspace_slug}' not found")
 
             workspace_id = ws_row["id"]
 
-            members_result = await session.execute(
-                _TOP_MEMBERS_SQL, {"workspace_id": workspace_id}
-            )
-            members_rows = members_result.mappings().all()
-
-            ai_result = await session.execute(
-                _RECENT_AI_ACTIONS_SQL, {"workspace_id": workspace_id}
-            )
-            ai_rows = ai_result.mappings().all()
+            members_rows = await repo.get_top_members(workspace_id)
+            ai_rows = await repo.get_recent_ai_actions(workspace_id)
 
         ws_id = str(ws_row["id"])
         rl_count = await self._get_rl_violation_count(ws_id)

@@ -147,6 +147,18 @@ from pilot_space.infrastructure.database.repositories.audit_log_repository impor
 from pilot_space.infrastructure.database.repositories.custom_role_repository import (
     CustomRoleRepository,
 )
+from pilot_space.infrastructure.database.repositories.issue_link_repository import (
+    IssueLinkRepository,
+)
+from pilot_space.infrastructure.database.repositories.issue_repository import (
+    IssueRepository,
+)
+from pilot_space.infrastructure.database.repositories.note_template_repository import (
+    NoteTemplateRepository,
+)
+from pilot_space.infrastructure.database.repositories.project_repository import (
+    ProjectRepository,
+)
 from pilot_space.infrastructure.database.repositories.workspace_ai_policy_repository import (
     WorkspaceAIPolicyRepository,
 )
@@ -248,16 +260,40 @@ class Container(SkillContainer, PluginContainer):
         session=providers.Callable(get_current_session),
     )
 
+    # Repositories required by refactored services
+    project_repository = providers.Factory(
+        ProjectRepository,
+        session=providers.Callable(get_current_session),
+    )
+
+    issue_repository = providers.Factory(
+        IssueRepository,
+        session=providers.Callable(get_current_session),
+    )
+
+    issue_link_repository = providers.Factory(
+        IssueLinkRepository,
+        session=providers.Callable(get_current_session),
+    )
+
+    note_template_repository = providers.Factory(
+        NoteTemplateRepository,
+        session=providers.Callable(get_current_session),
+    )
+
     # Dependency Graph Service
     dependency_graph_service = providers.Factory(
         DependencyGraphService,
-        session=providers.Callable(get_current_session),
+        project_repository=project_repository,
+        issue_repository=issue_repository,
+        issue_link_repository=issue_link_repository,
     )
 
     # Note Template Service
     note_template_service = providers.Factory(
         NoteTemplateService,
         session=providers.Callable(get_current_session),
+        note_template_repository=note_template_repository,
     )
 
     # Related Issues Suggestion Service
