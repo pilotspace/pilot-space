@@ -22,9 +22,8 @@ from pilot_space.application.services.ai_extraction import (
 )
 from pilot_space.dependencies import (
     CurrentUserId,
-    DbSession,
 )
-from pilot_space.dependencies.auth import require_workspace_member
+from pilot_space.dependencies.auth import SessionDep, require_workspace_member
 from pilot_space.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
@@ -138,7 +137,7 @@ async def extract_issues_stream(
     extract_request: ExtractIssuesRequest,
     current_user_id: CurrentUserId,
     request: Request,
-    session: DbSession,
+    session: SessionDep,
     _member: Annotated[UUID, Depends(require_workspace_member)],
 ) -> SSEResponse:
     """Extract issues from note content with confidence tags.
@@ -226,7 +225,7 @@ async def approve_extracted_issues(
     note_id: str,
     body: CreateExtractedIssuesRequestSchema,
     current_user_id: CurrentUserId,
-    session: DbSession,
+    session: SessionDep,
     service: CreateExtractedIssuesServiceDep,
     _member: Annotated[UUID, Depends(require_workspace_member)],
 ) -> CreateExtractedIssuesResponse:
@@ -268,7 +267,7 @@ async def approve_extracted_issues_no_note(
     workspace_id: WorkspaceId,
     body: CreateExtractedIssuesRequestSchema,
     current_user_id: CurrentUserId,
-    session: DbSession,
+    session: SessionDep,
     service: CreateExtractedIssuesServiceDep,
     _member: Annotated[UUID, Depends(require_workspace_member)],
 ) -> CreateExtractedIssuesResponse:

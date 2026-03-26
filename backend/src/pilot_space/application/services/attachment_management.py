@@ -14,9 +14,11 @@ from __future__ import annotations
 from typing import Any
 from uuid import UUID
 
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pilot_space.domain.exceptions import ForbiddenError, NotFoundError
+from pilot_space.infrastructure.database.models.workspace import Workspace
 from pilot_space.infrastructure.database.models.workspace_member import WorkspaceRole
 from pilot_space.infrastructure.database.repositories.chat_attachment_repository import (
     ChatAttachmentRepository,
@@ -28,7 +30,13 @@ from pilot_space.infrastructure.database.repositories.workspace_member_repositor
     WorkspaceMemberRepository,
 )
 from pilot_space.infrastructure.logging import get_logger
-from pilot_space.schemas.attachment_management import IngestResult, SignedUrlResult
+from pilot_space.schemas.attachment_management import (
+    ExtractionChunk,
+    ExtractionMetadata,
+    ExtractionResultResponse,
+    IngestResult,
+    SignedUrlResult,
+)
 
 logger = get_logger(__name__)
 
@@ -103,16 +111,27 @@ class AttachmentManagementService:
         Raises:
             StorageQuotaExceededError: If quota would be exceeded.
         """
-        from pilot_space.api.v1.routers.workspace_quota import (
-            _check_storage_quota,  # pyright: ignore[reportPrivateUsage]
-        )
+        workspace = await self._session.get(Workspace, workspace_id)
+        if workspace is None:
+            # Workspace not found — fail open (let the write proceed; endpoint will 404)
+            return None
 
-        quota_ok, warning_pct = await _check_storage_quota(
-            self._session, workspace_id, file_bytes
-        )
-        if not quota_ok:
+        if workspace.storage_quota_mb is None:
+            # NULL quota = unlimited
+            return None
+
+        quota_bytes = workspace.storage_quota_mb * 1024 * 1024
+        projected = workspace.storage_used_bytes + file_bytes
+
+        if projected > quota_bytes:
             raise StorageQuotaExceededError("Storage quota exceeded")
-        return warning_pct
+
+        if quota_bytes > 0:
+            pct = projected / quota_bytes
+            if pct >= 0.80:
+                return pct
+
+        return None
 
     async def update_storage_usage(
         self,
@@ -120,12 +139,12 @@ class AttachmentManagementService:
         file_bytes: int,
     ) -> None:
         """Update storage usage counters after successful upload."""
-        from pilot_space.api.v1.routers.workspace_quota import (
-            _update_storage_usage,  # pyright: ignore[reportPrivateUsage]
-        )
-
         try:
-            await _update_storage_usage(self._session, workspace_id, file_bytes)
+            await self._session.execute(
+                update(Workspace)
+                .where(Workspace.id == workspace_id)
+                .values(storage_used_bytes=Workspace.storage_used_bytes + file_bytes)
+            )
         except Exception:
             logger.warning("storage_usage_update_failed", workspace_id=str(workspace_id))
 
@@ -167,7 +186,7 @@ class AttachmentManagementService:
         self,
         attachment_id: UUID,
         attachment_repo: Any,
-    ) -> Any:
+    ) -> ExtractionResultResponse:
         """Return extraction metadata and pre-chunked content for an attachment.
 
         Reads from OCR results and Office extraction cache. Returns
@@ -176,11 +195,6 @@ class AttachmentManagementService:
         Raises:
             NotFoundError: Attachment not found or expired.
         """
-        from pilot_space.api.v1.schemas.attachments import (
-            ExtractionChunk,
-            ExtractionMetadata,
-            ExtractionResultResponse,
-        )
         from pilot_space.application.services.note.markdown_chunker import (
             chunk_markdown_by_headings,
         )
@@ -282,25 +296,26 @@ class AttachmentManagementService:
             "excluded_chunk_indices": excluded_chunk_indices,
         }
 
+        if not queue_client:
+            logger.warning(
+                "document_ingest_queue_unavailable",
+                attachment_id=str(attachment_id),
+            )
+            return IngestResult(status="skipped", attachment_id=attachment_id)
+
         try:
-            if queue_client:
-                await queue_client.enqueue(QueueName.AI_NORMAL, payload)
-                logger.info(
-                    "document_ingest_enqueued",
-                    attachment_id=str(attachment_id),
-                    workspace_id=str(workspace_id),
-                    excluded_chunks=len(excluded_chunk_indices),
-                )
-            else:
-                logger.warning(
-                    "document_ingest_queue_unavailable",
-                    attachment_id=str(attachment_id),
-                )
+            await queue_client.enqueue(QueueName.AI_NORMAL, payload)
+            logger.info(
+                "document_ingest_enqueued",
+                attachment_id=str(attachment_id),
+                workspace_id=str(workspace_id),
+                excluded_chunks=len(excluded_chunk_indices),
+            )
+            return IngestResult(status="queued", attachment_id=attachment_id)
         except Exception:
             logger.warning(
                 "document_ingest_enqueue_failed",
                 attachment_id=str(attachment_id),
                 exc_info=True,
             )
-
-        return IngestResult(status="queued", attachment_id=attachment_id)
+            return IngestResult(status="failed", attachment_id=attachment_id)
