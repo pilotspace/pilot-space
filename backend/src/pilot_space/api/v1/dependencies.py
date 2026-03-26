@@ -5,6 +5,7 @@ from typing import Annotated
 from dependency_injector.wiring import Provide, inject
 from fastapi import Depends
 
+from pilot_space.ai.infrastructure.approval import ApprovalService
 from pilot_space.api.v1.repository_deps import (
     ActivityRepositoryDep,
     CycleRepositoryDep,
@@ -16,6 +17,7 @@ from pilot_space.api.v1.repository_deps import (
     UserRepositoryDep,
     WorkspaceRepositoryDep,
 )
+from pilot_space.application.services.action_button import ActionButtonService
 from pilot_space.application.services.ai_context import (
     ExportAIContextService,
     GenerateAIContextService,
@@ -25,11 +27,10 @@ from pilot_space.application.services.ai_context import (
 from pilot_space.application.services.annotation import (
     CreateAnnotationService,
 )
-from pilot_space.application.services.block_ownership import BlockOwnershipService
-from pilot_space.application.services.dependency_graph import DependencyGraphService
-from pilot_space.application.services.note_template import NoteTemplateService
-from pilot_space.application.services.related_issues import RelatedIssuesSuggestionService
+from pilot_space.application.services.attachment_management import AttachmentManagementService
 from pilot_space.application.services.auth import AuthService
+from pilot_space.application.services.block_ownership import BlockOwnershipService
+from pilot_space.application.services.capacity_plan import CapacityPlanService
 from pilot_space.application.services.cycle import (
     AddIssueToCycleService,
     CreateCycleService,
@@ -37,9 +38,11 @@ from pilot_space.application.services.cycle import (
     RolloverCycleService,
     UpdateCycleService,
 )
+from pilot_space.application.services.dependency_graph import DependencyGraphService
 from pilot_space.application.services.discussion import (
     CreateDiscussionService,
 )
+from pilot_space.application.services.feature_toggle import FeatureToggleService
 from pilot_space.application.services.homepage import (
     DismissSuggestionService,
     GetActivityService,
@@ -59,6 +62,9 @@ from pilot_space.application.services.issue import (
     ListIssuesService,
     UpdateIssueService,
 )
+from pilot_space.application.services.mcp_oauth import McpOAuthService
+from pilot_space.application.services.mcp_server import McpServerService
+from pilot_space.application.services.mcp_tool_execution import MCPToolExecutionService
 from pilot_space.application.services.memory.knowledge_graph_query_service import (
     KnowledgeGraphQueryService,
 )
@@ -78,26 +84,17 @@ from pilot_space.application.services.note.ai_update_service import (
 )
 from pilot_space.application.services.note.move_page_service import MovePageService
 from pilot_space.application.services.note.reorder_page_service import ReorderPageService
+from pilot_space.application.services.note_template import NoteTemplateService
 from pilot_space.application.services.onboarding import (
     CreateGuidedNoteService,
     GetOnboardingService,
     UpdateOnboardingService,
 )
-from pilot_space.ai.infrastructure.approval import ApprovalService
-from pilot_space.application.services.action_button import ActionButtonService
-from pilot_space.application.services.feature_toggle import FeatureToggleService
-from pilot_space.application.services.attachment_management import AttachmentManagementService
-from pilot_space.application.services.mcp_oauth import McpOAuthService
-from pilot_space.application.services.mcp_server import McpServerService
-from pilot_space.application.services.mcp_tool_execution import MCPToolExecutionService
+from pilot_space.application.services.pm_block_insight_service import PMBlockInsightService
 from pilot_space.application.services.project_detail import ProjectDetailService
 from pilot_space.application.services.rate_limit import RateLimitService
-from pilot_space.application.services.workspace_ai_settings import WorkspaceAISettingsService
-from pilot_space.application.services.sprint_board import SprintBoardService
-from pilot_space.application.services.capacity_plan import CapacityPlanService
-from pilot_space.application.services.pm_block_insight_service import PMBlockInsightService
 from pilot_space.application.services.rbac_service import RbacService
-from pilot_space.application.services.scim_service import ScimService
+from pilot_space.application.services.related_issues import RelatedIssuesSuggestionService
 from pilot_space.application.services.role_skill import (
     CreateRoleSkillService,
     DeleteRoleSkillService,
@@ -105,9 +102,12 @@ from pilot_space.application.services.role_skill import (
     ListRoleSkillsService,
     UpdateRoleSkillService,
 )
+from pilot_space.application.services.scim_service import ScimService
+from pilot_space.application.services.sprint_board import SprintBoardService
 from pilot_space.application.services.task_service import TaskService
 from pilot_space.application.services.transcription import TranscriptionService
 from pilot_space.application.services.workspace import WorkspaceService
+from pilot_space.application.services.workspace_ai_settings import WorkspaceAISettingsService
 from pilot_space.application.services.workspace_invitation import WorkspaceInvitationService
 from pilot_space.application.services.workspace_member import (
     MemberProfileService,

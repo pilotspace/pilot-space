@@ -9,6 +9,7 @@ Source: Phase 17, SKBTN-01..04
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -65,8 +66,8 @@ class ActionButtonService:
         name: str,
         icon: str | None = None,
         binding_type: str,
-        binding_id: str,
-        binding_metadata: dict | None = None,
+        binding_id: UUID | None = None,
+        binding_metadata: dict[str, Any] | None = None,
     ) -> SkillActionButton:
         """Create a new action button.
 
@@ -97,7 +98,7 @@ class ActionButtonService:
         self,
         workspace_id: UUID,
         button_id: UUID,
-        update_data: dict,
+        update_data: dict[str, Any],
     ) -> SkillActionButton:
         """Update an existing action button.
 
