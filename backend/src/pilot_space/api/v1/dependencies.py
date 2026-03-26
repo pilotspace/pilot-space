@@ -83,11 +83,13 @@ from pilot_space.application.services.onboarding import (
     GetOnboardingService,
     UpdateOnboardingService,
 )
+from pilot_space.ai.infrastructure.approval import ApprovalService
 from pilot_space.application.services.feature_toggle import FeatureToggleService
 from pilot_space.application.services.attachment_management import AttachmentManagementService
 from pilot_space.application.services.mcp_oauth import McpOAuthService
 from pilot_space.application.services.mcp_server import McpServerService
 from pilot_space.application.services.rate_limit import RateLimitService
+from pilot_space.application.services.workspace_ai_settings import WorkspaceAISettingsService
 from pilot_space.application.services.rbac_service import RbacService
 from pilot_space.application.services.scim_service import ScimService
 from pilot_space.application.services.role_skill import (
@@ -796,8 +798,37 @@ def _get_scim_service(
 
 ScimServiceDep = Annotated[ScimService, Depends(_get_scim_service)]
 
+# ===== Workspace AI Settings Service Dependencies =====
+
+
+@inject
+def _get_workspace_ai_settings_service(
+    svc: WorkspaceAISettingsService = Depends(
+        Provide[Container.workspace_ai_settings_service]
+    ),
+) -> WorkspaceAISettingsService:
+    return svc
+
+
+WorkspaceAISettingsServiceDep = Annotated[
+    WorkspaceAISettingsService, Depends(_get_workspace_ai_settings_service)
+]
+
+# ===== Approval Service Dependencies =====
+
+
+@inject
+def _get_approval_service(
+    svc: ApprovalService = Depends(Provide[Container.approval_service]),
+) -> ApprovalService:
+    return svc
+
+
+ApprovalServiceDep = Annotated[ApprovalService, Depends(_get_approval_service)]
+
 __all__ = [  # noqa: RUF022
     "ActivityRepositoryDep",
+    "ApprovalServiceDep",
     "CycleRepositoryDep",
     "InvitationRepositoryDep",
     "IssueRepositoryDep",
@@ -869,6 +900,7 @@ __all__ = [  # noqa: RUF022
     "McpServerServiceDep",
     "McpOAuthServiceDep",
     "AttachmentManagementServiceDep",
+    "WorkspaceAISettingsServiceDep",
 ]
 
 

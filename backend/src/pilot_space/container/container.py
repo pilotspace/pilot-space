@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dependency_injector import containers, providers
 
+from pilot_space.ai.infrastructure.approval import ApprovalService
 from pilot_space.ai.infrastructure.cost_tracker import CostTracker
 from pilot_space.application.services.ai import (
     AttachmentContentService,
@@ -100,6 +101,7 @@ from pilot_space.application.services.note_template import NoteTemplateService
 from pilot_space.application.services.related_issues import RelatedIssuesSuggestionService
 from pilot_space.application.services.mcp_server import McpServerService
 from pilot_space.application.services.rate_limit import RateLimitService
+from pilot_space.application.services.workspace_ai_settings import WorkspaceAISettingsService
 from pilot_space.application.services.rbac_service import RbacService
 from pilot_space.application.services.scim_service import ScimService
 from pilot_space.application.services.sso_service import SsoService
@@ -211,6 +213,12 @@ class Container(SkillContainer, PluginContainer):
         session=providers.Callable(get_current_session),
     )
 
+    # AI Approval Service (DD-003) — Factory per request
+    approval_service = providers.Factory(
+        ApprovalService,
+        session=providers.Callable(get_current_session),
+    )
+
     # AI Policy Repository (AIGOV-01) — Factory per request
     workspace_ai_policy_repository = providers.Factory(
         WorkspaceAIPolicyRepository,
@@ -244,6 +252,12 @@ class Container(SkillContainer, PluginContainer):
     # Related Issues Suggestion Service
     related_issues_suggestion_service = providers.Factory(
         RelatedIssuesSuggestionService,
+        session=providers.Callable(get_current_session),
+    )
+
+    # Workspace AI Settings Service
+    workspace_ai_settings_service = providers.Factory(
+        WorkspaceAISettingsService,
         session=providers.Callable(get_current_session),
     )
 
