@@ -188,6 +188,47 @@ class ChatOutput:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
+def _classify_stream_error(exc: Exception) -> tuple[str, str, bool]:
+    """Classify a streaming exception into (error_code, user_message, retryable).
+
+    Translates raw SDK/infrastructure errors into user-friendly messages
+    instead of exposing internal details like "Command failed with exit code 1".
+    """
+    from pilot_space.ai.exceptions import AIError, AINotConfiguredError
+
+    # AI layer errors already have good messages
+    if isinstance(exc, AINotConfiguredError):
+        return ("ai_not_configured", str(exc), False)
+    if isinstance(exc, AIError):
+        return (exc.error_code, str(exc), False)
+
+    # Claude Agent SDK subprocess crash
+    try:
+        from claude_agent_sdk._errors import ProcessError
+
+        if isinstance(exc, ProcessError):
+            exit_code = getattr(exc, "exit_code", None)
+            stderr_text = getattr(exc, "stderr", "") or ""
+            # API key / auth errors from the CLI
+            if exit_code == 1 and ("api key" in stderr_text.lower() or "unauthorized" in stderr_text.lower() or stderr_text == "Check stderr output for details"):
+                return (
+                    "ai_not_configured",
+                    "No API key configured for this workspace. "
+                    "Configure a key in Settings > AI Providers.",
+                    False,
+                )
+            return (
+                "sdk_process_error",
+                f"AI service encountered an error (code {exit_code}). Please try again.",
+                True,
+            )
+    except ImportError:
+        pass
+
+    # Generic fallback
+    return ("sdk_error", "An unexpected error occurred. Please try again.", True)
+
+
 @dataclass(frozen=True, slots=True)
 class _ProviderConfig:
     """Resolved LLM provider configuration for the workspace."""
@@ -826,7 +867,8 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
 
         except Exception as e:
             logger.error("[SDK/Stream] Top-level error: %s: %s", type(e).__name__, e, exc_info=True)
-            err = {"errorCode": "sdk_error", "message": str(e), "retryable": False}
+            error_code, user_message, retryable = _classify_stream_error(e)
+            err = {"errorCode": error_code, "message": user_message, "retryable": retryable}
             yield f"event: error\ndata: {json.dumps(err)}\n\n"
 
     async def _stream_with_space(
@@ -993,7 +1035,8 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
                         duration_ms=duration_ms,
                         exc_info=True,
                     )
-                    yield f"event: error\ndata: {json.dumps({'errorCode': 'stream_error', 'message': str(stream_err), 'retryable': False})}\n\n"
+                    _err_code, _err_msg, _err_retry = _classify_stream_error(stream_err)
+                    yield f"event: error\ndata: {json.dumps({'errorCode': _err_code, 'message': _err_msg, 'retryable': _err_retry})}\n\n"
                 else:
                     final_flush = delta_buffer.flush()
                     if final_flush:
