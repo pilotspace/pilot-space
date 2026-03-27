@@ -1,12 +1,16 @@
-"""Add project RBAC schema.
+"""Add project RBAC schema, RLS policies, invitation changes.
 
-Creates project_members table; adds is_archived/archived_at to projects;
-adds last_active_project_id to workspace_members;
-adds project_assignments JSONB to workspace_invitations.
+Merged from migrations 100–104:
+  - 100_project_rbac_schema: project_members table; is_archived/archived_at on projects;
+    last_active_project_id on workspace_members; project_assignments on workspace_invitations.
+  - 101_project_rbac_rls: RLS policies for project_members.
+  - 102_workspace_invitation_supabase: supabase_invite_sent_at on workspace_invitations.
+  - 103_project_members_add_deleted_at: deleted_at column on project_members.
+  - 104_invitation_status_revoked: 'revoked' value added to invitation_status enum.
 
 Revision ID: 100_project_rbac_schema
-Revises: 099_tighten_mcp_rls_to_admin
-Create Date: 2026-03-25
+Revises: 100_add_pgmq_set_vt_wrapper
+Create Date: 2026-03-28
 """
 
 import sqlalchemy as sa
@@ -21,8 +25,6 @@ depends_on: tuple[str, ...] | None = None
 
 
 def upgrade() -> None:
-    """Create project_members table and add RBAC columns to existing tables."""
-
     # ── 1. Create project_members table ──────────────────────────────────────
     op.create_table(
         "project_members",
@@ -79,6 +81,11 @@ def upgrade() -> None:
             sa.Boolean(),
             server_default=sa.text("false"),
             nullable=False,
+        ),
+        sa.Column(
+            "deleted_at",
+            sa.DateTime(timezone=True),
+            nullable=True,
         ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
@@ -137,10 +144,147 @@ def upgrade() -> None:
         ),
     )
 
+    # ── 5. RLS policies for project_members ──────────────────────────────────
+    op.execute("ALTER TABLE project_members ENABLE ROW LEVEL SECURITY")
+    op.execute("ALTER TABLE project_members FORCE ROW LEVEL SECURITY")
+
+    op.execute(
+        """
+        CREATE POLICY "project_members_select"
+        ON project_members
+        FOR SELECT
+        USING (
+            project_id IN (
+                SELECT p.id
+                FROM projects p
+                INNER JOIN workspace_members wm
+                    ON wm.workspace_id = p.workspace_id
+                WHERE wm.user_id = current_setting('app.current_user_id', true)::uuid
+                  AND wm.is_deleted = false
+                  AND wm.is_active = true
+                  AND p.is_deleted = false
+            )
+        )
+    """
+    )
+
+    op.execute(
+        """
+        CREATE POLICY "project_members_insert"
+        ON project_members
+        FOR INSERT
+        WITH CHECK (
+            project_id IN (
+                SELECT p.id
+                FROM projects p
+                INNER JOIN workspace_members wm
+                    ON wm.workspace_id = p.workspace_id
+                WHERE wm.user_id = current_setting('app.current_user_id', true)::uuid
+                  AND wm.role IN ('ADMIN', 'OWNER')
+                  AND wm.is_deleted = false
+                  AND wm.is_active = true
+                  AND p.is_deleted = false
+            )
+        )
+    """
+    )
+
+    op.execute(
+        """
+        CREATE POLICY "project_members_update"
+        ON project_members
+        FOR UPDATE
+        USING (
+            project_id IN (
+                SELECT p.id
+                FROM projects p
+                INNER JOIN workspace_members wm
+                    ON wm.workspace_id = p.workspace_id
+                WHERE wm.user_id = current_setting('app.current_user_id', true)::uuid
+                  AND wm.role IN ('ADMIN', 'OWNER')
+                  AND wm.is_deleted = false
+                  AND wm.is_active = true
+                  AND p.is_deleted = false
+            )
+        )
+        WITH CHECK (
+            project_id IN (
+                SELECT p.id
+                FROM projects p
+                INNER JOIN workspace_members wm
+                    ON wm.workspace_id = p.workspace_id
+                WHERE wm.user_id = current_setting('app.current_user_id', true)::uuid
+                  AND wm.role IN ('ADMIN', 'OWNER')
+                  AND wm.is_deleted = false
+                  AND wm.is_active = true
+                  AND p.is_deleted = false
+            )
+        )
+    """
+    )
+
+    op.execute(
+        """
+        CREATE POLICY "project_members_delete"
+        ON project_members
+        FOR DELETE
+        USING (
+            project_id IN (
+                SELECT p.id
+                FROM projects p
+                INNER JOIN workspace_members wm
+                    ON wm.workspace_id = p.workspace_id
+                WHERE wm.user_id = current_setting('app.current_user_id', true)::uuid
+                  AND wm.role IN ('ADMIN', 'OWNER')
+                  AND wm.is_deleted = false
+                  AND wm.is_active = true
+                  AND p.is_deleted = false
+            )
+        )
+    """
+    )
+
+    op.execute(
+        """
+        CREATE INDEX IF NOT EXISTS ix_project_members_project_user_active
+        ON project_members (project_id, user_id)
+        WHERE is_active = true AND is_deleted = false
+    """
+    )
+
+    # ── 6. workspace_invitations: add supabase_invite_sent_at ────────────────
+    op.add_column(
+        "workspace_invitations",
+        sa.Column(
+            "supabase_invite_sent_at",
+            sa.TIMESTAMP(timezone=True),
+            nullable=True,
+            comment="Set when Supabase inviteUserByEmail() is called; prevents duplicate magic links on retry",
+        ),
+    )
+
+    # ── 7. invitation_status enum: add 'revoked' value ───────────────────────
+    op.execute("ALTER TYPE invitation_status ADD VALUE IF NOT EXISTS 'revoked'")
+
 
 def downgrade() -> None:
-    """Reverse all RBAC schema additions."""
-    # Remove added columns first
+    # Revert enum (data migration only; PostgreSQL cannot DROP enum values)
+    op.execute(
+        "UPDATE workspace_invitations SET status = 'cancelled' WHERE status = 'revoked'"
+    )
+
+    # Remove supabase_invite_sent_at
+    op.drop_column("workspace_invitations", "supabase_invite_sent_at")
+
+    # Remove RLS policies and disable RLS
+    op.execute("DROP INDEX IF EXISTS ix_project_members_project_user_active")
+    op.execute('DROP POLICY IF EXISTS "project_members_delete" ON project_members')
+    op.execute('DROP POLICY IF EXISTS "project_members_update" ON project_members')
+    op.execute('DROP POLICY IF EXISTS "project_members_insert" ON project_members')
+    op.execute('DROP POLICY IF EXISTS "project_members_select" ON project_members')
+    op.execute("ALTER TABLE project_members DISABLE ROW LEVEL SECURITY")
+
+    # Remove columns added to existing tables
     op.drop_column("workspace_invitations", "project_assignments")
 
     op.drop_index(

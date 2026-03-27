@@ -180,18 +180,3 @@ Notion-like neutral base with editorial quality. Inspirations: Craft (layered su
 5. **Accessible by default** — WCAG 2.2 AA baseline, color never sole meaning carrier, keyboard-first
 
 Full design context: `.impeccable.md` | Full UI spec: `specs/001-pilot-space-mvp/ui-design-spec.md`
-
-## Active Technologies
-- Python 3.12 (backend), TypeScript 5 / Next.js 16.1.4 / React 19 (frontend) + FastAPI, SQLAlchemy 2 async, Alembic, Supabase/PostgreSQL (RLS), pydantic v2 (backend); MobX 6, TanStack Query, shadcn/ui, Vitest, Playwright (frontend) (026-project-rbac)
-- PostgreSQL 15+ with Supabase RLS; `project_members` is a new junction table with FK constraints and RLS policies matching the existing workspace-scope pattern (026-project-rbac)
-- TypeScript 5 / React 19 / Next.js 16.1.4 + TanStack Query, MobX 6, shadcn/ui, Tailwind CSS (026-project-rbac)
-- N/A (read/write via REST API) (026-project-rbac)
-- Python 3.12 + FastAPI, SQLAlchemy async (026-project-rbac)
-- PostgreSQL (via Supabase) (026-project-rbac)
-- redis-py 5.x async client for invitation magic-link rate limiting (3/hour/email, fixed-window INCR+TTL) (028-invite-magic-link)
-- Supabase `inviteUserByEmail` admin API for server-initiated magic links with `redirectTo` carrying `invitation_id` query param (028-invite-magic-link)
-- `invitation_status` PostgreSQL enum extended with `revoked` value (migration 104, additive) (028-invite-magic-link)
-
-## Recent Changes
-- 026-project-rbac: Added Python 3.12 (backend), TypeScript 5 / Next.js 16.1.4 / React 19 (frontend) + FastAPI, SQLAlchemy 2 async, Alembic, Supabase/PostgreSQL (RLS), pydantic v2 (backend); MobX 6, TanStack Query, shadcn/ui, Vitest, Playwright (frontend)
-- 028-invite-magic-link: Added Redis rate limiter for magic link requests; new public invitation endpoints (`GET /invitations/{id}/preview`, `POST /invitations/{id}/request-magic-link`); new `/auth/invite` registration page; `revoked` enum value added to `invitation_status`; email mismatch validation in `accept_invitation`
