@@ -25,6 +25,7 @@ from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient
 from pilot_space.ai.agents.agent_base import AgentContext, StreamingSDKBaseAgent
 from pilot_space.ai.context import clear_context, set_workspace_context
 from pilot_space.ai.sdk.config import MODEL_SONNET, build_sdk_env
+from pilot_space.config import get_settings
 
 _logger = structlog.get_logger(__name__)
 
@@ -424,7 +425,16 @@ Be constructive and focus on production reliability, security, and maintainabili
             sdk_options = self._create_agent_options(context)
             if model_name:
                 sdk_options.model = model_name
-            sdk_options.env = build_sdk_env(api_key, base_url=base_url)
+            # Proxy routing — route through built-in proxy when enabled
+            _settings = get_settings()
+            if _settings.ai_proxy_enabled:
+                sdk_options.env = build_sdk_env(api_key, base_url=_settings.ai_proxy_base_url)
+                sdk_options.env["X_WORKSPACE_ID"] = str(context.workspace_id)
+                if context.user_id:
+                    sdk_options.env["X_USER_ID"] = str(context.user_id)
+                _logger.info("pr_review_proxy_routed", proxy_url=_settings.ai_proxy_base_url)
+            else:
+                sdk_options.env = build_sdk_env(api_key, base_url=base_url)
 
             # Set context for observability
             set_workspace_context(context.workspace_id, context.user_id)
