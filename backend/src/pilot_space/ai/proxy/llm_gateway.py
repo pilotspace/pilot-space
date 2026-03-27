@@ -30,6 +30,7 @@ from pilot_space.ai.proxy.provider_config import (
     resolve_model,
 )
 from pilot_space.ai.proxy.tracing import observe  # pyright: ignore[reportAttributeAccessIssue]
+from pilot_space.config import get_settings
 from pilot_space.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
@@ -95,34 +96,54 @@ class LLMGateway:
         self._openai_clients: dict[str, openai.AsyncOpenAI] = {}
 
     def _get_anthropic_client(
-        self, api_key: str, base_url: str | None = None
+        self,
+        api_key: str,
+        base_url: str | None = None,
+        default_headers: dict[str, str] | None = None,
     ) -> anthropic.AsyncAnthropic:
         """Get or create a cached AsyncAnthropic client for this API key.
 
         Args:
             api_key: Workspace-specific Anthropic API key.
             base_url: Optional custom base URL (for proxies / Ollama).
+            default_headers: Optional headers sent with every request (e.g. proxy tenant headers).
         """
-        key_hash = hashlib.sha256(f"{api_key}:{base_url or ''}".encode()).hexdigest()[:16]
+        headers_key = sorted(default_headers.items()) if default_headers else ""
+        key_hash = hashlib.sha256(
+            f"{api_key}:{base_url or ''}:{headers_key}".encode()
+        ).hexdigest()[:16]
         if key_hash not in self._anthropic_clients:
             kwargs: dict[str, Any] = {"api_key": api_key}
             if base_url:
                 kwargs["base_url"] = base_url
+            if default_headers:
+                kwargs["default_headers"] = default_headers
             self._anthropic_clients[key_hash] = anthropic.AsyncAnthropic(**kwargs)
         return self._anthropic_clients[key_hash]
 
-    def _get_openai_client(self, api_key: str, base_url: str | None = None) -> openai.AsyncOpenAI:
+    def _get_openai_client(
+        self,
+        api_key: str,
+        base_url: str | None = None,
+        default_headers: dict[str, str] | None = None,
+    ) -> openai.AsyncOpenAI:
         """Get or create a cached AsyncOpenAI client for this API key.
 
         Args:
             api_key: Workspace-specific OpenAI API key.
             base_url: Optional custom base URL (for proxies / Ollama).
+            default_headers: Optional headers sent with every request (e.g. proxy tenant headers).
         """
-        key_hash = hashlib.sha256(f"{api_key}:{base_url or ''}".encode()).hexdigest()[:16]
+        headers_key = sorted(default_headers.items()) if default_headers else ""
+        key_hash = hashlib.sha256(
+            f"{api_key}:{base_url or ''}:{headers_key}".encode()
+        ).hexdigest()[:16]
         if key_hash not in self._openai_clients:
             kwargs: dict[str, Any] = {"api_key": api_key}
             if base_url:
                 kwargs["base_url"] = base_url
+            if default_headers:
+                kwargs["default_headers"] = default_headers
             self._openai_clients[key_hash] = openai.AsyncOpenAI(**kwargs)
         return self._openai_clients[key_hash]
 
@@ -173,10 +194,24 @@ class LLMGateway:
         key_info = await self._key_storage.get_key_info(workspace_id, provider, "llm")
         base_url = key_info.base_url if key_info else None
 
+        # Proxy routing: when ai_proxy_enabled, override base_url to route
+        # through the built-in proxy for centralized cost tracking.
+        settings = get_settings()
+        _is_proxied = False
+        proxy_headers: dict[str, str] | None = None
+        if settings.ai_proxy_enabled:
+            base_url = settings.ai_proxy_base_url
+            _is_proxied = True
+            proxy_headers = {
+                "X-Workspace-Id": str(workspace_id),
+                "X-User-Id": str(user_id),
+            }
+
         if provider == "anthropic":
             return await self._complete_anthropic(
                 api_key=api_key,
                 base_url=base_url,
+                default_headers=proxy_headers,
                 provider=provider,
                 model=bare_model,
                 resolved_model=resolved,
@@ -187,10 +222,12 @@ class LLMGateway:
                 workspace_id=workspace_id,
                 user_id=user_id,
                 agent_name=agent_name,
+                _is_proxied=_is_proxied,
             )
         return await self._complete_openai(
             api_key=api_key,
             base_url=base_url,
+            default_headers=proxy_headers,
             provider=provider,
             model=bare_model,
             resolved_model=resolved,
@@ -201,6 +238,7 @@ class LLMGateway:
             workspace_id=workspace_id,
             user_id=user_id,
             agent_name=agent_name,
+            _is_proxied=_is_proxied,
         )
 
     async def _complete_anthropic(
@@ -208,6 +246,7 @@ class LLMGateway:
         *,
         api_key: str,
         base_url: str | None = None,
+        default_headers: dict[str, str] | None = None,
         provider: str,
         model: str,
         resolved_model: str,
@@ -218,9 +257,12 @@ class LLMGateway:
         workspace_id: UUID,
         user_id: UUID,
         agent_name: str,
+        _is_proxied: bool = False,
     ) -> LLMResponse:
         """Call Anthropic Messages API directly."""
-        client = self._get_anthropic_client(api_key, base_url=base_url)
+        client = self._get_anthropic_client(
+            api_key, base_url=base_url, default_headers=default_headers
+        )
 
         # Anthropic uses a separate `system` param, not a system message in the list
         anthropic_messages: list[dict[str, str]] = []
@@ -257,15 +299,16 @@ class LLMGateway:
         input_tokens = response.usage.input_tokens
         output_tokens = response.usage.output_tokens
 
-        await track_llm_cost(
-            self._cost_tracker,
-            workspace_id=workspace_id,
-            user_id=user_id,
-            model=resolved_model,
-            agent_name=agent_name,
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
-        )
+        if not _is_proxied:
+            await track_llm_cost(
+                self._cost_tracker,
+                workspace_id=workspace_id,
+                user_id=user_id,
+                model=resolved_model,
+                agent_name=agent_name,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+            )
 
         return LLMResponse(
             text=text,
@@ -280,6 +323,7 @@ class LLMGateway:
         *,
         api_key: str,
         base_url: str | None = None,
+        default_headers: dict[str, str] | None = None,
         provider: str,
         model: str,
         resolved_model: str,
@@ -290,9 +334,12 @@ class LLMGateway:
         workspace_id: UUID,
         user_id: UUID,
         agent_name: str,
+        _is_proxied: bool = False,
     ) -> LLMResponse:
         """Call OpenAI Chat Completions API (also works for OpenAI-compatible providers)."""
-        client = self._get_openai_client(api_key, base_url=base_url)
+        client = self._get_openai_client(
+            api_key, base_url=base_url, default_headers=default_headers
+        )
 
         # Filter system messages from list to avoid duplicates when system param is set
         final_messages = [m for m in messages if m["role"] != "system"]
@@ -324,15 +371,16 @@ class LLMGateway:
             input_tokens = response.usage.prompt_tokens or 0
             output_tokens = response.usage.completion_tokens or 0
 
-        await track_llm_cost(
-            self._cost_tracker,
-            workspace_id=workspace_id,
-            user_id=user_id,
-            model=resolved_model,
-            agent_name=agent_name,
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
-        )
+        if not _is_proxied:
+            await track_llm_cost(
+                self._cost_tracker,
+                workspace_id=workspace_id,
+                user_id=user_id,
+                model=resolved_model,
+                agent_name=agent_name,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+            )
 
         return LLMResponse(
             text=text,
@@ -379,7 +427,22 @@ class LLMGateway:
         key_info = await self._key_storage.get_key_info(workspace_id, provider, "llm")
         base_url = key_info.base_url if key_info else None
 
-        client = self._get_openai_client(api_key, base_url=base_url)
+        # Proxy routing for embeddings: when ai_proxy_enabled, route through
+        # the built-in proxy for centralized cost tracking.
+        settings = get_settings()
+        _is_proxied = False
+        proxy_headers: dict[str, str] | None = None
+        if settings.ai_proxy_enabled:
+            base_url = settings.ai_proxy_base_url
+            _is_proxied = True
+            proxy_headers = {
+                "X-Workspace-Id": str(workspace_id),
+                "X-User-Id": str(user_id),
+            }
+
+        client = self._get_openai_client(
+            api_key, base_url=base_url, default_headers=proxy_headers
+        )
 
         embed_kwargs: dict[str, Any] = {
             "model": bare_model,
@@ -396,15 +459,16 @@ class LLMGateway:
         embeddings = [item.embedding for item in response.data]
         input_tokens = response.usage.total_tokens if response.usage else 0
 
-        await track_llm_cost(
-            self._cost_tracker,
-            workspace_id=workspace_id,
-            user_id=user_id,
-            model=model,
-            agent_name=agent_name,
-            input_tokens=input_tokens,
-            output_tokens=0,
-        )
+        if not _is_proxied:
+            await track_llm_cost(
+                self._cost_tracker,
+                workspace_id=workspace_id,
+                user_id=user_id,
+                model=model,
+                agent_name=agent_name,
+                input_tokens=input_tokens,
+                output_tokens=0,
+            )
 
         return EmbeddingResponse(
             embeddings=embeddings,
