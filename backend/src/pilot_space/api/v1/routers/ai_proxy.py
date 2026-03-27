@@ -40,6 +40,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pilot_space.ai.exceptions import AINotConfiguredError
 from pilot_space.ai.proxy.cost_hooks import track_llm_cost
 from pilot_space.ai.proxy.tracing import observe  # pyright: ignore[reportAttributeAccessIssue]
+from pilot_space.dependencies import DbSession
 from pilot_space.domain.exceptions import ForbiddenError
 from pilot_space.infrastructure.logging import get_logger
 
@@ -208,6 +209,7 @@ def _get_cached_client(
 @observe(name="ai_proxy.messages")  # type: ignore[misc]
 async def proxy_messages(
     request: Request,
+    session: DbSession,  # populates ContextVar for DI-injected services
     x_workspace_id: str | None = Header(None, alias="X-Workspace-Id"),
     x_user_id: str | None = Header(None, alias="X-User-Id"),
 ) -> StreamingResponse | JSONResponse:
