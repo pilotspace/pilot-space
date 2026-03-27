@@ -23,6 +23,7 @@ from pilot_space.infrastructure.database.rls import set_rls_context
 from pilot_space.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
+    from pilot_space.infrastructure.cache.invite_rate_limiter import InviteRateLimiter
     from pilot_space.infrastructure.database.models.workspace_invitation import (
         WorkspaceInvitation,
     )
@@ -147,6 +148,22 @@ class AcceptInvitationResult:
     requires_profile_completion: bool
 
 
+@dataclass
+class RequestMagicLinkPayload:
+    """Payload for requesting a magic link for an invitation."""
+
+    invitation_id: UUID
+    email: str
+
+
+@dataclass
+class RequestMagicLinkResult:
+    """Result of request_magic_link operation."""
+
+    message: str
+    expires_in_minutes: int = 60
+
+
 class WorkspaceInvitationService:
     """Service for workspace invitation operations.
 
@@ -158,10 +175,12 @@ class WorkspaceInvitationService:
         workspace_repo: WorkspaceRepository,
         invitation_repo: InvitationRepository,
         user_repo: UserRepository | None = None,
+        rate_limiter: InviteRateLimiter | None = None,
     ) -> None:
         self.workspace_repo = workspace_repo
         self.invitation_repo = invitation_repo
         self.user_repo = user_repo
+        self.rate_limiter = rate_limiter
 
     async def list_invitations(
         self,
@@ -269,6 +288,96 @@ class WorkspaceInvitationService:
             cancelled_at=datetime.now(tz=UTC),
         )
 
+    async def request_magic_link(
+        self,
+        payload: RequestMagicLinkPayload,
+    ) -> RequestMagicLinkResult:
+        """Send a Supabase magic link to an invited email address.
+
+        Validates the invitation is PENDING and not expired, applies rate
+        limiting (3 per hour per email), then calls Supabase
+        `auth.admin.invite_user_by_email` with `redirect_to` pointing to
+        `/auth/accept-invite` for finalization.
+
+        Args:
+            payload: RequestMagicLinkPayload with invitation_id and email.
+
+        Returns:
+            RequestMagicLinkResult with confirmation message.
+
+        Raises:
+            NotFoundError: If the invitation does not exist.
+            ConflictError: If invitation is not PENDING or is expired.
+            AppError (429): If rate limit is exceeded.
+        """
+        from pilot_space.config import get_settings
+        from pilot_space.domain.exceptions import AppError, ConflictError, NotFoundError
+        from pilot_space.infrastructure.supabase_client import get_supabase_client
+
+        invitation = await self.invitation_repo.get_by_id(payload.invitation_id)
+        if invitation is None:
+            raise NotFoundError("Invitation not found")
+
+        if invitation.is_expired or invitation.status != InvitationStatus.PENDING:
+            effective = "expired" if invitation.is_expired else invitation.status.value
+            raise ConflictError(
+                f"Invitation is {effective} and cannot receive a magic link"
+            )
+
+        # Rate limiting — fail-open (rate_limiter None means no limit configured)
+        if self.rate_limiter is not None:
+            allowed = await self.rate_limiter.check_and_increment(payload.email)
+            if not allowed:
+
+                class _RateLimitError(AppError):
+                    http_status = 429
+                    error_code = "rate_limit_exceeded"
+
+                raise _RateLimitError(
+                    "Too many magic link requests. Please wait before trying again."
+                )
+
+        settings = get_settings()
+        supabase_client = await get_supabase_client()
+        redirect_url = (
+            f"{settings.frontend_url}/auth/accept-invite"
+            f"?invitation_id={invitation.id}"
+            f"&workspace_id={invitation.workspace_id}"
+        )
+
+        try:
+            await supabase_client.auth.admin.invite_user_by_email(
+                payload.email,
+                options={
+                    "redirect_to": redirect_url,
+                    "data": {
+                        "workspace_invitation_id": str(invitation.id),
+                        "workspace_id": str(invitation.workspace_id),
+                    },
+                },
+            )
+        except Exception:
+            logger.warning(
+                "supabase_invite_failed_on_request_magic_link",
+                invitation_id=str(invitation.id),
+                email=payload.email,
+            )
+            raise
+
+        invitation.supabase_invite_sent_at = datetime.now(UTC)
+        await self.invitation_repo.session.flush()
+
+        logger.info(
+            "magic_link_sent",
+            invitation_id=str(invitation.id),
+            workspace_id=str(invitation.workspace_id),
+        )
+
+        return RequestMagicLinkResult(
+            message="Check your email for the magic link.",
+            expires_in_minutes=60,
+        )
+
     async def accept_invitation(
         self,
         payload: AcceptInvitationPayload,
@@ -300,6 +409,18 @@ class WorkspaceInvitationService:
         if invitation.status != InvitationStatus.PENDING:
             msg = f"Invitation is {invitation.status.value}, cannot be accepted"
             raise WorkspaceInvitationConflictError(msg)
+
+        # Email mismatch validation (US2 — T013)
+        # Ensures the authenticated user's email matches the invited email.
+        if self.user_repo is not None:
+            from pilot_space.domain.exceptions import ConflictError
+
+            user = await self.user_repo.get_by_id_scalar(payload.user_id)
+            if user is not None and user.email.lower() != invitation.email.lower():
+                raise ConflictError(
+                    "This invitation was sent to a different email address. "
+                    "Please sign in with the invited email or request a new invitation."
+                )
 
         workspace_id = invitation.workspace_id
 
@@ -367,5 +488,7 @@ __all__ = [
     "CancelInvitationResult",
     "ListInvitationsPayload",
     "ListInvitationsResult",
+    "RequestMagicLinkPayload",
+    "RequestMagicLinkResult",
     "WorkspaceInvitationService",
 ]

@@ -14,7 +14,7 @@ export interface WorkspaceInvitation {
   id: string;
   email: string;
   role: 'admin' | 'member' | 'guest';
-  status: 'pending' | 'accepted' | 'expired' | 'cancelled';
+  status: 'pending' | 'accepted' | 'expired' | 'cancelled' | 'revoked';
   invitedById: string;
   invitedByName: string | null;
   createdAt: string;
@@ -33,6 +33,20 @@ export interface AcceptInvitationResponse {
   workspace_id: string;
   workspace_slug: string;
   requires_profile_completion: boolean;
+}
+
+export interface InvitationPreviewResponse {
+  invitation_id: string;
+  status: 'pending' | 'accepted' | 'expired' | 'cancelled' | 'revoked';
+  workspace_name: string;
+  workspace_slug: string;
+  invited_email_masked: string;
+  expires_at: string;
+}
+
+export interface RequestMagicLinkResponse {
+  message: string;
+  expires_in_minutes: number;
 }
 
 export const workspaceInvitationsKeys = {
@@ -113,5 +127,31 @@ export function useAcceptInvitation() {
   return useMutation<AcceptInvitationResponse, Error, string>({
     mutationFn: acceptInvitation,
   });
+}
+
+/**
+ * Preview an invitation without authentication.
+ * Used by the /auth/invite page to show workspace name and detect status.
+ */
+export async function previewInvitation(
+  invitationId: string,
+): Promise<InvitationPreviewResponse> {
+  return apiClient.get<InvitationPreviewResponse>(
+    `/invitations/${invitationId}/preview`,
+  );
+}
+
+/**
+ * Request a Supabase magic link for an invitation.
+ * Rate limited to 3 requests per hour per email (server-side).
+ */
+export async function requestMagicLink(
+  invitationId: string,
+  email: string,
+): Promise<RequestMagicLinkResponse> {
+  return apiClient.post<RequestMagicLinkResponse>(
+    `/invitations/${invitationId}/request-magic-link`,
+    { email },
+  );
 }
 

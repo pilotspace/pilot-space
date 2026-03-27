@@ -17,7 +17,7 @@ import { Loader2 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import * as React from 'react';
 
-type PageState = 'processing' | 'complete_profile' | 'error';
+type PageState = 'processing' | 'complete_profile' | 'error' | 'email_mismatch';
 
 export default function AcceptInvitePage() {
   const router = useRouter();
@@ -55,6 +55,11 @@ export default function AcceptInvitePage() {
         router.push(`/${result.workspace_slug}`);
       }
     } catch (err) {
+      const status = (err as { status?: number })?.status;
+      if (status === 409) {
+        setPageState('email_mismatch');
+        return;
+      }
       const msg = err instanceof Error ? err.message : 'Failed to accept invitation.';
       handleError(msg);
     }
@@ -111,6 +116,34 @@ export default function AcceptInvitePage() {
             </p>
           </div>
           <ProfileCompletionForm onComplete={() => router.push(`/${workspaceSlug}`)} />
+        </div>
+      </div>
+    );
+  }
+
+  if (pageState === 'email_mismatch') {
+    return (
+      <div className="flex min-h-screen items-center justify-center px-4">
+        <div className="text-center space-y-4 max-w-sm">
+          <h1 className="text-lg font-semibold text-destructive">Wrong email address</h1>
+          <p className="text-sm text-muted-foreground">
+            This invitation was sent to a different email address. Please sign in with the
+            invited email or request a new invitation.
+          </p>
+          <button
+            type="button"
+            className="text-sm text-primary underline underline-offset-4 hover:text-primary/80"
+            onClick={async () => {
+              await supabase.auth.signOut();
+              if (invitationId) {
+                router.push(`/auth/invite?invitation_id=${invitationId}`);
+              } else {
+                router.push('/login');
+              }
+            }}
+          >
+            Sign out and try again
+          </button>
         </div>
       </div>
     );

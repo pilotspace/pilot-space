@@ -136,6 +136,7 @@ from pilot_space.container._factories import (
 from pilot_space.container._plugin_providers import PluginContainer
 from pilot_space.container._skill_providers import SkillContainer
 from pilot_space.dependencies.auth import get_current_session
+from pilot_space.infrastructure.cache.invite_rate_limiter import InviteRateLimiter
 from pilot_space.infrastructure.database.repositories.audit_log_repository import (
     AuditLogRepository,
 )
@@ -183,6 +184,7 @@ class Container(SkillContainer, PluginContainer):
             "pilot_space.api.v1.routers.workspace_invitations",
             "pilot_space.api.v1.routers.project_members",
             "pilot_space.api.v1.routers.my_projects",
+            "pilot_space.api.v1.routers.invitations_public",
         ],
     )
 
@@ -660,6 +662,12 @@ class Container(SkillContainer, PluginContainer):
     # Note Write Lock (C-3) — Redis-backed mutex, one per process
     note_write_lock = providers.Singleton(
         NoteWriteLock,
+        redis_client=InfraContainer.redis_client,
+    )
+
+    # Invite Rate Limiter (028-invite-magic-link) — Redis fixed-window counter
+    invite_rate_limiter = providers.Singleton(
+        InviteRateLimiter,
         redis_client=InfraContainer.redis_client,
     )
 

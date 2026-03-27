@@ -193,18 +193,21 @@ class InvitationRepository(BaseRepository[WorkspaceInvitation]):
         return invitation_result.scalar_one()
 
     async def cancel(self, invitation_id: UUID) -> WorkspaceInvitation | None:
-        """Cancel a pending invitation.
+        """Revoke a pending invitation (admin-initiated cancellation).
+
+        Sets status to REVOKED (migration 104). CANCELLED is preserved in
+        the enum for backward compatibility with existing records.
 
         Args:
             invitation_id: The invitation UUID.
 
         Returns:
-            The cancelled invitation, or None if not found/already processed.
+            The revoked invitation, or None if not found/already processed.
         """
         invitation = await self.get_by_id(invitation_id)
         if invitation is None or invitation.status != InvitationStatus.PENDING:
             return None
-        invitation.status = InvitationStatus.CANCELLED
+        invitation.status = InvitationStatus.REVOKED
         await self.session.flush()
         return invitation
 

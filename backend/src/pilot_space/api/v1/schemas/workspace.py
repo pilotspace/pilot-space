@@ -188,6 +188,52 @@ class InvitationResponse(BaseSchema):
     created_at: datetime = Field(description="Invitation creation timestamp")
 
 
+class InvitationPreviewResponse(BaseSchema):
+    """Public preview of an invitation (no auth required).
+
+    Returns enough information for the /auth/invite page to render the
+    workspace name and detect already-used/expired invitations.
+
+    Attributes:
+        invitation_id: Invitation UUID.
+        status: Current invitation status.
+        workspace_name: Display name of the workspace being joined.
+        workspace_slug: Workspace URL slug (used for post-accept redirect).
+        invited_email_masked: Email with local-part masked (e.g. j***@example.com).
+        expires_at: When the invitation expires.
+    """
+
+    invitation_id: UUID = Field(description="Invitation UUID")
+    status: str = Field(description="Invitation status (pending/accepted/expired/revoked/cancelled)")
+    workspace_name: str = Field(description="Display name of the workspace")
+    workspace_slug: str = Field(description="Workspace URL slug")
+    invited_email_masked: str = Field(description="Email with local-part masked")
+    expires_at: datetime = Field(description="Invitation expiry timestamp")
+
+
+class RequestMagicLinkRequest(BaseSchema):
+    """Request to send a magic link for an invitation.
+
+    Attributes:
+        email: The email address that should receive the magic link.
+               Must match the invited email address.
+    """
+
+    email: EmailStr = Field(description="Email address to send the magic link to")
+
+
+class RequestMagicLinkResponse(BaseSchema):
+    """Response after requesting a magic link.
+
+    Attributes:
+        message: Human-readable confirmation message.
+        expires_in_minutes: How long the magic link is valid for.
+    """
+
+    message: str = Field(description="Confirmation message")
+    expires_in_minutes: int = Field(description="Magic link validity in minutes")
+
+
 class InvitationCreateRequest(BaseSchema):
     """Create invitation request.
 
@@ -588,6 +634,7 @@ __all__ = [
     "AIFeatureToggles",
     "APIKeyUpdate",
     "InvitationCreateRequest",
+    "InvitationPreviewResponse",
     "InvitationResponse",
     "KeyValidationResult",
     "MemberActivityItem",
@@ -595,6 +642,8 @@ __all__ = [
     "MemberContributionStats",
     "MemberProfileResponse",
     "ProviderStatus",
+    "RequestMagicLinkRequest",
+    "RequestMagicLinkResponse",
     "WorkspaceAISettingsResponse",
     "WorkspaceAISettingsUpdate",
     "WorkspaceAISettingsUpdateResponse",

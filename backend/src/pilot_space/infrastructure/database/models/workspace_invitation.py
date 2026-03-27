@@ -38,6 +38,7 @@ class InvitationStatus(StrEnum):
     ACCEPTED = "accepted"
     EXPIRED = "expired"
     CANCELLED = "cancelled"
+    REVOKED = "revoked"  # Added in migration 104; use for new admin cancellations
 
 
 def _default_expires_at() -> datetime:

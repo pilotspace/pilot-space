@@ -145,7 +145,7 @@ async def add_workspace_member(
             settings = get_settings()
             supabase_client = await get_supabase_client()
             redirect_url = (
-                f"{settings.frontend_url}/auth/accept-invite"
+                f"{settings.frontend_url}/auth/invite"
                 f"?invitation_id={invitation.id}"
                 f"&workspace_id={workspace_id}"
             )

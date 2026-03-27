@@ -95,6 +95,7 @@ from pilot_space.application.services.workspace_member import (
     WorkspaceMemberService,
 )
 from pilot_space.container import Container
+from pilot_space.infrastructure.cache.invite_rate_limiter import InviteRateLimiter
 
 # ===== Issue Service Dependencies =====
 
@@ -673,6 +674,18 @@ WorkspaceInvitationServiceDep = Annotated[
     WorkspaceInvitationService, Depends(_get_workspace_invitation_service)
 ]
 
+# ===== Invite Rate Limiter Dependency =====
+
+
+@inject
+def _get_invite_rate_limiter(
+    limiter: InviteRateLimiter = Depends(Provide[Container.invite_rate_limiter]),
+) -> InviteRateLimiter:
+    return limiter
+
+
+InviteRateLimiterDep = Annotated[InviteRateLimiter, Depends(_get_invite_rate_limiter)]
+
 # ===== Auth Service Dependencies =====
 
 
@@ -805,6 +818,7 @@ __all__ = [  # noqa: RUF022
     "WorkspaceServiceDep",
     "WorkspaceMemberServiceDep",
     "WorkspaceInvitationServiceDep",
+    "InviteRateLimiterDep",
     "TaskServiceDep",
     "RbacServiceDep",
     "MovePageServiceDep",

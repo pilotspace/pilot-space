@@ -45,6 +45,7 @@ from pilot_space.api.v1.routers import (
     homepage_router,
     integrations_router,
     intents_router,
+    invitations_public_router,
     issue_implement_router,
     issues_ai_context_router,
     issues_ai_context_streaming_router,
@@ -283,6 +284,9 @@ app.include_router(health_router)
 
 # Mount all routers under /api/v1
 API_V1_PREFIX = "/api/v1"
+
+# Public invitation endpoints — no auth required; must be mounted BEFORE authenticated routers
+app.include_router(invitations_public_router, prefix=API_V1_PREFIX)
 
 # Super-admin operator dashboard (TENANT-04) — separate from workspace JWT auth
 app.include_router(admin_router, prefix=f"{API_V1_PREFIX}/admin")
