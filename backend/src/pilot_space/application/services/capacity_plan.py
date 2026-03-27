@@ -84,9 +84,8 @@ class CapacityPlanService:
                 has_data = True
 
             user = m.user
-            display_name = (
-                getattr(user, "display_name", None)
-                or getattr(user, "email", str(m.user_id))
+            display_name = getattr(user, "display_name", None) or getattr(
+                user, "email", str(m.user_id)
             )
 
             capacity_members.append(

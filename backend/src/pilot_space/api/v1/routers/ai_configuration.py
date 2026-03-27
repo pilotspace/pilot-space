@@ -198,9 +198,7 @@ async def test_ai_configuration(
     service: AIConfigurationServiceDep,
 ) -> AIConfigurationTestResponse:
     """Test an AI configuration by validating the API key."""
-    result = await service.test_configuration(
-        workspace_id, config_id, current_user.user_id
-    )
+    result = await service.test_configuration(workspace_id, config_id, current_user.user_id)
     return AIConfigurationTestResponse(
         success=result.success,
         provider=result.provider,

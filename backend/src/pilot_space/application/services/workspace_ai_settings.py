@@ -95,9 +95,7 @@ class WorkspaceAISettingsService:
             providers=providers,
             features=features,
             default_llm_provider=ws_settings.get("default_llm_provider", "anthropic"),
-            default_embedding_provider=ws_settings.get(
-                "default_embedding_provider", "google"
-            ),
+            default_embedding_provider=ws_settings.get("default_embedding_provider", "google"),
             cost_limit_usd=ws_settings.get("ai_cost_limit_usd"),
         )
 
@@ -171,9 +169,7 @@ class WorkspaceAISettingsService:
                 updated_features = True
 
             if body.default_embedding_provider is not None:
-                workspace_settings["default_embedding_provider"] = (
-                    body.default_embedding_provider
-                )
+                workspace_settings["default_embedding_provider"] = body.default_embedding_provider
                 updated_features = True
 
             workspace.settings = workspace_settings
@@ -248,18 +244,34 @@ class WorkspaceAISettingsService:
 
         if has_new_key:
             return await self._handle_new_key(
-                key_storage, workspace_id, provider, service_type,
-                key_update, base_url, model_name, provider_label,
+                key_storage,
+                workspace_id,
+                provider,
+                service_type,
+                key_update,
+                base_url,
+                model_name,
+                provider_label,
             )
         if has_metadata_change and existing_info is not None:
             return await self._handle_metadata_update(
-                key_storage, workspace_id, provider, service_type,
-                base_url, model_name, provider_label,
+                key_storage,
+                workspace_id,
+                provider,
+                service_type,
+                base_url,
+                model_name,
+                provider_label,
             )
         if has_metadata_change and existing_info is None:
             return await self._handle_metadata_no_existing(
-                key_storage, workspace_id, provider, service_type,
-                base_url, model_name, provider_label,
+                key_storage,
+                workspace_id,
+                provider,
+                service_type,
+                base_url,
+                model_name,
+                provider_label,
             )
         if not has_new_key and not has_metadata_change and existing_info is not None:
             # Explicit None api_key with no metadata changes -- delete the key

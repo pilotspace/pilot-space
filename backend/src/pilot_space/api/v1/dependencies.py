@@ -144,9 +144,7 @@ def _get_block_ownership_service(
     return svc
 
 
-BlockOwnershipServiceDep = Annotated[
-    BlockOwnershipService, Depends(_get_block_ownership_service)
-]
+BlockOwnershipServiceDep = Annotated[BlockOwnershipService, Depends(_get_block_ownership_service)]
 
 # ===== Dependency Graph Service Dependencies =====
 
@@ -172,9 +170,7 @@ def _get_note_template_service(
     return svc
 
 
-NoteTemplateServiceDep = Annotated[
-    NoteTemplateService, Depends(_get_note_template_service)
-]
+NoteTemplateServiceDep = Annotated[NoteTemplateService, Depends(_get_note_template_service)]
 
 # ===== Related Issues Suggestion Service Dependencies =====
 
@@ -828,9 +824,7 @@ ScimServiceDep = Annotated[ScimService, Depends(_get_scim_service)]
 
 @inject
 def _get_workspace_ai_settings_service(
-    svc: WorkspaceAISettingsService = Depends(
-        Provide[Container.workspace_ai_settings_service]
-    ),
+    svc: WorkspaceAISettingsService = Depends(Provide[Container.workspace_ai_settings_service]),
 ) -> WorkspaceAISettingsService:
     return svc
 
@@ -885,9 +879,7 @@ def _get_pm_block_insight_service(
     return svc
 
 
-PMBlockInsightServiceDep = Annotated[
-    PMBlockInsightService, Depends(_get_pm_block_insight_service)
-]
+PMBlockInsightServiceDep = Annotated[PMBlockInsightService, Depends(_get_pm_block_insight_service)]
 
 # ===== Admin Dashboard Service Dependencies =====
 
@@ -920,9 +912,7 @@ AIConfigurationServiceDep = Annotated[
 
 @inject
 def _get_create_extracted_issues_service(
-    svc: CreateExtractedIssuesService = Depends(
-        Provide[Container.create_extracted_issues_service]
-    ),
+    svc: CreateExtractedIssuesService = Depends(Provide[Container.create_extracted_issues_service]),
 ) -> CreateExtractedIssuesService:
     return svc
 
@@ -1133,9 +1123,7 @@ McpOAuthServiceDep = Annotated[McpOAuthService, Depends(_get_mcp_oauth_service)]
 
 @inject
 def _get_attachment_management_service(
-    svc: AttachmentManagementService = Depends(
-        Provide[Container.attachment_management_service]
-    ),
+    svc: AttachmentManagementService = Depends(Provide[Container.attachment_management_service]),
 ) -> AttachmentManagementService:
     return svc
 

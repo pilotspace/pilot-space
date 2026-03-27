@@ -140,14 +140,10 @@ class OcrConfigurationService:
 
         if payload.provider_type == "tencent_ocr":
             if not payload.secret_id or not payload.secret_key:
-                raise DomainValidationError(
-                    "secret_id and secret_key are required for tencent_ocr"
-                )
+                raise DomainValidationError("secret_id and secret_key are required for tencent_ocr")
             credentials_json: str | None = None
             if payload.secret_id and payload.secret_key:
-                credentials_json = json.dumps(
-                    {"id": payload.secret_id, "key": payload.secret_key}
-                )
+                credentials_json = json.dumps({"id": payload.secret_id, "key": payload.secret_key})
 
             await self._key_storage.store_api_key(
                 workspace_id=workspace_id,

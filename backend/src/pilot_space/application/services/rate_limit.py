@@ -65,9 +65,7 @@ class RateLimitService:
         """
         count = await self._redis.incr(key)
         if count is None:
-            raise RateLimitUnavailableError(
-                "Rate limiter unavailable. Please try again later."
-            )
+            raise RateLimitUnavailableError("Rate limiter unavailable. Please try again later.")
         if count == 1:
             await self._redis.expire(key, window_seconds)
         if count > max_requests:

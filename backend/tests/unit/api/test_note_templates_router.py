@@ -64,8 +64,13 @@ def _make_row(
 def _make_service(**method_overrides: Any) -> MagicMock:
     """Create a MagicMock NoteTemplateService with AsyncMock methods."""
     svc = MagicMock()
-    for method in ("list_templates", "get_template", "create_template",
-                   "update_template", "delete_template"):
+    for method in (
+        "list_templates",
+        "get_template",
+        "create_template",
+        "update_template",
+        "delete_template",
+    ):
         setattr(svc, method, AsyncMock())
     for method, return_value in method_overrides.items():
         getattr(svc, method).return_value = return_value

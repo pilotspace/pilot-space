@@ -90,9 +90,7 @@ class AttachmentManagementService:
             workspace_id=workspace_id,
         )
         if role == WorkspaceRole.GUEST:
-            raise ForbiddenError(
-                "Guests cannot upload attachments", error_code="GUEST_NOT_ALLOWED"
-            )
+            raise ForbiddenError("Guests cannot upload attachments", error_code="GUEST_NOT_ALLOWED")
 
     # ------------------------------------------------------------------
     # QUOTA CHECK
@@ -242,9 +240,7 @@ class AttachmentManagementService:
                     content=c.content,
                     char_count=len(c.content),
                     token_count=c.token_count,
-                    heading_hierarchy=list(c.heading_hierarchy)
-                    if c.heading_hierarchy
-                    else [],
+                    heading_hierarchy=list(c.heading_hierarchy) if c.heading_hierarchy else [],
                 )
                 for c in raw_chunks
             ]

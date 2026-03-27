@@ -87,9 +87,7 @@ class ProjectDetailService:
         """
         return await self._project_repo.get_issue_counts(project_id)
 
-    async def get_batch_issue_counts(
-        self, project_ids: list[UUID]
-    ) -> dict[UUID, tuple[int, int]]:
+    async def get_batch_issue_counts(self, project_ids: list[UUID]) -> dict[UUID, tuple[int, int]]:
         """Get issue counts for multiple projects.
 
         Args:
@@ -116,9 +114,7 @@ class ProjectDetailService:
         """
         workspace = await self._workspace_repo.get_by_id(workspace_id)
         is_member = (
-            any(m.user_id == lead_id for m in (workspace.members or []))
-            if workspace
-            else False
+            any(m.user_id == lead_id for m in (workspace.members or [])) if workspace else False
         )
         if not is_member:
             raise ValidationError("lead_id must belong to a workspace member")

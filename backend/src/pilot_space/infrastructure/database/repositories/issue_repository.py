@@ -658,7 +658,6 @@ class IssueRepository(BaseRepository[Issue]):
 
         return query
 
-
     async def get_active_by_ids(
         self,
         issue_ids: list[UUID],

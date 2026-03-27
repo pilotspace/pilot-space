@@ -109,16 +109,12 @@ class AIConfigurationService:
 
         return member.role
 
-    async def list_configurations(
-        self, workspace_id: UUID, user_id: UUID
-    ) -> list[AIConfiguration]:
+    async def list_configurations(self, workspace_id: UUID, user_id: UUID) -> list[AIConfiguration]:
         """List AI configurations for a workspace."""
         await set_rls_context(self._session, user_id, workspace_id)
         await self._verify_workspace_membership(workspace_id, user_id)
 
-        return await self._ai_config_repo.get_by_workspace(
-            workspace_id, include_inactive=True
-        )
+        return await self._ai_config_repo.get_by_workspace(workspace_id, include_inactive=True)
 
     async def create_configuration(
         self,
@@ -139,17 +135,11 @@ class AIConfigurationService:
             ForbiddenError: If not admin.
         """
         await set_rls_context(self._session, user_id, workspace_id)
-        await self._verify_workspace_membership(
-            workspace_id, user_id, require_admin=True
-        )
+        await self._verify_workspace_membership(workspace_id, user_id, require_admin=True)
 
-        existing = await self._ai_config_repo.get_by_workspace_and_provider(
-            workspace_id, provider
-        )
+        existing = await self._ai_config_repo.get_by_workspace_and_provider(workspace_id, provider)
         if existing:
-            raise ConflictError(
-                f"Configuration for provider '{provider.value}' already exists"
-            )
+            raise ConflictError(f"Configuration for provider '{provider.value}' already exists")
 
         encrypted_key = encrypt_api_key(api_key)
 
@@ -188,9 +178,7 @@ class AIConfigurationService:
         await set_rls_context(self._session, user_id, workspace_id)
         await self._verify_workspace_membership(workspace_id, user_id)
 
-        config = await self._ai_config_repo.get_by_workspace_and_id(
-            workspace_id, config_id
-        )
+        config = await self._ai_config_repo.get_by_workspace_and_id(workspace_id, config_id)
         if not config:
             raise NotFoundError("AI configuration not found")
 
@@ -216,13 +204,9 @@ class AIConfigurationService:
             ForbiddenError: If not admin.
         """
         await set_rls_context(self._session, user_id, workspace_id)
-        await self._verify_workspace_membership(
-            workspace_id, user_id, require_admin=True
-        )
+        await self._verify_workspace_membership(workspace_id, user_id, require_admin=True)
 
-        config = await self._ai_config_repo.get_by_workspace_and_id(
-            workspace_id, config_id
-        )
+        config = await self._ai_config_repo.get_by_workspace_and_id(workspace_id, config_id)
         if not config:
             raise NotFoundError("AI configuration not found")
 
@@ -261,13 +245,9 @@ class AIConfigurationService:
             ForbiddenError: If not admin.
         """
         await set_rls_context(self._session, user_id, workspace_id)
-        await self._verify_workspace_membership(
-            workspace_id, user_id, require_admin=True
-        )
+        await self._verify_workspace_membership(workspace_id, user_id, require_admin=True)
 
-        config = await self._ai_config_repo.get_by_workspace_and_id(
-            workspace_id, config_id
-        )
+        config = await self._ai_config_repo.get_by_workspace_and_id(workspace_id, config_id)
         if not config:
             raise NotFoundError("AI configuration not found")
 
@@ -295,9 +275,7 @@ class AIConfigurationService:
         await set_rls_context(self._session, user_id, workspace_id)
         await self._verify_workspace_membership(workspace_id, user_id)
 
-        config = await self._ai_config_repo.get_by_workspace_and_id(
-            workspace_id, config_id
-        )
+        config = await self._ai_config_repo.get_by_workspace_and_id(workspace_id, config_id)
         if not config:
             raise NotFoundError("AI configuration not found")
 
@@ -348,9 +326,7 @@ class AIConfigurationService:
         from pilot_space.ai.providers.model_listing import ModelListingService
 
         listing_service = ModelListingService()
-        models = await listing_service.list_models_for_workspace(
-            workspace_id, self._session
-        )
+        models = await listing_service.list_models_for_workspace(workspace_id, self._session)
 
         return [
             AvailableModel(
@@ -380,15 +356,11 @@ class AIConfigurationService:
             return await AIConfigurationService._test_google_key(api_key)
         if provider in _OPENAI_COMPATIBLE_DEFAULTS:
             resolved_url = base_url or _OPENAI_COMPATIBLE_DEFAULTS[provider]
-            return await AIConfigurationService._test_openai_compatible_key(
-                api_key, resolved_url
-            )
+            return await AIConfigurationService._test_openai_compatible_key(api_key, resolved_url)
         if provider == LLMProvider.CUSTOM:
             if not base_url:
                 return False, "Custom provider requires a base_url"
-            return await AIConfigurationService._test_openai_compatible_key(
-                api_key, base_url
-            )
+            return await AIConfigurationService._test_openai_compatible_key(api_key, base_url)
         return False, f"Unknown provider: {provider}"
 
     @staticmethod
@@ -453,9 +425,7 @@ class AIConfigurationService:
             return True, "API key is valid"
 
     @staticmethod
-    async def _test_openai_compatible_key(
-        api_key: str, base_url: str
-    ) -> tuple[bool, str]:
+    async def _test_openai_compatible_key(api_key: str, base_url: str) -> tuple[bool, str]:
         """Test an OpenAI-compatible API key by listing models at the given base_url."""
         import openai
 

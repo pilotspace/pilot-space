@@ -61,9 +61,7 @@ class NoteTemplate(BaseModel):
         nullable=True,
     )
 
-    __table_args__ = (
-        Index("ix_note_templates_is_deleted", "is_deleted"),
-    )
+    __table_args__ = (Index("ix_note_templates_is_deleted", "is_deleted"),)
 
 
 __all__ = ["NoteTemplate"]

@@ -83,9 +83,7 @@ class NoteTemplateService:
         templates = await self._repo.list_for_workspace(workspace_id)
         return [self._to_result(t) for t in templates]
 
-    async def get_template(
-        self, template_id: UUID, workspace_id: UUID
-    ) -> NoteTemplateResult:
+    async def get_template(self, template_id: UUID, workspace_id: UUID) -> NoteTemplateResult:
         """Get a template by ID. Validates workspace access."""
         template = await self._repo.get_by_id(template_id)
         if not template:

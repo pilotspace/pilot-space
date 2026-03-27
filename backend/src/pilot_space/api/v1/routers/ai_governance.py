@@ -49,7 +49,12 @@ async def get_ai_policy(
 ) -> list[PolicyRowResponse]:
     """Return all policy rows for the workspace."""
     rows = await service.list_policies(workspace_slug, current_user.user_id)
-    return [PolicyRowResponse(role=r.role, action_type=r.action_type, requires_approval=r.requires_approval) for r in rows]
+    return [
+        PolicyRowResponse(
+            role=r.role, action_type=r.action_type, requires_approval=r.requires_approval
+        )
+        for r in rows
+    ]
 
 
 @router.put("/workspaces/{workspace_slug}/settings/ai-policy/{role}/{action_type}")
@@ -66,7 +71,9 @@ async def set_ai_policy(
     result = await service.upsert_policy(
         workspace_slug, current_user.user_id, role, action_type, body.requires_approval
     )
-    return PolicyRowResponse(role=result.role, action_type=result.action_type, requires_approval=result.requires_approval)
+    return PolicyRowResponse(
+        role=result.role, action_type=result.action_type, requires_approval=result.requires_approval
+    )
 
 
 @router.delete(
@@ -82,9 +89,7 @@ async def delete_ai_policy(
     service: GovernanceRollbackServiceDep,
 ) -> None:
     """Delete a policy row, reverting to hardcoded defaults."""
-    await service.delete_policy(
-        workspace_slug, current_user.user_id, role, action_type
-    )
+    await service.delete_policy(workspace_slug, current_user.user_id, role, action_type)
 
 
 # ---------------------------------------------------------------------------
@@ -118,9 +123,7 @@ async def rollback_ai_artifact(
     service: GovernanceRollbackServiceDep,
 ) -> dict[str, str]:
     """Roll back an AI-created or AI-modified artifact to its pre-AI state."""
-    result = await service.execute_rollback(
-        workspace_slug, entry_id, current_user.user_id
-    )
+    result = await service.execute_rollback(workspace_slug, entry_id, current_user.user_id)
     return {"status": result.status, "entry_id": str(result.entry_id)}
 
 

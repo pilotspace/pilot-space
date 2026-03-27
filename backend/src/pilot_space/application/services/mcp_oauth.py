@@ -210,9 +210,7 @@ class McpOAuthService:
         if workspace_slug and not workspace_slug_re.match(workspace_slug):
             workspace_slug = ""
         redirect_base = (
-            f"/{workspace_slug}/settings/mcp-servers"
-            if workspace_slug
-            else "/settings/mcp-servers"
+            f"/{workspace_slug}/settings/mcp-servers" if workspace_slug else "/settings/mcp-servers"
         )
 
         await redis.client.delete(f"mcp_oauth_state:{state}")

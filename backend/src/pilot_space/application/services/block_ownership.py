@@ -200,9 +200,7 @@ class BlockOwnershipService:
             raise NotFoundError(f"Note {note_id} not found in workspace {workspace_id}")
         return note
 
-    def _find_block_or_raise(
-        self, note: Any, note_id: UUID, block_id: str
-    ) -> dict[str, Any]:
+    def _find_block_or_raise(self, note: Any, note_id: UUID, block_id: str) -> dict[str, Any]:
         content = note.content or {}
         blocks = content.get("content", [])
         return self._find_block_or_raise_from_list(blocks, note_id, block_id)
@@ -216,9 +214,7 @@ class BlockOwnershipService:
         return block
 
     @staticmethod
-    def _find_block(
-        blocks: list[dict[str, Any]], block_id: str
-    ) -> dict[str, Any] | None:
+    def _find_block(blocks: list[dict[str, Any]], block_id: str) -> dict[str, Any] | None:
         """Recursively find a block by ID in TipTap content tree."""
         for node in blocks:
             if node.get("attrs", {}).get("id") == block_id:

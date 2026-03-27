@@ -90,9 +90,7 @@ class PluginLifecycleService:
             logger.warning("Failed to decrypt GitHub PAT for workspace %s", workspace_id)
             return None
 
-    async def save_github_credential(
-        self, workspace_id: UUID, pat: str, created_by: UUID
-    ) -> None:
+    async def save_github_credential(self, workspace_id: UUID, pat: str, created_by: UUID) -> None:
         """Encrypt and store a GitHub PAT for a workspace."""
         from pilot_space.infrastructure.encryption import encrypt_api_key
 
@@ -111,9 +109,7 @@ class PluginLifecycleService:
     # Browse
     # ------------------------------------------------------------------
 
-    async def browse_repo(
-        self, workspace_id: UUID, repo_url: str
-    ) -> list[BrowseRepoResult]:
+    async def browse_repo(self, workspace_id: UUID, repo_url: str) -> list[BrowseRepoResult]:
         """Fetch available skills from a GitHub repository URL."""
         from pilot_space.integrations.github.plugin_service import (
             GitHubPluginService,
@@ -146,9 +142,7 @@ class PluginLifecycleService:
     # Toggle
     # ------------------------------------------------------------------
 
-    async def toggle_plugin(
-        self, workspace_id: UUID, plugin_id: UUID, is_active: bool
-    ) -> object:
+    async def toggle_plugin(self, workspace_id: UUID, plugin_id: UUID, is_active: bool) -> object:
         """Toggle a single plugin active/inactive. Returns the updated plugin model."""
         plugin = await self._plugin_repo.get_by_id(plugin_id)
         if plugin is None or plugin.workspace_id != workspace_id or plugin.is_deleted:
@@ -156,9 +150,7 @@ class PluginLifecycleService:
 
         plugin.is_active = is_active
         updated = await self._plugin_repo.update(plugin)
-        logger.info(
-            "[Plugins] Toggled %s to %s", plugin_id, "active" if is_active else "inactive"
-        )
+        logger.info("[Plugins] Toggled %s to %s", plugin_id, "active" if is_active else "inactive")
         return updated
 
     async def toggle_repo_plugins(
@@ -179,9 +171,7 @@ class PluginLifecycleService:
         for plugin in plugins:
             await self._session.refresh(plugin)
 
-        logger.info(
-            "[Plugins] Toggled %d from %s/%s to %s", len(plugins), owner, repo, is_active
-        )
+        logger.info("[Plugins] Toggled %d from %s/%s to %s", len(plugins), owner, repo, is_active)
         return list(plugins)
 
     # ------------------------------------------------------------------
@@ -260,6 +250,7 @@ class PluginLifecycleService:
         install_svc = InstallPluginService(db_session=self._session)
         results: list[object] = []
         try:
+
             async def _fetch(name: str) -> tuple[str, object] | None:
                 try:
                     content = await gh.fetch_skill_content(owner, repo, name)
@@ -334,9 +325,7 @@ class PluginLifecycleService:
             logger.warning("Failed to fetch HEAD SHA for %s/%s", owner, repo)
         return None
 
-    async def check_updates(
-        self, workspace_id: UUID
-    ) -> list[tuple[object, bool]]:
+    async def check_updates(self, workspace_id: UUID) -> list[tuple[object, bool]]:
         """Check installed plugins for updates. Returns list of (plugin, has_update) tuples."""
         from pilot_space.integrations.github.plugin_service import GitHubPluginService
 

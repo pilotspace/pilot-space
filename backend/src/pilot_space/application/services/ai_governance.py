@@ -82,9 +82,7 @@ class GovernanceRollbackService:
             raise NotFoundError("Workspace not found")
         return workspace.id  # type: ignore[return-value]
 
-    async def _require_admin_or_owner(
-        self, user_id: UUID, workspace_id: UUID
-    ) -> None:
+    async def _require_admin_or_owner(self, user_id: UUID, workspace_id: UUID) -> None:
         """Assert the user has settings:read permission (ADMIN or OWNER).
 
         Raises:
@@ -100,9 +98,7 @@ class GovernanceRollbackService:
         if not allowed:
             raise ForbiddenError("Admin or owner access required")
 
-    async def _require_owner(
-        self, user_id: UUID, workspace_id: UUID
-    ) -> None:
+    async def _require_owner(self, user_id: UUID, workspace_id: UUID) -> None:
         """Assert the user has settings:manage permission (OWNER only).
 
         Raises:
@@ -145,9 +141,7 @@ class GovernanceRollbackService:
             ValidationError: If resource_type not supported.
         """
         if resource_type not in _ROLLBACK_RESOURCE_TYPES:
-            raise ValidationError(
-                f"Rollback not supported for resource_type '{resource_type}'."
-            )
+            raise ValidationError(f"Rollback not supported for resource_type '{resource_type}'.")
 
         if resource_type == "issue":
             await self._rollback_issue(resource_id, before_state)

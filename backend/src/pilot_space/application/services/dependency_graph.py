@@ -116,9 +116,7 @@ class DependencyGraphService:
                 name=i.name,
                 state=i.state.name if i.state else "Backlog",
                 state_group=(
-                    i.state.group
-                    if i.state and hasattr(i.state, "group")
-                    else "unstarted"
+                    i.state.group if i.state and hasattr(i.state, "group") else "unstarted"
                 ),
             )
             for i in issues

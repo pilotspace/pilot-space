@@ -329,11 +329,15 @@ class GhostTextService:
 
         # Try the default provider first
         key_info = await self._key_storage.get_key_info(
-            workspace_id, default_provider, "llm",
+            workspace_id,
+            default_provider,
+            "llm",
         )
         if key_info is not None:
             api_key = await self._key_storage.get_api_key(
-                workspace_id, default_provider, "llm",
+                workspace_id,
+                default_provider,
+                "llm",
             )
             if api_key or key_info.base_url:
                 logger.debug(
@@ -353,7 +357,9 @@ class GhostTextService:
         for ki in all_keys:
             if ki.service_type == "llm":
                 api_key = await self._key_storage.get_api_key(
-                    workspace_id, ki.provider, "llm",
+                    workspace_id,
+                    ki.provider,
+                    "llm",
                 )
                 if api_key or ki.base_url:
                     logger.debug(

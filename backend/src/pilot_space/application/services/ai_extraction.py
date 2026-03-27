@@ -108,9 +108,7 @@ class CreateExtractedIssuesService:
         self._label_repo = label_repository
         self._note_issue_link_repo = note_issue_link_repository
 
-    async def execute(
-        self, payload: CreateExtractedIssuesPayload
-    ) -> CreateExtractedIssuesResult:
+    async def execute(self, payload: CreateExtractedIssuesPayload) -> CreateExtractedIssuesResult:
         """Create extracted issues and link them to the source note.
 
         Raises:
