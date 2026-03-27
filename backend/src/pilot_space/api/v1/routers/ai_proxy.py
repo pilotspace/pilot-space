@@ -200,6 +200,31 @@ def _get_cached_client(
     return clients[key_hash]
 
 
+def _get_cached_openai_client(
+    request: Request,
+    api_key: str,
+    base_url: str | None,
+) -> Any:
+    """Get or create a cached AsyncOpenAI client from app state."""
+    import hashlib
+
+    import openai
+
+    key_hash = hashlib.sha256(f"{api_key}:{base_url or ''}".encode()).hexdigest()[:16]
+
+    proxy_clients_attr = "proxy_openai_clients"
+    if not hasattr(request.app.state, proxy_clients_attr):
+        setattr(request.app.state, proxy_clients_attr, {})
+
+    clients: dict[str, openai.AsyncOpenAI] = getattr(request.app.state, proxy_clients_attr)
+    if key_hash not in clients:
+        kwargs: dict[str, Any] = {"api_key": api_key}
+        if base_url:
+            kwargs["base_url"] = base_url
+        clients[key_hash] = openai.AsyncOpenAI(**kwargs)
+    return clients[key_hash]
+
+
 # ---------------------------------------------------------------------------
 # Main proxy endpoint
 # ---------------------------------------------------------------------------
@@ -334,6 +359,129 @@ async def proxy_messages(
 
     return JSONResponse(
         content=json.loads(response.model_dump_json()),
+        media_type="application/json",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Embeddings proxy endpoint
+# ---------------------------------------------------------------------------
+
+
+@router.post("/v1/embeddings", response_model=None)
+@observe(name="ai_proxy.embeddings")  # type: ignore[misc]
+async def proxy_embeddings(
+    request: Request,
+    session: DbSession,  # populates ContextVar for DI-injected services
+    x_workspace_id: str | None = Header(None, alias="X-Workspace-Id"),
+    x_user_id: str | None = Header(None, alias="X-User-Id"),
+) -> JSONResponse:
+    """OpenAI Embeddings API proxy with tenant validation.
+
+    Validates workspace permissions, enforces budget/rate limits,
+    resolves provider config, then forwards to the real OpenAI Embeddings API.
+
+    Headers:
+        Authorization: Bearer <api-key> (OpenAI API key)
+        X-Workspace-Id: Workspace UUID for tenant validation + cost attribution
+        X-User-Id: User UUID for cost attribution
+    """
+    # --- Require workspace header ---
+    if not x_workspace_id:
+        raise ForbiddenError("X-Workspace-Id header required")
+
+    workspace_id = UUID(x_workspace_id)
+    user_id = UUID(x_user_id) if x_user_id else _SYSTEM_USER_ID
+
+    # --- Extract API key ---
+    api_key = ""
+    auth = request.headers.get("authorization", "")
+    if auth.startswith("Bearer "):
+        api_key = auth[7:]
+    if not api_key:
+        api_key = request.headers.get("x-api-key") or ""
+
+    # --- Parse request body ---
+    body = await request.json()
+    model: str = body.get("model", "text-embedding-3-large")
+    input_texts: str | list[str] = body.get("input", [])
+    dimensions: int | None = body.get("dimensions")
+
+    # --- Tenant validation ---
+    executor, cost_tracker, key_storage, base_url, _capped = await _validate_tenant(
+        request, workspace_id, user_id, model, 0
+    )
+
+    # --- Resolve OpenAI API key (BYOK or env fallback) ---
+    openai_key = await key_storage.get_api_key(workspace_id, "openai", "llm")
+    if openai_key is None:
+        from pilot_space.config import get_settings
+
+        settings = get_settings()
+        openai_key = getattr(settings, "openai_api_key", "") or api_key
+    if not openai_key:
+        openai_key = api_key  # Use the key from the request header
+
+    # --- Get pooled OpenAI client ---
+    client = _get_cached_openai_client(request, openai_key, base_url)
+
+    # --- Build embeddings kwargs ---
+    embed_kwargs: dict[str, Any] = {
+        "model": model,
+        "input": input_texts,
+    }
+    if dimensions is not None:
+        embed_kwargs["dimensions"] = dimensions
+
+    logger.info(
+        "ai_proxy_embeddings_request",
+        model=model,
+        workspace_id=str(workspace_id),
+        input_count=len(input_texts) if isinstance(input_texts, list) else 1,
+    )
+
+    # --- Forward to OpenAI ---
+    response = await executor.execute(
+        provider="openai",
+        operation=lambda: client.embeddings.create(**embed_kwargs),
+    )
+
+    # --- Track cost ---
+    total_tokens = response.usage.total_tokens if response.usage else 0
+    await track_llm_cost(
+        cost_tracker,
+        workspace_id=workspace_id,
+        user_id=user_id,
+        model=f"openai/{model}",
+        agent_name="ai_proxy",
+        input_tokens=total_tokens,
+        output_tokens=0,
+    )
+
+    logger.info(
+        "ai_proxy_embeddings_response",
+        model=model,
+        total_tokens=total_tokens,
+    )
+
+    # --- Return OpenAI-format response ---
+    return JSONResponse(
+        content={
+            "object": "list",
+            "data": [
+                {
+                    "object": "embedding",
+                    "index": i,
+                    "embedding": item.embedding,
+                }
+                for i, item in enumerate(response.data)
+            ],
+            "model": response.model,
+            "usage": {
+                "prompt_tokens": response.usage.prompt_tokens if response.usage else 0,
+                "total_tokens": total_tokens,
+            },
+        },
         media_type="application/json",
     )
 
