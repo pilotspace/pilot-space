@@ -211,6 +211,18 @@ class GhostTextService:
                 detail="No Anthropic API key configured for this workspace",
             )
 
+        # Proxy routing — override base_url when proxy is enabled
+        settings = get_settings()
+        _is_proxied = False
+        if settings.ai_proxy_enabled:
+            base_url = settings.ai_proxy_base_url
+            _is_proxied = True
+            logger.info(
+                "ghost_text_proxy_routed",
+                workspace_id=str(workspace_id),
+                proxy_url=settings.ai_proxy_base_url,
+            )
+
         # Model from routing table (respects circuit breaker state)
         _, model = self._provider_selector.select(TaskType.GHOST_TEXT)
 
@@ -269,20 +281,21 @@ class GhostTextService:
                 ttl=GHOST_TEXT_CACHE_TTL,
             )
 
-        # Cost tracking — non-fatal; completion already served if this raises
-        try:
-            await self._cost_tracker.track(
-                workspace_id=workspace_id,
-                user_id=user_id,
-                agent_name="ghost_text",
-                provider="anthropic",
-                model=model,
-                input_tokens=response.usage.input_tokens,
-                output_tokens=response.usage.output_tokens,
-                operation_type="ghost_text",
-            )
-        except Exception:
-            logger.warning("ghost_text_cost_tracking_failed", workspace_id=str(workspace_id))
+        # Cost tracking — non-fatal; skipped when proxied (proxy handles cost)
+        if not _is_proxied:
+            try:
+                await self._cost_tracker.track(
+                    workspace_id=workspace_id,
+                    user_id=user_id,
+                    agent_name="ghost_text",
+                    provider="anthropic",
+                    model=model,
+                    input_tokens=response.usage.input_tokens,
+                    output_tokens=response.usage.output_tokens,
+                    operation_type="ghost_text",
+                )
+            except Exception:
+                logger.warning("ghost_text_cost_tracking_failed", workspace_id=str(workspace_id))
 
         logger.info(
             "ghost_text_completion_generated",

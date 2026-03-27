@@ -493,6 +493,7 @@ class TestBYOKIntegration:
             mock_settings = MagicMock()
             mock_settings.anthropic_api_key = MagicMock()
             mock_settings.anthropic_api_key.get_secret_value.return_value = "sk-ant-env-key"
+            mock_settings.ai_proxy_enabled = False
             mock_cfg.return_value = mock_settings
 
             await service.generate_completion(
