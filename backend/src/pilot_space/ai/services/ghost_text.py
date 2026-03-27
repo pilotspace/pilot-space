@@ -14,6 +14,7 @@ import hashlib
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
+import anthropic
 from anthropic.types import TextBlock
 
 from pilot_space.ai.exceptions import AINotConfiguredError
@@ -222,16 +223,16 @@ class GhostTextService:
                 ),
                 timeout_sec=2.5,
             )
-        except Exception as exc:
-            # Surface billing/credit errors as AINotConfiguredError so callers
-            # get a clear 503 with actionable message instead of generic failure.
-            exc_msg = str(exc).lower()
-            if "credit balance" in exc_msg or "billing" in exc_msg:
-                raise AINotConfiguredError(
-                    "Anthropic API key has insufficient credits. "
-                    "Please check your billing at https://console.anthropic.com/settings/billing",
-                    code="insufficient_credits",
-                ) from exc
+        except anthropic.BadRequestError as exc:
+            # Surface billing/credit errors so callers get actionable context.
+            logger.warning(
+                "ghost_text_api_bad_request workspace=%s error=%s",
+                workspace_id,
+                exc.message,
+                exc_info=exc,
+            )
+            raise AINotConfiguredError(workspace_id=workspace_id) from exc
+        except Exception:
             logger.exception("Failed to generate ghost text completion")
             raise
 
@@ -375,9 +376,7 @@ class GhostTextService:
                 return (env_key, None, None)
 
         raise AINotConfiguredError(
-            "No LLM API key configured for this workspace. "
-            "Add a provider key in Settings → AI Providers.",
-            code="no_llm_key",
+            workspace_id=workspace_id,
         )
 
     @staticmethod
