@@ -12,6 +12,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Path, status
 
 from pilot_space.api.v1.dependencies import (
+    CreateExtractedIssuesServiceDep,
     NoteAIUpdateServiceDep,
     WorkspaceRepositoryDep,
 )
@@ -19,7 +20,6 @@ from pilot_space.api.v1.schemas.note import AIUpdateRequest, AIUpdateResponse
 from pilot_space.api.v1.schemas.workspace_notes_ai import (
     CreateExtractedIssuesRequest,
     CreateExtractedIssuesResponse,
-    ExtractedIssueInput,  # noqa: F401  # re-exported: tests import from this module
 )
 from pilot_space.dependencies.auth import CurrentUserId, SessionDep
 from pilot_space.domain.exceptions import NotFoundError
@@ -159,6 +159,7 @@ async def create_extracted_issues(
     current_user_id: CurrentUserId,
     note_repo: NoteRepo,
     workspace_repo: WorkspaceRepositoryDep,
+    service: CreateExtractedIssuesServiceDep,
 ) -> CreateExtractedIssuesResponse:
     """Create issues from AI extraction and link them to the note.
 
@@ -166,7 +167,6 @@ async def create_extracted_issues(
     """
     from pilot_space.application.services.ai_extraction import (
         CreateExtractedIssuesPayload,
-        CreateExtractedIssuesService,
         ExtractedIssueInput as ServiceExtractedIssueInput,
     )
     from pilot_space.domain.mappers.issue_priority import map_priority_string
@@ -202,7 +202,6 @@ async def create_extracted_issues(
         IssuePriority.NONE: 4,
     }
 
-    service = CreateExtractedIssuesService(session=session)
     payload = CreateExtractedIssuesPayload(
         workspace_id=workspace.id,
         note_id=str(note_id),

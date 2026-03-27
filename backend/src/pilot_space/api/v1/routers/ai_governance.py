@@ -106,7 +106,9 @@ async def get_ai_status(
 ) -> AIStatusResponse:
     """Return BYOK configuration status for the workspace."""
     result = await service.get_ai_status(workspace_slug, current_user.user_id)
-    return AIStatusResponse(byok_configured=result.byok_configured, providers=result.providers)
+    return AIStatusResponse(
+        byok_configured=result.byok_configured, providers=list(result.providers)
+    )
 
 
 # ---------------------------------------------------------------------------

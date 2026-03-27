@@ -63,10 +63,12 @@ class PMBlockInsightService:
         Returns:
             List of PMBlockInsight ORM models.
         """
-        return await self._repo.list_by_block(
-            block_id=block_id,
-            workspace_id=workspace_id,
-            include_dismissed=include_dismissed,
+        return list(
+            await self._repo.list_by_block(
+                block_id=block_id,
+                workspace_id=workspace_id,
+                include_dismissed=include_dismissed,
+            )
         )
 
     async def dismiss(
@@ -142,7 +144,7 @@ class PMBlockInsightService:
             if newest.tzinfo is None:
                 newest = newest.replace(tzinfo=UTC)
             if datetime.now(UTC) - newest < timedelta(seconds=30):
-                return existing
+                return list(existing)
 
         try:
             block_type_enum = PMBlockType(block_type_str)

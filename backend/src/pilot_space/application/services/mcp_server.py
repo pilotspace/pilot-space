@@ -162,11 +162,13 @@ class McpServerService:
         search: str | None = None,
     ) -> list[WorkspaceMcpServer]:
         """List active (non-deleted) MCP servers with optional filters."""
-        return await self._repo.get_filtered(
-            workspace_id=workspace_id,
-            server_type=server_type,
-            status=status,
-            search=search,
+        return list(
+            await self._repo.get_filtered(
+                workspace_id=workspace_id,
+                server_type=server_type,
+                status=status,
+                search=search,
+            )
         )
 
     # ------------------------------------------------------------------
@@ -258,19 +260,20 @@ class McpServerService:
                     raise ValidationError(str(exc)) from exc
 
         # Cross-field validation: server_type / transport compatibility
-        effective_transport = transport if _has_transport else server.transport
-        if effective_server_type == McpServerType.REMOTE:
-            if effective_transport not in (McpTransport.SSE, McpTransport.STREAMABLE_HTTP):
-                raise ValidationError(
-                    f"Remote servers only support 'sse' or 'streamable_http' transport, "
-                    f"got '{effective_transport.value}'"
-                )
-        elif effective_server_type == McpServerType.COMMAND:
-            if effective_transport != McpTransport.STDIO:
-                raise ValidationError(
-                    f"{effective_server_type.value} servers only support 'stdio' transport, "
-                    f"got '{effective_transport.value}'"
-                )
+        effective_transport: McpTransport | None = transport if _has_transport else server.transport
+        if effective_transport is not None:
+            if effective_server_type == McpServerType.REMOTE:
+                if effective_transport not in (McpTransport.SSE, McpTransport.STREAMABLE_HTTP):
+                    raise ValidationError(
+                        f"Remote servers only support 'sse' or 'streamable_http' transport, "
+                        f"got '{effective_transport.value}'"
+                    )
+            elif effective_server_type == McpServerType.COMMAND:
+                if effective_transport != McpTransport.STDIO:
+                    raise ValidationError(
+                        f"{effective_server_type.value} servers only support 'stdio' transport, "
+                        f"got '{effective_transport.value}'"
+                    )
 
         # Apply scalar fields
         if _has_server_type:

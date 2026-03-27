@@ -76,7 +76,7 @@ async def create_template(
         CreateTemplatePayload(
             workspace_id=workspace_id,
             name=payload.name,
-            description=payload.description,
+            description=payload.description or "",
             content=payload.content,
             created_by=current_user_id,
         )

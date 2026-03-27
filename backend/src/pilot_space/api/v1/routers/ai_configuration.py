@@ -114,7 +114,7 @@ async def list_available_models(
     return ModelListResponse(
         items=[
             ProviderModelItem(
-                provider_config_id=m.provider_config_id,
+                provider_config_id=str(m.provider_config_id),
                 provider=m.provider,
                 model_id=m.model_id,
                 display_name=m.display_name,

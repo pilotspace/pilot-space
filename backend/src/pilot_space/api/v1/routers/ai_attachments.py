@@ -19,15 +19,13 @@ from __future__ import annotations
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, File, Form, Request, Response, UploadFile, status
+from fastapi import APIRouter, File, Form, Response, UploadFile, status
 
+from pilot_space.api.v1.dependencies import AttachmentManagementServiceDep
 from pilot_space.api.v1.schemas.attachments import (
     AttachmentUploadResponse,
     DocumentIngestRequest,
     ExtractionResultResponse,
-)
-from pilot_space.application.services.attachment_management import (
-    AttachmentManagementService,
 )
 from pilot_space.dependencies.ai import QueueClientDep
 from pilot_space.dependencies.auth import CurrentUserId, DbSession
@@ -68,6 +66,7 @@ async def upload_attachment(
     upload_service: AttachmentUploadServiceDep,
     db: DbSession,
     workspace_id: HeaderWorkspaceMemberId,
+    svc: AttachmentManagementServiceDep,
     file: Annotated[UploadFile, File(...)],
     session_id: Annotated[str | None, Form()] = None,
     response: Response = Response(),
@@ -76,7 +75,6 @@ async def upload_attachment(
 
     Validates MIME type, enforces size limits, checks quota. Guests blocked.
     """
-    svc = AttachmentManagementService(session=db)
 
     # Guest check
     await svc.check_guest_restriction(workspace_id, user_id)
@@ -122,12 +120,10 @@ async def get_attachment_url(
     attachment_id: UUID,
     user_id: CurrentUserId,
     db: DbSession,
-    request: Request,
     _workspace_id: HeaderWorkspaceMemberId,
+    svc: AttachmentManagementServiceDep,
 ) -> dict[str, str | int]:
     """Get a 1-hour signed download URL for a chat attachment."""
-    storage = request.app.state.container.storage_client()
-    svc = AttachmentManagementService(session=db, storage_client=storage)
     result = await svc.get_signed_url(attachment_id, user_id)
     return {"url": result.url, "expiresIn": result.expires_in}
 
@@ -161,9 +157,9 @@ async def get_extraction_result(
     user_id: CurrentUserId,
     db: DbSession,
     attachment_repo: ChatAttachmentRepositoryDep,
+    svc: AttachmentManagementServiceDep,
 ) -> ExtractionResultResponse:
     """Return extraction metadata and pre-chunked content for an attachment."""
-    svc = AttachmentManagementService(session=db)
     return await svc.get_extraction_result(attachment_id, attachment_repo)
 
 
@@ -178,11 +174,11 @@ async def ingest_document(
     db: DbSession,
     attachment_repo: ChatAttachmentRepositoryDep,
     queue_client: QueueClientDep,
+    svc: AttachmentManagementServiceDep,
 ) -> dict[str, str]:
     """Enqueue the document for KG ingestion with optional chunk adjustments."""
     excluded_indices = [adj.chunk_index for adj in body.chunk_adjustments if adj.excluded]
 
-    svc = AttachmentManagementService(session=db)
     result = await svc.ingest_document(
         attachment_id=attachment_id,
         workspace_id=body.workspace_id,

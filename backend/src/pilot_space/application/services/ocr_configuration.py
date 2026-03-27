@@ -15,7 +15,7 @@ from pilot_space.domain.exceptions import ValidationError as DomainValidationErr
 from pilot_space.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
-    from pilot_space.infrastructure.security.secure_key_storage import SecureKeyStorage
+    from pilot_space.ai.infrastructure.key_storage import SecureKeyStorage
 
 logger = get_logger(__name__)
 

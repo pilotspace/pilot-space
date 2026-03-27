@@ -13,6 +13,7 @@ only and is not stored anywhere else.
 from __future__ import annotations
 
 import hmac
+from typing import Any
 
 import anthropic
 
@@ -73,7 +74,7 @@ class AnthropicClientPool:
         raw = f"{api_key}:{base_url or ''}"
         key_hash = self._cache_key(raw)
         if key_hash not in self._clients:
-            kwargs: dict[str, str] = {"api_key": api_key}
+            kwargs: dict[str, Any] = {"api_key": api_key}
             if base_url:
                 kwargs["base_url"] = base_url
             self._clients[key_hash] = anthropic.AsyncAnthropic(**kwargs)

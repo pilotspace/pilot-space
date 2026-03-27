@@ -17,6 +17,7 @@ from uuid import UUID
 from fastapi import APIRouter, Query, Request, status
 from fastapi.responses import RedirectResponse
 
+from pilot_space.api.v1.dependencies import McpOAuthServiceDep, McpServerServiceDep
 from pilot_space.api.v1.routers._workspace_admin import get_admin_workspace
 from pilot_space.api.v1.schemas.mcp_server import (
     WORKSPACE_SLUG_RE,
@@ -34,7 +35,6 @@ from pilot_space.api.v1.schemas.mcp_server import (
     WorkspaceMcpServerUpdate,
 )
 from pilot_space.application.services.mcp_oauth import McpOAuthService
-from pilot_space.application.services.mcp_server import McpServerService
 from pilot_space.dependencies import (
     CurrentUser,
     DbSession,
@@ -68,12 +68,12 @@ async def register_mcp_server(
     body: WorkspaceMcpServerCreate,
     current_user: CurrentUser,
     session: DbSession,
+    svc: McpServerServiceDep,
 ) -> WorkspaceMcpServerResponse:
     """Register a new MCP server for the workspace. Requires admin role."""
     await get_admin_workspace(workspace_id, current_user, session)
     await set_rls_context(session, current_user.user_id, workspace_id)
 
-    svc = McpServerService(session=session)
     server = await svc.register_server(
         workspace_id,
         display_name=body.display_name,
@@ -82,7 +82,7 @@ async def register_mcp_server(
         server_type=body.server_type,
         command_runner=body.command_runner,
         transport=body.transport,
-        command_args=body.command_args,
+        command_args=[body.command_args] if body.command_args is not None else None,
         auth_type=body.auth_type,
         auth_token=body.auth_token,
         oauth_client_id=body.oauth_client_id,
@@ -109,6 +109,7 @@ async def list_mcp_servers(
     workspace_id: UUID,
     current_user: CurrentUser,
     session: DbSession,
+    svc: McpServerServiceDep,
     server_type: McpServerType | None = Query(default=None),
     mcp_status: McpStatus | None = Query(default=None, alias="status"),
     search: str | None = Query(default=None, max_length=128),
@@ -117,7 +118,6 @@ async def list_mcp_servers(
     await get_admin_workspace(workspace_id, current_user, session)
     await set_rls_context(session, current_user.user_id, workspace_id)
 
-    svc = McpServerService(session=session)
     servers = await svc.list_servers(
         workspace_id,
         server_type=server_type,
@@ -144,6 +144,7 @@ async def update_mcp_server(
     body: WorkspaceMcpServerUpdate,
     current_user: CurrentUser,
     session: DbSession,
+    svc: McpServerServiceDep,
 ) -> WorkspaceMcpServerResponse:
     """Partially update a registered MCP server. Requires admin role."""
     await get_admin_workspace(workspace_id, current_user, session)
@@ -152,7 +153,6 @@ async def update_mcp_server(
     # Detect which fields were actually provided in the request body
     provided = body.model_fields_set
 
-    svc = McpServerService(session=session)
     server = await svc.update_server(
         workspace_id,
         server_id,
@@ -161,7 +161,7 @@ async def update_mcp_server(
         server_type=body.server_type,
         command_runner=body.command_runner,
         transport=body.transport,
-        command_args=body.command_args,
+        command_args=[body.command_args] if body.command_args is not None else None,
         auth_type=body.auth_type,
         auth_token=body.auth_token,
         oauth_client_id=body.oauth_client_id,
@@ -202,12 +202,12 @@ async def get_mcp_server_status(
     server_id: UUID,
     current_user: CurrentUser,
     session: DbSession,
+    svc: McpServerServiceDep,
 ) -> McpServerStatusResponse:
     """Legacy connectivity probe (MCP-05). Prefer POST .../test."""
     await get_admin_workspace(workspace_id, current_user, session)
     await set_rls_context(session, current_user.user_id, workspace_id)
 
-    svc = McpServerService(session=session)
     _server, probe_status, checked_at = await svc.probe_status(workspace_id, server_id)
 
     return McpServerStatusResponse(
@@ -232,12 +232,12 @@ async def test_mcp_server_connection(
     server_id: UUID,
     current_user: CurrentUser,
     session: DbSession,
+    svc: McpServerServiceDep,
 ) -> McpServerTestResponse:
     """On-demand connection test. Requires admin role."""
     await get_admin_workspace(workspace_id, current_user, session)
     await set_rls_context(session, current_user.user_id, workspace_id)
 
-    svc = McpServerService(session=session)
     _server, result = await svc.test_connection(workspace_id, server_id)
 
     return McpServerTestResponse(
@@ -264,12 +264,12 @@ async def enable_mcp_server(
     server_id: UUID,
     current_user: CurrentUser,
     session: DbSession,
+    svc: McpServerServiceDep,
 ) -> None:
     """Enable a previously disabled MCP server. Requires admin role."""
     await get_admin_workspace(workspace_id, current_user, session)
     await set_rls_context(session, current_user.user_id, workspace_id)
 
-    svc = McpServerService(session=session)
     await svc.enable_server(workspace_id, server_id)
 
 
@@ -288,12 +288,12 @@ async def disable_mcp_server(
     server_id: UUID,
     current_user: CurrentUser,
     session: DbSession,
+    svc: McpServerServiceDep,
 ) -> None:
     """Disable an MCP server. Requires admin role."""
     await get_admin_workspace(workspace_id, current_user, session)
     await set_rls_context(session, current_user.user_id, workspace_id)
 
-    svc = McpServerService(session=session)
     await svc.disable_server(workspace_id, server_id)
 
 
@@ -312,12 +312,12 @@ async def import_mcp_servers(
     body: ImportMcpServersRequest,
     current_user: CurrentUser,
     session: DbSession,
+    svc: McpServerServiceDep,
 ) -> ImportMcpServersResponse:
     """Bulk import MCP servers from a Claude/Cursor/VS Code JSON config. Requires admin."""
     await get_admin_workspace(workspace_id, current_user, session)
     await set_rls_context(session, current_user.user_id, workspace_id)
 
-    svc = McpServerService(session=session)
     result = await svc.import_servers(workspace_id, body.config_json)
 
     return ImportMcpServersResponse(
@@ -342,12 +342,12 @@ async def delete_mcp_server(
     server_id: UUID,
     current_user: CurrentUser,
     session: DbSession,
+    svc: McpServerServiceDep,
 ) -> None:
     """Soft-delete a registered MCP server. Requires admin role."""
     await get_admin_workspace(workspace_id, current_user, session)
     await set_rls_context(session, current_user.user_id, workspace_id)
 
-    svc = McpServerService(session=session)
     await svc.delete_server(workspace_id, server_id)
 
 
@@ -366,17 +366,14 @@ async def get_mcp_oauth_url(
     server_id: UUID,
     current_user: CurrentUser,
     session: DbSession,
-    request: Request,
+    svc: McpOAuthServiceDep,
 ) -> McpOAuthUrlResponse:
     """Build OAuth 2.0 authorization URL. Requires admin role."""
     workspace = await get_admin_workspace(workspace_id, current_user, session)
     await set_rls_context(session, current_user.user_id, workspace_id)
 
-    redis_client = _get_redis_client(request)
-
     from pilot_space.config import get_settings as _get_settings
 
-    svc = McpOAuthService(session=session, redis=redis_client)
     result = await svc.initiate_oauth(
         workspace_id=workspace_id,
         server_id=server_id,

@@ -82,7 +82,7 @@ async def approve_block(
     return BlockApproveResponse(
         block_id=result.block_id,
         note_id=result.note_id,
-        action=result.action,
+        action="approved",
         owner=result.owner,
     )
 
@@ -111,6 +111,6 @@ async def reject_block(
     return BlockRejectResponse(
         block_id=result.block_id,
         note_id=result.note_id,
-        action=result.action,
+        action="rejected",
         removed=result.removed,
     )

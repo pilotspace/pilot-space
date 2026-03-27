@@ -114,7 +114,9 @@ class AIConfigurationService:
         await set_rls_context(self._session, user_id, workspace_id)
         await self._verify_workspace_membership(workspace_id, user_id)
 
-        return await self._ai_config_repo.get_by_workspace(workspace_id, include_inactive=True)
+        return list(
+            await self._ai_config_repo.get_by_workspace(workspace_id, include_inactive=True)
+        )
 
     async def create_configuration(
         self,
@@ -330,7 +332,7 @@ class AIConfigurationService:
 
         return [
             AvailableModel(
-                provider_config_id=m.provider_config_id,
+                provider_config_id=UUID(m.provider_config_id),
                 provider=m.provider,
                 model_id=m.model_id,
                 display_name=m.display_name,

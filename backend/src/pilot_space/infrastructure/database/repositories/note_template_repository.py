@@ -158,16 +158,17 @@ class NoteTemplateRepository(BaseRepository[NoteTemplate]):
         await self.session.refresh(template)
         return template
 
-    async def delete(self, template: NoteTemplate) -> None:
+    async def delete(self, entity: NoteTemplate, *, hard: bool = False) -> None:
         """Hard-delete a note template row.
 
         Note templates use hard delete (consistent with original service
         behaviour and the absence of a soft-delete use case here).
 
         Args:
-            template: The NoteTemplate instance to delete.
+            entity: The NoteTemplate instance to delete.
+            hard: Ignored; note templates always use hard delete.
         """
-        await self.session.delete(template)
+        await self.session.delete(entity)
         await self.session.flush()
 
 

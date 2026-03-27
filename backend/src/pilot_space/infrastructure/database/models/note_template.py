@@ -8,6 +8,7 @@ to all workspaces. Custom workspace templates are workspace-scoped.
 from __future__ import annotations
 
 import uuid
+from typing import Any
 
 from sqlalchemy import Boolean, ForeignKey, Index, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -47,7 +48,7 @@ class NoteTemplate(BaseModel):
         Text,
         nullable=True,
     )
-    content: Mapped[dict] = mapped_column(
+    content: Mapped[dict[str, Any]] = mapped_column(
         JSONB,
         nullable=False,
     )
