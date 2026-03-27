@@ -354,6 +354,7 @@ class TestH5CrossWorkspaceInvitationCancel:
         mock_workspace_repo.get_with_members.return_value = workspace_a
 
         mock_invitation_repo = AsyncMock()
+        mock_invitation_repo.get_by_id.return_value = mock_invitation
         mock_invitation_repo.cancel.return_value = mock_invitation
 
         service = WorkspaceInvitationService(
@@ -393,6 +394,7 @@ class TestH5CrossWorkspaceInvitationCancel:
         mock_workspace_repo.get_with_members.return_value = workspace
 
         mock_invitation_repo = AsyncMock()
+        mock_invitation_repo.get_by_id.return_value = mock_invitation
         mock_invitation_repo.cancel.return_value = mock_invitation
 
         service = WorkspaceInvitationService(

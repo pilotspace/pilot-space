@@ -190,6 +190,8 @@ class TestListWorkspaceMembersPagination:
         members = [_make_workspace_member() for _ in range(3)]
         result = MagicMock()
         result.members = members
+        result.total = 3
+        result.project_chips = {}
         mock_member_service.list_members = AsyncMock(return_value=result)
 
         response = await members_client.get(f"/api/v1/workspaces/{_WS_ID}/members")
@@ -209,6 +211,8 @@ class TestListWorkspaceMembersPagination:
         members = [_make_workspace_member() for _ in range(3)]
         result = MagicMock()
         result.members = members
+        result.total = 3
+        result.project_chips = {}
         mock_member_service.list_members = AsyncMock(return_value=result)
 
         response = await members_client.get(f"/api/v1/workspaces/{_WS_ID}/members")
@@ -225,9 +229,11 @@ class TestListWorkspaceMembersPagination:
         self, members_client: Any, mock_member_service: AsyncMock
     ) -> None:
         """page_size=2 on 5 members returns 2 items and has_next=True."""
-        members = [_make_workspace_member(full_name=f"User {i}") for i in range(5)]
+        all_members = [_make_workspace_member(full_name=f"User {i}") for i in range(5)]
         result = MagicMock()
-        result.members = members
+        result.members = all_members[:2]  # service returns page 1 of 2
+        result.total = 5
+        result.project_chips = {}
         mock_member_service.list_members = AsyncMock(return_value=result)
 
         response = await members_client.get(
@@ -245,9 +251,11 @@ class TestListWorkspaceMembersPagination:
         self, members_client: Any, mock_member_service: AsyncMock
     ) -> None:
         """Page 2 with page_size=2 on 5 members has has_prev=True."""
-        members = [_make_workspace_member(full_name=f"User {i}") for i in range(5)]
+        all_members = [_make_workspace_member(full_name=f"User {i}") for i in range(5)]
         result = MagicMock()
-        result.members = members
+        result.members = all_members[2:4]  # service returns page 2 of 2
+        result.total = 5
+        result.project_chips = {}
         mock_member_service.list_members = AsyncMock(return_value=result)
 
         response = await members_client.get(
@@ -264,9 +272,11 @@ class TestListWorkspaceMembersPagination:
         self, members_client: Any, mock_member_service: AsyncMock
     ) -> None:
         """Last page on 5 members with page_size=2 → page 3 has 1 item, has_next=False."""
-        members = [_make_workspace_member(full_name=f"User {i}") for i in range(5)]
+        all_members = [_make_workspace_member(full_name=f"User {i}") for i in range(5)]
         result = MagicMock()
-        result.members = members
+        result.members = all_members[4:5]  # service returns last page (1 item)
+        result.total = 5
+        result.project_chips = {}
         mock_member_service.list_members = AsyncMock(return_value=result)
 
         response = await members_client.get(
@@ -285,6 +295,8 @@ class TestListWorkspaceMembersPagination:
         """Empty workspace returns total=0, empty items, has_next=False."""
         result = MagicMock()
         result.members = []
+        result.total = 0
+        result.project_chips = {}
         mock_member_service.list_members = AsyncMock(return_value=result)
 
         response = await members_client.get(f"/api/v1/workspaces/{_WS_ID}/members")
@@ -300,13 +312,13 @@ class TestListWorkspaceMembersPagination:
         self, members_client: Any, mock_member_service: AsyncMock
     ) -> None:
         """search=alice returns only members whose name contains 'alice'."""
-        members = [
-            _make_workspace_member(full_name="Alice Smith", email="alice@test.com"),
-            _make_workspace_member(full_name="Bob Jones", email="bob@test.com"),
-            _make_workspace_member(full_name="Charlie Aliceson", email="charlie@test.com"),
-        ]
+        alice = _make_workspace_member(full_name="Alice Smith", email="alice@test.com")
+        charlie = _make_workspace_member(full_name="Charlie Aliceson", email="charlie@test.com")
         result = MagicMock()
-        result.members = members
+        # Service returns only the matching members (already filtered)
+        result.members = [alice, charlie]
+        result.total = 2
+        result.project_chips = {}
         mock_member_service.list_members = AsyncMock(return_value=result)
 
         response = await members_client.get(f"/api/v1/workspaces/{_WS_ID}/members?search=alice")
@@ -324,12 +336,12 @@ class TestListWorkspaceMembersPagination:
         self, members_client: Any, mock_member_service: AsyncMock
     ) -> None:
         """search=bob filters by email substring."""
-        members = [
-            _make_workspace_member(full_name="Alice Smith", email="alice@test.com"),
-            _make_workspace_member(full_name="Bob Jones", email="bob@example.com"),
-        ]
+        bob = _make_workspace_member(full_name="Bob Jones", email="bob@example.com")
         result = MagicMock()
-        result.members = members
+        # Service returns only the matching member (already filtered)
+        result.members = [bob]
+        result.total = 1
+        result.project_chips = {}
         mock_member_service.list_members = AsyncMock(return_value=result)
 
         response = await members_client.get(f"/api/v1/workspaces/{_WS_ID}/members?search=bob")
@@ -343,11 +355,12 @@ class TestListWorkspaceMembersPagination:
         self, members_client: Any, mock_member_service: AsyncMock
     ) -> None:
         """search is case-insensitive."""
-        members = [
-            _make_workspace_member(full_name="ALICE SMITH", email="alice@test.com"),
-        ]
+        alice = _make_workspace_member(full_name="ALICE SMITH", email="alice@test.com")
         result = MagicMock()
-        result.members = members
+        # Service returns the matching member (already filtered, case-insensitive)
+        result.members = [alice]
+        result.total = 1
+        result.project_chips = {}
         mock_member_service.list_members = AsyncMock(return_value=result)
 
         response = await members_client.get(f"/api/v1/workspaces/{_WS_ID}/members?search=alice")
@@ -360,11 +373,11 @@ class TestListWorkspaceMembersPagination:
         self, members_client: Any, mock_member_service: AsyncMock
     ) -> None:
         """search with no match returns total=0, empty items."""
-        members = [
-            _make_workspace_member(full_name="Alice Smith", email="alice@test.com"),
-        ]
         result = MagicMock()
-        result.members = members
+        # Service returns empty (no match)
+        result.members = []
+        result.total = 0
+        result.project_chips = {}
         mock_member_service.list_members = AsyncMock(return_value=result)
 
         response = await members_client.get(
@@ -383,6 +396,8 @@ class TestListWorkspaceMembersPagination:
         members = [_make_workspace_member() for _ in range(3)]
         result = MagicMock()
         result.members = members
+        result.total = 3
+        result.project_chips = {}
         mock_member_service.list_members = AsyncMock(return_value=result)
 
         response = await members_client.get(f"/api/v1/workspaces/{_WS_ID}/members?page_size=5")
@@ -407,6 +422,10 @@ class TestListWorkspaceInvitationsPagination:
         invitations = [_make_invitation() for _ in range(2)]
         result = MagicMock()
         result.invitations = invitations
+        result.total = 2
+        result.has_next = False
+        result.has_prev = False
+        result.page_size = 20
         mock_invitation_service.list_invitations = AsyncMock(return_value=result)
 
         response = await invitations_client.get(f"/api/v1/workspaces/{_WS_ID}/invitations")
@@ -426,6 +445,10 @@ class TestListWorkspaceInvitationsPagination:
         invitations = [_make_invitation(email=f"user{i}@test.com") for i in range(3)]
         result = MagicMock()
         result.invitations = invitations
+        result.total = 3
+        result.has_next = False
+        result.has_prev = False
+        result.page_size = 20
         mock_invitation_service.list_invitations = AsyncMock(return_value=result)
 
         response = await invitations_client.get(f"/api/v1/workspaces/{_WS_ID}/invitations")
@@ -444,7 +467,11 @@ class TestListWorkspaceInvitationsPagination:
         """page_size=2 on 5 invitations returns 2 items, has_next=True."""
         invitations = [_make_invitation(email=f"u{i}@test.com") for i in range(5)]
         result = MagicMock()
-        result.invitations = invitations
+        result.invitations = invitations[:2]  # service returns page 1 of 2
+        result.total = 5
+        result.has_next = True
+        result.has_prev = False
+        result.page_size = 2
         mock_invitation_service.list_invitations = AsyncMock(return_value=result)
 
         response = await invitations_client.get(
@@ -464,7 +491,11 @@ class TestListWorkspaceInvitationsPagination:
         """Page 2 has has_prev=True."""
         invitations = [_make_invitation(email=f"u{i}@test.com") for i in range(5)]
         result = MagicMock()
-        result.invitations = invitations
+        result.invitations = invitations[2:4]  # service returns page 2 of 2
+        result.total = 5
+        result.has_next = True
+        result.has_prev = True
+        result.page_size = 2
         mock_invitation_service.list_invitations = AsyncMock(return_value=result)
 
         response = await invitations_client.get(
@@ -482,7 +513,11 @@ class TestListWorkspaceInvitationsPagination:
         """Last page has has_next=False."""
         invitations = [_make_invitation(email=f"u{i}@test.com") for i in range(5)]
         result = MagicMock()
-        result.invitations = invitations
+        result.invitations = invitations[4:5]  # service returns last page (1 item)
+        result.total = 5
+        result.has_next = False
+        result.has_prev = True
+        result.page_size = 2
         mock_invitation_service.list_invitations = AsyncMock(return_value=result)
 
         response = await invitations_client.get(
@@ -501,6 +536,10 @@ class TestListWorkspaceInvitationsPagination:
         """No invitations returns total=0, empty items."""
         result = MagicMock()
         result.invitations = []
+        result.total = 0
+        result.has_next = False
+        result.has_prev = False
+        result.page_size = 20
         mock_invitation_service.list_invitations = AsyncMock(return_value=result)
 
         response = await invitations_client.get(f"/api/v1/workspaces/{_WS_ID}/invitations")
@@ -519,6 +558,10 @@ class TestListWorkspaceInvitationsPagination:
         invitations = [_make_invitation(email=f"u{i}@test.com") for i in range(3)]
         result = MagicMock()
         result.invitations = invitations
+        result.total = 3
+        result.has_next = False
+        result.has_prev = False
+        result.page_size = 10
         mock_invitation_service.list_invitations = AsyncMock(return_value=result)
 
         response = await invitations_client.get(
@@ -536,6 +579,10 @@ class TestListWorkspaceInvitationsPagination:
         inv = _make_invitation(email="test@example.com", role="ADMIN")
         result = MagicMock()
         result.invitations = [inv]
+        result.total = 1
+        result.has_next = False
+        result.has_prev = False
+        result.page_size = 20
         mock_invitation_service.list_invitations = AsyncMock(return_value=result)
 
         response = await invitations_client.get(f"/api/v1/workspaces/{_WS_ID}/invitations")
