@@ -23,11 +23,11 @@ from pilot_space.api.v1.routers.ai_approvals import router as ai_approvals_route
 from pilot_space.api.v1.routers.ai_attachments import router as ai_attachments_router
 from pilot_space.api.v1.routers.ai_chat import router as ai_chat_router
 from pilot_space.api.v1.routers.ai_configuration import router as ai_configuration_router
-from pilot_space.api.v1.routers.ai_proxy import router as ai_proxy_router
 from pilot_space.api.v1.routers.ai_costs import router as ai_costs_router
 from pilot_space.api.v1.routers.ai_drive import router as ai_drive_router
 from pilot_space.api.v1.routers.ai_extraction import router as ai_extraction_router
 from pilot_space.api.v1.routers.ai_governance import router as ai_governance_router
+from pilot_space.api.v1.routers.ai_proxy import router as ai_proxy_router
 from pilot_space.api.v1.routers.ai_sessions import router as ai_sessions_router
 from pilot_space.api.v1.routers.ai_tasks import router as ai_tasks_router
 from pilot_space.api.v1.routers.artifact_annotations import router as artifact_annotations_router
