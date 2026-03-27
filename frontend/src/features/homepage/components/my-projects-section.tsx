@@ -74,7 +74,7 @@ export function MyProjectsSection({ workspaceId, workspaceSlug }: MyProjectsSect
   const router = useRouter();
   const { data, isLoading } = useMyProjects(workspaceId);
 
-  const projects = data?.projects.filter((p) => !p.isArchived) ?? [];
+  const projects = data?.items.filter((p) => !p.isArchived) ?? [];
 
   return (
     <section aria-label="My projects" className="space-y-3">

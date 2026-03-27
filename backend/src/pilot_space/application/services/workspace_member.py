@@ -387,10 +387,36 @@ class WorkspaceMemberService:
         # Apply workspace role change if requested
         if payload.workspace_role and payload.workspace_role != target.role.value:
             try:
-                target.role = WsRole(payload.workspace_role)
-                await session.flush()
+                new_role = WsRole(payload.workspace_role)
             except ValueError as e:
                 raise WorkspaceMemberValidationError(f"Invalid role: {payload.workspace_role}") from e
+
+            # Guard: only OWNER can promote to OWNER
+            if new_role == WsRole.OWNER and caller.role != WsRole.OWNER:
+                raise WorkspaceMemberForbiddenError("Only the workspace owner can transfer ownership")
+
+            # Guard: prevent demoting the last admin
+            new_role_is_non_admin = new_role not in (WsRole.OWNER, WsRole.ADMIN)
+            if target.role in (WsRole.OWNER, WsRole.ADMIN) and new_role_is_non_admin:
+                from sqlalchemy import func as sa_func
+
+                from pilot_space.infrastructure.database.models.workspace_member import (
+                    WorkspaceMember as WsMemberModel,
+                )
+
+                result = await session.execute(
+                    sa_select(sa_func.count()).where(
+                        WsMemberModel.workspace_id == payload.workspace_id,
+                        WsMemberModel.role.in_([WsRole.OWNER, WsRole.ADMIN]),
+                        WsMemberModel.is_deleted == False,  # noqa: E712
+                    )
+                )
+                admin_count = result.scalar_one()
+                if admin_count <= 1:
+                    raise WorkspaceMemberConflictError("Cannot demote the only admin from workspace")
+
+            target.role = new_role
+            await session.flush()
 
         return BulkUpdateMemberAssignmentsResult(
             user_id=payload.target_user_id,

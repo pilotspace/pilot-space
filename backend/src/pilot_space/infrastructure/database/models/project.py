@@ -165,4 +165,3 @@ class Project(WorkspaceScopedModel):
     def __repr__(self) -> str:
         """Return string representation."""
         return f"<Project(id={self.id}, identifier={self.identifier})>"
-        return f"<Project(id={self.id}, identifier={self.identifier})>"

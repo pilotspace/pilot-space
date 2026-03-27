@@ -121,7 +121,7 @@ export class WorkspaceStore {
   }
 
   get isAdmin(): boolean {
-    const role = this.currentUserRole;    
+    const role = this.currentUserRole;
     return role === 'admin' || role === 'owner';
   }
 

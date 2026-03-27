@@ -18,7 +18,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
-from pilot_space.domain.exceptions import ForbiddenError, NotFoundError
+from pilot_space.domain.exceptions import NotFoundError
 from pilot_space.infrastructure.database.models.workspace_invitation import (
     InvitationStatus,
 )
@@ -281,14 +281,15 @@ class WorkspaceInvitationService:
             msg = "Admin role required"
             raise WorkspaceInvitationForbiddenError(msg)
 
-        # Cancel invitation
-        cancelled_invitation = await self.invitation_repo.cancel(payload.invitation_id)
-        if cancelled_invitation is None:
+        # Preflight: verify invitation exists and belongs to this workspace before mutating
+        preflight = await self.invitation_repo.get_by_id(payload.invitation_id)
+        if preflight is None or preflight.workspace_id != payload.workspace_id:
             msg = "Invitation not found or already processed"
             raise WorkspaceInvitationNotFoundError(msg)
 
-        # H-5 fix: verify invitation belongs to this workspace (cross-workspace security)
-        if cancelled_invitation.workspace_id != payload.workspace_id:
+        # Cancel invitation
+        cancelled_invitation = await self.invitation_repo.cancel(payload.invitation_id)
+        if cancelled_invitation is None:
             msg = "Invitation not found or already processed"
             raise WorkspaceInvitationNotFoundError(msg)
 

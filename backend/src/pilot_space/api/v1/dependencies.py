@@ -119,8 +119,8 @@ from pilot_space.application.services.workspace_member import (
     WorkspaceMemberService,
 )
 from pilot_space.container import Container
-from pilot_space.infrastructure.cache.invite_rate_limiter import InviteRateLimiter
 from pilot_space.dependencies.ai import get_key_storage
+from pilot_space.infrastructure.cache.invite_rate_limiter import InviteRateLimiter
 
 # ===== Action Button Service Dependencies =====
 
@@ -1166,7 +1166,10 @@ from fastapi import (
     status as _status,
 )
 
-from pilot_space.dependencies.auth import CurrentUserId as _CurrentUserId
+from pilot_space.dependencies.auth import (
+    CurrentUserId as _CurrentUserId,
+    SessionDep as _SessionDep,
+)
 from pilot_space.infrastructure.database.models.workspace_member import (
     WorkspaceRole as _WorkspaceRole,
 )
@@ -1180,6 +1183,7 @@ async def require_project_membership(
     workspace_id: _UUID,
     project_id: _UUID,
     current_user_id: _CurrentUserId,
+    session: _SessionDep,  # populates session ContextVar before DI resolves services
     project_member_svc: ProjectMemberService = Depends(
         Provide[Container.project_member_service]
     ),

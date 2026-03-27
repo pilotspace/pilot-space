@@ -9,19 +9,21 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import Field, field_validator
+
+from pilot_space.api.v1.schemas.base import BaseSchema
 
 # ── Project assignment item (used in invites and bulk-update) ──────────────────
 
 
-class ProjectAssignmentItem(BaseModel):
+class ProjectAssignmentItem(BaseSchema):
     """Minimal assignment reference stored in workspace_invitations.project_assignments."""
 
     project_id: UUID
     role: str = Field(default="member", pattern="^member$")
 
 
-class ProjectAssignmentAction(BaseModel):
+class ProjectAssignmentAction(BaseSchema):
     """Single add/remove action for bulk-update endpoint."""
 
     project_id: UUID
@@ -31,7 +33,7 @@ class ProjectAssignmentAction(BaseModel):
 # ── ProjectMember response ───────────────────────────────────────────────────
 
 
-class ProjectMemberResponse(BaseModel):
+class ProjectMemberResponse(BaseSchema):
     """Serialized project member for API responses."""
 
     id: UUID
@@ -44,10 +46,8 @@ class ProjectMemberResponse(BaseModel):
     assigned_by: UUID | None = None
     is_active: bool
 
-    model_config = {"from_attributes": True}
 
-
-class ProjectMemberListResponse(BaseModel):
+class ProjectMemberListResponse(BaseSchema):
     """Paginated list of project members."""
 
     items: list[ProjectMemberResponse]
@@ -59,13 +59,13 @@ class ProjectMemberListResponse(BaseModel):
 # ── Add / remove single member ────────────────────────────────────────────────
 
 
-class AddProjectMemberRequest(BaseModel):
+class AddProjectMemberRequest(BaseSchema):
     """Request body for POST /projects/{pid}/members."""
 
     user_id: UUID
 
 
-class RemoveProjectMemberResponse(BaseModel):
+class RemoveProjectMemberResponse(BaseSchema):
     """Response after removing a project member."""
 
     removed: bool
@@ -75,7 +75,7 @@ class RemoveProjectMemberResponse(BaseModel):
 # ── Bulk assignment (US4) ─────────────────────────────────────────────────────
 
 
-class BulkAssignmentRequest(BaseModel):
+class BulkAssignmentRequest(BaseSchema):
     """Request body for PATCH /workspaces/{wid}/members/{uid}/assignments."""
 
     workspace_role: str | None = Field(
@@ -100,14 +100,14 @@ class BulkAssignmentRequest(BaseModel):
         return upper
 
 
-class BulkAssignmentWarning(BaseModel):
+class BulkAssignmentWarning(BaseSchema):
     """Soft-warning attached to BulkAssignmentResponse."""
 
     code: str
     message: str
 
 
-class BulkAssignmentResponse(BaseModel):
+class BulkAssignmentResponse(BaseSchema):
     """Response from PATCH .../assignments."""
 
     user_id: UUID
@@ -119,7 +119,7 @@ class BulkAssignmentResponse(BaseModel):
 # ── Project summary chip (US2 — workspace members page) ───────────────────────
 
 
-class ProjectSummaryChip(BaseModel):
+class ProjectSummaryChip(BaseSchema):
     """Compact project info for embedding in WorkspaceMemberResponse."""
 
     project_id: UUID
@@ -132,7 +132,7 @@ class ProjectSummaryChip(BaseModel):
 # ── My-projects dashboard (US5) ───────────────────────────────────────────────
 
 
-class MyProjectCard(BaseModel):
+class MyProjectCard(BaseSchema):
     """Project card shown on member dashboard."""
 
     project_id: UUID
@@ -148,7 +148,7 @@ class MyProjectCard(BaseModel):
     total_issues_count: int = 0
 
 
-class MyProjectsResponse(BaseModel):
+class MyProjectsResponse(BaseSchema):
     """Response for GET /workspaces/{wid}/my-projects."""
 
     items: list[MyProjectCard]
@@ -158,7 +158,7 @@ class MyProjectsResponse(BaseModel):
 # ── Archive project ───────────────────────────────────────────────────────────
 
 
-class ArchiveProjectRequest(BaseModel):
+class ArchiveProjectRequest(BaseSchema):
     """Request body for PATCH /projects/{pid}/archive."""
 
     is_archived: bool

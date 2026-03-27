@@ -88,15 +88,18 @@ def upgrade() -> None:
             nullable=True,
         ),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint(
-            "project_id",
-            "user_id",
-            name="uq_project_members_project_user",
-        ),
     )
     op.create_index("ix_project_members_project_id", "project_members", ["project_id"])
     op.create_index("ix_project_members_user_id", "project_members", ["user_id"])
     op.create_index("ix_project_members_is_active", "project_members", ["is_active"])
+    # Partial unique index: only one active membership per (project, user) — allows re-assignment after soft-delete
+    op.create_index(
+        "uq_project_members_project_user_active",
+        "project_members",
+        ["project_id", "user_id"],
+        unique=True,
+        postgresql_where=sa.text("is_deleted = false"),
+    )
 
     # ── 2. projects: add is_archived / archived_at ────────────────────────────
     op.add_column(
@@ -298,6 +301,7 @@ def downgrade() -> None:
     op.drop_column("projects", "is_archived")
 
     # Drop project_members table
+    op.drop_index("uq_project_members_project_user_active", table_name="project_members")
     op.drop_index("ix_project_members_is_active", table_name="project_members")
     op.drop_index("ix_project_members_user_id", table_name="project_members")
     op.drop_index("ix_project_members_project_id", table_name="project_members")

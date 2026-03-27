@@ -34,7 +34,7 @@ export const AIChatProjectSelector = observer(function AIChatProjectSelector() {
 
   const { data } = useMyProjects(workspaceId);
   const activeProjects: MyProjectCard[] =
-    data?.projects.filter((p: MyProjectCard) => !p.isArchived) ?? [];
+    data?.items.filter((p: MyProjectCard) => !p.isArchived) ?? [];
 
   // T046: Auto-initialize project context on first load (before any UI render).
   // When the store has no active project yet and projects have loaded, seed the

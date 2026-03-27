@@ -290,7 +290,7 @@ async def rescind_workspace_invitation(
 ) -> None:
     """Rescind (cancel) a pending invitation from the Members page.
 
-    Admin/owner only. Sets invitation status to 'cancelled'.
+    Admin/owner only. Sets invitation status to 'REVOKED'.
     Source: T026, US3 FR-03.
     """
     await set_rls_context(session, current_user_id, workspace_id)

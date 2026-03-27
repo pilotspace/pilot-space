@@ -25,7 +25,7 @@ export interface ProjectMember {
 }
 
 export interface ProjectMemberListResponse {
-  members: ProjectMember[];
+  items: ProjectMember[];
   total: number;
   nextCursor: string | null;
   hasNext: boolean;
@@ -77,7 +77,7 @@ export interface MyProjectCard {
 }
 
 export interface MyProjectsResponse {
-  projects: MyProjectCard[];
+  items: MyProjectCard[];
   total: number;
 }
 

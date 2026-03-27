@@ -360,6 +360,11 @@ async def complete_signup(
         NotFoundError (404): Invitation not found or workspace not found.
         ConflictError (409): Invitation already accepted or cancelled.
     """
+    # Preflight: validate invitation exists before touching external systems
+    invitation = await invitation_repo.get_by_id(request.invitation_id)
+    if invitation is None:
+        raise NotFoundError("Invitation not found")
+
     await service.update_profile(
         UpdateProfilePayload(
             user_id=synced_user_id,
@@ -372,10 +377,6 @@ async def complete_signup(
         str(synced_user_id),
         {"password": request.password},
     )
-
-    invitation = await invitation_repo.get_by_id(request.invitation_id)
-    if invitation is None:
-        raise NotFoundError("Invitation not found")
 
     if invitation.status == InvitationStatus.PENDING:
         svc = WorkspaceInvitationService(
