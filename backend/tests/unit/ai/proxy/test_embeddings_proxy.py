@@ -1,6 +1,6 @@
 """Unit tests for /v1/embeddings proxy endpoint.
 
-Tests the embeddings proxy endpoint in ai_proxy router.
+Tests the embeddings proxy endpoint in the proxy sub-application.
 All OpenAI SDK calls are mocked -- no real API calls.
 """
 
@@ -17,24 +17,26 @@ from fastapi.responses import JSONResponse
 from httpx import ASGITransport, AsyncClient
 from starlette.requests import Request as StarletteRequest
 
-from pilot_space.api.v1.routers.ai_proxy import router
+from pilot_space.ai.proxy.app import proxy_app
 from pilot_space.domain.exceptions import ForbiddenError
 
 WS_ID = uuid4()
 USER_ID = uuid4()
 
+# The patch target is the actual module where the functions live.
+_PROXY_MOD = "pilot_space.ai.proxy.app"
+
 
 def _make_mock_app() -> FastAPI:
-    """Create a minimal FastAPI app with ai_proxy router and mocked state."""
+    """Create a test app by mounting the proxy sub-app with mocked state.
+
+    Uses a wrapper FastAPI app that mounts proxy_app at the expected
+    prefix, mimicking the main app's mount configuration.
+    """
     app = FastAPI()
-    app.include_router(router, prefix="/api/v1/ai/proxy")
+    app.mount("/api/v1/ai/proxy", proxy_app)
 
-    # Register exception handler for ForbiddenError (normally in middleware)
-    @app.exception_handler(ForbiddenError)
-    async def _forbidden_handler(request: StarletteRequest, exc: ForbiddenError) -> JSONResponse:
-        return JSONResponse(status_code=403, content={"detail": str(exc)})
-
-    # Mock container on app state
+    # Mock container on the proxy sub-app's state (same as main.py lifespan)
     container = MagicMock()
     executor = AsyncMock()
 
@@ -56,7 +58,7 @@ def _make_mock_app() -> FastAPI:
     redis = AsyncMock()
     container.redis.return_value = redis
 
-    app.state.container = container
+    proxy_app.state.container = container
     return app
 
 
@@ -94,17 +96,25 @@ def _mock_workspace(
 # -- Test 1: Valid embeddings request returns 200 with OpenAI format -----------
 
 
-@patch("pilot_space.api.v1.routers.ai_proxy._get_cached_openai_client")
-@patch("pilot_space.api.v1.routers.ai_proxy._validate_tenant")
+@patch(f"{_PROXY_MOD}._get_cached_openai_client")
+@patch(f"{_PROXY_MOD}._validate_tenant")
+@patch(f"{_PROXY_MOD}.get_session")
 async def test_embeddings_returns_200_with_valid_request(
+    mock_get_session: MagicMock,
     mock_validate: AsyncMock,
     mock_get_client: MagicMock,
 ) -> None:
     """POST /v1/embeddings with valid headers returns 200 with OpenAI-format response."""
+    # Mock session dependency to yield a dummy session
+    async def _fake_session():  # type: ignore[no-untyped-def]
+        yield MagicMock()
+
+    mock_get_session.side_effect = _fake_session
+
     app = _make_mock_app()
 
     # Mock _validate_tenant to return valid tenant
-    container = app.state.container
+    container = proxy_app.state.container
     mock_validate.return_value = (
         container.resilient_executor(),
         container.cost_tracker(),
@@ -149,8 +159,16 @@ async def test_embeddings_returns_200_with_valid_request(
 # -- Test 2: Missing X-Workspace-Id returns 403 --------------------------------
 
 
-async def test_embeddings_returns_403_without_workspace_header() -> None:
+@patch(f"{_PROXY_MOD}.get_session")
+async def test_embeddings_returns_403_without_workspace_header(
+    mock_get_session: MagicMock,
+) -> None:
     """POST /v1/embeddings without X-Workspace-Id returns 403."""
+    async def _fake_session():  # type: ignore[no-untyped-def]
+        yield MagicMock()
+
+    mock_get_session.side_effect = _fake_session
+
     app = _make_mock_app()
 
     async with AsyncClient(
@@ -174,17 +192,24 @@ async def test_embeddings_returns_403_without_workspace_header() -> None:
 # -- Test 3: Tracks cost via CostTracker --------------------------------------
 
 
-@patch("pilot_space.api.v1.routers.ai_proxy._get_cached_openai_client")
-@patch("pilot_space.api.v1.routers.ai_proxy._validate_tenant")
-@patch("pilot_space.api.v1.routers.ai_proxy.track_llm_cost")
+@patch(f"{_PROXY_MOD}._get_cached_openai_client")
+@patch(f"{_PROXY_MOD}._validate_tenant")
+@patch(f"{_PROXY_MOD}.track_llm_cost")
+@patch(f"{_PROXY_MOD}.get_session")
 async def test_embeddings_tracks_cost(
+    mock_get_session: MagicMock,
     mock_track_cost: AsyncMock,
     mock_validate: AsyncMock,
     mock_get_client: MagicMock,
 ) -> None:
     """POST /v1/embeddings tracks cost via CostTracker."""
+    async def _fake_session():  # type: ignore[no-untyped-def]
+        yield MagicMock()
+
+    mock_get_session.side_effect = _fake_session
+
     app = _make_mock_app()
-    container = app.state.container
+    container = proxy_app.state.container
     cost_tracker = container.cost_tracker()
 
     mock_validate.return_value = (
@@ -228,15 +253,22 @@ async def test_embeddings_tracks_cost(
 # -- Test 4: Validates tenant (calls _validate_tenant) -------------------------
 
 
-@patch("pilot_space.api.v1.routers.ai_proxy._get_cached_openai_client")
-@patch("pilot_space.api.v1.routers.ai_proxy._validate_tenant")
+@patch(f"{_PROXY_MOD}._get_cached_openai_client")
+@patch(f"{_PROXY_MOD}._validate_tenant")
+@patch(f"{_PROXY_MOD}.get_session")
 async def test_embeddings_validates_tenant(
+    mock_get_session: MagicMock,
     mock_validate: AsyncMock,
     mock_get_client: MagicMock,
 ) -> None:
     """POST /v1/embeddings calls _validate_tenant for workspace checks."""
+    async def _fake_session():  # type: ignore[no-untyped-def]
+        yield MagicMock()
+
+    mock_get_session.side_effect = _fake_session
+
     app = _make_mock_app()
-    container = app.state.container
+    container = proxy_app.state.container
 
     mock_validate.return_value = (
         container.resilient_executor(),

@@ -27,7 +27,6 @@ from pilot_space.api.v1.routers import (
     ai_extraction_router,
     ai_governance_router,
     ai_pr_review_router,
-    ai_proxy_router,
     ai_router,
     ai_sessions_router,
     ai_tasks_router,
@@ -126,6 +125,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     container.wire(modules=container.wiring_config.modules)
 
     app.state.container = container
+
+    # Share DI container with the AI proxy sub-application so it can
+    # resolve services (resilient_executor, cost_tracker, key_storage, redis).
+    from pilot_space.ai.proxy.app import proxy_app as _proxy_app
+
+    _proxy_app.state.container = container
+
     settings = get_settings()
 
     # Configure structured logging first
@@ -326,7 +332,6 @@ app.include_router(transcription_router, prefix=f"{API_V1_PREFIX}/ai")
 app.include_router(transcription_ws_router, prefix=f"{API_V1_PREFIX}/ai")
 app.include_router(ai_drive_router, prefix=f"{API_V1_PREFIX}/ai")
 app.include_router(ai_chat_router, prefix=f"{API_V1_PREFIX}/ai")
-app.include_router(ai_proxy_router, prefix=f"{API_V1_PREFIX}/ai/proxy")
 app.include_router(ai_configuration_router, prefix=API_V1_PREFIX)
 app.include_router(ai_costs_router, prefix=f"{API_V1_PREFIX}/ai")
 app.include_router(ai_extraction_router, prefix=API_V1_PREFIX)
@@ -396,6 +401,12 @@ app.include_router(skill_approvals_router, prefix=f"{API_V1_PREFIX}/workspaces")
 app.include_router(notifications_router, prefix=f"{API_V1_PREFIX}/workspaces")
 if debug_router:
     app.include_router(debug_router, prefix=API_V1_PREFIX)
+
+# AI Proxy sub-application — mounted as a separate ASGI app so it gets its
+# own exception handlers and can be deployed independently if needed.
+from pilot_space.ai.proxy.app import proxy_app  # noqa: E402
+
+app.mount(f"{API_V1_PREFIX}/ai/proxy", proxy_app)
 
 
 def cli() -> None:
