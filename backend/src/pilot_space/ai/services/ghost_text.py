@@ -211,16 +211,17 @@ class GhostTextService:
                 detail="No Anthropic API key configured for this workspace",
             )
 
-        # Proxy routing — override base_url when proxy is enabled
+        # Proxy routing — override base_url when proxy is enabled.
+        # workspace_id is encoded in the URL path (no custom headers needed).
         settings = get_settings()
         _is_proxied = False
         if settings.ai_proxy_enabled:
-            base_url = settings.ai_proxy_base_url
+            base_url = f"{settings.ai_proxy_base_url}/{workspace_id}/"
             _is_proxied = True
             logger.info(
                 "ghost_text_proxy_routed",
                 workspace_id=str(workspace_id),
-                proxy_url=settings.ai_proxy_base_url,
+                proxy_url=base_url,
             )
 
         # Model from routing table (respects circuit breaker state)

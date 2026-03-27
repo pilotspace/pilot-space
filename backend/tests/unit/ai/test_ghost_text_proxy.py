@@ -140,10 +140,10 @@ async def test_proxy_enabled_uses_proxy_base_url(
             use_cache=False,
         )
 
-    # client_pool.get_client should have been called with proxy base_url
+    # client_pool.get_client should have been called with proxy base_url (workspace_id in path)
     mock_client_pool.get_client.assert_called_once()
     call_kwargs = mock_client_pool.get_client.call_args
-    assert call_kwargs[1]["base_url"] == PROXY_BASE_URL
+    assert call_kwargs[1]["base_url"] == f"{PROXY_BASE_URL}/{WORKSPACE_ID}/"
 
 
 @pytest.mark.asyncio
@@ -234,6 +234,6 @@ async def test_proxy_enabled_no_byok_key_uses_env_key_and_proxy(
             use_cache=False,
         )
 
-    # Should still use proxy base_url even with env fallback key
+    # Should still use proxy base_url (workspace_id in path) even with env fallback key
     call_kwargs = mock_client_pool.get_client.call_args
-    assert call_kwargs[1]["base_url"] == PROXY_BASE_URL
+    assert call_kwargs[1]["base_url"] == f"{PROXY_BASE_URL}/{WORKSPACE_ID}/"

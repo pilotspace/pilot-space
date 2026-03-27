@@ -116,7 +116,8 @@ async def test_pr_review_proxy_enabled_uses_proxy_base_url() -> None:
         async for _ in subagent.stream(input_data, context):
             pass
 
-        mock_build.assert_called_once_with(TEST_API_KEY, base_url=PROXY_BASE_URL)
+        expected_proxy_url = f"{PROXY_BASE_URL}/{WORKSPACE_ID}/"
+        mock_build.assert_called_once_with(TEST_API_KEY, base_url=expected_proxy_url)
 
 
 @pytest.mark.asyncio
@@ -173,7 +174,8 @@ async def test_doc_generator_proxy_enabled_uses_proxy_base_url() -> None:
         async for _ in subagent.stream(input_data, context):
             pass
 
-        mock_build.assert_called_once_with(TEST_API_KEY, base_url=PROXY_BASE_URL)
+        expected_proxy_url = f"{PROXY_BASE_URL}/{WORKSPACE_ID}/"
+        mock_build.assert_called_once_with(TEST_API_KEY, base_url=expected_proxy_url)
 
 
 @pytest.mark.asyncio
@@ -203,13 +205,13 @@ async def test_doc_generator_proxy_disabled_uses_byok_base_url() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Proxy env headers test
+# Proxy env: workspace_id is in URL path, NOT in env vars
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_both_subagents_include_workspace_and_user_headers_when_proxied() -> None:
-    """Both subagents set X_WORKSPACE_ID and X_USER_ID in sdk env when proxied."""
+async def test_both_subagents_encode_workspace_in_url_not_env_when_proxied() -> None:
+    """Both subagents encode workspace_id in URL path, not X_WORKSPACE_ID env var."""
     user_id = uuid4()
     context = _make_context(user_id=user_id)
 
@@ -249,7 +251,7 @@ async def test_both_subagents_include_workspace_and_user_headers_when_proxied() 
 
         with (
             patch(f"{module_path}.get_settings", return_value=_make_settings(proxy_enabled=True)),
-            patch(f"{module_path}.build_sdk_env", side_effect=capture_build_sdk_env),
+            patch(f"{module_path}.build_sdk_env", side_effect=capture_build_sdk_env) as mock_build,
             patch(f"{module_path}.ClaudeSDKClient") as mock_client_cls,
         ):
             mock_client = AsyncMock()
@@ -264,13 +266,17 @@ async def test_both_subagents_include_workspace_and_user_headers_when_proxied() 
             async for _ in subagent.stream(input_data, context):
                 pass
 
-            # The SDK options should have env with X_WORKSPACE_ID and X_USER_ID
+            # build_sdk_env should receive the URL with workspace_id in path
+            expected_proxy_url = f"{PROXY_BASE_URL}/{WORKSPACE_ID}/"
+            mock_build.assert_called_once_with(TEST_API_KEY, base_url=expected_proxy_url)
+
+            # The SDK env should NOT have X_WORKSPACE_ID or X_USER_ID
             sdk_options = mock_client_cls.call_args[0][0]
             captured_env = sdk_options.env
 
-        assert captured_env.get("X_WORKSPACE_ID") == str(WORKSPACE_ID), (
-            f"{SubagentCls.__name__} must set X_WORKSPACE_ID when proxied"
+        assert "X_WORKSPACE_ID" not in captured_env, (
+            f"{SubagentCls.__name__} must NOT set X_WORKSPACE_ID (workspace_id is in URL path)"
         )
-        assert captured_env.get("X_USER_ID") == str(user_id), (
-            f"{SubagentCls.__name__} must set X_USER_ID when proxied"
+        assert "X_USER_ID" not in captured_env, (
+            f"{SubagentCls.__name__} must NOT set X_USER_ID (no longer needed)"
         )

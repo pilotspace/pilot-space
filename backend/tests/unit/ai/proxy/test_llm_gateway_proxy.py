@@ -131,7 +131,7 @@ async def test_complete_anthropic_routes_through_proxy_when_enabled(
     gateway: LLMGateway,
     mock_key_storage: AsyncMock,
 ) -> None:
-    """When ai_proxy_enabled=True, complete() uses proxy base_url and passes headers."""
+    """When ai_proxy_enabled=True, complete() uses proxy base_url with workspace_id in path."""
     mock_get_settings.return_value = _mock_settings(ai_proxy_enabled=True)
 
     mock_client = MagicMock()
@@ -147,12 +147,10 @@ async def test_complete_anthropic_routes_through_proxy_when_enabled(
     )
 
     assert isinstance(result, LLMResponse)
-    # Verify client created with proxy base_url and workspace headers
+    # Verify client created with proxy base_url containing workspace_id, no custom headers
     call_kwargs = mock_anthropic_mod.AsyncAnthropic.call_args.kwargs
-    assert call_kwargs["base_url"] == PROXY_BASE_URL
-    assert "default_headers" in call_kwargs
-    assert call_kwargs["default_headers"]["X-Workspace-Id"] == str(WS_ID)
-    assert call_kwargs["default_headers"]["X-User-Id"] == str(USER_ID)
+    assert call_kwargs["base_url"] == f"{PROXY_BASE_URL}/{WS_ID}/"
+    assert "default_headers" not in call_kwargs
 
 
 # -- Test 2: Proxy skips local cost tracking -----------------------------------
@@ -233,7 +231,7 @@ async def test_embed_routes_through_proxy_when_enabled(
     gateway: LLMGateway,
     mock_key_storage: AsyncMock,
 ) -> None:
-    """When ai_proxy_enabled=True, embed() uses proxy base_url and passes headers."""
+    """When ai_proxy_enabled=True, embed() uses proxy base_url with workspace_id in path."""
     mock_get_settings.return_value = _mock_settings(ai_proxy_enabled=True)
 
     mock_client = MagicMock()
@@ -248,9 +246,8 @@ async def test_embed_routes_through_proxy_when_enabled(
     )
 
     call_kwargs = mock_openai_mod.AsyncOpenAI.call_args.kwargs
-    assert call_kwargs["base_url"] == PROXY_BASE_URL
-    assert "default_headers" in call_kwargs
-    assert call_kwargs["default_headers"]["X-Workspace-Id"] == str(WS_ID)
+    assert call_kwargs["base_url"] == f"{PROXY_BASE_URL}/{WS_ID}/"
+    assert "default_headers" not in call_kwargs
 
 
 # -- Test 5: embed() skips cost tracking when proxied -------------------------

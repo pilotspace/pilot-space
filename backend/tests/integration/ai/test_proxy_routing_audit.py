@@ -10,12 +10,12 @@ path that bypasses the proxy, or removes the proxy routing from an existing
 path, these tests fail.
 
 Paths audited:
-  1. PilotSpaceAgent          — ANTHROPIC_BASE_URL env override
-  2. LLMGateway.complete()    — base_url override + proxy headers
-  3. LLMGateway.embed()       — base_url override + proxy headers
-  4. GhostTextService         — base_url override via client pool
-  5. PRReviewSubagent         — build_sdk_env(base_url=...) + SDK env
-  6. DocGeneratorSubagent     — build_sdk_env(base_url=...) + SDK env
+  1. PilotSpaceAgent          — ANTHROPIC_BASE_URL env override (workspace_id in path)
+  2. LLMGateway.complete()    — base_url override (workspace_id in path)
+  3. LLMGateway.embed()       — base_url override (workspace_id in path)
+  4. GhostTextService         — base_url override via client pool (workspace_id in path)
+  5. PRReviewSubagent         — build_sdk_env(base_url=...) (workspace_id in path)
+  6. DocGeneratorSubagent     — build_sdk_env(base_url=...) (workspace_id in path)
 
 See also: test_no_direct_calls.py (guards against direct SDK use in services/jobs)
 """
@@ -289,40 +289,39 @@ class TestCostTrackingGuards:
 
 
 # ===================================================================
-# Category 4: Workspace context headers (proxy needs them for cost attribution)
+# Category 4: Workspace context via URL path (workspace_id in base_url)
 # ===================================================================
 
 
-class TestProxyContextHeaders:
-    """Verify that proxied paths pass workspace/user context to the proxy."""
+class TestProxyWorkspaceInUrl:
+    """Verify that proxied paths encode workspace_id in the URL path."""
 
-    def test_llm_gateway_passes_workspace_headers(self) -> None:
-        """LLMGateway must pass X-Workspace-Id when proxied."""
+    def test_llm_gateway_encodes_workspace_in_url(self) -> None:
+        """LLMGateway must encode workspace_id in proxy base_url path."""
         source = _LLM_GATEWAY.read_text(encoding="utf-8")
-        assert "X-Workspace-Id" in source, (
-            "LLMGateway must pass X-Workspace-Id header to proxy"
+        assert "/{workspace_id}/" in source or 'f"{' in source, (
+            "LLMGateway must encode workspace_id in proxy URL path"
         )
-        assert "X-User-Id" in source, (
-            "LLMGateway must pass X-User-Id header to proxy"
+        # Should NOT use X-Workspace-Id headers anymore
+        assert "X-Workspace-Id" not in source, (
+            "LLMGateway must NOT pass X-Workspace-Id header (workspace_id is in URL path)"
         )
 
-    def test_pilotspace_agent_passes_workspace_headers(self) -> None:
-        """PilotSpaceAgent must pass workspace context via env when proxied."""
+    def test_pilotspace_agent_encodes_workspace_in_url(self) -> None:
+        """PilotSpaceAgent must encode workspace_id in ANTHROPIC_BASE_URL."""
         source = _PILOTSPACE_AGENT.read_text(encoding="utf-8")
-        assert "X_WORKSPACE_ID" in source or "X-Workspace-Id" in source, (
-            "PilotSpaceAgent must pass workspace ID to proxy"
+        # Should NOT use X_WORKSPACE_ID env vars anymore
+        assert "X_WORKSPACE_ID" not in source, (
+            "PilotSpaceAgent must NOT set X_WORKSPACE_ID env (workspace_id is in URL path)"
         )
 
-    def test_subagents_pass_workspace_headers(self) -> None:
-        """Subagents must pass workspace/user context via SDK env when proxied."""
+    def test_subagents_encode_workspace_in_url(self) -> None:
+        """Subagents must encode workspace_id in proxy URL, not env vars."""
         for name, path in [
             ("PRReviewSubagent", _PR_REVIEW),
             ("DocGeneratorSubagent", _DOC_GENERATOR),
         ]:
             source = path.read_text(encoding="utf-8")
-            assert "X_WORKSPACE_ID" in source, (
-                f"{name} must pass X_WORKSPACE_ID in SDK env when proxied"
-            )
-            assert "X_USER_ID" in source, (
-                f"{name} must pass X_USER_ID in SDK env when proxied"
+            assert "X_WORKSPACE_ID" not in source, (
+                f"{name} must NOT set X_WORKSPACE_ID env (workspace_id is in URL path)"
             )

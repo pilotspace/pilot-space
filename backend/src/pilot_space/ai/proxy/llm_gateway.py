@@ -196,22 +196,17 @@ class LLMGateway:
 
         # Proxy routing: when ai_proxy_enabled, override base_url to route
         # through the built-in proxy for centralized cost tracking.
+        # workspace_id is encoded in the URL path (no custom headers needed).
         settings = get_settings()
         _is_proxied = False
-        proxy_headers: dict[str, str] | None = None
         if settings.ai_proxy_enabled:
-            base_url = settings.ai_proxy_base_url
+            base_url = f"{settings.ai_proxy_base_url}/{workspace_id}/"
             _is_proxied = True
-            proxy_headers = {
-                "X-Workspace-Id": str(workspace_id),
-                "X-User-Id": str(user_id),
-            }
 
         if provider == "anthropic":
             return await self._complete_anthropic(
                 api_key=api_key,
                 base_url=base_url,
-                default_headers=proxy_headers,
                 provider=provider,
                 model=bare_model,
                 resolved_model=resolved,
@@ -227,7 +222,6 @@ class LLMGateway:
         return await self._complete_openai(
             api_key=api_key,
             base_url=base_url,
-            default_headers=proxy_headers,
             provider=provider,
             model=bare_model,
             resolved_model=resolved,
@@ -429,20 +423,14 @@ class LLMGateway:
 
         # Proxy routing for embeddings: when ai_proxy_enabled, route through
         # the built-in proxy for centralized cost tracking.
+        # workspace_id is encoded in the URL path (no custom headers needed).
         settings = get_settings()
         _is_proxied = False
-        proxy_headers: dict[str, str] | None = None
         if settings.ai_proxy_enabled:
-            base_url = settings.ai_proxy_base_url
+            base_url = f"{settings.ai_proxy_base_url}/{workspace_id}/"
             _is_proxied = True
-            proxy_headers = {
-                "X-Workspace-Id": str(workspace_id),
-                "X-User-Id": str(user_id),
-            }
 
-        client = self._get_openai_client(
-            api_key, base_url=base_url, default_headers=proxy_headers
-        )
+        client = self._get_openai_client(api_key, base_url=base_url)
 
         embed_kwargs: dict[str, Any] = {
             "model": bare_model,

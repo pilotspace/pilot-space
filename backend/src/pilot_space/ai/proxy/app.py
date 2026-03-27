@@ -7,8 +7,8 @@ accepts only internal calls from LLMGateway, GhostTextService, Agent SDK,
 and subagents running on the same host.
 
 Flow:
-    Claude Agent SDK -> ANTHROPIC_BASE_URL=http://localhost:8000/api/v1/ai/proxy
-    -> POST /v1/messages
+    Claude Agent SDK -> ANTHROPIC_BASE_URL=http://localhost:8000/api/v1/ai/proxy/{workspace_id}/
+    -> POST /{workspace_id}/v1/messages
     -> tenant validation (workspace active, AI enabled, budget, rate limit)
     -> provider routing (anthropic/ollama/custom via workspace config)
     -> forward to real provider
@@ -306,12 +306,12 @@ def _get_cached_openai_client(
 # ---------------------------------------------------------------------------
 
 
-@proxy_app.post("/v1/messages", response_model=None, tags=["ai-proxy"])
+@proxy_app.post("/{workspace_id}/v1/messages", response_model=None, tags=["ai-proxy"])
 @observe(name="ai_proxy.messages")  # type: ignore[misc]
 async def proxy_messages(
     request: Request,
+    workspace_id: UUID,
     session: ProxyDbSession,  # populates ContextVar for DI-injected services
-    x_workspace_id: str | None = Header(None, alias="X-Workspace-Id"),
     x_user_id: str | None = Header(None, alias="X-User-Id"),
 ) -> StreamingResponse | JSONResponse:
     """Anthropic Messages API proxy with tenant validation.
@@ -319,10 +319,11 @@ async def proxy_messages(
     Validates workspace permissions, enforces budget/rate limits,
     resolves provider config, then forwards to the real LLM provider.
 
+    Path params:
+        workspace_id: Workspace UUID for tenant validation + cost attribution
     Headers:
         x-api-key: Anthropic API key (sent by SDK automatically)
-        X-Workspace-Id: Workspace UUID for tenant validation + cost attribution
-        X-User-Id: User UUID for cost attribution
+        X-User-Id: User UUID for cost attribution (optional, defaults to SYSTEM)
     """
     # --- Extract API key ---
     api_key = request.headers.get("x-api-key") or ""
@@ -332,7 +333,7 @@ async def proxy_messages(
             api_key = auth[7:]
 
     if not api_key:
-        raise AINotConfiguredError(workspace_id=UUID(x_workspace_id) if x_workspace_id else None)
+        raise AINotConfiguredError(workspace_id=workspace_id)
 
     # --- Parse request body ---
     body = await request.json()
@@ -343,21 +344,12 @@ async def proxy_messages(
     system_msg: str | list[Any] | None = body.get("system")
     stream: bool = body.get("stream", False)
 
-    workspace_id = UUID(x_workspace_id) if x_workspace_id else None
     user_id = UUID(x_user_id) if x_user_id else _SYSTEM_USER_ID
 
-    # --- Tenant validation (skip for system calls without workspace) ---
-    if workspace_id:
-        executor, cost_tracker, _key_storage, base_url, max_tokens = await _validate_tenant(
-            request, workspace_id, user_id, model, max_tokens
-        )
-    else:
-        from pilot_space.container.container import Container
-
-        container: Container = request.app.state.container  # type: ignore[assignment]
-        executor = container.resilient_executor()
-        cost_tracker = container.cost_tracker()
-        base_url = None
+    # --- Tenant validation ---
+    executor, cost_tracker, _key_storage, base_url, max_tokens = await _validate_tenant(
+        request, workspace_id, user_id, model, max_tokens
+    )
 
     # --- Get pooled client ---
     client = _get_cached_client(request, api_key, base_url)
@@ -444,12 +436,12 @@ async def proxy_messages(
 # ---------------------------------------------------------------------------
 
 
-@proxy_app.post("/v1/embeddings", response_model=None, tags=["ai-proxy"])
+@proxy_app.post("/{workspace_id}/v1/embeddings", response_model=None, tags=["ai-proxy"])
 @observe(name="ai_proxy.embeddings")  # type: ignore[misc]
 async def proxy_embeddings(
     request: Request,
+    workspace_id: UUID,
     session: ProxyDbSession,  # populates ContextVar for DI-injected services
-    x_workspace_id: str | None = Header(None, alias="X-Workspace-Id"),
     x_user_id: str | None = Header(None, alias="X-User-Id"),
 ) -> JSONResponse:
     """OpenAI Embeddings API proxy with tenant validation.
@@ -457,16 +449,12 @@ async def proxy_embeddings(
     Validates workspace permissions, enforces budget/rate limits,
     resolves provider config, then forwards to the real OpenAI Embeddings API.
 
+    Path params:
+        workspace_id: Workspace UUID for tenant validation + cost attribution
     Headers:
         Authorization: Bearer <api-key> (OpenAI API key)
-        X-Workspace-Id: Workspace UUID for tenant validation + cost attribution
-        X-User-Id: User UUID for cost attribution
+        X-User-Id: User UUID for cost attribution (optional, defaults to SYSTEM)
     """
-    # --- Require workspace header ---
-    if not x_workspace_id:
-        raise ForbiddenError("X-Workspace-Id header required")
-
-    workspace_id = UUID(x_workspace_id)
     user_id = UUID(x_user_id) if x_user_id else _SYSTEM_USER_ID
 
     # --- Extract API key ---

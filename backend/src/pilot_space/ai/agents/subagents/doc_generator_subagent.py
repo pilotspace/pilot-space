@@ -344,14 +344,13 @@ Use available tools to:
             sdk_options = self._create_agent_options(context)
             if model_name:
                 sdk_options.model = model_name
-            # Proxy routing — route through built-in proxy when enabled
+            # Proxy routing — route through built-in proxy when enabled.
+            # workspace_id is encoded in the URL path (no custom headers needed).
             _settings = get_settings()
             if _settings.ai_proxy_enabled:
-                sdk_options.env = build_sdk_env(api_key, base_url=_settings.ai_proxy_base_url)
-                sdk_options.env["X_WORKSPACE_ID"] = str(context.workspace_id)
-                if context.user_id:
-                    sdk_options.env["X_USER_ID"] = str(context.user_id)
-                logger.info("doc_generator_proxy_routed", proxy_url=_settings.ai_proxy_base_url)
+                proxy_url = f"{_settings.ai_proxy_base_url}/{context.workspace_id}/"
+                sdk_options.env = build_sdk_env(api_key, base_url=proxy_url)
+                logger.info("doc_generator_proxy_routed", proxy_url=proxy_url)
             else:
                 sdk_options.env = build_sdk_env(api_key, base_url=base_url)
 

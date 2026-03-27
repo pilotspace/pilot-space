@@ -11,14 +11,10 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID, uuid4
 
-import pytest
 from fastapi import FastAPI
-from fastapi.responses import JSONResponse
 from httpx import ASGITransport, AsyncClient
-from starlette.requests import Request as StarletteRequest
 
 from pilot_space.ai.proxy.app import proxy_app
-from pilot_space.domain.exceptions import ForbiddenError
 
 WS_ID = uuid4()
 USER_ID = uuid4()
@@ -104,7 +100,7 @@ async def test_embeddings_returns_200_with_valid_request(
     mock_validate: AsyncMock,
     mock_get_client: MagicMock,
 ) -> None:
-    """POST /v1/embeddings with valid headers returns 200 with OpenAI-format response."""
+    """POST /{workspace_id}/v1/embeddings with valid path param returns 200."""
     # Mock session dependency to yield a dummy session
     async def _fake_session():  # type: ignore[no-untyped-def]
         yield MagicMock()
@@ -135,13 +131,12 @@ async def test_embeddings_returns_200_with_valid_request(
         base_url="http://test",
     ) as client:
         response = await client.post(
-            "/api/v1/ai/proxy/v1/embeddings",
+            f"/api/v1/ai/proxy/{WS_ID}/v1/embeddings",
             json={
                 "model": "text-embedding-3-large",
                 "input": ["hello world"],
             },
             headers={
-                "X-Workspace-Id": str(WS_ID),
                 "X-User-Id": str(USER_ID),
                 "Authorization": "Bearer sk-test-key",
             },
@@ -156,14 +151,14 @@ async def test_embeddings_returns_200_with_valid_request(
     assert "usage" in data
 
 
-# -- Test 2: Missing X-Workspace-Id returns 403 --------------------------------
+# -- Test 2: Invalid workspace_id in path returns 422 --------------------------
 
 
 @patch(f"{_PROXY_MOD}.get_session")
-async def test_embeddings_returns_403_without_workspace_header(
+async def test_embeddings_returns_422_with_invalid_workspace_id(
     mock_get_session: MagicMock,
 ) -> None:
-    """POST /v1/embeddings without X-Workspace-Id returns 403."""
+    """POST /{workspace_id}/v1/embeddings with invalid UUID returns 422."""
     async def _fake_session():  # type: ignore[no-untyped-def]
         yield MagicMock()
 
@@ -176,7 +171,7 @@ async def test_embeddings_returns_403_without_workspace_header(
         base_url="http://test",
     ) as client:
         response = await client.post(
-            "/api/v1/ai/proxy/v1/embeddings",
+            "/api/v1/ai/proxy/not-a-uuid/v1/embeddings",
             json={
                 "model": "text-embedding-3-large",
                 "input": ["hello"],
@@ -186,7 +181,7 @@ async def test_embeddings_returns_403_without_workspace_header(
             },
         )
 
-    assert response.status_code == 403
+    assert response.status_code == 422
 
 
 # -- Test 3: Tracks cost via CostTracker --------------------------------------
@@ -231,13 +226,12 @@ async def test_embeddings_tracks_cost(
         base_url="http://test",
     ) as client:
         await client.post(
-            "/api/v1/ai/proxy/v1/embeddings",
+            f"/api/v1/ai/proxy/{WS_ID}/v1/embeddings",
             json={
                 "model": "text-embedding-3-large",
                 "input": ["hello"],
             },
             headers={
-                "X-Workspace-Id": str(WS_ID),
                 "X-User-Id": str(USER_ID),
                 "Authorization": "Bearer sk-test-key",
             },
@@ -289,13 +283,12 @@ async def test_embeddings_validates_tenant(
         base_url="http://test",
     ) as client:
         await client.post(
-            "/api/v1/ai/proxy/v1/embeddings",
+            f"/api/v1/ai/proxy/{WS_ID}/v1/embeddings",
             json={
                 "model": "text-embedding-3-large",
                 "input": ["validate me"],
             },
             headers={
-                "X-Workspace-Id": str(WS_ID),
                 "X-User-Id": str(USER_ID),
                 "Authorization": "Bearer sk-test-key",
             },

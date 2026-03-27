@@ -789,16 +789,11 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
             "ANTHROPIC_API_KEY": provider_config.api_key,
         }
         if _settings.ai_proxy_enabled:
-            provider_env["ANTHROPIC_BASE_URL"] = _settings.ai_proxy_base_url
-            # Pass workspace context as custom headers so the proxy can
-            # attribute costs correctly. The SDK forwards env vars but
-            # custom headers need the HTTP_* prefix convention.
-            provider_env["X_WORKSPACE_ID"] = str(context.workspace_id)
-            if context.user_id:
-                provider_env["X_USER_ID"] = str(context.user_id)
+            proxy_url = f"{_settings.ai_proxy_base_url}/{context.workspace_id}/"
+            provider_env["ANTHROPIC_BASE_URL"] = proxy_url
             logger.info(
                 "[SDK/Space] AI Proxy enabled: routing through %s",
-                _settings.ai_proxy_base_url,
+                proxy_url,
             )
         elif provider_config.base_url:
             provider_env["ANTHROPIC_BASE_URL"] = provider_config.base_url
