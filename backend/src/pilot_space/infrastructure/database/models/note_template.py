@@ -11,10 +11,11 @@ import uuid
 from typing import Any
 
 from sqlalchemy import Boolean, ForeignKey, Index, String, Text
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from pilot_space.infrastructure.database.base import BaseModel
+from pilot_space.infrastructure.database.types import JSONBCompat
 
 
 class NoteTemplate(BaseModel):
@@ -49,7 +50,7 @@ class NoteTemplate(BaseModel):
         nullable=True,
     )
     content: Mapped[dict[str, Any]] = mapped_column(
-        JSONB,
+        JSONBCompat,
         nullable=False,
     )
     is_system: Mapped[bool] = mapped_column(
