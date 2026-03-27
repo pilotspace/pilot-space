@@ -13,6 +13,7 @@ import pytest
 
 from pilot_space.ai.exceptions import AINotConfiguredError
 from pilot_space.ai.infrastructure.key_storage import APIKeyInfo
+from pilot_space.ai.providers.provider_selector import TaskType
 from pilot_space.ai.proxy.llm_gateway import EmbeddingResponse, LLMGateway, LLMResponse
 from pilot_space.ai.proxy.provider_config import (
     TASK_TYPE_MODEL_MAP,
@@ -20,8 +21,6 @@ from pilot_space.ai.proxy.provider_config import (
     extract_provider,
     resolve_model,
 )
-from pilot_space.ai.providers.provider_selector import TaskType
-
 
 # -- Fixtures ------------------------------------------------------------------
 
@@ -119,9 +118,9 @@ async def test_complete_calls_anthropic_messages_create(
     """LLMGateway.complete() calls AsyncAnthropic.messages.create for anthropic models."""
     mock_client = MagicMock()
     mock_client.messages.create = AsyncMock(return_value=_make_anthropic_response())
-    gateway._anthropic_clients["test"] = mock_client  # noqa: SLF001
+    gateway._anthropic_clients["test"] = mock_client
     # Patch _get_anthropic_client to return our mock
-    gateway._get_anthropic_client = MagicMock(return_value=mock_client)  # type: ignore[method-assign]  # noqa: SLF001
+    gateway._get_anthropic_client = MagicMock(return_value=mock_client)  # type: ignore[method-assign]
 
     result = await gateway.complete(
         workspace_id=WS_ID,
@@ -144,7 +143,7 @@ async def test_complete_wraps_in_executor(
     """LLMGateway.complete() wraps call in self._executor.execute()."""
     mock_client = MagicMock()
     mock_client.messages.create = AsyncMock(return_value=_make_anthropic_response())
-    gateway._get_anthropic_client = MagicMock(return_value=mock_client)  # type: ignore[method-assign]  # noqa: SLF001
+    gateway._get_anthropic_client = MagicMock(return_value=mock_client)  # type: ignore[method-assign]
 
     await gateway.complete(
         workspace_id=WS_ID,
@@ -165,7 +164,7 @@ async def test_complete_tracks_cost(
     """LLMGateway.complete() calls track_llm_cost after successful completion."""
     mock_client = MagicMock()
     mock_client.messages.create = AsyncMock(return_value=_make_anthropic_response())
-    gateway._get_anthropic_client = MagicMock(return_value=mock_client)  # type: ignore[method-assign]  # noqa: SLF001
+    gateway._get_anthropic_client = MagicMock(return_value=mock_client)  # type: ignore[method-assign]
 
     await gateway.complete(
         workspace_id=WS_ID,
@@ -189,7 +188,7 @@ async def test_complete_resolves_byok_key(
     """LLMGateway.complete() resolves BYOK key from SecureKeyStorage."""
     mock_client = MagicMock()
     mock_client.messages.create = AsyncMock(return_value=_make_anthropic_response())
-    gateway._get_anthropic_client = MagicMock(return_value=mock_client)  # type: ignore[method-assign]  # noqa: SLF001
+    gateway._get_anthropic_client = MagicMock(return_value=mock_client)  # type: ignore[method-assign]
 
     await gateway.complete(
         workspace_id=WS_ID,
@@ -223,7 +222,7 @@ async def test_complete_with_system_message(
     """system param is passed as separate Anthropic system param."""
     mock_client = MagicMock()
     mock_client.messages.create = AsyncMock(return_value=_make_anthropic_response())
-    gateway._get_anthropic_client = MagicMock(return_value=mock_client)  # type: ignore[method-assign]  # noqa: SLF001
+    gateway._get_anthropic_client = MagicMock(return_value=mock_client)  # type: ignore[method-assign]
 
     await gateway.complete(
         workspace_id=WS_ID,
@@ -247,7 +246,7 @@ async def test_complete_returns_correct_response(
     mock_client.messages.create = AsyncMock(
         return_value=_make_anthropic_response("hello world", 200, 100)
     )
-    gateway._get_anthropic_client = MagicMock(return_value=mock_client)  # type: ignore[method-assign]  # noqa: SLF001
+    gateway._get_anthropic_client = MagicMock(return_value=mock_client)  # type: ignore[method-assign]
 
     result = await gateway.complete(
         workspace_id=WS_ID,
@@ -272,7 +271,7 @@ async def test_embed_calls_openai_embeddings_create(
     mock_client.embeddings.create = AsyncMock(
         return_value=_make_embedding_response([[0.1, 0.2]])
     )
-    gateway._get_openai_client = MagicMock(return_value=mock_client)  # type: ignore[method-assign]  # noqa: SLF001
+    gateway._get_openai_client = MagicMock(return_value=mock_client)  # type: ignore[method-assign]
 
     result = await gateway.embed(
         workspace_id=WS_ID,
@@ -369,7 +368,7 @@ async def test_complete_anthropic_forwards_base_url(
     mock_anthropic_mod.AsyncAnthropic.return_value = mock_client
 
     # Clear any cached clients so _get_anthropic_client creates a new one
-    gateway._anthropic_clients.clear()  # noqa: SLF001
+    gateway._anthropic_clients.clear()
 
     await gateway.complete(
         workspace_id=WS_ID,
@@ -399,7 +398,7 @@ async def test_complete_openai_forwards_base_url(
     mock_client.chat.completions.create = AsyncMock(return_value=_make_openai_response())
     mock_openai_mod.AsyncOpenAI.return_value = mock_client
 
-    gateway._openai_clients.clear()  # noqa: SLF001
+    gateway._openai_clients.clear()
 
     await gateway.complete(
         workspace_id=WS_ID,
@@ -421,13 +420,13 @@ async def test_client_cache_differentiates_base_url(
     with patch("pilot_space.ai.proxy.llm_gateway.anthropic") as mock_mod:
         mock_mod.AsyncAnthropic.side_effect = lambda **kw: MagicMock(name=f"client-{kw.get('base_url')}")
 
-        gateway._anthropic_clients.clear()  # noqa: SLF001
+        gateway._anthropic_clients.clear()
 
-        client1 = gateway._get_anthropic_client("sk-test", base_url=None)  # noqa: SLF001
-        client2 = gateway._get_anthropic_client("sk-test", base_url="https://proxy.example.com")  # noqa: SLF001
+        client1 = gateway._get_anthropic_client("sk-test", base_url=None)
+        client2 = gateway._get_anthropic_client("sk-test", base_url="https://proxy.example.com")
 
         assert client1 is not client2
-        assert len(gateway._anthropic_clients) == 2  # noqa: SLF001
+        assert len(gateway._anthropic_clients) == 2
 
 
 @patch("pilot_space.ai.proxy.llm_gateway.openai")
@@ -447,7 +446,7 @@ async def test_embed_forwards_base_url(
     )
     mock_openai_mod.AsyncOpenAI.return_value = mock_client
 
-    gateway._openai_clients.clear()  # noqa: SLF001
+    gateway._openai_clients.clear()
 
     await gateway.embed(
         workspace_id=WS_ID,
@@ -473,7 +472,7 @@ async def test_complete_anthropic_no_base_url_omits_kwarg(
     mock_client.messages.create = AsyncMock(return_value=_make_anthropic_response())
     mock_anthropic_mod.AsyncAnthropic.return_value = mock_client
 
-    gateway._anthropic_clients.clear()  # noqa: SLF001
+    gateway._anthropic_clients.clear()
 
     await gateway.complete(
         workspace_id=WS_ID,

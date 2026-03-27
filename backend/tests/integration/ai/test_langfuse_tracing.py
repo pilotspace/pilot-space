@@ -16,8 +16,8 @@ from uuid import uuid4
 
 import pytest
 
-from pilot_space.ai.proxy.llm_gateway import LLMGateway
 from pilot_space.ai.providers.provider_selector import TaskType
+from pilot_space.ai.proxy.llm_gateway import LLMGateway
 
 WS_ID = uuid4()
 USER_ID = uuid4()
@@ -70,7 +70,7 @@ async def test_complete_fires_langfuse_observe() -> None:
     mock_key_storage.get_api_key = AsyncMock(return_value="sk-test-key")
 
     gateway = LLMGateway(mock_executor, mock_cost_tracker, mock_key_storage)
-    gateway._get_anthropic_client = MagicMock(return_value=mock_client)  # type: ignore[method-assign]  # noqa: SLF001
+    gateway._get_anthropic_client = MagicMock(return_value=mock_client)  # type: ignore[method-assign]
 
     result = await gateway.complete(
         workspace_id=WS_ID,
