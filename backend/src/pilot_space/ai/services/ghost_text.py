@@ -192,14 +192,10 @@ class GhostTextService:
 
         # BYOK key resolution — also resolve base_url for custom proxy/Ollama support
         base_url: str | None = None
-        workspace_api_key = await self._key_storage.get_api_key(
-            workspace_id, "anthropic", "llm"
-        )
+        workspace_api_key = await self._key_storage.get_api_key(workspace_id, "anthropic", "llm")
         if workspace_api_key:
             api_key = workspace_api_key
-            key_info = await self._key_storage.get_key_info(
-                workspace_id, "anthropic", "llm"
-            )
+            key_info = await self._key_storage.get_key_info(workspace_id, "anthropic", "llm")
             if key_info and key_info.base_url:
                 base_url = key_info.base_url
         else:

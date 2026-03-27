@@ -188,12 +188,8 @@ Format with proper Markdown:
 
         if workspace_id is not None:
             if self._key_storage is not None:
-                key_info = await self._key_storage.get_key_info(
-                    workspace_id, "anthropic", "llm"
-                )
-                api_key = await self._key_storage.get_api_key(
-                    workspace_id, "anthropic", "llm"
-                )
+                key_info = await self._key_storage.get_key_info(workspace_id, "anthropic", "llm")
+                api_key = await self._key_storage.get_api_key(workspace_id, "anthropic", "llm")
                 if key_info and (api_key or key_info.base_url):
                     return (
                         api_key or "no-key-required",

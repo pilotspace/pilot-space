@@ -133,16 +133,12 @@ async def _validate_tenant(
         # Redis unavailable — fail open (allow request, log warning)
         logger.warning("ai_proxy_rate_limit_check_failed", exc_info=True)
     if rate_limit_exceeded:
-        raise ForbiddenError(
-            f"AI rate limit exceeded ({ai_rpm} requests/minute)"
-        )
+        raise ForbiddenError(f"AI rate limit exceeded ({ai_rpm} requests/minute)")
 
     # --- 5. Model allowlist ---
     allowed_models: list[str] | None = ws_settings.get("allowed_models")
     if allowed_models and model not in allowed_models:
-        raise ForbiddenError(
-            f"Model '{model}' not in workspace allowlist: {allowed_models}"
-        )
+        raise ForbiddenError(f"Model '{model}' not in workspace allowlist: {allowed_models}")
 
     # --- 6. Max tokens ceiling ---
     workspace_max_tokens: int | None = ws_settings.get("ai_max_tokens")
@@ -188,17 +184,13 @@ def _get_cached_client(
 
     import anthropic
 
-    key_hash = hashlib.sha256(
-        f"{api_key}:{base_url or ''}".encode()
-    ).hexdigest()[:16]
+    key_hash = hashlib.sha256(f"{api_key}:{base_url or ''}".encode()).hexdigest()[:16]
 
     proxy_clients_attr = "proxy_anthropic_clients"
     if not hasattr(request.app.state, proxy_clients_attr):
         setattr(request.app.state, proxy_clients_attr, {})
 
-    clients: dict[str, anthropic.AsyncAnthropic] = getattr(
-        request.app.state, proxy_clients_attr
-    )
+    clients: dict[str, anthropic.AsyncAnthropic] = getattr(request.app.state, proxy_clients_attr)
     if key_hash not in clients:
         kwargs: dict[str, Any] = {"api_key": api_key}
         if base_url:
@@ -237,9 +229,7 @@ async def proxy_messages(
             api_key = auth[7:]
 
     if not api_key:
-        raise AINotConfiguredError(
-            workspace_id=UUID(x_workspace_id) if x_workspace_id else None
-        )
+        raise AINotConfiguredError(workspace_id=UUID(x_workspace_id) if x_workspace_id else None)
 
     # --- Parse request body ---
     body = await request.json()
@@ -255,8 +245,8 @@ async def proxy_messages(
 
     # --- Tenant validation (skip for system calls without workspace) ---
     if workspace_id:
-        executor, cost_tracker, _key_storage, base_url, max_tokens = (
-            await _validate_tenant(request, workspace_id, user_id, model, max_tokens)
+        executor, cost_tracker, _key_storage, base_url, max_tokens = await _validate_tenant(
+            request, workspace_id, user_id, model, max_tokens
         )
     else:
         from pilot_space.container.container import Container
@@ -284,8 +274,13 @@ async def proxy_messages(
 
     # Pass through Anthropic-specific params
     for param in (
-        "top_p", "top_k", "stop_sequences", "metadata",
-        "tools", "tool_choice", "thinking",
+        "top_p",
+        "top_k",
+        "stop_sequences",
+        "metadata",
+        "tools",
+        "tool_choice",
+        "thinking",
     ):
         if param in body:
             create_kwargs[param] = body[param]
@@ -369,9 +364,7 @@ async def _handle_streaming(
             )
 
             async for event in stream:
-                event_data = (
-                    event.model_dump() if hasattr(event, "model_dump") else {}
-                )
+                event_data = event.model_dump() if hasattr(event, "model_dump") else {}
                 event_type = getattr(event, "type", "")
 
                 if event_type == "message_start":
@@ -391,11 +384,7 @@ async def _handle_streaming(
             }
             yield f"event: error\ndata: {json.dumps(error_data)}\n\n"
         finally:
-            if (
-                workspace_id
-                and cost_tracker
-                and (total_input_tokens or total_output_tokens)
-            ):
+            if workspace_id and cost_tracker and (total_input_tokens or total_output_tokens):
                 try:
                     await track_llm_cost(
                         cost_tracker,
@@ -407,9 +396,7 @@ async def _handle_streaming(
                         output_tokens=total_output_tokens,
                     )
                 except Exception:
-                    logger.debug(
-                        "ai_proxy_stream_cost_tracking_failed", exc_info=True
-                    )
+                    logger.debug("ai_proxy_stream_cost_tracking_failed", exc_info=True)
 
             logger.info(
                 "ai_proxy_stream_complete",

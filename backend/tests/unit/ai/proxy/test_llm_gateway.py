@@ -24,6 +24,7 @@ from pilot_space.ai.proxy.provider_config import (
 
 # -- Fixtures ------------------------------------------------------------------
 
+
 def _make_anthropic_response(
     text: str = "test response",
     input_tokens: int = 100,
@@ -263,14 +264,13 @@ async def test_complete_returns_correct_response(
 
 # -- LLMGateway.embed tests ---------------------------------------------------
 
+
 async def test_embed_calls_openai_embeddings_create(
     gateway: LLMGateway,
 ) -> None:
     """LLMGateway.embed() calls AsyncOpenAI.embeddings.create."""
     mock_client = MagicMock()
-    mock_client.embeddings.create = AsyncMock(
-        return_value=_make_embedding_response([[0.1, 0.2]])
-    )
+    mock_client.embeddings.create = AsyncMock(return_value=_make_embedding_response([[0.1, 0.2]]))
     gateway._get_openai_client = MagicMock(return_value=mock_client)  # type: ignore[method-assign]
 
     result = await gateway.embed(
@@ -285,6 +285,7 @@ async def test_embed_calls_openai_embeddings_create(
 
 
 # -- resolve_model tests ------------------------------------------------------
+
 
 def test_resolve_model_default() -> None:
     """TaskType.GHOST_TEXT maps to haiku model."""
@@ -306,6 +307,7 @@ def test_resolve_model_all_task_types_mapped() -> None:
 
 # -- extract_provider tests ----------------------------------------------------
 
+
 def test_extract_provider_anthropic() -> None:
     assert extract_provider("anthropic/claude-sonnet-4-20250514") == "anthropic"
 
@@ -321,6 +323,7 @@ def test_extract_provider_no_prefix() -> None:
 
 # -- extract_model_name tests --------------------------------------------------
 
+
 def test_extract_model_name_with_prefix() -> None:
     assert extract_model_name("anthropic/claude-sonnet-4-20250514") == "claude-sonnet-4-20250514"
 
@@ -330,6 +333,7 @@ def test_extract_model_name_no_prefix() -> None:
 
 
 # -- base_url forwarding tests ------------------------------------------------
+
 
 def _make_key_info(
     base_url: str | None = None,
@@ -418,7 +422,9 @@ async def test_client_cache_differentiates_base_url(
 ) -> None:
     """Same api_key with different base_url produces different cached clients."""
     with patch("pilot_space.ai.proxy.llm_gateway.anthropic") as mock_mod:
-        mock_mod.AsyncAnthropic.side_effect = lambda **kw: MagicMock(name=f"client-{kw.get('base_url')}")
+        mock_mod.AsyncAnthropic.side_effect = lambda **kw: MagicMock(
+            name=f"client-{kw.get('base_url')}"
+        )
 
         gateway._anthropic_clients.clear()
 
@@ -441,9 +447,7 @@ async def test_embed_forwards_base_url(
     )
 
     mock_client = MagicMock()
-    mock_client.embeddings.create = AsyncMock(
-        return_value=_make_embedding_response([[0.1, 0.2]])
-    )
+    mock_client.embeddings.create = AsyncMock(return_value=_make_embedding_response([[0.1, 0.2]]))
     mock_openai_mod.AsyncOpenAI.return_value = mock_client
 
     gateway._openai_clients.clear()

@@ -39,9 +39,7 @@ class AnthropicClientPool:
         """Initialize empty client pool."""
         self._clients: dict[str, anthropic.AsyncAnthropic] = {}
 
-    def get_client(
-        self, api_key: str, base_url: str | None = None
-    ) -> anthropic.AsyncAnthropic:
+    def get_client(self, api_key: str, base_url: str | None = None) -> anthropic.AsyncAnthropic:
         """Return cached client for api_key, creating one if absent.
 
         Args:
@@ -51,9 +49,7 @@ class AnthropicClientPool:
         Returns:
             Reusable AsyncAnthropic client for that key + endpoint.
         """
-        key_hash = hashlib.sha256(
-            f"{api_key}:{base_url or ''}".encode()
-        ).hexdigest()[:16]
+        key_hash = hashlib.sha256(f"{api_key}:{base_url or ''}".encode()).hexdigest()[:16]
         if key_hash not in self._clients:
             kwargs: dict[str, Any] = {"api_key": api_key}
             if base_url:
@@ -75,9 +71,7 @@ class AnthropicClientPool:
             True if a client was found and removed, False if the key was
             not cached (already evicted or never used).
         """
-        key_hash = hashlib.sha256(
-            f"{api_key}:{base_url or ''}".encode()
-        ).hexdigest()[:16]
+        key_hash = hashlib.sha256(f"{api_key}:{base_url or ''}".encode()).hexdigest()[:16]
         return self._clients.pop(key_hash, None) is not None
 
 

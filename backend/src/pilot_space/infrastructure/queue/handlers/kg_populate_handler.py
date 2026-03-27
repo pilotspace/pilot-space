@@ -185,7 +185,8 @@ class KgPopulateHandler:
             chunks = chunk_markdown_by_headings(issue_md, min_chunk_chars=_MIN_CHUNK_CHARS)
             try:
                 chunks = await enrich_chunks_with_context(
-                    chunks, issue_md,
+                    chunks,
+                    issue_md,
                     llm_gateway=self._llm_gateway,
                     workspace_id=issue.workspace_id,
                 )
@@ -322,7 +323,8 @@ class KgPopulateHandler:
         chunks = chunk_markdown_by_headings(markdown, min_chunk_chars=_MIN_CHUNK_CHARS)
         try:
             chunks = await enrich_chunks_with_context(
-                chunks, markdown,
+                chunks,
+                markdown,
                 llm_gateway=self._llm_gateway,
                 workspace_id=note.workspace_id,
             )

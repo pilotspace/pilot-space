@@ -161,8 +161,10 @@ class VersionDigestService:
                 agent_name="version_digest",
             )
 
-            return response.text.strip() if response.text else self._minimal_digest(
-                new_content, previous_content
+            return (
+                response.text.strip()
+                if response.text
+                else self._minimal_digest(new_content, previous_content)
             )
 
         except Exception:

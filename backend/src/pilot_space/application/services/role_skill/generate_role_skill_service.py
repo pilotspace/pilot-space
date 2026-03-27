@@ -243,9 +243,7 @@ class GenerateRoleSkillService:
             msg = f"AI skill generation failed: {e}"
             raise SkillGenerationError(msg) from e
 
-        result = self._parse_ai_response(
-            response.text, display_name, role_name, response.model
-        )
+        result = self._parse_ai_response(response.text, display_name, role_name, response.model)
         if result is None:
             msg = "AI returned invalid or insufficient content"
             raise SkillGenerationError(msg)

@@ -384,7 +384,9 @@ class GraphExtractionService:
             Returns empty result when llm_gateway is None or on any error.
         """
         if self._llm_gateway is None:
-            logger.debug("GraphExtractionService: no llm_gateway provided -- returning empty result")
+            logger.debug(
+                "GraphExtractionService: no llm_gateway provided -- returning empty result"
+            )
             return _empty_result()
 
         if not payload.messages:

@@ -165,8 +165,13 @@ async def enrich_chunks_with_context(
 
     tasks = [
         _enrich_single_chunk(
-            chunk, full_document, llm_gateway, workspace_id,
-            effective_user_id, content_cap, semaphore,
+            chunk,
+            full_document,
+            llm_gateway,
+            workspace_id,
+            effective_user_id,
+            content_cap,
+            semaphore,
         )
         for chunk in chunks
     ]

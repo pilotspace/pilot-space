@@ -103,9 +103,7 @@ class LLMGateway:
             api_key: Workspace-specific Anthropic API key.
             base_url: Optional custom base URL (for proxies / Ollama).
         """
-        key_hash = hashlib.sha256(
-            f"{api_key}:{base_url or ''}".encode()
-        ).hexdigest()[:16]
+        key_hash = hashlib.sha256(f"{api_key}:{base_url or ''}".encode()).hexdigest()[:16]
         if key_hash not in self._anthropic_clients:
             kwargs: dict[str, Any] = {"api_key": api_key}
             if base_url:
@@ -113,18 +111,14 @@ class LLMGateway:
             self._anthropic_clients[key_hash] = anthropic.AsyncAnthropic(**kwargs)
         return self._anthropic_clients[key_hash]
 
-    def _get_openai_client(
-        self, api_key: str, base_url: str | None = None
-    ) -> openai.AsyncOpenAI:
+    def _get_openai_client(self, api_key: str, base_url: str | None = None) -> openai.AsyncOpenAI:
         """Get or create a cached AsyncOpenAI client for this API key.
 
         Args:
             api_key: Workspace-specific OpenAI API key.
             base_url: Optional custom base URL (for proxies / Ollama).
         """
-        key_hash = hashlib.sha256(
-            f"{api_key}:{base_url or ''}".encode()
-        ).hexdigest()[:16]
+        key_hash = hashlib.sha256(f"{api_key}:{base_url or ''}".encode()).hexdigest()[:16]
         if key_hash not in self._openai_clients:
             kwargs: dict[str, Any] = {"api_key": api_key}
             if base_url:
@@ -195,19 +189,19 @@ class LLMGateway:
                 agent_name=agent_name,
             )
         return await self._complete_openai(
-                api_key=api_key,
-                base_url=base_url,
-                provider=provider,
-                model=bare_model,
-                resolved_model=resolved,
-                messages=messages,
-                max_tokens=max_tokens,
-                temperature=temperature,
-                system=system,
-                workspace_id=workspace_id,
-                user_id=user_id,
-                agent_name=agent_name,
-            )
+            api_key=api_key,
+            base_url=base_url,
+            provider=provider,
+            model=bare_model,
+            resolved_model=resolved,
+            messages=messages,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            system=system,
+            workspace_id=workspace_id,
+            user_id=user_id,
+            agent_name=agent_name,
+        )
 
     async def _complete_anthropic(
         self,
