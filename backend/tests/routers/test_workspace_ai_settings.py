@@ -300,7 +300,11 @@ class TestDefaultProviderSelection:
 
     async def test_invalid_provider_rejected(self, ai_settings_client: Any) -> None:
         """Invalid provider name for default_llm_provider is rejected by schema."""
+        from pilot_space.api.v1.dependencies import _get_workspace_ai_settings_service
+        from pilot_space.main import app
+
         mock_workspace = _mock_workspace()
+        app.dependency_overrides[_get_workspace_ai_settings_service] = lambda: AsyncMock()
 
         with patch(_ADMIN_WORKSPACE_PATH, return_value=mock_workspace):
             resp = await ai_settings_client.patch(
