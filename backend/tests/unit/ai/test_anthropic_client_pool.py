@@ -75,12 +75,18 @@ class TestAnthropicClientPool:
         mock_cls.assert_called_once_with(api_key=TEST_API_KEY)
 
     def test_evict_removes_cached_client(self, pool: AnthropicClientPool) -> None:
-        """evict() removes the client for the given key."""
+        """evict() removes the client for the given key.
+
+        get_client hashes f"{api_key}:{base_url or ''}". When base_url is None,
+        the stored hash is _cache_key(f"{api_key}:"). evict() must be called with
+        the same raw string to find the cached client.
+        """
         with patch("pilot_space.ai.infrastructure.anthropic_client_pool.anthropic.AsyncAnthropic"):
             pool.get_client(TEST_API_KEY)
 
         assert len(pool._clients) == 1
-        assert pool.evict(TEST_API_KEY) is True
+        # evict() with the matching raw key (api_key + ":" suffix for no base_url)
+        assert pool.evict(f"{TEST_API_KEY}:") is True
         assert len(pool._clients) == 0
 
     def test_evict_returns_false_for_unknown_key(self, pool: AnthropicClientPool) -> None:
@@ -95,7 +101,8 @@ class TestAnthropicClientPool:
             mock_cls.side_effect = [MagicMock(), MagicMock()]
 
             client1 = pool.get_client(TEST_API_KEY)
-            pool.evict(TEST_API_KEY)
+            # evict() must use the same raw string as get_client uses internally
+            pool.evict(f"{TEST_API_KEY}:")
             client2 = pool.get_client(TEST_API_KEY)
 
         assert client1 is not client2

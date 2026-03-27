@@ -77,13 +77,24 @@ def _make_payload(
 pytestmark = pytest.mark.asyncio
 
 
+def _make_session() -> AsyncMock:
+    """Create a mock AsyncSession with begin_nested support."""
+    session = AsyncMock()
+    # begin_nested() must return an async context manager (not a coroutine)
+    nested_cm = MagicMock()
+    nested_cm.__aenter__ = AsyncMock(return_value=None)
+    nested_cm.__aexit__ = AsyncMock(return_value=False)
+    session.begin_nested = MagicMock(return_value=nested_cm)
+    return session
+
+
 def _make_service(
     session: AsyncMock | None = None,
     project_repository: AsyncMock | MagicMock | None = None,
 ) -> CreateExtractedIssuesService:
     """Build a CreateExtractedIssuesService with mock dependencies."""
     return CreateExtractedIssuesService(
-        session=session or AsyncMock(),
+        session=session or _make_session(),
         project_repository=project_repository or MagicMock(),
         issue_repository=MagicMock(),
         activity_repository=MagicMock(),
