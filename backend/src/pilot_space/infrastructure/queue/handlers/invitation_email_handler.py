@@ -24,32 +24,25 @@ async def send_invitation_email(payload: dict[str, Any]) -> None:
     invitation_id = payload.get("invitation_id", "")
 
     if not email or not invitation_id:
-        logger.warning("send_invitation_email: missing email or invitation_id in payload")
-        return
+        msg = f"send_invitation_email: missing required fields (email={bool(email)}, invitation_id={bool(invitation_id)})"
+        raise ValueError(msg)
 
-    try:
-        from pilot_space.config import get_settings
-        from pilot_space.infrastructure.supabase_client import get_supabase_client
+    from pilot_space.config import get_settings
+    from pilot_space.infrastructure.supabase_client import get_supabase_client
 
-        settings = get_settings()
-        redirect_url = f"{settings.frontend_url}/accept-invite?invitation_id={invitation_id}"
+    settings = get_settings()
+    redirect_url = f"{settings.frontend_url}/accept-invite?invitation_id={invitation_id}"
 
-        client = await get_supabase_client()
-        await client.auth.admin.invite_user_by_email(
-            email,
-            options={
-                "redirect_to": redirect_url,
-                "data": {"invitation_id": str(invitation_id)},
-            },
-        )
+    client = await get_supabase_client()
+    await client.auth.admin.invite_user_by_email(
+        email,
+        options={
+            "redirect_to": redirect_url,
+            "data": {"invitation_id": str(invitation_id)},
+        },
+    )
 
-        logger.info(
-            "Invitation email sent via Supabase",
-            extra={"invitation_id": invitation_id},
-        )
-    except Exception:
-        logger.warning(
-            "Failed to send invitation email — invitation still valid in DB",
-            extra={"invitation_id": invitation_id},
-            exc_info=True,
-        )
+    logger.info(
+        "Invitation email sent via Supabase",
+        extra={"invitation_id": invitation_id},
+    )
