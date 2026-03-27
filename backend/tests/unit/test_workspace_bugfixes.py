@@ -18,6 +18,9 @@ from uuid import uuid4
 import pytest
 
 from pilot_space.domain.exceptions import ForbiddenError
+from pilot_space.infrastructure.database.models.project_member import (
+    ProjectMember,  # noqa: F401 — ensures mapper is configured before factories use it
+)
 from pilot_space.infrastructure.database.models.workspace_member import (
     WorkspaceRole,
 )
@@ -200,7 +203,8 @@ class TestM5OwnerSelfRemovalPrevention:
                     workspace_id=workspace.id,
                     target_user_id=owner.id,
                     actor_id=owner.id,
-                )
+                ),
+                session=AsyncMock(),
             )
 
     @pytest.mark.asyncio
@@ -229,13 +233,20 @@ class TestM5OwnerSelfRemovalPrevention:
 
         service = WorkspaceMemberService(workspace_repo=mock_workspace_repo)
 
+        # Build a mock session whose execute() returns an empty scalars result
+        mock_session = AsyncMock()
+        mock_execute_result = MagicMock()
+        mock_execute_result.scalars.return_value.all.return_value = []
+        mock_session.execute.return_value = mock_execute_result
+
         # Admin can self-remove because owner is still there (admin_count=2)
         await service.remove_member(
             RemoveMemberPayload(
                 workspace_id=workspace.id,
                 target_user_id=admin.id,
                 actor_id=admin.id,
-            )
+            ),
+            session=mock_session,
         )
 
         mock_workspace_repo.remove_member.assert_awaited_once_with(workspace.id, admin.id)

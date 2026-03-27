@@ -191,6 +191,7 @@ class RemoveMemberResult:
     removed_user_id: UUID
     workspace_id: UUID
     removed_at: datetime
+    project_memberships_deactivated: int = 0
 
 
 @dataclass
@@ -511,6 +512,7 @@ class WorkspaceMemberService:
     async def remove_member(
         self,
         payload: RemoveMemberPayload,
+        session: AsyncSession,
     ) -> RemoveMemberResult:
         """Remove member from workspace.
 
@@ -519,8 +521,12 @@ class WorkspaceMemberService:
         - Owner cannot remove themselves (M-5)
         - Cannot remove the only admin
 
+        Also deactivates all project memberships for the removed user within
+        this workspace (same transaction).
+
         Args:
             payload: Remove member payload.
+            session: AsyncSession for project membership cleanup.
 
         Returns:
             Removed member info.
@@ -576,6 +582,20 @@ class WorkspaceMemberService:
             payload.target_user_id,
         )
 
+        from pilot_space.infrastructure.database.repositories.project_member import (
+            ProjectMemberRepository as _PMRepo,
+        )
+
+        _pm_repo = _PMRepo(session=session)
+        _deactivated = await _pm_repo.deactivate_all_for_user_in_workspace(
+            user_id=payload.target_user_id,
+            workspace_id=payload.workspace_id,
+        )
+        logger.info(
+            "Project memberships deactivated on workspace member removal",
+            extra={"count": _deactivated, "user_id": str(payload.target_user_id)},
+        )
+
         logger.info(
             "Workspace member removed",
             extra={
@@ -598,6 +618,7 @@ class WorkspaceMemberService:
             removed_user_id=payload.target_user_id,
             workspace_id=payload.workspace_id,
             removed_at=datetime.now(tz=UTC),
+            project_memberships_deactivated=_deactivated,
         )
 
     async def update_availability(

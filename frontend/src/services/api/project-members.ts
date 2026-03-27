@@ -243,10 +243,15 @@ export function useRemoveProjectMember(workspaceId: string, projectId: string) {
   return useMutation({
     mutationFn: (userId: string) =>
       projectMembersApi.removeProjectMember(workspaceId, projectId, userId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: projectMemberKeys.list(workspaceId, projectId),
-      });
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: projectMemberKeys.list(workspaceId, projectId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ['workspaces', workspaceId, 'members'],
+        }),
+      ]);
     },
   });
 }

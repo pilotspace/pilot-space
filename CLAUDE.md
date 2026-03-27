@@ -184,6 +184,10 @@ Full design context: `.impeccable.md` | Full UI spec: `specs/001-pilot-space-mvp
 ## Active Technologies
 - Python 3.12 (backend), TypeScript 5 / Next.js 16.1.4 / React 19 (frontend) + FastAPI, SQLAlchemy 2 async, Alembic, Supabase/PostgreSQL (RLS), pydantic v2 (backend); MobX 6, TanStack Query, shadcn/ui, Vitest, Playwright (frontend) (026-project-rbac)
 - PostgreSQL 15+ with Supabase RLS; `project_members` is a new junction table with FK constraints and RLS policies matching the existing workspace-scope pattern (026-project-rbac)
+- TypeScript 5 / React 19 / Next.js 16.1.4 + TanStack Query, MobX 6, shadcn/ui, Tailwind CSS (026-project-rbac)
+- N/A (read/write via REST API) (026-project-rbac)
+- Python 3.12 + FastAPI, SQLAlchemy async (026-project-rbac)
+- PostgreSQL (via Supabase) (026-project-rbac)
 
 ## Recent Changes
 - 026-project-rbac: Added Python 3.12 (backend), TypeScript 5 / Next.js 16.1.4 / React 19 (frontend) + FastAPI, SQLAlchemy 2 async, Alembic, Supabase/PostgreSQL (RLS), pydantic v2 (backend); MobX 6, TanStack Query, shadcn/ui, Vitest, Playwright (frontend)

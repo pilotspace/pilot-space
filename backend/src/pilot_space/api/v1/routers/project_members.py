@@ -69,17 +69,7 @@ async def list_project_members(
     )
 
     items = [
-        ProjectMemberResponse(
-            id=m.id,
-            project_id=m.project_id,
-            user_id=m.user_id,
-            email=m.user.email if m.user else "",
-            full_name=m.user.full_name if m.user else None,
-            avatar_url=m.user.avatar_url if m.user else None,
-            assigned_at=m.assigned_at,
-            assigned_by=m.assigned_by,
-            is_active=m.is_active,
-        )
+        ProjectMemberResponse.model_validate(m)
         for m in result.members
     ]
 

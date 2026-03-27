@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -177,6 +178,45 @@ class ProjectMemberRepository(BaseRepository[ProjectMember]):
         existing.is_active = False
         await self.session.flush()
         return existing
+
+    async def deactivate_all_for_user_in_workspace(
+        self,
+        user_id: UUID,
+        workspace_id: UUID,
+    ) -> int:
+        """Soft-delete all project memberships for a user across a workspace.
+
+        Called when a workspace member is removed so their project assignments
+        are also cleaned up in the same transaction.
+
+        Args:
+            user_id: The user whose project memberships to deactivate.
+            workspace_id: Only deactivate memberships within this workspace.
+
+        Returns:
+            Number of project membership rows deactivated.
+        """
+        from pilot_space.infrastructure.database.models.project import Project
+
+        result = await self.session.execute(
+            select(ProjectMember)
+            .join(Project, Project.id == ProjectMember.project_id)
+            .where(
+                and_(
+                    Project.workspace_id == workspace_id,
+                    ProjectMember.user_id == user_id,
+                    ProjectMember.is_deleted == False,  # noqa: E712
+                )
+            )
+        )
+        rows = list(result.scalars().all())
+        now = datetime.now(tz=UTC)
+        for row in rows:
+            row.is_active = False
+            row.is_deleted = True
+            row.deleted_at = now
+        await self.session.flush()
+        return len(rows)
 
     async def get_project_chips_for_user(
         self,

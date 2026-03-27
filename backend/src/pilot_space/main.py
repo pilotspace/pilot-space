@@ -64,6 +64,7 @@ from pilot_space.api.v1.routers import (
     onboarding_router,
     pm_blocks_router,
     project_artifacts_router,
+    project_members_router,
     projects_router,
     related_issues_router,
     role_skills_router,
@@ -342,6 +343,7 @@ app.include_router(workspace_action_buttons_router, prefix=f"{API_V1_PREFIX}/wor
 app.include_router(workspace_issue_branches_router, prefix=f"{API_V1_PREFIX}/workspaces")
 app.include_router(workspace_invitations_router, prefix=API_V1_PREFIX)
 app.include_router(workspace_members_router, prefix=f"{API_V1_PREFIX}/workspaces")
+app.include_router(project_members_router, prefix=f"{API_V1_PREFIX}/workspaces")
 app.include_router(workspace_sessions_router, prefix=f"{API_V1_PREFIX}/workspaces")
 app.include_router(workspace_note_issue_links_router, prefix=f"{API_V1_PREFIX}/workspaces")
 app.include_router(workspace_note_links_router, prefix=f"{API_V1_PREFIX}/workspaces")

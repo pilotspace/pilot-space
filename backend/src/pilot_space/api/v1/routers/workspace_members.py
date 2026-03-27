@@ -226,7 +226,8 @@ async def remove_workspace_member(
             workspace_id=workspace_id,
             target_user_id=user_id,
             actor_id=current_user.user_id,
-        )
+        ),
+        session=session,
     )
 
 
