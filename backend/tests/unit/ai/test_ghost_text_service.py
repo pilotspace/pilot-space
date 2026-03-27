@@ -72,7 +72,14 @@ def mock_key_storage() -> AsyncMock:
     """SecureKeyStorage stub returning workspace key."""
     storage = AsyncMock()
     storage.get_api_key.return_value = TEST_API_KEY
-    storage.get_key_info.return_value = None
+    # Set db=None so _resolve_workspace_provider skips the DB settings lookup
+    storage.db = None
+    # _resolve_workspace_provider calls get_key_info first, then get_api_key
+    mock_key_info = MagicMock()
+    mock_key_info.base_url = None
+    mock_key_info.model_name = None
+    storage.get_key_info.return_value = mock_key_info
+    storage.get_all_key_infos.return_value = []
     return storage
 
 
@@ -482,7 +489,6 @@ class TestBYOKIntegration:
             context="ctx", prefix="pre", workspace_id=WORKSPACE_ID, user_id=TEST_USER_ID
         )
 
-        # base_url comes from key_info (None by default in mock)
         mock_client_pool.get_client.assert_called_once_with(TEST_API_KEY, base_url=None)
 
     @pytest.mark.asyncio
@@ -495,6 +501,7 @@ class TestBYOKIntegration:
     ) -> None:
         mock_key_storage.get_api_key.return_value = None
         mock_key_storage.get_key_info.return_value = None
+        mock_key_storage.get_all_key_infos.return_value = []
         mock_executor.execute = AsyncMock(return_value=_anthropic_response("ok"))
 
         with patch("pilot_space.ai.services.ghost_text.get_settings") as mock_cfg:
@@ -511,26 +518,28 @@ class TestBYOKIntegration:
         mock_client_pool.get_client.assert_called_once_with("sk-ant-env-key", base_url=None)
 
     @pytest.mark.asyncio
-    async def test_raises_402_when_no_key_available(
+    async def test_raises_ai_not_configured_when_no_key_available(
         self,
         service: GhostTextService,
         mock_key_storage: AsyncMock,
     ) -> None:
-        from fastapi import HTTPException
+        from pilot_space.ai.exceptions import AINotConfiguredError
 
         mock_key_storage.get_api_key.return_value = None
+        mock_key_storage.get_key_info.return_value = None
+        mock_key_storage.get_all_key_infos.return_value = []
 
         with patch("pilot_space.ai.services.ghost_text.get_settings") as mock_cfg:
             mock_settings = MagicMock()
             mock_settings.anthropic_api_key = None
             mock_cfg.return_value = mock_settings
 
-            with pytest.raises(HTTPException) as exc_info:
+            with pytest.raises(AINotConfiguredError) as exc_info:
                 await service.generate_completion(
                     context="ctx", prefix="pre", workspace_id=WORKSPACE_ID, user_id=TEST_USER_ID
                 )
 
-        assert exc_info.value.status_code == 402
+        assert exc_info.value.http_status == 503
 
 
 # ---------------------------------------------------------------------------
