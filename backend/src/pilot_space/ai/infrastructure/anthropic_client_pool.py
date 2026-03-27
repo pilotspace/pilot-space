@@ -38,18 +38,28 @@ class AnthropicClientPool:
         """Initialize empty client pool."""
         self._clients: dict[str, anthropic.AsyncAnthropic] = {}
 
-    def get_client(self, api_key: str) -> anthropic.AsyncAnthropic:
-        """Return cached client for api_key, creating one if absent.
+    def get_client(
+        self,
+        api_key: str,
+        base_url: str | None = None,
+    ) -> anthropic.AsyncAnthropic:
+        """Return cached client for api_key + base_url, creating one if absent.
 
         Args:
-            api_key: Workspace-specific Anthropic API key.
+            api_key: Workspace-specific API key.
+            base_url: Optional base URL for Ollama/proxy endpoints.
 
         Returns:
-            Reusable AsyncAnthropic client for that key.
+            Reusable AsyncAnthropic client for that key + base_url combo.
         """
-        key_hash = hashlib.sha256(api_key.encode()).hexdigest()[:16]
+        # Include base_url in hash so different endpoints get separate clients
+        raw = f"{api_key}:{base_url or ''}"
+        key_hash = hashlib.sha256(raw.encode()).hexdigest()[:16]
         if key_hash not in self._clients:
-            self._clients[key_hash] = anthropic.AsyncAnthropic(api_key=api_key)
+            kwargs: dict[str, str] = {"api_key": api_key}
+            if base_url:
+                kwargs["base_url"] = base_url
+            self._clients[key_hash] = anthropic.AsyncAnthropic(**kwargs)
         return self._clients[key_hash]
 
     def evict(self, api_key: str) -> bool:
