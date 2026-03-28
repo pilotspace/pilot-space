@@ -8,8 +8,8 @@ Merged from migrations 100–104:
   - 103_project_members_add_deleted_at: deleted_at column on project_members.
   - 104_invitation_status_revoked: 'revoked' value added to invitation_status enum.
 
-Revision ID: 100_project_rbac_schema
-Revises: 100_add_pgmq_set_vt_wrapper
+Revision ID: 104_invitation_status_revoked
+Revises: 103_fix_invitation_unique_constraint
 Create Date: 2026-03-28
 """
 
@@ -19,7 +19,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = "100_project_rbac_schema"
-down_revision: str | None = "100_add_pgmq_set_vt_wrapper"
+down_revision: str | None = "103_fix_invitation_unique_constraint"
 branch_labels: tuple[str, ...] | None = None
 depends_on: tuple[str, ...] | None = None
 
