@@ -12,7 +12,8 @@ import re
 from uuid import UUID
 
 from fastapi import APIRouter, Body, HTTPException, status
-from pydantic import BaseModel
+
+from pilot_space.api.v1.schemas.issue import StateUpdateRequest
 
 from pilot_space.api.v1.dependencies import UpdateIssueServiceDep
 from pilot_space.api.v1.dependencies_pilot import (
@@ -164,11 +165,6 @@ async def get_implement_context(
 # ============================================================================
 
 
-class _StateUpdateBody(BaseModel):
-    """Request body for PATCH /{issue_ref}/state."""
-
-    state: str
-
 
 @router.patch(
     "/{issue_ref}/state",
@@ -186,7 +182,7 @@ async def update_issue_state(
     update_service: UpdateIssueServiceDep,
     issue_repo: IssueRepositoryDep,
     requester_context: CLIRequesterContextDep,
-    body: _StateUpdateBody = Body(...),
+    body: StateUpdateRequest = Body(...),
 ) -> None:
     """Update the state of an issue.
 
