@@ -20,13 +20,11 @@ from uuid import UUID
 from pilot_space.application.services.note.markdown_chunker import (
     MarkdownChunk,
 )
+from pilot_space.domain.constants import SYSTEM_USER_ID
 
 __all__ = ["enrich_chunks_with_context"]
 
 logger = logging.getLogger(__name__)
-
-# Sentinel user ID for system-initiated enrichment (no real user context)
-_SYSTEM_USER_ID = UUID("00000000-0000-0000-0000-000000000000")
 
 
 def _estimate_tokens(text: str) -> int:
@@ -160,7 +158,7 @@ async def enrich_chunks_with_context(
     if workspace_id is None:
         return chunks
 
-    effective_user_id = user_id or _SYSTEM_USER_ID
+    effective_user_id = user_id or SYSTEM_USER_ID
     semaphore = asyncio.Semaphore(_MAX_CONCURRENT_ENRICHMENTS)
 
     tasks = [

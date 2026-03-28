@@ -21,6 +21,7 @@ from uuid import UUID
 from pilot_space.ai.prompts.skill_generation import build_skill_generation_prompt
 from pilot_space.ai.providers.provider_selector import TaskType
 from pilot_space.application.services.role_skill.types import VALID_ROLE_TYPES
+from pilot_space.domain.constants import SYSTEM_USER_ID
 from pilot_space.domain.exceptions import AppError, ValidationError
 from pilot_space.infrastructure.logging import get_logger
 
@@ -30,9 +31,6 @@ if TYPE_CHECKING:
     from pilot_space.ai.proxy.llm_gateway import LLMGateway
 
 logger = get_logger(__name__)
-
-# Sentinel user ID for system-initiated generation (no real user context)
-_SYSTEM_USER_ID = UUID("00000000-0000-0000-0000-000000000000")
 
 # In-memory sliding window rate limiter: max 30 generations/hour/user (FR-003)
 _RATE_LIMIT_MAX = 30
@@ -232,7 +230,7 @@ class GenerateRoleSkillService:
         try:
             response = await self._llm_gateway.complete(
                 workspace_id=workspace_id,
-                user_id=user_id or _SYSTEM_USER_ID,
+                user_id=user_id or SYSTEM_USER_ID,
                 task_type=TaskType.ROLE_SKILL_GENERATION,
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=2048,

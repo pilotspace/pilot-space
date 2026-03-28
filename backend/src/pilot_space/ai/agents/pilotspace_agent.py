@@ -73,9 +73,9 @@ if TYPE_CHECKING:
     from pilot_space.infrastructure.queue.supabase_queue import SupabaseQueueClient
     from pilot_space.spaces.base import SpaceContext
 
-logger = get_logger(__name__)
+from pilot_space.domain.constants import SYSTEM_USER_ID
 
-_SYSTEM_USER_ID = UUID("00000000-0000-0000-0000-000000000000")
+logger = get_logger(__name__)
 
 
 async def _background_graph_extraction(
@@ -127,7 +127,7 @@ async def _background_graph_extraction(
 
             _bg_key_session_cm = get_db_session()
             bg_key_session = await _bg_key_session_cm.__aenter__()
-            await set_rls_context(bg_key_session, user_id or _SYSTEM_USER_ID, workspace_id)
+            await set_rls_context(bg_key_session, user_id or SYSTEM_USER_ID, workspace_id)
             bg_key_storage = SecureKeyStorage(db=bg_key_session, master_secret=encryption_key)
             bg_cost_tracker = CostTracker(session=bg_key_session)
             llm_gateway = LLMGateway(

@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from pilot_space.application.services.memory.graph_write_service import EdgeInput, NodeInput
+from pilot_space.domain.constants import SYSTEM_USER_ID
 from pilot_space.domain.graph_node import NodeType
 from pilot_space.infrastructure.logging import get_logger
 
@@ -26,9 +27,6 @@ if TYPE_CHECKING:
     from pilot_space.ai.proxy.llm_gateway import LLMGateway
 
 logger = get_logger(__name__)
-
-# Sentinel user ID for system-initiated extraction (no real user context)
-_SYSTEM_USER_ID = UUID("00000000-0000-0000-0000-000000000000")
 
 _MAX_TOKENS = 1024
 
@@ -425,7 +423,7 @@ class GraphExtractionService:
             prompt = _build_prompt(payload.messages)
             response = await self._llm_gateway.complete(  # type: ignore[union-attr]
                 workspace_id=payload.workspace_id,
-                user_id=payload.user_id or _SYSTEM_USER_ID,
+                user_id=payload.user_id or SYSTEM_USER_ID,
                 task_type=TaskType.GRAPH_EXTRACTION,
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=_MAX_TOKENS,

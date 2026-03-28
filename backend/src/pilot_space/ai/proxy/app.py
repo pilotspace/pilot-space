@@ -44,12 +44,11 @@ from pilot_space.ai.exceptions import AINotConfiguredError
 from pilot_space.ai.proxy.cost_hooks import track_llm_cost
 from pilot_space.ai.proxy.tracing import observe  # pyright: ignore[reportAttributeAccessIssue]
 from pilot_space.dependencies.auth import get_session
+from pilot_space.domain.constants import SYSTEM_USER_ID
 from pilot_space.domain.exceptions import ForbiddenError
 from pilot_space.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
-
-_SYSTEM_USER_ID = UUID("00000000-0000-0000-0000-000000000000")
 
 # Default max_tokens ceiling to prevent runaway costs
 _MAX_TOKENS_CEILING = 16384
@@ -251,57 +250,57 @@ async def validate_tenant(
 # ---------------------------------------------------------------------------
 
 
-def get_cached_client(
+def _get_cached_sdk_client(
     request: Request,
     api_key: str,
     base_url: str | None,
+    *,
+    state_attr: str,
+    factory: type,
 ) -> Any:
+    """Get or create a cached SDK client from app state.
+
+    Uses a plain tuple as dict key — the dict lives in-memory only,
+    so there is no need for cryptographic hashing.
+    """
+    cache_key = (api_key, base_url or "")
+
+    if not hasattr(request.app.state, state_attr):
+        setattr(request.app.state, state_attr, {})
+
+    clients: dict[tuple[str, str], Any] = getattr(request.app.state, state_attr)
+    if cache_key not in clients:
+        kwargs: dict[str, Any] = {"api_key": api_key}
+        if base_url:
+            kwargs["base_url"] = base_url
+        clients[cache_key] = factory(**kwargs)
+    return clients[cache_key]
+
+
+def get_cached_client(request: Request, api_key: str, base_url: str | None) -> Any:
     """Get or create a cached AsyncAnthropic client from app state."""
     import anthropic
 
-    # Use a plain tuple as dict key — the dict lives in-memory only, so
-    # there is no need for cryptographic hashing.
-    cache_key = (api_key, base_url or "")
-
-    proxy_clients_attr = "proxy_anthropic_clients"
-    if not hasattr(request.app.state, proxy_clients_attr):
-        setattr(request.app.state, proxy_clients_attr, {})
-
-    clients: dict[tuple[str, str], anthropic.AsyncAnthropic] = getattr(
-        request.app.state, proxy_clients_attr
+    return _get_cached_sdk_client(
+        request,
+        api_key,
+        base_url,
+        state_attr="proxy_anthropic_clients",
+        factory=anthropic.AsyncAnthropic,
     )
-    if cache_key not in clients:
-        kwargs: dict[str, Any] = {"api_key": api_key}
-        if base_url:
-            kwargs["base_url"] = base_url
-        clients[cache_key] = anthropic.AsyncAnthropic(**kwargs)
-    return clients[cache_key]
 
 
-def get_cached_openai_client(
-    request: Request,
-    api_key: str,
-    base_url: str | None,
-) -> Any:
+def get_cached_openai_client(request: Request, api_key: str, base_url: str | None) -> Any:
     """Get or create a cached AsyncOpenAI client from app state."""
     import openai
 
-    # Use a plain tuple as dict key — no crypto needed for in-memory cache.
-    cache_key = (api_key, base_url or "")
-
-    proxy_clients_attr = "proxy_openai_clients"
-    if not hasattr(request.app.state, proxy_clients_attr):
-        setattr(request.app.state, proxy_clients_attr, {})
-
-    clients: dict[tuple[str, str], openai.AsyncOpenAI] = getattr(
-        request.app.state, proxy_clients_attr
+    return _get_cached_sdk_client(
+        request,
+        api_key,
+        base_url,
+        state_attr="proxy_openai_clients",
+        factory=openai.AsyncOpenAI,
     )
-    if cache_key not in clients:
-        kwargs: dict[str, Any] = {"api_key": api_key}
-        if base_url:
-            kwargs["base_url"] = base_url
-        clients[cache_key] = openai.AsyncOpenAI(**kwargs)
-    return clients[cache_key]
 
 
 # ---------------------------------------------------------------------------
@@ -328,7 +327,7 @@ async def proxy_messages(
         x-api-key: Anthropic API key (sent by SDK automatically)
         X-User-Id: User UUID for cost attribution (optional, defaults to SYSTEM)
     """
-    # --- Extract API key ---
+
     api_key = request.headers.get("x-api-key") or ""
     if not api_key:
         auth = request.headers.get("authorization", "")
@@ -338,7 +337,6 @@ async def proxy_messages(
     if not api_key:
         raise AINotConfiguredError(workspace_id=workspace_id)
 
-    # --- Parse request body ---
     body = await request.json()
     model: str = body.get("model", "claude-sonnet-4-20250514")
     messages: list[dict[str, Any]] = body.get("messages", [])
@@ -347,17 +345,14 @@ async def proxy_messages(
     system_msg: str | list[Any] | None = body.get("system")
     stream: bool = body.get("stream", False)
 
-    user_id = UUID(x_user_id) if x_user_id else _SYSTEM_USER_ID
+    user_id = UUID(x_user_id) if x_user_id else SYSTEM_USER_ID
 
-    # --- Tenant validation ---
     executor, cost_tracker, _key_storage, base_url, max_tokens = await validate_tenant(
         request, workspace_id, user_id, model, max_tokens
     )
 
-    # --- Get pooled client ---
     client = get_cached_client(request, api_key, base_url)
 
-    # --- Build Anthropic Messages API kwargs ---
     create_kwargs: dict[str, Any] = {
         "model": model,
         "messages": messages,
@@ -393,7 +388,6 @@ async def proxy_messages(
         max_tokens=max_tokens,
     )
 
-    # --- Forward request ---
     if stream:
         return await _handle_streaming(
             client=client,
@@ -429,7 +423,7 @@ async def proxy_messages(
     )
 
     return JSONResponse(
-        content=json.loads(response.model_dump_json()),
+        content=response.model_dump(),
         media_type="application/json",
     )
 
@@ -458,9 +452,8 @@ async def proxy_embeddings(
         Authorization: Bearer <api-key> (OpenAI API key)
         X-User-Id: User UUID for cost attribution (optional, defaults to SYSTEM)
     """
-    user_id = UUID(x_user_id) if x_user_id else _SYSTEM_USER_ID
+    user_id = UUID(x_user_id) if x_user_id else SYSTEM_USER_ID
 
-    # --- Extract API key ---
     api_key = ""
     auth = request.headers.get("authorization", "")
     if auth.startswith("Bearer "):
@@ -468,18 +461,15 @@ async def proxy_embeddings(
     if not api_key:
         api_key = request.headers.get("x-api-key") or ""
 
-    # --- Parse request body ---
     body = await request.json()
     model: str = body.get("model", "text-embedding-3-large")
     input_texts: str | list[str] = body.get("input", [])
     dimensions: int | None = body.get("dimensions")
 
-    # --- Tenant validation ---
     executor, cost_tracker, key_storage, base_url, _capped = await validate_tenant(
         request, workspace_id, user_id, model, 0
     )
 
-    # --- Resolve OpenAI API key (BYOK or env fallback) ---
     openai_key = await key_storage.get_api_key(workspace_id, "openai", "llm")
     if openai_key is None:
         from pilot_space.config import get_settings
@@ -487,12 +477,10 @@ async def proxy_embeddings(
         settings = get_settings()
         openai_key = getattr(settings, "openai_api_key", "") or api_key
     if not openai_key:
-        openai_key = api_key  # Use the key from the request header
+        openai_key = api_key
 
-    # --- Get pooled OpenAI client ---
     client = get_cached_openai_client(request, openai_key, base_url)
 
-    # --- Build embeddings kwargs ---
     embed_kwargs: dict[str, Any] = {
         "model": model,
         "input": input_texts,
@@ -507,13 +495,11 @@ async def proxy_embeddings(
         input_count=len(input_texts) if isinstance(input_texts, list) else 1,
     )
 
-    # --- Forward to OpenAI ---
     response = await executor.execute(
         provider="openai",
         operation=lambda: client.embeddings.create(**embed_kwargs),
     )
 
-    # --- Track cost ---
     total_tokens = response.usage.total_tokens if response.usage else 0
     await track_llm_cost(
         cost_tracker,
@@ -531,7 +517,6 @@ async def proxy_embeddings(
         total_tokens=total_tokens,
     )
 
-    # --- Return OpenAI-format response ---
     return JSONResponse(
         content={
             "object": "list",

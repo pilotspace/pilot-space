@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 from uuid import UUID
 
 from pilot_space.ai.providers.provider_selector import TaskType
+from pilot_space.domain.constants import SYSTEM_USER_ID
 from pilot_space.domain.work_intent import DedupStatus, IntentStatus, WorkIntent
 from pilot_space.infrastructure.logging import get_logger
 
@@ -29,9 +30,6 @@ if TYPE_CHECKING:
     )
 
 logger = get_logger(__name__)
-
-# Sentinel user ID for system-initiated detection (no real user context)
-_SYSTEM_USER_ID = UUID("00000000-0000-0000-0000-000000000000")
 
 # Chat-priority window: Redis key pattern and TTL
 _CHAT_LOCK_KEY_PREFIX = "intent_lock:"
@@ -389,7 +387,7 @@ class IntentDetectionService:
         try:
             response = await self._llm_gateway.complete(
                 workspace_id=workspace_id,
-                user_id=_SYSTEM_USER_ID,
+                user_id=SYSTEM_USER_ID,
                 task_type=TaskType.INTENT_DETECTION,
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=2048,
