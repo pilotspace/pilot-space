@@ -324,9 +324,10 @@ export const CostDashboardPage = observer(function CostDashboardPage({
                       tick={{ fontSize: 11 }}
                     />
                     <Tooltip
-                      formatter={(value: number | undefined) => {
+                      formatter={(value: unknown) => {
                         if (value == null) return '—';
-                        return value < 0.01 ? '<$0.01' : `$${value.toFixed(4)}`;
+                        const num = Number(value);
+                        return num < 0.01 ? '<$0.01' : `$${num.toFixed(4)}`;
                       }}
                       labelFormatter={(label: unknown) =>
                         typeof label === 'string' ? formatFeatureName(label) : String(label)
