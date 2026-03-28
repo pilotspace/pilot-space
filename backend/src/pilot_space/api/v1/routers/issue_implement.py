@@ -12,7 +12,6 @@ import re
 from uuid import UUID
 
 from fastapi import APIRouter, Body, HTTPException, status
-from pydantic import BaseModel
 
 from pilot_space.api.v1.dependencies import UpdateIssueServiceDep
 from pilot_space.api.v1.dependencies_pilot import (
@@ -21,6 +20,7 @@ from pilot_space.api.v1.dependencies_pilot import (
 )
 from pilot_space.api.v1.repository_deps import IssueRepositoryDep
 from pilot_space.api.v1.schemas.implement_context import ImplementContextResponse
+from pilot_space.api.v1.schemas.issue import StateUpdateRequest
 from pilot_space.application.services.issue import GetImplementContextPayload
 from pilot_space.dependencies.auth import SessionDep
 from pilot_space.infrastructure.database.rls import set_rls_context
@@ -164,12 +164,6 @@ async def get_implement_context(
 # ============================================================================
 
 
-class _StateUpdateBody(BaseModel):
-    """Request body for PATCH /{issue_ref}/state."""
-
-    state: str
-
-
 @router.patch(
     "/{issue_ref}/state",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -186,7 +180,7 @@ async def update_issue_state(
     update_service: UpdateIssueServiceDep,
     issue_repo: IssueRepositoryDep,
     requester_context: CLIRequesterContextDep,
-    body: _StateUpdateBody = Body(...),
+    body: StateUpdateRequest = Body(...),
 ) -> None:
     """Update the state of an issue.
 
