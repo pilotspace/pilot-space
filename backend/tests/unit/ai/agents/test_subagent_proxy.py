@@ -31,6 +31,9 @@ TEST_API_KEY = "sk-ant-test-key"  # pragma: allowlist secret
 BYOK_BASE_URL = "https://custom-proxy.example.com/v1"
 PROXY_BASE_URL = "http://localhost:8000/api/v1/ai/proxy"
 
+_PR_MOD = "pilot_space.ai.agents.subagents.pr_review_subagent"
+_DOC_MOD = "pilot_space.ai.agents.subagents.doc_generator_subagent"
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -54,6 +57,27 @@ def _make_context(
         user_id=user_id or USER_ID,
         metadata={"db_session": MagicMock()},
     )
+
+
+def _make_mock_sdk_options() -> MagicMock:
+    """Create a mock ClaudeAgentOptions that avoids real imports."""
+    opts = MagicMock()
+    opts.model = "claude-sonnet-4-20250514"
+    opts.env = {}
+    opts.mcp_servers = {}
+    return opts
+
+
+def _make_mock_client() -> AsyncMock:
+    """Create a mock ClaudeSDKClient with empty async iterator."""
+    mock_client = AsyncMock()
+    mock_client.receive_response = AsyncMock(
+        return_value=AsyncMock(
+            __aiter__=lambda s: s,
+            __anext__=AsyncMock(side_effect=StopAsyncIteration),
+        )
+    )
+    return mock_client
 
 
 def _make_pr_review_subagent(key_storage: AsyncMock | None = None) -> PRReviewSubagent:
@@ -101,23 +125,15 @@ async def test_pr_review_proxy_enabled_uses_proxy_base_url() -> None:
     input_data = PRReviewInput(repository_id=uuid4(), pr_number=42)
 
     with (
-        patch(
-            "pilot_space.ai.agents.subagents.pr_review_subagent.get_settings",
-            return_value=_make_settings(proxy_enabled=True),
-        ),
-        patch("pilot_space.ai.agents.subagents.pr_review_subagent.build_sdk_env") as mock_build,
-        patch(
-            "pilot_space.ai.agents.subagents.pr_review_subagent.ClaudeSDKClient"
-        ) as mock_client_cls,
+        patch(f"{_PR_MOD}.get_settings", return_value=_make_settings(proxy_enabled=True)),
+        patch(f"{_PR_MOD}.build_sdk_env") as mock_build,
+        patch(f"{_PR_MOD}.ClaudeSDKClient") as mock_client_cls,
+        patch.object(subagent, "_create_agent_options", return_value=_make_mock_sdk_options()),
+        patch(f"{_PR_MOD}.set_workspace_context"),
+        patch(f"{_PR_MOD}.clear_context"),
     ):
         mock_build.return_value = {"ANTHROPIC_API_KEY": TEST_API_KEY, "PATH": "", "HOME": ""}
-        mock_client = AsyncMock()
-        mock_client.receive_response = AsyncMock(
-            return_value=AsyncMock(
-                __aiter__=lambda s: s, __anext__=AsyncMock(side_effect=StopAsyncIteration)
-            )
-        )
-        mock_client_cls.return_value = mock_client
+        mock_client_cls.return_value = _make_mock_client()
 
         async for _ in subagent.stream(input_data, context):
             pass
@@ -134,23 +150,15 @@ async def test_pr_review_proxy_disabled_uses_byok_base_url() -> None:
     input_data = PRReviewInput(repository_id=uuid4(), pr_number=42)
 
     with (
-        patch(
-            "pilot_space.ai.agents.subagents.pr_review_subagent.get_settings",
-            return_value=_make_settings(proxy_enabled=False),
-        ),
-        patch("pilot_space.ai.agents.subagents.pr_review_subagent.build_sdk_env") as mock_build,
-        patch(
-            "pilot_space.ai.agents.subagents.pr_review_subagent.ClaudeSDKClient"
-        ) as mock_client_cls,
+        patch(f"{_PR_MOD}.get_settings", return_value=_make_settings(proxy_enabled=False)),
+        patch(f"{_PR_MOD}.build_sdk_env") as mock_build,
+        patch(f"{_PR_MOD}.ClaudeSDKClient") as mock_client_cls,
+        patch.object(subagent, "_create_agent_options", return_value=_make_mock_sdk_options()),
+        patch(f"{_PR_MOD}.set_workspace_context"),
+        patch(f"{_PR_MOD}.clear_context"),
     ):
         mock_build.return_value = {"ANTHROPIC_API_KEY": TEST_API_KEY, "PATH": "", "HOME": ""}
-        mock_client = AsyncMock()
-        mock_client.receive_response = AsyncMock(
-            return_value=AsyncMock(
-                __aiter__=lambda s: s, __anext__=AsyncMock(side_effect=StopAsyncIteration)
-            )
-        )
-        mock_client_cls.return_value = mock_client
+        mock_client_cls.return_value = _make_mock_client()
 
         async for _ in subagent.stream(input_data, context):
             pass
@@ -171,23 +179,15 @@ async def test_doc_generator_proxy_enabled_uses_proxy_base_url() -> None:
     input_data = DocGeneratorInput(workspace_id=WORKSPACE_ID, doc_type="api", source_files=["a.py"])
 
     with (
-        patch(
-            "pilot_space.ai.agents.subagents.doc_generator_subagent.get_settings",
-            return_value=_make_settings(proxy_enabled=True),
-        ),
-        patch("pilot_space.ai.agents.subagents.doc_generator_subagent.build_sdk_env") as mock_build,
-        patch(
-            "pilot_space.ai.agents.subagents.doc_generator_subagent.ClaudeSDKClient"
-        ) as mock_client_cls,
+        patch(f"{_DOC_MOD}.get_settings", return_value=_make_settings(proxy_enabled=True)),
+        patch(f"{_DOC_MOD}.build_sdk_env") as mock_build,
+        patch(f"{_DOC_MOD}.ClaudeSDKClient") as mock_client_cls,
+        patch.object(subagent, "_create_agent_options", return_value=_make_mock_sdk_options()),
+        patch(f"{_DOC_MOD}.set_workspace_context"),
+        patch(f"{_DOC_MOD}.clear_context"),
     ):
         mock_build.return_value = {"ANTHROPIC_API_KEY": TEST_API_KEY, "PATH": "", "HOME": ""}
-        mock_client = AsyncMock()
-        mock_client.receive_response = AsyncMock(
-            return_value=AsyncMock(
-                __aiter__=lambda s: s, __anext__=AsyncMock(side_effect=StopAsyncIteration)
-            )
-        )
-        mock_client_cls.return_value = mock_client
+        mock_client_cls.return_value = _make_mock_client()
 
         async for _ in subagent.stream(input_data, context):
             pass
@@ -204,23 +204,15 @@ async def test_doc_generator_proxy_disabled_uses_byok_base_url() -> None:
     input_data = DocGeneratorInput(workspace_id=WORKSPACE_ID, doc_type="api", source_files=["a.py"])
 
     with (
-        patch(
-            "pilot_space.ai.agents.subagents.doc_generator_subagent.get_settings",
-            return_value=_make_settings(proxy_enabled=False),
-        ),
-        patch("pilot_space.ai.agents.subagents.doc_generator_subagent.build_sdk_env") as mock_build,
-        patch(
-            "pilot_space.ai.agents.subagents.doc_generator_subagent.ClaudeSDKClient"
-        ) as mock_client_cls,
+        patch(f"{_DOC_MOD}.get_settings", return_value=_make_settings(proxy_enabled=False)),
+        patch(f"{_DOC_MOD}.build_sdk_env") as mock_build,
+        patch(f"{_DOC_MOD}.ClaudeSDKClient") as mock_client_cls,
+        patch.object(subagent, "_create_agent_options", return_value=_make_mock_sdk_options()),
+        patch(f"{_DOC_MOD}.set_workspace_context"),
+        patch(f"{_DOC_MOD}.clear_context"),
     ):
         mock_build.return_value = {"ANTHROPIC_API_KEY": TEST_API_KEY, "PATH": "", "HOME": ""}
-        mock_client = AsyncMock()
-        mock_client.receive_response = AsyncMock(
-            return_value=AsyncMock(
-                __aiter__=lambda s: s, __anext__=AsyncMock(side_effect=StopAsyncIteration)
-            )
-        )
-        mock_client_cls.return_value = mock_client
+        mock_client_cls.return_value = _make_mock_client()
 
         async for _ in subagent.stream(input_data, context):
             pass
@@ -243,12 +235,12 @@ async def test_both_subagents_encode_workspace_in_url_not_env_when_proxied() -> 
         (
             PRReviewSubagent,
             PRReviewInput(repository_id=uuid4(), pr_number=1),
-            "pilot_space.ai.agents.subagents.pr_review_subagent",
+            _PR_MOD,
         ),
         (
             DocGeneratorSubagent,
             DocGeneratorInput(workspace_id=WORKSPACE_ID, doc_type="api", source_files=["x.py"]),
-            "pilot_space.ai.agents.subagents.doc_generator_subagent",
+            _DOC_MOD,
         ),
     ]:
         ks = AsyncMock()
@@ -277,15 +269,11 @@ async def test_both_subagents_encode_workspace_in_url_not_env_when_proxied() -> 
             patch(f"{module_path}.get_settings", return_value=_make_settings(proxy_enabled=True)),
             patch(f"{module_path}.build_sdk_env", side_effect=capture_build_sdk_env) as mock_build,
             patch(f"{module_path}.ClaudeSDKClient") as mock_client_cls,
+            patch.object(subagent, "_create_agent_options", return_value=_make_mock_sdk_options()),
+            patch(f"{module_path}.set_workspace_context"),
+            patch(f"{module_path}.clear_context"),
         ):
-            mock_client = AsyncMock()
-            mock_client.receive_response = AsyncMock(
-                return_value=AsyncMock(
-                    __aiter__=lambda s: s,
-                    __anext__=AsyncMock(side_effect=StopAsyncIteration),
-                )
-            )
-            mock_client_cls.return_value = mock_client
+            mock_client_cls.return_value = _make_mock_client()
 
             async for _ in subagent.stream(input_data, context):
                 pass
