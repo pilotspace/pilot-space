@@ -436,6 +436,8 @@ export class PilotSpaceActions {
     // Reset pagination state
     this.store.setMessagePaginationState(false, 0);
     this.store.setIsLoadingMoreMessages(false);
+    // Reset skill generation state
+    this.store.resetSkillGeneration();
   }
 
   /**

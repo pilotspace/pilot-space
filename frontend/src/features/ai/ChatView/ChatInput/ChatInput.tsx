@@ -75,6 +75,8 @@ interface ChatInputProps {
   workspaceId?: string;
   /** Session ID for attachment uploads */
   sessionId?: string;
+  /** Callback when user selects \generate-skill */
+  onGenerateSkill?: () => void;
   className?: string;
 }
 
@@ -104,6 +106,7 @@ export const ChatInput = observer<ChatInputProps>(
     onSelectSection,
     workspaceId,
     sessionId,
+    onGenerateSkill,
     className,
   }) => {
     const { skills: dynamicSkills } = useSkills(workspaceId);
@@ -246,11 +249,19 @@ export const ChatInput = observer<ChatInputProps>(
           textareaRef.current?.focus();
           return;
         }
+        // Special handling for \generate-skill - open inline form
+        if (skill.name === 'generate-skill') {
+          const newValue = value.replace(/\\$/, '');
+          onChange(newValue);
+          onGenerateSkill?.();
+          textareaRef.current?.focus();
+          return;
+        }
         const newValue = value.replace(/\\$/, `\\${skill.name} `);
         onChange(newValue);
         textareaRef.current?.focus();
       },
-      [value, onChange, onNewSession]
+      [value, onChange, onNewSession, onGenerateSkill]
     );
 
     const handleAgentSelect = useCallback(
