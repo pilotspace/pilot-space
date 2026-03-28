@@ -61,7 +61,10 @@ from pilot_space.application.services.integration import (
     LinkCommitService,
     ProcessGitHubWebhookService,
 )
-from pilot_space.application.services.intent import IntentDetectionService, IntentService
+from pilot_space.application.services.intent import (
+    IntentDetectionService,
+    IntentService,
+)
 from pilot_space.application.services.issue import (
     ActivityService,
     CreateIssueService,
@@ -80,8 +83,12 @@ from pilot_space.application.services.memory.constitution_service import (
 from pilot_space.application.services.memory.knowledge_graph_query_service import (
     KnowledgeGraphQueryService,
 )
-from pilot_space.application.services.memory.memory_save_service import MemorySaveService
-from pilot_space.application.services.memory.memory_search_service import MemorySearchService
+from pilot_space.application.services.memory.memory_save_service import (
+    MemorySaveService,
+)
+from pilot_space.application.services.memory.memory_search_service import (
+    MemorySearchService,
+)
 from pilot_space.application.services.note import (
     CreateNoteFromChatService,
     CreateNoteService,
@@ -93,9 +100,7 @@ from pilot_space.application.services.note import (
     UpdateAnnotationService,
     UpdateNoteService,
 )
-from pilot_space.application.services.note.ai_update_service import (
-    NoteAIUpdateService,
-)
+from pilot_space.application.services.note.ai_update_service import NoteAIUpdateService
 from pilot_space.application.services.note.move_page_service import MovePageService
 from pilot_space.application.services.note.reorder_page_service import ReorderPageService
 from pilot_space.application.services.note_template import NoteTemplateService
@@ -108,6 +113,7 @@ from pilot_space.application.services.onboarding import (
 from pilot_space.application.services.plugin_lifecycle import PluginLifecycleService
 from pilot_space.application.services.pm_block_insight_service import PMBlockInsightService
 from pilot_space.application.services.project_detail import ProjectDetailService
+from pilot_space.application.services.project_member import ProjectMemberService
 from pilot_space.application.services.rate_limit import RateLimitService
 from pilot_space.application.services.rbac_service import RbacService
 from pilot_space.application.services.related_issues import RelatedIssuesSuggestionService
@@ -118,10 +124,16 @@ from pilot_space.application.services.task_service import TaskService
 from pilot_space.application.services.transcription import TranscriptionService
 from pilot_space.application.services.version.diff_service import VersionDiffService
 from pilot_space.application.services.version.digest_service import VersionDigestService
-from pilot_space.application.services.version.impact_service import ImpactAnalysisService
-from pilot_space.application.services.version.restore_service import VersionRestoreService
+from pilot_space.application.services.version.impact_service import (
+    ImpactAnalysisService,
+)
+from pilot_space.application.services.version.restore_service import (
+    VersionRestoreService,
+)
 from pilot_space.application.services.version.retention_service import RetentionService
-from pilot_space.application.services.version.snapshot_service import VersionSnapshotService
+from pilot_space.application.services.version.snapshot_service import (
+    VersionSnapshotService,
+)
 from pilot_space.application.services.workspace import WorkspaceService
 from pilot_space.application.services.workspace_ai_settings import WorkspaceAISettingsService
 from pilot_space.application.services.workspace_invitation import (
@@ -146,6 +158,7 @@ from pilot_space.container._factories import (
 from pilot_space.container._plugin_providers import PluginContainer
 from pilot_space.container._skill_providers import SkillContainer
 from pilot_space.dependencies.auth import get_current_session
+from pilot_space.infrastructure.cache.invite_rate_limiter import InviteRateLimiter
 from pilot_space.infrastructure.database.repositories.audit_log_repository import (
     AuditLogRepository,
 )
@@ -160,6 +173,9 @@ from pilot_space.infrastructure.database.repositories.issue_repository import (
 )
 from pilot_space.infrastructure.database.repositories.note_template_repository import (
     NoteTemplateRepository,
+)
+from pilot_space.infrastructure.database.repositories.project_member import (
+    ProjectMemberRepository,
 )
 from pilot_space.infrastructure.database.repositories.project_repository import (
     ProjectRepository,
@@ -198,6 +214,11 @@ class Container(SkillContainer, PluginContainer):
             "pilot_space.api.v1.routers.project_artifacts",
             "pilot_space.api.v1.routers.artifact_annotations",
             "pilot_space.api.v1.routers.notes_ai",
+            "pilot_space.api.v1.routers.workspace_members",
+            "pilot_space.api.v1.routers.workspace_invitations",
+            "pilot_space.api.v1.routers.project_members",
+            "pilot_space.api.v1.routers.my_projects",
+            "pilot_space.api.v1.routers.invitations_public",
         ],
     )
 
@@ -251,6 +272,18 @@ class Container(SkillContainer, PluginContainer):
     audit_log_repository = providers.Factory(
         AuditLogRepository,
         session=providers.Callable(get_current_session),
+    )
+
+    # Project Member Repository (RBAC) — Factory per request
+    project_member_repository = providers.Factory(
+        ProjectMemberRepository,
+        session=providers.Callable(get_current_session),
+    )
+
+    # Project Member Service (RBAC) — Factory per request
+    project_member_service = providers.Factory(
+        ProjectMemberService,
+        project_member_repository=project_member_repository,
     )
 
     # Action Button Service
@@ -819,6 +852,12 @@ class Container(SkillContainer, PluginContainer):
     # Note Write Lock (C-3) — Redis-backed mutex, one per process
     note_write_lock = providers.Singleton(
         NoteWriteLock,
+        redis_client=InfraContainer.redis_client,
+    )
+
+    # Invite Rate Limiter (028-invite-magic-link) — Redis fixed-window counter
+    invite_rate_limiter = providers.Singleton(
+        InviteRateLimiter,
         redis_client=InfraContainer.redis_client,
     )
 
