@@ -92,9 +92,11 @@ class TestPreviewInvitation:
         assert response.invitation_id == invitation.id
         assert response.workspace_name == "Test Workspace"
         assert response.workspace_slug == "test-workspace"
-        # Local part is masked: j***@example.com
+        # Local part is masked: j***@<domain>
         assert response.invited_email_masked.startswith("j***@")
-        assert response.invited_email_masked.endswith("example.com")
+        # Domain is preserved (split on @ to avoid CodeQL URL-sanitization false positive)
+        domain = invitation.email.split("@", 1)[1]
+        assert response.invited_email_masked == f"j***@{domain}"
 
     @pytest.mark.asyncio
     async def test_preview_returns_404_for_unknown_id(self) -> None:
