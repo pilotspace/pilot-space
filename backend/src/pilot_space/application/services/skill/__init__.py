@@ -16,6 +16,13 @@ from pilot_space.application.services.skill.skill_execution_service import (
     SkillExecutionService,
     SkillOutputValidationError,
 )
+from pilot_space.application.services.skill.skill_generator_service import (
+    SkillGeneratorPayload,
+    SkillGeneratorResult,
+    SkillGeneratorService,
+    SkillSavePayload,
+    SkillSaveResult,
+)
 
 __all__ = [
     "ApprovalMode",
@@ -26,5 +33,10 @@ __all__ = [
     "SkillDefinitionError",
     "SkillDefinitionParser",
     "SkillExecutionService",
+    "SkillGeneratorPayload",
+    "SkillGeneratorResult",
+    "SkillGeneratorService",
     "SkillOutputValidationError",
+    "SkillSavePayload",
+    "SkillSaveResult",
 ]

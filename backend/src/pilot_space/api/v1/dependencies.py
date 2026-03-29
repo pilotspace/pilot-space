@@ -633,6 +633,22 @@ GenerateRoleSkillServiceDep = Annotated[
     GenerateRoleSkillService, Depends(_get_generate_role_skill_service)
 ]
 
+# ===== Skill Generator Service Dependencies =====
+
+from pilot_space.application.services.skill.skill_generator_service import SkillGeneratorService
+
+
+@inject
+def _get_skill_generator_service(
+    svc: SkillGeneratorService = Depends(Provide[Container.skill_generator_service]),
+) -> SkillGeneratorService:
+    return svc
+
+
+SkillGeneratorServiceDep = Annotated[
+    SkillGeneratorService, Depends(_get_skill_generator_service)
+]
+
 # ===== Homepage Service Dependencies =====
 
 
@@ -1052,6 +1068,7 @@ __all__ = [  # noqa: RUF022
     "GovernanceRollbackServiceDep",
     "OcrConfigurationServiceDep",
     "PluginLifecycleServiceDep",
+    "SkillGeneratorServiceDep",
 ]
 
 
