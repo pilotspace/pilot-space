@@ -24,3 +24,11 @@ export {
   useGraphWorkflowContext,
   type GraphWorkflowContextValue,
 } from './contexts/graph-workflow-context';
+
+// Components
+export { workflowNodeTypes } from './components/graph-node-component';
+export { GraphNodePalette } from './components/graph-node-palette';
+export { GraphWorkflowCanvas } from './components/graph-workflow-canvas';
+
+// Hooks
+export { useGraphWorkflow } from './hooks/use-graph-workflow';

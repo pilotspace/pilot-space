@@ -1,0 +1,235 @@
+'use client';
+
+/**
+ * GraphWorkflowCanvas — ReactFlow-based workflow graph editor.
+ *
+ * CRITICAL CONSTRAINT: GraphWorkflowInner MUST NOT be wrapped in observer().
+ * MobX useSyncExternalStore + ReactFlow causes nested flushSync in React 19.
+ * MobX state is accessed via GraphWorkflowContext (context bridge pattern).
+ *
+ * Structure:
+ *   GraphWorkflowCanvas (outer) — provides ReactFlowProvider + context
+ *   GraphWorkflowInner (inner) — plain React component, NOT observer
+ */
+
+import { useCallback, useMemo, useRef } from 'react';
+import {
+  ReactFlow,
+  ReactFlowProvider,
+  MiniMap,
+  Controls,
+  Background,
+  BackgroundVariant,
+  useReactFlow,
+  type Node,
+} from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
+
+import {
+  WorkflowNodeType,
+  WORKFLOW_NODE_SPECS,
+  createWorkflowNode,
+  type WorkflowNodeData,
+} from '@/features/skills/utils/graph-node-types';
+import { GraphWorkflowStore } from '@/features/skills/stores/GraphWorkflowStore';
+import { GraphWorkflowContext } from '@/features/skills/contexts/graph-workflow-context';
+import { workflowNodeTypes } from '@/features/skills/components/graph-node-component';
+import { useGraphWorkflow } from '@/features/skills/hooks/use-graph-workflow';
+
+// ── Inner Component (NOT observer) ──────────────────────────────────────────
+
+function GraphWorkflowInner({ store }: { store: GraphWorkflowStore }) {
+  const { screenToFlowPosition } = useReactFlow();
+  const {
+    nodes,
+    edges,
+    setNodes,
+    onNodesChange,
+    onEdgesChange,
+    onConnect,
+    undo,
+    redo,
+    pushHistory,
+  } = useGraphWorkflow();
+
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // ── Drop handler ────────────────────────────────────────────────────────
+
+  const onDrop = useCallback(
+    (event: React.DragEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      const nodeType = event.dataTransfer.getData('application/workflowNodeType');
+      if (!nodeType || !(nodeType in WORKFLOW_NODE_SPECS)) return;
+
+      const position = screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
+
+      const newNode = createWorkflowNode(
+        nodeType as WorkflowNodeType,
+        position
+      );
+
+      setNodes((nds) => [...nds, newNode]);
+      store.markDirty();
+      requestAnimationFrame(() => pushHistory());
+    },
+    [screenToFlowPosition, setNodes, store, pushHistory]
+  );
+
+  const onDragOver = useCallback((event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+  }, []);
+
+  // ── Node click → select via store ───────────────────────────────────────
+
+  const onNodeClick = useCallback(
+    (_event: React.MouseEvent, node: Node<WorkflowNodeData>) => {
+      store.selectNode(node.id);
+    },
+    [store]
+  );
+
+  const onPaneClick = useCallback(() => {
+    store.selectNode(null);
+  }, [store]);
+
+  // ── Node drag end → push history ────────────────────────────────────────
+
+  const onNodeDragStop = useCallback(() => {
+    store.markDirty();
+    pushHistory();
+  }, [store, pushHistory]);
+
+  // ── Delete selected nodes/edges ─────────────────────────────────────────
+
+  const deleteSelected = useCallback(() => {
+    setNodes((nds) => nds.filter((n) => !n.selected));
+    // Edges connected to deleted nodes are auto-removed by ReactFlow
+    store.markDirty();
+    requestAnimationFrame(() => pushHistory());
+  }, [setNodes, store, pushHistory]);
+
+  // ── Keyboard shortcuts ──────────────────────────────────────────────────
+
+  const onKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      const isCtrlOrMeta = event.ctrlKey || event.metaKey;
+
+      if (isCtrlOrMeta && event.shiftKey && event.key === 'z') {
+        event.preventDefault();
+        redo();
+        return;
+      }
+
+      if (isCtrlOrMeta && event.key === 'z') {
+        event.preventDefault();
+        undo();
+        return;
+      }
+
+      if (isCtrlOrMeta && event.key === 's') {
+        event.preventDefault();
+        // TODO: save workflow
+        return;
+      }
+
+      if (event.key === 'Delete' || event.key === 'Backspace') {
+        // Only delete if not typing in an input
+        const target = event.target as HTMLElement;
+        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
+        event.preventDefault();
+        deleteSelected();
+      }
+    },
+    [undo, redo, deleteSelected]
+  );
+
+  // ── MiniMap node color ──────────────────────────────────────────────────
+
+  const minimapNodeColor = useCallback((node: Node) => {
+    const nodeType = node.type as WorkflowNodeType;
+    return WORKFLOW_NODE_SPECS[nodeType]?.color ?? '#666';
+  }, []);
+
+  return (
+    <div
+      ref={containerRef}
+      className="flex-1 h-full"
+      onKeyDown={onKeyDown}
+      tabIndex={0}
+      style={{ outline: 'none' }}
+    >
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        nodeTypes={workflowNodeTypes}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onConnect={onConnect}
+        onDrop={onDrop}
+        onDragOver={onDragOver}
+        onNodeClick={onNodeClick}
+        onPaneClick={onPaneClick}
+        onNodeDragStop={onNodeDragStop}
+        fitView
+        proOptions={{ hideAttribution: true }}
+        minZoom={0.2}
+        maxZoom={3}
+        className="!bg-[#1a1a2e]"
+        deleteKeyCode={null}
+      >
+        <Background
+          variant={BackgroundVariant.Dots}
+          gap={24}
+          size={0.6}
+          className="opacity-[0.12]"
+        />
+        <MiniMap
+          position="bottom-right"
+          className="!bottom-4 !right-4"
+          nodeColor={minimapNodeColor}
+          maskColor="rgba(26, 26, 46, 0.7)"
+        />
+        <Controls position="bottom-left" className="!bottom-4 !left-4" />
+      </ReactFlow>
+    </div>
+  );
+}
+
+// ── Outer Component (provides context) ──────────────────────────────────────
+
+export interface GraphWorkflowCanvasProps {
+  graphId?: string;
+}
+
+export function GraphWorkflowCanvas({ graphId }: GraphWorkflowCanvasProps) {
+  const store = useMemo(() => {
+    const s = new GraphWorkflowStore();
+    if (graphId) s.setGraphId(graphId);
+    return s;
+  }, [graphId]);
+
+  const onNodeSelect = useCallback(
+    (id: string | null) => {
+      store.selectNode(id);
+    },
+    [store]
+  );
+
+  const contextValue = useMemo(
+    () => ({ store, onNodeSelect }),
+    [store, onNodeSelect]
+  );
+
+  return (
+    <ReactFlowProvider>
+      <GraphWorkflowContext.Provider value={contextValue}>
+        <GraphWorkflowInner store={store} />
+      </GraphWorkflowContext.Provider>
+    </ReactFlowProvider>
+  );
+}
