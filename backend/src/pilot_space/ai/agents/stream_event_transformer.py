@@ -27,6 +27,11 @@ _FORWARDED_EVENT_TYPES = frozenset(
     {
         "content_block_start",
         "content_block_delta",
+        # Phase 051: Skill generator events (forwarded if encountered in raw stream)
+        "skill_draft",
+        "skill_preview",
+        "skill_saved",
+        "graph_update",
     }
 )
 

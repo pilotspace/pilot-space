@@ -23,6 +23,12 @@ import type {
   ToolInputDeltaEvent,
   FocusBlockEvent,
 } from './types/events';
+import type {
+  SkillDraftEvent,
+  SkillPreviewEvent,
+  SkillSavedEvent,
+  GraphUpdateEvent,
+} from './types/events-skill-gen';
 import {
   isMessageStartEvent,
   isContentBlockStartEvent,
@@ -43,6 +49,10 @@ import {
   isToolInputDeltaEvent,
   isContentUpdateEvent,
   isFocusBlockEvent,
+  isSkillDraftEvent,
+  isSkillPreviewEvent,
+  isSkillSavedEvent,
+  isGraphUpdateEvent,
 } from './types/events';
 import type { PilotSpaceStore } from './PilotSpaceStore';
 import { PilotSpaceToolCallHandler } from './PilotSpaceToolCallHandler';
@@ -138,7 +148,11 @@ export class PilotSpaceStreamHandler {
         | CitationEvent
         | MemoryUpdateEvent
         | ToolInputDeltaEvent
-        | FocusBlockEvent;
+        | FocusBlockEvent
+        | SkillDraftEvent
+        | SkillPreviewEvent
+        | SkillSavedEvent
+        | GraphUpdateEvent;
 
       // Route to type-specific handler
       if (isMessageStartEvent(event)) {
@@ -171,6 +185,14 @@ export class PilotSpaceStreamHandler {
         this.handleMemoryUpdate(event);
       } else if (isToolInputDeltaEvent(event)) {
         this.toolCallHandler.handleToolInputDelta(event);
+      } else if (isSkillDraftEvent(event)) {
+        this.store.skillGeneratorStore.handleSkillDraft(event.data);
+      } else if (isSkillPreviewEvent(event)) {
+        this.store.skillGeneratorStore.handleSkillPreview(event.data);
+      } else if (isSkillSavedEvent(event)) {
+        this.store.skillGeneratorStore.handleSkillSaved(event.data);
+      } else if (isGraphUpdateEvent(event)) {
+        this.store.skillGeneratorStore.handleGraphUpdate(event.data);
       } else if (isMessageStopEvent(event)) {
         this.handleTextComplete(event);
       } else if (isBudgetWarningEvent(event)) {
