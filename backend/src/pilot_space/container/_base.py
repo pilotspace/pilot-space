@@ -141,6 +141,9 @@ from pilot_space.infrastructure.database.repositories.skill_action_button_reposi
 from pilot_space.infrastructure.database.repositories.skill_execution_repository import (
     SkillExecutionRepository,
 )
+from pilot_space.infrastructure.database.repositories.skill_graph_repository import (
+    SkillGraphRepository,
+)
 from pilot_space.infrastructure.database.repositories.task_repository import (
     TaskRepository,
 )
@@ -426,6 +429,11 @@ class InfraContainer(containers.DeclarativeContainer):
 
     skill_action_button_repository = providers.Factory(
         SkillActionButtonRepository,
+        session=providers.Callable(get_current_session),
+    )
+
+    skill_graph_repository = providers.Factory(
+        SkillGraphRepository,
         session=providers.Callable(get_current_session),
     )
 

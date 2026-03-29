@@ -21,6 +21,7 @@ from pilot_space.application.services.role_skill import (
 )
 from pilot_space.application.services.skill.concurrency_manager import SkillConcurrencyManager
 from pilot_space.application.services.skill.skill_execution_service import SkillExecutionService
+from pilot_space.application.services.skill.skill_graph_service import SkillGraphService
 from pilot_space.application.services.user_skill.create_user_skill_service import (
     CreateUserSkillService,
 )
@@ -122,6 +123,16 @@ class SkillContainer(InfraContainer):
     create_user_skill_service = providers.Factory(
         CreateUserSkillService,
         session=providers.Callable(get_current_session),
+    )
+
+    # ---------------------------------------------------------------------------
+    # Skill Graph Service (P52-03)
+    # ---------------------------------------------------------------------------
+
+    skill_graph_service = providers.Factory(
+        SkillGraphService,
+        session=providers.Callable(get_current_session),
+        repo=InfraContainer.skill_graph_repository,
     )
 
 

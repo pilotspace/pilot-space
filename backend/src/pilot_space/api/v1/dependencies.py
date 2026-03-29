@@ -649,6 +649,20 @@ SkillGeneratorServiceDep = Annotated[
     SkillGeneratorService, Depends(_get_skill_generator_service)
 ]
 
+# ===== Skill Graph Service Dependencies =====
+
+from pilot_space.application.services.skill.skill_graph_service import SkillGraphService
+
+
+@inject
+def _get_skill_graph_service(
+    svc: SkillGraphService = Depends(Provide[Container.skill_graph_service]),
+) -> SkillGraphService:
+    return svc
+
+
+SkillGraphServiceDep = Annotated[SkillGraphService, Depends(_get_skill_graph_service)]
+
 # ===== Homepage Service Dependencies =====
 
 
@@ -1069,6 +1083,7 @@ __all__ = [  # noqa: RUF022
     "OcrConfigurationServiceDep",
     "PluginLifecycleServiceDep",
     "SkillGeneratorServiceDep",
+    "SkillGraphServiceDep",
 ]
 
 
