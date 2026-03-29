@@ -20,8 +20,10 @@ import {
   Controls,
   Background,
   BackgroundVariant,
+  addEdge,
   useReactFlow,
   type Node,
+  type Connection,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
@@ -34,6 +36,7 @@ import {
 import { GraphWorkflowStore } from '@/features/skills/stores/GraphWorkflowStore';
 import { GraphWorkflowContext } from '@/features/skills/contexts/graph-workflow-context';
 import { workflowNodeTypes } from '@/features/skills/components/graph-node-component';
+import { workflowEdgeTypes } from '@/features/skills/components/graph-edge-component';
 import { useGraphWorkflow } from '@/features/skills/hooks/use-graph-workflow';
 
 // ── Inner Component (NOT observer) ──────────────────────────────────────────
@@ -44,15 +47,50 @@ function GraphWorkflowInner({ store }: { store: GraphWorkflowStore }) {
     nodes,
     edges,
     setNodes,
+    setEdges,
     onNodesChange,
     onEdgesChange,
-    onConnect,
+    onConnect: _hookOnConnect,
     undo,
     redo,
     pushHistory,
   } = useGraphWorkflow();
 
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // ── Connect handler with conditional edge detection ─────────────────────
+
+  const onConnect = useCallback(
+    (connection: Connection) => {
+      const sourceNode = nodes.find((n) => n.id === connection.source);
+      const sourceHandle = connection.sourceHandle ?? '';
+
+      // Detect conditional edges from Condition node boolean handles
+      let edgeType = 'sequential';
+      let edgeData: Record<string, unknown> = {};
+
+      if (sourceNode?.data?.nodeType === WorkflowNodeType.Condition) {
+        if (sourceHandle.startsWith('output:boolean:')) {
+          edgeType = 'conditional';
+          const branch = sourceHandle.split(':')[2] as 'true' | 'false';
+          edgeData = { branch };
+        }
+      }
+
+      setEdges((eds) =>
+        addEdge(
+          {
+            ...connection,
+            type: edgeType,
+            data: edgeData,
+          },
+          eds
+        )
+      );
+      requestAnimationFrame(() => pushHistory());
+    },
+    [nodes, setEdges, pushHistory]
+  );
 
   // ── Drop handler ────────────────────────────────────────────────────────
 
@@ -167,6 +205,7 @@ function GraphWorkflowInner({ store }: { store: GraphWorkflowStore }) {
         nodes={nodes}
         edges={edges}
         nodeTypes={workflowNodeTypes}
+        edgeTypes={workflowEdgeTypes}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
