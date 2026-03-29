@@ -10,8 +10,8 @@
 
 import * as React from 'react';
 import { observer } from 'mobx-react-lite';
-import { useParams } from 'next/navigation';
-import { AlertCircle, Layers, Lock, MousePointerClick, Package, Plus, Wand2 } from 'lucide-react';
+import { useParams, useRouter } from 'next/navigation';
+import { AlertCircle, Layers, Lock, MousePointerClick, Network, Package, Plus, Wand2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -78,6 +78,7 @@ function GuestView() {
 export const SkillsSettingsPage = observer(function SkillsSettingsPage() {
   const { workspaceStore } = useStore();
   const params = useParams();
+  const router = useRouter();
   const workspaceSlug = params?.workspaceSlug as string;
   const currentWorkspace = workspaceStore.getWorkspaceBySlug(workspaceSlug);
   const workspaceId = currentWorkspace?.id || workspaceSlug;
@@ -279,6 +280,17 @@ export const SkillsSettingsPage = observer(function SkillsSettingsPage() {
           </TabsList>
           {activeTab === 'skills' && (
             <div className="flex gap-2">
+              {isAdmin && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => router.push(`/${workspaceSlug}/skills/graph/new`)}
+                  data-testid="create-with-graph-btn"
+                >
+                  <Network className="mr-1.5 h-4 w-4" />
+                  Create with Graph
+                </Button>
+              )}
               {isAdmin && (
                 <Button size="sm" variant="outline" onClick={() => setCreateTemplateOpen(true)}>
                   <Layers className="mr-1.5 h-4 w-4" />
