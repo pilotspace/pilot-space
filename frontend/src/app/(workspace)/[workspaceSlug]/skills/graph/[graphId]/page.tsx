@@ -30,6 +30,14 @@ const GraphWorkflowCanvas = dynamic(
   { ssr: false },
 );
 
+const GraphNodePalette = dynamic(
+  () =>
+    import('@/features/skills/components/graph-node-palette').then(
+      (mod) => mod.GraphNodePalette,
+    ),
+  { ssr: false },
+);
+
 export default function EditGraphPage() {
   const params = useParams();
   const router = useRouter();
@@ -146,8 +154,12 @@ export default function EditGraphPage() {
         </Button>
       </div>
 
-      {/* Canvas */}
-      <div className="flex-1 min-h-0">
+      {/* Canvas with palette */}
+      <div className="flex flex-1 min-h-0">
+        <Suspense fallback={null}>
+          <GraphNodePalette />
+        </Suspense>
+        <div className="flex-1 min-h-0">
         <Suspense
           fallback={
             <div className="flex items-center justify-center h-full">
@@ -162,6 +174,7 @@ export default function EditGraphPage() {
             onSave={handleSave}
           />
         </Suspense>
+        </div>
       </div>
     </div>
   );

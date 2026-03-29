@@ -42,6 +42,14 @@ const GraphWorkflowCanvas = dynamic(
   { ssr: false },
 );
 
+const GraphNodePalette = dynamic(
+  () =>
+    import('@/features/skills/components/graph-node-palette').then(
+      (mod) => mod.GraphNodePalette,
+    ),
+  { ssr: false },
+);
+
 const SKILL_CATEGORIES = [
   'code-review',
   'code-generation',
@@ -151,17 +159,22 @@ export default function NewGraphPage() {
         </Button>
       </div>
 
-      {/* Canvas */}
-      <div className="flex-1 min-h-0">
-        <Suspense
-          fallback={
-            <div className="flex items-center justify-center h-full">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          }
-        >
-          <GraphWorkflowCanvas onSave={handleSave} />
+      {/* Canvas with palette */}
+      <div className="flex flex-1 min-h-0">
+        <Suspense fallback={null}>
+          <GraphNodePalette />
         </Suspense>
+        <div className="flex-1 min-h-0">
+          <Suspense
+            fallback={
+              <div className="flex items-center justify-center h-full">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            }
+          >
+            <GraphWorkflowCanvas onSave={handleSave} />
+          </Suspense>
+        </div>
       </div>
 
       {/* Save Dialog */}
