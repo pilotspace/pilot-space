@@ -10,10 +10,7 @@
 
 import { makeAutoObservable } from 'mobx';
 
-export interface ValidationError {
-  nodeId: string;
-  message: string;
-}
+export type { ValidationError } from '@/features/skills/utils/graph-validation-engine';
 
 export class GraphWorkflowStore {
   /** Currently selected node ID (null = none) */
