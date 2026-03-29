@@ -22,6 +22,9 @@ from pilot_space.application.services.role_skill import (
 from pilot_space.application.services.skill.concurrency_manager import SkillConcurrencyManager
 from pilot_space.application.services.skill.graph_compiler_service import GraphCompilerService
 from pilot_space.application.services.skill.graph_decompiler_service import GraphDecompilerService
+from pilot_space.application.services.skill.marketplace_install_service import MarketplaceInstallService
+from pilot_space.application.services.skill.marketplace_review_service import MarketplaceReviewService
+from pilot_space.application.services.skill.marketplace_service import MarketplaceService
 from pilot_space.application.services.skill.skill_execution_service import SkillExecutionService
 from pilot_space.application.services.skill.skill_graph_service import SkillGraphService
 from pilot_space.application.services.user_skill.create_user_skill_service import (
@@ -152,6 +155,25 @@ class SkillContainer(InfraContainer):
 
     graph_decompiler_service = providers.Factory(
         GraphDecompilerService,
+        session=providers.Callable(get_current_session),
+    )
+
+    # ---------------------------------------------------------------------------
+    # Marketplace Services (P54-04)
+    # ---------------------------------------------------------------------------
+
+    marketplace_service = providers.Factory(
+        MarketplaceService,
+        session=providers.Callable(get_current_session),
+    )
+
+    marketplace_install_service = providers.Factory(
+        MarketplaceInstallService,
+        session=providers.Callable(get_current_session),
+    )
+
+    marketplace_review_service = providers.Factory(
+        MarketplaceReviewService,
         session=providers.Callable(get_current_session),
     )
 

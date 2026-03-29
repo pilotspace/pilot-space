@@ -692,6 +692,48 @@ def _get_graph_decompiler_service(
 
 GraphDecompilerServiceDep = Annotated[GraphDecompilerService, Depends(_get_graph_decompiler_service)]
 
+# ===== Marketplace Service Dependencies (P54-04) =====
+
+from pilot_space.application.services.skill.marketplace_service import MarketplaceService
+
+
+@inject
+def _get_marketplace_service(
+    svc: MarketplaceService = Depends(Provide[Container.marketplace_service]),
+) -> MarketplaceService:
+    return svc
+
+
+MarketplaceServiceDep = Annotated[MarketplaceService, Depends(_get_marketplace_service)]
+
+from pilot_space.application.services.skill.marketplace_install_service import MarketplaceInstallService
+
+
+@inject
+def _get_marketplace_install_service(
+    svc: MarketplaceInstallService = Depends(Provide[Container.marketplace_install_service]),
+) -> MarketplaceInstallService:
+    return svc
+
+
+MarketplaceInstallServiceDep = Annotated[
+    MarketplaceInstallService, Depends(_get_marketplace_install_service)
+]
+
+from pilot_space.application.services.skill.marketplace_review_service import MarketplaceReviewService
+
+
+@inject
+def _get_marketplace_review_service(
+    svc: MarketplaceReviewService = Depends(Provide[Container.marketplace_review_service]),
+) -> MarketplaceReviewService:
+    return svc
+
+
+MarketplaceReviewServiceDep = Annotated[
+    MarketplaceReviewService, Depends(_get_marketplace_review_service)
+]
+
 # ===== Homepage Service Dependencies =====
 
 
@@ -1115,6 +1157,9 @@ __all__ = [  # noqa: RUF022
     "SkillGraphServiceDep",
     "GraphCompilerServiceDep",
     "GraphDecompilerServiceDep",
+    "MarketplaceServiceDep",
+    "MarketplaceInstallServiceDep",
+    "MarketplaceReviewServiceDep",
 ]
 
 
