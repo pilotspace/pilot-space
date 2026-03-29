@@ -53,12 +53,21 @@ export function CategoryGrid({ onCategorySelect }: CategoryGridProps) {
         return (
           <Card
             key={cat.name}
-            className="cursor-pointer transition-shadow hover:shadow-md"
+            role="button"
+            tabIndex={0}
+            aria-label={`Filter by ${cat.name}`}
+            className="cursor-pointer transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             onClick={() => onCategorySelect(cat.name)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onCategorySelect(cat.name);
+              }
+            }}
           >
             <CardContent className="flex items-center gap-3 py-4">
               <div className={`${cat.color}`}>
-                <Icon className="h-6 w-6" />
+                <Icon className="h-6 w-6" aria-hidden="true" />
               </div>
               <span className="text-sm font-medium">{cat.name}</span>
             </CardContent>

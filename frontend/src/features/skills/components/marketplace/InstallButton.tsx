@@ -55,10 +55,10 @@ export function InstallButton({ listing, workspaceId }: InstallButtonProps) {
   const installMutation = useInstallListing(workspaceId);
   const updateMutation = useApplyUpdate(workspaceId);
 
-  // Determine state
+  // Determine state — updateEntry exists means skill is installed (with or without update)
   const updateEntry = updates?.find((u) => u.listingId === listing.id);
-  const hasUpdate = !!updateEntry;
-  const isInstalled = localInstalled || (!hasUpdate && !!updateEntry);
+  const hasUpdate = updateEntry?.availableVersion !== updateEntry?.installedVersion && !!updateEntry;
+  const isInstalled = localInstalled || (!!updateEntry && !hasUpdate);
 
   // Latest version changelog
   const latestVersion = versions?.[0];

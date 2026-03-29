@@ -126,6 +126,7 @@ export const SkillEditorPanel = observer(function SkillEditorPanel() {
         <div className="flex items-center rounded-md border bg-muted p-0.5 gap-0.5">
           <button
             type="button"
+            aria-pressed={viewMode === 'text'}
             onClick={() => setViewMode('text')}
             className={cn(
               'px-2.5 py-1 text-xs font-medium rounded-sm transition-colors',
@@ -139,6 +140,7 @@ export const SkillEditorPanel = observer(function SkillEditorPanel() {
           </button>
           <button
             type="button"
+            aria-pressed={viewMode === 'graph'}
             onClick={() => setViewMode('graph')}
             className={cn(
               'px-2.5 py-1 text-xs font-medium rounded-sm transition-colors',

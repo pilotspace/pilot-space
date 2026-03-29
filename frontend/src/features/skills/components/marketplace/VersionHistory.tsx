@@ -86,6 +86,7 @@ function VersionEntry({
             <Button
               variant="ghost"
               size="sm"
+              aria-expanded={expanded}
               className="h-auto p-0 text-xs text-muted-foreground hover:text-foreground"
               onClick={() => setExpanded(!expanded)}
             >

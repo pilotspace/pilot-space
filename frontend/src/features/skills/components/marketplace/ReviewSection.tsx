@@ -54,6 +54,7 @@ function StarSelector({
         <button
           key={i}
           type="button"
+          aria-label={`Rate ${i} star${i !== 1 ? 's' : ''}`}
           className="p-0.5 transition-transform hover:scale-110"
           onMouseEnter={() => setHoveredStar(i)}
           onMouseLeave={() => setHoveredStar(null)}

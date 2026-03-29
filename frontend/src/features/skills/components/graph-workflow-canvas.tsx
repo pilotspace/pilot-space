@@ -29,6 +29,16 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Eye, FileInput, LayoutGrid, Play, Square } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 
 import {
   WorkflowNodeType,
@@ -361,46 +371,47 @@ function GraphWorkflowInner({ store, initialNodes: initNodes, initialEdges: init
       <GraphConfigPanel nodes={nodes} onUpdateNode={updateNodeData} />
 
       {/* Import Dialog */}
-      {showImportDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="w-[520px] rounded-xl bg-[#1e1e2e] border border-[#2a2a3e] p-5 shadow-2xl">
-            <h3 className="text-sm font-semibold text-zinc-200 mb-3">Import from SKILL.md</h3>
-            <p className="text-xs text-zinc-400 mb-3">
+      <Dialog open={showImportDialog} onOpenChange={(open) => {
+        setShowImportDialog(open);
+        if (!open) setImportContent('');
+      }}>
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle>Import from SKILL.md</DialogTitle>
+            <DialogDescription>
               Paste your SKILL.md content below to generate a graph representation.
-            </p>
-            <textarea
-              value={importContent}
-              onChange={(e) => setImportContent(e.target.value)}
-              placeholder="Paste SKILL.md content here..."
-              className="w-full h-48 rounded-lg bg-[#141425] border border-[#2a2a3e] p-3 text-xs text-zinc-300 font-mono resize-none focus:outline-none focus:border-[#3b82f6]/50"
-            />
-            <div className="flex justify-end gap-2 mt-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowImportDialog(false);
-                  setImportContent('');
-                }}
-                className="px-3 py-1.5 rounded-md text-xs text-zinc-400 hover:text-zinc-200 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={!importContent.trim()}
-                onClick={() => {
-                  onImport?.(importContent);
-                  setShowImportDialog(false);
-                  setImportContent('');
-                }}
-                className="px-3 py-1.5 rounded-md text-xs bg-[#3b82f6] text-white hover:bg-[#3b82f6]/80 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                Import
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={importContent}
+            onChange={(e) => setImportContent(e.target.value)}
+            placeholder="Paste SKILL.md content here..."
+            className="h-48 font-mono text-xs resize-none"
+            aria-label="SKILL.md content to import"
+          />
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowImportDialog(false);
+                setImportContent('');
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              disabled={!importContent.trim()}
+              onClick={() => {
+                onImport?.(importContent);
+                setShowImportDialog(false);
+                setImportContent('');
+              }}
+            >
+              Import
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
