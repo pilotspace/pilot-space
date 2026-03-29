@@ -20,6 +20,7 @@ import type {
 import { MessageGroup } from './MessageGroup';
 import { StreamingContent } from './StreamingContent';
 import { InlineStreamingIndicator } from './InlineStreamingIndicator';
+import { SkillPreviewCard } from './SkillPreviewCard';
 
 const DEFAULT_SUGGESTED_PROMPTS = [
   'Extract issues from this note',
@@ -331,6 +332,7 @@ export const MessageList = observer<MessageListProps>(
                     <span className="text-xs text-muted-foreground">Scroll up for more</span>
                   </div>
                 ) : null,
+              Footer: () => <SkillPreviewCard />,
             }}
             itemContent={(index) => {
               // Streaming footer is the last item
