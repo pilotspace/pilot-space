@@ -10,7 +10,9 @@ Phase 051: Conversational Skill Generator
 from __future__ import annotations
 
 import json
+import re
 import uuid
+from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
@@ -203,6 +205,194 @@ class SkillGeneratorService:
             refinement_suggestion=llm_data.get("refinement_suggestion"),
             session_data=session_data,
         )
+
+    async def generate_chat_response(
+        self,
+        *,
+        message: str,
+        workspace_id: UUID,
+        user_id: UUID,
+        session_id: UUID | None = None,
+        context: dict[str, Any] | None = None,
+    ) -> AsyncGenerator[str, None]:
+        """Stream SSE events for a skill generation chat message.
+
+        Calls LLMGateway.complete(), then emits SSE events:
+        - content_delta: streamed text chunks from the response
+        - skill_preview: parsed skill metadata when a skill block is detected
+        - graph_update: graph modification operations extracted from the response
+        - done: end-of-stream marker
+        - error: on failure
+
+        Args:
+            message: User chat message.
+            workspace_id: Workspace UUID for BYOK key lookup.
+            user_id: User UUID.
+            session_id: Optional conversation session ID.
+            context: Optional context dict (graph_json, skill_content, etc.).
+
+        Yields:
+            SSE-formatted strings.
+        """
+        ctx = context or {}
+        effective_session_id = session_id or uuid.uuid4()
+
+        # Build system prompt with optional graph context
+        graph_json = ctx.get("graph_json")
+        skill_content = ctx.get("skill_content")
+
+        system_prompt = get_skill_generation_system_prompt(
+            turn_number=1,
+            current_draft={"skill_content": skill_content} if skill_content else None,
+        )
+        if graph_json:
+            system_prompt += (
+                "\n\nCurrent graph state:\n```json\n"
+                + json.dumps(graph_json, indent=2)
+                + "\n```\n"
+            )
+
+        if self._llm_gateway is None:
+            yield (
+                'event: error\ndata: {"message": '
+                '"No AI provider configured. Please configure an AI provider in Settings."'
+                "}\n\n"
+            )
+            return
+
+        try:
+            response = await self._llm_gateway.complete(
+                workspace_id=workspace_id,
+                user_id=user_id,
+                task_type=TaskType.ROLE_SKILL_GENERATION,
+                messages=[{"role": "user", "content": message}],
+                system=system_prompt,
+                max_tokens=2048,
+                temperature=0.7,
+                agent_name="skill_generator_chat",
+            )
+
+            full_text = response.text
+
+            # Emit content_delta with the full response text
+            yield (
+                f"event: content_delta\n"
+                f"data: {json.dumps({'content': full_text, 'isPartial': False})}\n\n"
+            )
+
+            # Try to parse skill preview from the response
+            skill_data = self._extract_skill_preview(full_text)
+            if skill_data:
+                yield (
+                    f"event: skill_preview\n"
+                    f"data: {json.dumps(skill_data)}\n\n"
+                )
+
+            # Extract graph updates from the response
+            graph_updates = self._extract_graph_updates(full_text)
+            for update in graph_updates:
+                yield (
+                    f"event: graph_update\n"
+                    f"data: {json.dumps(update)}\n\n"
+                )
+
+            # Done event
+            yield (
+                f"event: done\n"
+                f"data: {json.dumps({'sessionId': str(effective_session_id)})}\n\n"
+            )
+
+        except Exception as exc:
+            logger.exception("Skill generator chat error: %s", exc)
+            yield (
+                f"event: error\n"
+                f"data: {json.dumps({'message': str(exc)})}\n\n"
+            )
+
+    @staticmethod
+    def _extract_skill_preview(text: str) -> dict[str, Any] | None:
+        """Extract skill preview data from LLM response text.
+
+        Looks for JSON with skill fields or markdown skill blocks.
+
+        Returns:
+            Skill preview dict or None if not found.
+        """
+        # Try parsing the whole response as JSON (common for structured output)
+        try:
+            stripped = text.strip()
+            # Strip markdown code fences
+            if stripped.startswith("```"):
+                lines = stripped.split("\n")
+                lines = lines[1:]
+                if lines and lines[-1].strip() == "```":
+                    lines = lines[:-1]
+                stripped = "\n".join(lines)
+
+            data = json.loads(stripped, strict=False)
+            if isinstance(data, dict) and "skill_content" in data:
+                return {
+                    "name": data.get("name", "Untitled Skill"),
+                    "description": data.get("description", ""),
+                    "skillContent": data.get("skill_content", ""),
+                    "category": data.get("category", "general"),
+                    "icon": data.get("icon", "Wand2"),
+                }
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+        # Try extracting ```skill or ```markdown blocks
+        skill_match = re.search(r"```(?:skill|markdown)\s*\n([\s\S]*?)```", text)
+        if skill_match:
+            return {
+                "name": "Generated Skill",
+                "description": "",
+                "skillContent": skill_match.group(1).strip(),
+                "category": "general",
+                "icon": "Wand2",
+            }
+
+        return None
+
+    @staticmethod
+    def _extract_graph_updates(text: str) -> list[dict[str, Any]]:
+        """Extract graph update operations from LLM response text.
+
+        Looks for JSON with graph_data containing nodes/edges, and emits
+        add_node/add_edge operations.
+
+        Returns:
+            List of graph update dicts with operation and payload.
+        """
+        updates: list[dict[str, Any]] = []
+
+        try:
+            stripped = text.strip()
+            if stripped.startswith("```"):
+                lines = stripped.split("\n")
+                lines = lines[1:]
+                if lines and lines[-1].strip() == "```":
+                    lines = lines[:-1]
+                stripped = "\n".join(lines)
+
+            data = json.loads(stripped, strict=False)
+            if isinstance(data, dict):
+                graph_data = data.get("graph_data")
+                if isinstance(graph_data, dict):
+                    for node in graph_data.get("nodes", []):
+                        updates.append({
+                            "operation": "add_node",
+                            "payload": node,
+                        })
+                    for edge in graph_data.get("edges", []):
+                        updates.append({
+                            "operation": "add_edge",
+                            "payload": edge,
+                        })
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+        return updates
 
     async def save_skill(self, payload: SkillSavePayload) -> SkillSaveResult:
         """Persist a generated skill to the database.

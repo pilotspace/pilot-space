@@ -1,8 +1,10 @@
 """Skill Generator API router.
 
-Handles saving skills generated through conversational AI.
+Handles saving skills generated through conversational AI
+and dedicated chat SSE endpoint for skill generation.
 
 Phase 051: Conversational Skill Generator
+Phase 058: Dedicated generator chat endpoint with graph_update events
 """
 
 from __future__ import annotations
@@ -10,7 +12,8 @@ from __future__ import annotations
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from pilot_space.api.v1.dependencies import SkillGeneratorServiceDep
@@ -50,6 +53,89 @@ class SkillSaveResponse(BaseModel):
     save_type: str = Field(..., alias="saveType")
 
     model_config = {"populate_by_name": True}
+
+
+class GeneratorChatRequest(BaseModel):
+    """Request body for generator chat SSE endpoint."""
+
+    message: str = Field(..., min_length=1, max_length=5000)
+    session_id: UUID | None = Field(default=None, alias="sessionId")
+    context: dict[str, Any] = Field(default_factory=dict)
+
+    model_config = {"populate_by_name": True}
+
+
+@router.post(
+    "/chat",
+    response_model=None,
+    summary="Generator chat SSE stream",
+    description="Stream skill generation events via SSE. Emits content_delta, "
+    "skill_preview, graph_update, done, and error events.",
+)
+async def generator_chat(
+    body: GeneratorChatRequest,
+    fastapi_request: Request,
+    session: DbSession,
+    workspace_id: HeaderWorkspaceMemberId,
+    user_id: CurrentUserId,
+    service: SkillGeneratorServiceDep,
+) -> StreamingResponse:
+    """Chat endpoint for skill generation with SSE streaming.
+
+    Returns an SSE stream with skill generation events including
+    content_delta, skill_preview, graph_update, done, and error.
+
+    Args:
+        body: Chat request with message, session_id, and context.
+        fastapi_request: FastAPI request for disconnect detection.
+        session: DB session (required for DI context).
+        workspace_id: Workspace from X-Workspace-Id header.
+        user_id: Authenticated user ID.
+        service: Injected SkillGeneratorService.
+
+    Returns:
+        StreamingResponse with SSE events.
+    """
+    import asyncio
+
+    logger.info(
+        "Generator chat: message='%s', workspace_id=%s",
+        body.message[:50],
+        workspace_id,
+    )
+
+    async def stream_response():
+        """Generate SSE stream from skill generator service."""
+        try:
+            async with asyncio.timeout(300):
+                async for sse_event in service.generate_chat_response(
+                    message=body.message,
+                    workspace_id=workspace_id,
+                    user_id=user_id,
+                    session_id=body.session_id,
+                    context=body.context,
+                ):
+                    yield sse_event
+
+                    if await fastapi_request.is_disconnected():
+                        logger.info("Client disconnected during generator chat stream")
+                        break
+        except TimeoutError:
+            logger.warning("Generator chat stream timeout")
+            yield 'event: error\ndata: {"message": "Stream exceeded maximum duration"}\n\n'
+        except Exception as e:
+            logger.exception("Generator chat endpoint error: %s", e)
+            yield 'event: error\ndata: {"message": "An internal error occurred"}\n\n'
+
+    return StreamingResponse(
+        stream_response(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.post(
