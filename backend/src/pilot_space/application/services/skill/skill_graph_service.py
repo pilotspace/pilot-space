@@ -88,6 +88,23 @@ class SkillGraphService:
             raise NotFoundError("Skill graph not found")
         return graph
 
+    async def get_by_template(self, skill_template_id: UUID) -> SkillGraph:
+        """Get the graph for a skill template.
+
+        Args:
+            skill_template_id: The parent skill template UUID.
+
+        Returns:
+            The SkillGraph for the template.
+
+        Raises:
+            NotFoundError: If no graph exists for the template.
+        """
+        graph = await self._repo.get_by_template(skill_template_id)
+        if graph is None:
+            raise NotFoundError("Skill graph not found for template")
+        return graph
+
     async def update(
         self,
         graph_id: UUID,

@@ -4,6 +4,7 @@ REST API for workspace-scoped skill graph persistence.
 - POST  /{workspace_id}/skill-graphs                        -> create (201)
 - GET   /{workspace_id}/skill-graphs/{graph_id}              -> get (200)
 - PUT   /{workspace_id}/skill-graphs/{graph_id}              -> update (200)
+- GET   /{workspace_id}/skill-graphs/by-template/{template}  -> get by template (200)
 - PUT   /{workspace_id}/skill-graphs/by-template/{template}  -> upsert (200)
 
 Source: Phase 52, P52-03
@@ -86,6 +87,25 @@ async def update_skill_graph(
     """Update graph JSON with new node/edge data."""
     await set_rls_context(session, current_user_id, workspace_id)
     graph = await service.update(graph_id, payload)
+    return SkillGraphResponse.model_validate(graph)
+
+
+@router.get(
+    "/by-template/{skill_template_id}",
+    response_model=SkillGraphResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get a skill graph by template ID",
+)
+async def get_skill_graph_by_template(
+    workspace_id: WorkspaceId,
+    skill_template_id: UUID,
+    session: DbSession,
+    current_user_id: CurrentUserId,
+    service: SkillGraphServiceDep,
+) -> SkillGraphResponse:
+    """Return the graph for a given skill template."""
+    await set_rls_context(session, current_user_id, workspace_id)
+    graph = await service.get_by_template(skill_template_id)
     return SkillGraphResponse.model_validate(graph)
 
 
