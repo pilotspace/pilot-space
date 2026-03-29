@@ -118,7 +118,7 @@ class GraphCompilerService:
         edges = graph_json.get("edges", [])
 
         # Topological sort
-        sorted_nodes = self._topological_sort(nodes, edges)
+        sorted_nodes = self.topological_sort(nodes, edges)
         node_order = [n["id"] for n in sorted_nodes]
 
         # Generate SKILL.md — AI-polished when gateway available, mechanical otherwise
@@ -223,7 +223,7 @@ class GraphCompilerService:
         return mechanical_fallback
 
     @staticmethod
-    def _topological_sort(
+    def topological_sort(
         nodes: list[dict[str, Any]],
         edges: list[dict[str, Any]],
     ) -> list[dict[str, Any]]:

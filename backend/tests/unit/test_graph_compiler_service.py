@@ -71,7 +71,7 @@ def _make_graph(
 
 
 class TestTopologicalSort:
-    """Tests for _topological_sort static method."""
+    """Tests for topological_sort static method."""
 
     def test_compile_linear_graph(self) -> None:
         """3-node linear graph (Input -> Prompt -> Output) returns correct order."""
@@ -85,7 +85,7 @@ class TestTopologicalSort:
             _make_edge("2", "3"),
         ]
 
-        sorted_nodes = GraphCompilerService._topological_sort(nodes, edges)
+        sorted_nodes = GraphCompilerService.topological_sort(nodes, edges)
 
         ids = [n["id"] for n in sorted_nodes]
         assert ids == ["1", "2", "3"]
@@ -107,7 +107,7 @@ class TestTopologicalSort:
             _make_edge("4", "5"),
         ]
 
-        sorted_nodes = GraphCompilerService._topological_sort(nodes, edges)
+        sorted_nodes = GraphCompilerService.topological_sort(nodes, edges)
 
         ids = [n["id"] for n in sorted_nodes]
         # Input first, condition second, output last
@@ -131,7 +131,7 @@ class TestTopologicalSort:
         ]
 
         with pytest.raises(ValidationError, match="cycle"):
-            GraphCompilerService._topological_sort(nodes, edges)
+            GraphCompilerService.topological_sort(nodes, edges)
 
     def test_loop_edges_excluded(self) -> None:
         """Edges with type='loop' are excluded from topological sort."""
@@ -146,7 +146,7 @@ class TestTopologicalSort:
             _make_edge("3", "2", "loop"),  # loop edge — should be excluded
         ]
 
-        sorted_nodes = GraphCompilerService._topological_sort(nodes, edges)
+        sorted_nodes = GraphCompilerService.topological_sort(nodes, edges)
         ids = [n["id"] for n in sorted_nodes]
         assert ids == ["1", "2", "3"]
 
@@ -165,7 +165,7 @@ class TestSkillContentGeneration:
             _make_node("3", "output", "Result"),
         ]
         edges = [_make_edge("1", "2"), _make_edge("2", "3")]
-        sorted_nodes = GraphCompilerService._topological_sort(nodes, edges)
+        sorted_nodes = GraphCompilerService.topological_sort(nodes, edges)
         graph_json = _make_graph(nodes, edges)
 
         content = GraphCompilerService._generate_skill_content(sorted_nodes, edges, graph_json)
@@ -185,7 +185,7 @@ class TestSkillContentGeneration:
             _make_node("3", "output", "End"),
         ]
         edges = [_make_edge("1", "2"), _make_edge("2", "3")]
-        sorted_nodes = GraphCompilerService._topological_sort(nodes, edges)
+        sorted_nodes = GraphCompilerService.topological_sort(nodes, edges)
         graph_json = _make_graph(nodes, edges)
 
         content = GraphCompilerService._generate_skill_content(sorted_nodes, edges, graph_json)
@@ -202,7 +202,7 @@ class TestSkillContentGeneration:
             _make_node("3", "output", "End"),
         ]
         edges = [_make_edge("1", "2"), _make_edge("2", "3")]
-        sorted_nodes = GraphCompilerService._topological_sort(nodes, edges)
+        sorted_nodes = GraphCompilerService.topological_sort(nodes, edges)
         graph_json = _make_graph(nodes, edges)
 
         content = GraphCompilerService._generate_skill_content(sorted_nodes, edges, graph_json)
@@ -218,7 +218,7 @@ class TestSkillContentGeneration:
             _make_node("3", "output", "End"),
         ]
         edges = [_make_edge("1", "2"), _make_edge("2", "3")]
-        sorted_nodes = GraphCompilerService._topological_sort(nodes, edges)
+        sorted_nodes = GraphCompilerService.topological_sort(nodes, edges)
         graph_json = _make_graph(nodes, edges)
 
         content = GraphCompilerService._generate_skill_content(sorted_nodes, edges, graph_json)
@@ -231,7 +231,7 @@ class TestSkillContentGeneration:
     def test_compile_empty_graph(self) -> None:
         """Empty graph (no nodes) raises ValidationError."""
         with pytest.raises(ValidationError, match="no nodes"):
-            GraphCompilerService._topological_sort([], [])
+            GraphCompilerService.topological_sort([], [])
 
     def test_deterministic_output(self) -> None:
         """Same graph JSON always produces byte-identical SKILL.md."""
@@ -251,7 +251,7 @@ class TestSkillContentGeneration:
 
         results = []
         for _ in range(5):
-            sorted_nodes = GraphCompilerService._topological_sort(nodes, edges)
+            sorted_nodes = GraphCompilerService.topological_sort(nodes, edges)
             content = GraphCompilerService._generate_skill_content(sorted_nodes, edges, graph_json)
             results.append(content)
 

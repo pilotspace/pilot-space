@@ -21,6 +21,7 @@ from pilot_space.application.services.role_skill import (
 )
 from pilot_space.application.services.skill.concurrency_manager import SkillConcurrencyManager
 from pilot_space.application.services.skill.graph_compiler_service import GraphCompilerService
+from pilot_space.application.services.skill.graph_decompiler_service import GraphDecompilerService
 from pilot_space.application.services.skill.skill_execution_service import SkillExecutionService
 from pilot_space.application.services.skill.skill_graph_service import SkillGraphService
 from pilot_space.application.services.user_skill.create_user_skill_service import (
@@ -142,6 +143,15 @@ class SkillContainer(InfraContainer):
 
     graph_compiler_service = providers.Factory(
         GraphCompilerService,
+        session=providers.Callable(get_current_session),
+    )
+
+    # ---------------------------------------------------------------------------
+    # Graph Decompiler Service (P53-03)
+    # ---------------------------------------------------------------------------
+
+    graph_decompiler_service = providers.Factory(
+        GraphDecompilerService,
         session=providers.Callable(get_current_session),
     )
 

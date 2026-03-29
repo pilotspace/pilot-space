@@ -17,18 +17,27 @@ from uuid import UUID
 from fastapi import APIRouter, status
 
 from pilot_space.api.middleware.request_context import WorkspaceId
-from pilot_space.api.v1.dependencies import GraphCompilerServiceDep, SkillGraphServiceDep
+from pilot_space.api.v1.dependencies import (
+    GraphCompilerServiceDep,
+    GraphDecompilerServiceDep,
+    SkillGraphServiceDep,
+)
 from pilot_space.api.v1.schemas.skill_graph import (
     ExecutionPreviewResponse,
     ExecutionTraceStep,
     SkillGraphCompileResponse,
     SkillGraphCreate,
+    SkillGraphDecompileRequest,
+    SkillGraphDecompileResponse,
     SkillGraphResponse,
     SkillGraphUpdate,
 )
 from pilot_space.application.services.skill.graph_compiler_service import (
     GraphCompilePayload,
     GraphCompilerService,
+)
+from pilot_space.application.services.skill.graph_decompiler_service import (
+    GraphDecompilePayload,
 )
 from pilot_space.dependencies import CurrentUserId, DbSession
 from pilot_space.infrastructure.database.rls import set_rls_context
@@ -195,8 +204,7 @@ async def preview_skill_graph(
     nodes = graph_json.get("nodes", [])
     edges = graph_json.get("edges", [])
 
-    # Use the static topological sort method for execution ordering
-    sorted_nodes = GraphCompilerService._topological_sort(nodes, edges)  # pyright: ignore[reportPrivateUsage]
+    sorted_nodes = GraphCompilerService.topological_sort(nodes, edges)
 
     trace: list[ExecutionTraceStep] = []
     for step_num, node in enumerate(sorted_nodes, start=1):
@@ -220,26 +228,51 @@ async def preview_skill_graph(
     return ExecutionPreviewResponse(trace=trace)
 
 
-def _trace_description(node_type: str, label: str, config: dict) -> str:  # type: ignore[type-arg]
+def _trace_description(node_type: str, label: str, config: dict[str, str]) -> str:
     """Generate a human-readable description for a trace step."""
-    match node_type:
-        case "input":
-            return f"Receive input: {label}"
-        case "output":
-            fmt = config.get("outputFormat", "text")
-            return f"Emit output ({fmt}): {label}"
-        case "prompt":
-            return f"Execute prompt: {label}"
-        case "skill":
-            skill = config.get("skillName", "unknown")
-            return f"Invoke skill '{skill}': {label}"
-        case "condition":
-            expr = config.get("conditionExpression", "")
-            return f"Evaluate condition: {expr or label}"
-        case "transform":
-            return f"Apply transformation: {label}"
-        case _:
-            return f"Execute: {label}"
+    descriptions: dict[str, str] = {
+        "input": f"Receive input: {label}",
+        "output": f"Emit output ({config.get('outputFormat', 'text')}): {label}",
+        "prompt": f"Execute prompt: {label}",
+        "skill": f"Invoke skill '{config.get('skillName', 'unknown')}': {label}",
+        "condition": f"Evaluate condition: {config.get('conditionExpression', '') or label}",
+        "transform": f"Apply transformation: {label}",
+    }
+    return descriptions.get(node_type, f"Execute: {label}")
+
+
+@router.post(
+    "/decompile",
+    response_model=SkillGraphDecompileResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Decompile SKILL.md into graph JSON",
+)
+async def decompile_skill_graph(
+    workspace_id: WorkspaceId,
+    payload: SkillGraphDecompileRequest,
+    session: DbSession,
+    current_user_id: CurrentUserId,
+    service: GraphDecompilerServiceDep,
+) -> SkillGraphDecompileResponse:
+    """Analyze SKILL.md content and produce a React Flow-compatible graph.
+
+    Uses AI analysis when available, with heuristic fallback.
+    Returns graph JSON with nodes, edges, and confidence indicator.
+    """
+    await set_rls_context(session, current_user_id, workspace_id)
+    result = await service.decompile(
+        GraphDecompilePayload(
+            skill_content=payload.skill_content,
+            workspace_id=workspace_id,
+            user_id=current_user_id,
+        )
+    )
+    return SkillGraphDecompileResponse(
+        graph_json=result.graph_json,
+        node_count=result.node_count,
+        edge_count=result.edge_count,
+        confidence=result.confidence,
+    )
 
 
 __all__ = ["router"]

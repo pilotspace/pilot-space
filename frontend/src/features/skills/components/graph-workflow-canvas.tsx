@@ -12,7 +12,7 @@
  *   GraphWorkflowInner (inner) — plain React component, NOT observer
  */
 
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -28,7 +28,7 @@ import {
   type Connection,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Eye, LayoutGrid, Play, Square } from 'lucide-react';
+import { Eye, FileInput, LayoutGrid, Play, Square } from 'lucide-react';
 
 import {
   WorkflowNodeType,
@@ -54,11 +54,12 @@ interface GraphWorkflowInnerProps {
   initialEdges?: Edge[];
   onSave?: (data: { nodes: Node<WorkflowNodeData>[]; edges: Edge[] }) => void;
   onPreview?: () => void;
-  onCompile?: (content: string) => void;
+  onCompile?: () => void;
   isCompiling?: boolean;
+  onImport?: (skillContent: string) => void;
 }
 
-function GraphWorkflowInner({ store, initialNodes: initNodes, initialEdges: initEdges, onSave, onPreview, onCompile, isCompiling }: GraphWorkflowInnerProps) {
+function GraphWorkflowInner({ store, initialNodes: initNodes, initialEdges: initEdges, onSave, onPreview, onCompile, isCompiling, onImport }: GraphWorkflowInnerProps) {
   const { screenToFlowPosition } = useReactFlow();
   const {
     nodes,
@@ -75,6 +76,10 @@ function GraphWorkflowInner({ store, initialNodes: initNodes, initialEdges: init
 
   const containerRef = useRef<HTMLDivElement>(null);
   const { applyLayout } = useDagreLayout();
+
+  // ── Import dialog state ─────────────────────────────────────────────────
+  const [showImportDialog, setShowImportDialog] = useState(false);
+  const [importContent, setImportContent] = useState('');
 
   // ── Validation: run on node/edge changes with 500ms debounce ───────────
 
@@ -325,7 +330,7 @@ function GraphWorkflowInner({ store, initialNodes: initNodes, initialEdges: init
             {onCompile && (
               <button
                 type="button"
-                onClick={() => onCompile?.('')}
+                onClick={onCompile}
                 disabled={!store.graphId || store.hasErrors || isCompiling}
                 className="flex items-center gap-1.5 rounded-md bg-emerald-900/60 px-2.5 py-1.5 text-xs text-emerald-200 backdrop-blur-sm border border-emerald-800/50 hover:bg-emerald-900/80 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 data-testid="compile-btn"
@@ -338,6 +343,14 @@ function GraphWorkflowInner({ store, initialNodes: initNodes, initialEdges: init
                 Compile
               </button>
             )}
+            <button
+              type="button"
+              onClick={() => setShowImportDialog(true)}
+              className="flex items-center gap-1.5 rounded-md bg-[#1e1e2e]/90 px-2.5 py-1.5 text-xs text-zinc-300 backdrop-blur-sm border border-[#2a2a3e] hover:bg-[#2a2a3e] transition-colors"
+            >
+              <FileInput className="h-3.5 w-3.5" />
+              Import
+            </button>
           </div>
         </Panel>
         <Panel position="top-right">
@@ -346,6 +359,48 @@ function GraphWorkflowInner({ store, initialNodes: initNodes, initialEdges: init
       </ReactFlow>
       </div>
       <GraphConfigPanel nodes={nodes} onUpdateNode={updateNodeData} />
+
+      {/* Import Dialog */}
+      {showImportDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="w-[520px] rounded-xl bg-[#1e1e2e] border border-[#2a2a3e] p-5 shadow-2xl">
+            <h3 className="text-sm font-semibold text-zinc-200 mb-3">Import from SKILL.md</h3>
+            <p className="text-xs text-zinc-400 mb-3">
+              Paste your SKILL.md content below to generate a graph representation.
+            </p>
+            <textarea
+              value={importContent}
+              onChange={(e) => setImportContent(e.target.value)}
+              placeholder="Paste SKILL.md content here..."
+              className="w-full h-48 rounded-lg bg-[#141425] border border-[#2a2a3e] p-3 text-xs text-zinc-300 font-mono resize-none focus:outline-none focus:border-[#3b82f6]/50"
+            />
+            <div className="flex justify-end gap-2 mt-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowImportDialog(false);
+                  setImportContent('');
+                }}
+                className="px-3 py-1.5 rounded-md text-xs text-zinc-400 hover:text-zinc-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!importContent.trim()}
+                onClick={() => {
+                  onImport?.(importContent);
+                  setShowImportDialog(false);
+                  setImportContent('');
+                }}
+                className="px-3 py-1.5 rounded-md text-xs bg-[#3b82f6] text-white hover:bg-[#3b82f6]/80 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Import
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -358,8 +413,9 @@ export interface GraphWorkflowCanvasProps {
   initialEdges?: Edge[];
   onSave?: (data: { nodes: Node<WorkflowNodeData>[]; edges: Edge[] }) => void;
   onPreview?: () => void;
-  onCompile?: (content: string) => void;
+  onCompile?: () => void;
   isCompiling?: boolean;
+  onImport?: (skillContent: string) => void;
 }
 
 export function GraphWorkflowCanvas({
@@ -370,6 +426,7 @@ export function GraphWorkflowCanvas({
   onPreview,
   onCompile,
   isCompiling,
+  onImport,
 }: GraphWorkflowCanvasProps) {
   const store = useMemo(() => {
     const s = new GraphWorkflowStore();
@@ -400,6 +457,7 @@ export function GraphWorkflowCanvas({
           onPreview={onPreview}
           onCompile={onCompile}
           isCompiling={isCompiling}
+          onImport={onImport}
         />
       </GraphWorkflowContext.Provider>
     </ReactFlowProvider>
