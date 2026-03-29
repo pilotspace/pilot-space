@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
@@ -20,7 +20,6 @@ from pilot_space.ai.prompts.skill_generator import (
     get_skill_refinement_prompt,
 )
 from pilot_space.ai.providers.provider_selector import TaskType
-from pilot_space.domain.constants import SYSTEM_USER_ID
 from pilot_space.domain.exceptions import AppError, ValidationError
 from pilot_space.infrastructure.database.models.skill_graph import SkillGraph
 from pilot_space.infrastructure.database.models.skill_template import SkillTemplate
@@ -185,14 +184,14 @@ class SkillGeneratorService:
         }
 
         return SkillGeneratorResult(
-            skill_content=draft["skill_content"],
-            name=draft["name"],
-            description=draft["description"],
-            category=draft["category"],
-            icon=draft["icon"],
-            example_prompts=draft["example_prompts"],
-            context_requirements=draft["context_requirements"],
-            tool_declarations=draft["tool_declarations"],
+            skill_content=str(draft["skill_content"]),
+            name=str(draft["name"]),
+            description=str(draft["description"]),
+            category=str(draft["category"]),
+            icon=str(draft["icon"]),
+            example_prompts=list(draft["example_prompts"] or []),
+            context_requirements=list(draft["context_requirements"] or []),
+            tool_declarations=list(draft["tool_declarations"] or []),
             graph_data=draft["graph_data"],
             is_complete=bool(llm_data.get("is_complete", False)),
             refinement_suggestion=llm_data.get("refinement_suggestion"),
