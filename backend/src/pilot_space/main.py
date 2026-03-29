@@ -71,6 +71,7 @@ from pilot_space.api.v1.routers import (
     role_templates_router,
     scim_router,
     skill_approvals_router,
+    skill_generator_router,
     skills_router,
     webhooks_router,
     workspace_ai_settings_router,
@@ -400,6 +401,7 @@ app.include_router(role_templates_router, prefix=API_V1_PREFIX)
 app.include_router(role_skills_router, prefix=API_V1_PREFIX)
 app.include_router(skills_router, prefix=API_V1_PREFIX)
 app.include_router(skill_approvals_router, prefix=f"{API_V1_PREFIX}/workspaces")
+app.include_router(skill_generator_router, prefix=API_V1_PREFIX)
 app.include_router(notifications_router, prefix=f"{API_V1_PREFIX}/workspaces")
 if debug_router:
     app.include_router(debug_router, prefix=API_V1_PREFIX)

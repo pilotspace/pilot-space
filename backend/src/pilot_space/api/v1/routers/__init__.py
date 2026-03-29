@@ -79,6 +79,7 @@ from pilot_space.api.v1.routers.role_skills import (
 from pilot_space.api.v1.routers.scim import router as scim_router
 from pilot_space.api.v1.routers.sessions import router as workspace_sessions_router
 from pilot_space.api.v1.routers.skill_approvals import router as skill_approvals_router
+from pilot_space.api.v1.routers.skill_generator import router as skill_generator_router
 from pilot_space.api.v1.routers.skill_templates import router as skill_templates_router
 from pilot_space.api.v1.routers.skills import router as skills_router
 from pilot_space.api.v1.routers.user_skills import router as user_skills_router
@@ -220,6 +221,7 @@ __all__ = [
     "role_templates_router",
     "scim_router",
     "skill_approvals_router",
+    "skill_generator_router",
     "skill_templates_router",
     "skills_router",
     "user_skills_router",
