@@ -30,6 +30,7 @@ import {
   CheckCircle2,
   Network,
   BookOpen,
+  Store,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useUIStore, useNotificationStore, useAuthStore, useWorkspaceStore } from '@/stores';
@@ -62,6 +63,7 @@ import { NotificationPanel } from '@/components/layout/notification-panel';
 import { addRecentWorkspace } from '@/components/workspace-selector';
 import { WorkspaceSwitcher } from '@/components/layout/workspace-switcher';
 import { usePendingApprovalCount } from '@/features/approvals/hooks/use-approvals';
+import { useMarketplaceUpdates } from '@/features/skills/hooks/use-marketplace';
 import { usePinnedNotes } from '@/hooks/usePinnedNotes';
 import { useSettingsModal } from '@/features/settings/settings-modal-context';
 import type { WorkspaceFeatureToggles } from '@/types';
@@ -103,6 +105,7 @@ const navigationSections: NavSection[] = [
     icon: Sparkles,
     items: [
       { name: 'Skill', path: 'skills', icon: UserCog, testId: 'nav-roles', featureKey: 'skills' },
+      { name: 'Marketplace', path: 'marketplace', icon: Store, testId: 'nav-marketplace', badgeKey: 'marketplaceUpdates', featureKey: 'skills' },
       { name: 'Costs', path: 'costs', icon: DollarSign, testId: 'nav-costs', featureKey: 'costs' },
       {
         name: 'Approvals',
@@ -337,9 +340,16 @@ export const Sidebar = observer(function Sidebar() {
     workspaceStore.currentUserRole === 'owner' || workspaceStore.currentUserRole === 'admin';
   const pendingApprovalCount = usePendingApprovalCount(isAdminOrOwner ? workspaceId : '');
 
+  // Marketplace update count for sidebar badge
+  const { data: marketplaceUpdates } = useMarketplaceUpdates(
+    resolvedWorkspaceId && isAuthenticated ? resolvedWorkspaceId : '',
+  );
+  const marketplaceUpdateCount = marketplaceUpdates?.length ?? 0;
+
   // Map badgeKey → dynamic badge value
   const badgeValues: Record<string, number> = {
     pendingApprovals: pendingApprovalCount,
+    marketplaceUpdates: marketplaceUpdateCount,
   };
 
   // Workspace projects for sidebar tree sections
