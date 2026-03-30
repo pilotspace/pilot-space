@@ -8,11 +8,12 @@ import {
   LayoutList,
   Maximize2,
   Minimize2,
+  Pencil,
   Play,
   TableOfContents,
   X,
 } from 'lucide-react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { observer } from 'mobx-react-lite';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -125,6 +126,7 @@ export const FilePreviewModal = observer(function FilePreviewModal({
 }: FilePreviewModalProps) {
   // Workspace and user context — needed for annotation API calls
   const params = useParams<{ workspaceSlug?: string; projectId?: string }>();
+  const router = useRouter();
   const { workspaceStore, authStore } = useStore();
   const workspaceId = workspaceStore.currentWorkspace?.id ?? '';
   const projectId = params.projectId ?? '';
@@ -182,6 +184,29 @@ export const FilePreviewModal = observer(function FilePreviewModal({
   }, []);
 
   const rendererType = resolveRenderer(mimeType, filename);
+
+  /**
+   * Show "Edit" button for code and text files that Monaco can edit.
+   * Covers: code, text, json, markdown, html-preview types.
+   */
+  const isEditableFile = React.useMemo((): boolean => {
+    return (
+      rendererType === 'code' ||
+      rendererType === 'text' ||
+      rendererType === 'json' ||
+      rendererType === 'markdown' ||
+      rendererType === 'html-preview'
+    );
+  }, [rendererType]);
+
+  const handleEditInIde = React.useCallback(() => {
+    const workspaceSlug = params.workspaceSlug ?? '';
+    const pid = params.projectId ?? projectId;
+    if (workspaceSlug && pid) {
+      router.push(`/${workspaceSlug}/projects/${pid}/code/${filename}`);
+      onOpenChange(false);
+    }
+  }, [params.workspaceSlug, params.projectId, projectId, filename, router, onOpenChange]);
 
   /** Legacy Office formats (.doc, .ppt) degrade to download — skip content fetch */
   const isLegacyOffice = React.useMemo(() => isLegacyOfficeFormat(filename), [filename]);
@@ -533,6 +558,26 @@ export const FilePreviewModal = observer(function FilePreviewModal({
                   </TooltipTrigger>
                   <TooltipContent side="bottom" className="text-xs">
                     {isFullscreen ? 'Exit slideshow' : 'Slideshow'}
+                  </TooltipContent>
+                </Tooltip>
+              )}
+
+              {/* Edit button — shown for code/text/markdown files */}
+              {isEditableFile && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-8"
+                      onClick={handleEditInIde}
+                      aria-label="Edit in code editor"
+                    >
+                      <Pencil className="size-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-xs">
+                    Edit in code editor
                   </TooltipContent>
                 </Tooltip>
               )}
