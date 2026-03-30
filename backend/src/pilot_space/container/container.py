@@ -114,6 +114,7 @@ from pilot_space.application.services.plugin_lifecycle import PluginLifecycleSer
 from pilot_space.application.services.pm_block_insight_service import PMBlockInsightService
 from pilot_space.application.services.project_detail import ProjectDetailService
 from pilot_space.application.services.project_member import ProjectMemberService
+from pilot_space.application.services.project_rbac import ProjectRbacService
 from pilot_space.application.services.rate_limit import RateLimitService
 from pilot_space.application.services.rbac_service import RbacService
 from pilot_space.application.services.related_issues import RelatedIssuesSuggestionService
@@ -307,6 +308,13 @@ class Container(SkillContainer, PluginContainer):
     # Project Member Service (RBAC) — Factory per request
     project_member_service = providers.Factory(
         ProjectMemberService,
+        project_member_repository=project_member_repository,
+    )
+
+    # Project RBAC Service — centralized permission gates
+    project_rbac_service = providers.Factory(
+        ProjectRbacService,
+        session=providers.Callable(get_current_session),
         project_member_repository=project_member_repository,
     )
 

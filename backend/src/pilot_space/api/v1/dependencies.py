@@ -97,6 +97,7 @@ from pilot_space.application.services.plugin_lifecycle import PluginLifecycleSer
 from pilot_space.application.services.pm_block_insight_service import PMBlockInsightService
 from pilot_space.application.services.project_detail import ProjectDetailService
 from pilot_space.application.services.project_member import ProjectMemberService
+from pilot_space.application.services.project_rbac import ProjectRbacService
 from pilot_space.application.services.rate_limit import RateLimitService
 from pilot_space.application.services.rbac_service import RbacService
 from pilot_space.application.services.related_issues import RelatedIssuesSuggestionService
@@ -1056,6 +1057,7 @@ __all__ = [  # noqa: RUF022
     "McpServerServiceDep",
     "McpOAuthServiceDep",
     "ProjectDetailServiceDep",
+    "ProjectRbacServiceDep",
     "AttachmentManagementServiceDep",
     "WorkspaceAISettingsServiceDep",
     "SprintBoardServiceDep",
@@ -1204,6 +1206,19 @@ def _get_project_detail_service(
 
 
 ProjectDetailServiceDep = Annotated[ProjectDetailService, Depends(_get_project_detail_service)]
+
+
+# ===== Project RBAC Service Dependencies =====
+
+
+@inject
+def _get_project_rbac_service(
+    svc: ProjectRbacService = Depends(Provide[Container.project_rbac_service]),
+) -> ProjectRbacService:
+    return svc
+
+
+ProjectRbacServiceDep = Annotated[ProjectRbacService, Depends(_get_project_rbac_service)]
 
 
 @inject
