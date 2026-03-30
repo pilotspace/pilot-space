@@ -14,10 +14,12 @@ Feature: Phase 62 — Monaco IDE (IDE-03)
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 from uuid import UUID
 
 from pilot_space.domain.exceptions import NotFoundError, ValidationError
+from pilot_space.infrastructure.database.models.artifact import Artifact
 from pilot_space.infrastructure.database.repositories.artifact_repository import (
     ArtifactRepository,
 )
@@ -32,6 +34,16 @@ logger = get_logger(__name__)
 
 _BUCKET = "note-artifacts"
 _MAX_TEXT_BYTES = 1_048_576  # 1 MB limit for text files
+
+
+@dataclass
+class ArtifactContentResult:
+    """Result returned by get_content containing file content and metadata."""
+
+    content: str
+    size_bytes: int
+    filename: str
+    content_type: str
 
 
 class ArtifactContentService:
@@ -70,7 +82,7 @@ class ArtifactContentService:
         artifact_id: UUID,
         workspace_id: UUID,
         project_id: UUID,
-    ) -> object:
+    ) -> Artifact:
         """Fetch artifact and verify workspace/project ownership.
 
         Args:
@@ -96,8 +108,8 @@ class ArtifactContentService:
         artifact_id: UUID,
         workspace_id: UUID,
         project_id: UUID,
-    ) -> str:
-        """Download and return the UTF-8 text content of an artifact.
+    ) -> ArtifactContentResult:
+        """Download and return the UTF-8 text content of an artifact with metadata.
 
         Fetches the artifact record, verifies workspace/project ownership,
         downloads bytes from storage, and decodes as UTF-8.
@@ -108,7 +120,7 @@ class ArtifactContentService:
             project_id: Project scope for cross-project IDOR prevention.
 
         Returns:
-            UTF-8 decoded text content of the file.
+            ArtifactContentResult with decoded text and artifact metadata.
 
         Raises:
             NotFoundError: If artifact does not exist or belongs to a different workspace/project.
@@ -129,7 +141,12 @@ class ArtifactContentService:
         except UnicodeDecodeError as exc:
             raise ValidationError("File is not valid UTF-8 text") from exc
 
-        return content
+        return ArtifactContentResult(
+            content=content,
+            size_bytes=len(data),
+            filename=artifact.filename,
+            content_type=artifact.mime_type,
+        )
 
     async def update_content(
         self,
@@ -177,4 +194,4 @@ class ArtifactContentService:
         )
 
 
-__all__ = ["ArtifactContentService"]
+__all__ = ["ArtifactContentResult", "ArtifactContentService"]

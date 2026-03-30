@@ -189,7 +189,9 @@ class TestGetContent:
 
         result = await service.get_content(_ARTIFACT_ID, _WORKSPACE_ID, _PROJECT_ID)
 
-        assert result == "print('hello world')"
+        assert result.content == "print('hello world')"
+        assert result.filename == "main.py"
+        assert result.content_type == "text/x-python"
         mock_storage_client.download_object.assert_awaited_once_with(
             bucket="note-artifacts",
             key=_STORAGE_KEY,
