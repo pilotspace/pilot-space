@@ -5,8 +5,8 @@
  *
  * Panels:
  * 1. Left: FileTree (defaultSize=20%, minSize=0, maxSize=30%, collapsible)
- * 2. Center: BreadcrumbBar (36px) + TabBar (36px, progressive) + Monaco (flex) + StatusBar (22px)
- * 3. Right: Placeholder for ChatView/SourceControl (defaultSize=0, collapsible, Plan 05)
+ * 2. Center: BreadcrumbBar (36px) + TabBar (36px, progressive) + Monaco/DiffViewer (flex) + StatusBar (22px)
+ * 3. Right: SourceControlPanel (defaultSize=0, collapsible, toggle via Ctrl+Shift+G)
  *
  * Features:
  * - ResizablePanelGroup from shadcn/ui wrapper for react-resizable-panels v4
@@ -19,15 +19,12 @@
  * - beforeunload warning when dirty files
  * - CSS custom properties for IDE spacing
  * - Monaco pre-warm via requestIdleCallback
- *
- * Stripped from branch:
- * - usePluginLoader, usePluginEditorBridge, PluginSandbox, PluginSidebar
- * - ThemeStore references
- * - MonacoNoteEditor references
- * - useGitWebStore (placeholder for Plan 05)
+ * - Ctrl+Shift+G: toggle right SourceControlPanel
+ * - Clicking changed file in SourceControlPanel opens DiffViewer in center panel
+ * - useProjectGitIntegration provides owner/repo from workspace integration config
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { observer } from 'mobx-react-lite';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -36,7 +33,8 @@ import {
   ResizablePanel,
   ResizableHandle,
 } from '@/components/ui/resizable';
-import { useFileStore } from '@/stores/RootStore';
+import type { PanelImperativeHandle } from 'react-resizable-panels';
+import { useFileStore, useGitStore } from '@/stores/RootStore';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAutoSaveEditor } from '../hooks/useAutoSaveEditor';
 import { FileTree } from './FileTree';
@@ -45,8 +43,12 @@ import { BreadcrumbBar } from './BreadcrumbBar';
 import { StatusBar } from './StatusBar';
 import { WelcomePane } from './WelcomePane';
 import { MonacoErrorBoundary } from './ErrorBoundary';
+import { SourceControlPanel } from '../panels/SourceControlPanel';
+import { useProjectGitIntegration } from '../hooks/useProjectGitIntegration';
 import { apiClient } from '@/services/api/client';
 import type { Artifact } from '@/types/artifact';
+import type { ChangedFile } from '../git-types';
+import { getLanguageFromPath } from '../hooks/useFileDiff';
 
 // ─── CSS Custom Properties ────────────────────────────────────────────────────
 // These are injected inline on the layout root element:
@@ -63,6 +65,12 @@ const MonacoFileEditor = dynamic(() => import('./MonacoFileEditor'), {
   loading: () => <Skeleton className="h-full w-full" />,
 });
 
+// DiffViewer — dynamic import with ssr:false (uses monaco-editor DOM APIs)
+const DiffViewer = dynamic(() => import('./DiffViewer'), {
+  ssr: false,
+  loading: () => <Skeleton className="h-full w-full" />,
+});
+
 // CodeRenderer for mobile read-only fallback
 const CodeRenderer = dynamic(
   () =>
@@ -71,6 +79,17 @@ const CodeRenderer = dynamic(
     })),
   { ssr: false, loading: () => <Skeleton className="h-full w-full" /> }
 );
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type RightPanelMode = 'hidden' | 'source-control';
+
+interface DiffViewState {
+  filePath: string;
+  originalContent: string;
+  modifiedContent: string;
+  language: string;
+}
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -94,11 +113,105 @@ export const EditorLayout = observer(function EditorLayout({
   className,
 }: EditorLayoutProps) {
   const fileStore = useFileStore();
+  const gitStore = useGitStore();
   const isMobile = useMediaQuery('(max-width: 767px)');
   const isTablet = useMediaQuery('(max-width: 1023px)');
 
+  // ─── Git integration ─────────────────────────────────────────────────────
+  const { owner, repo, isConnected } = useProjectGitIntegration(projectId, workspaceId);
+
+  // ─── Right panel state ───────────────────────────────────────────────────
+  const [rightPanelMode, setRightPanelMode] = useState<RightPanelMode>('hidden');
+  const rightPanelRef = useRef<PanelImperativeHandle | null>(null);
+
+  // ─── Diff view state ─────────────────────────────────────────────────────
+  const [diffView, setDiffView] = useState<DiffViewState | null>(null);
+
   const [cursorLine] = useState(1);
   const [cursorCol] = useState(1);
+
+  // ─── Wire GitStore when integration resolves ─────────────────────────────
+  useEffect(() => {
+    if (isConnected && owner && repo) {
+      gitStore.setRepoInfo(owner, repo);
+    }
+  }, [isConnected, owner, repo, gitStore]);
+
+  // ─── Expand/collapse right panel imperatively ────────────────────────────
+  const toggleRightPanel = useCallback(() => {
+    setRightPanelMode((prev) => {
+      const next = prev === 'hidden' ? 'source-control' : 'hidden';
+      if (next === 'source-control') {
+        rightPanelRef.current?.expand();
+      } else {
+        rightPanelRef.current?.collapse();
+      }
+      return next;
+    });
+  }, []);
+
+  // ─── Keyboard shortcut: Ctrl+Shift+G ─────────────────────────────────────
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const platform =
+        (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData
+          ?.platform ?? navigator.platform;
+      const isMac = /mac/i.test(platform);
+      const modifier = isMac ? e.metaKey : e.ctrlKey;
+
+      // ctrl+shift+g (or cmd+shift+g on Mac)
+      if (modifier && e.shiftKey && (e.key === 'g' || e.key === 'G')) {
+        if (!isConnected) return; // No git integration — shortcut is a no-op
+        e.preventDefault();
+        toggleRightPanel();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown, { capture: true });
+    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
+  }, [isConnected, toggleRightPanel]);
+
+  // ─── Open diff view when clicking a changed file ─────────────────────────
+  const handleDiffFileSelect = useCallback(
+    async (changedFile: ChangedFile) => {
+      if (!owner || !repo || !gitStore.defaultBranch || !gitStore.currentBranch) return;
+
+      const language = getLanguageFromPath(changedFile.path);
+
+      // Fetch original content (base branch)
+      let originalContent = '';
+      let modifiedContent = '';
+
+      try {
+        if (changedFile.status !== 'added') {
+          const res = await apiClient.get<{ content: string }>(
+            `/workspaces/${workspaceId}/git/repos/${owner}/${repo}/contents/${encodeURIComponent(changedFile.path)}?ref=${encodeURIComponent(gitStore.defaultBranch)}`
+          );
+          originalContent = res.content ?? '';
+        }
+        if (changedFile.status !== 'deleted') {
+          const res = await apiClient.get<{ content: string }>(
+            `/workspaces/${workspaceId}/git/repos/${owner}/${repo}/contents/${encodeURIComponent(changedFile.path)}?ref=${encodeURIComponent(gitStore.currentBranch!)}`
+          );
+          modifiedContent = res.content ?? '';
+        }
+      } catch {
+        // Content fetch failed — fall back to patch-based rendering
+      }
+
+      setDiffView({
+        filePath: changedFile.path,
+        originalContent,
+        modifiedContent,
+        language,
+      });
+    },
+    [owner, repo, workspaceId, gitStore.defaultBranch, gitStore.currentBranch]
+  );
+
+  const handleCloseDiff = useCallback(() => {
+    setDiffView(null);
+  }, []);
 
   // ─── Save function ───────────────────────────────────────────────────────
   const saveFile = useCallback(
@@ -135,6 +248,9 @@ export const EditorLayout = observer(function EditorLayout({
   // ─── File select from tree ───────────────────────────────────────────────
   const handleFileSelect = useCallback(
     (artifact: Artifact) => {
+      // Close diff view when selecting a regular file
+      setDiffView(null);
+
       fileStore.openFile({
         id: artifact.id,
         name: artifact.filename,
@@ -259,7 +375,7 @@ export const EditorLayout = observer(function EditorLayout({
 
         <ResizableHandle withHandle />
 
-        {/* ── Center: Editor ──────────────────────────────────────────── */}
+        {/* ── Center: Editor / DiffViewer ─────────────────────────── */}
         <ResizablePanel defaultSize={isTablet ? 100 : 80} minSize={40}>
           <div className="flex h-full flex-col">
             {/* Breadcrumb bar — hidden on mobile via CSS in BreadcrumbBar */}
@@ -268,9 +384,20 @@ export const EditorLayout = observer(function EditorLayout({
             {/* Tab bar — progressive disclosure (null when empty) */}
             <TabBar />
 
-            {/* Editor content */}
+            {/* Editor / DiffViewer content */}
             <div className="relative flex-1 overflow-hidden">
-              {activeFile ? (
+              {diffView ? (
+                /* DiffViewer mode — shown when a changed file is selected in SourceControlPanel */
+                <MonacoErrorBoundary>
+                  <DiffViewer
+                    filePath={diffView.filePath}
+                    originalContent={diffView.originalContent}
+                    modifiedContent={diffView.modifiedContent}
+                    language={diffView.language}
+                    onClose={handleCloseDiff}
+                  />
+                </MonacoErrorBoundary>
+              ) : activeFile ? (
                 <MonacoErrorBoundary>
                   {activeFile.content !== null ? (
                     <MonacoFileEditor
@@ -301,11 +428,30 @@ export const EditorLayout = observer(function EditorLayout({
           </div>
         </ResizablePanel>
 
-        {/* ── Right: ChatView/SourceControl placeholder (Plan 05) ──── */}
-        <ResizablePanel defaultSize={0} minSize={0} maxSize={35} collapsible>
-          {/* Right panel wired in Plan 05 — empty for now */}
-          <div className="h-full bg-muted/20" />
-        </ResizablePanel>
+        {/* ── Right: SourceControlPanel ───────────────────────────── */}
+        {isConnected && (
+          <>
+            <ResizableHandle withHandle />
+            <ResizablePanel
+              panelRef={rightPanelRef}
+              defaultSize={0}
+              minSize={25}
+              maxSize={40}
+              collapsible
+            >
+              <div className="h-full">
+                {rightPanelMode === 'source-control' && (
+                  <SourceControlPanel
+                    workspaceId={workspaceId}
+                    owner={owner}
+                    repo={repo}
+                    onFileSelect={handleDiffFileSelect}
+                  />
+                )}
+              </div>
+            </ResizablePanel>
+          </>
+        )}
       </ResizablePanelGroup>
     </div>
   );

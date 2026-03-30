@@ -18,6 +18,11 @@ interface SourceControlPanelProps {
   owner: string | null;
   /** GitHub repository name — from useProjectGitIntegration */
   repo: string | null;
+  /**
+   * Optional callback invoked when the user clicks a changed file.
+   * EditorLayout uses this to open DiffViewer in the center panel.
+   */
+  onFileSelect?: (file: ChangedFile) => void;
 }
 
 /**
@@ -40,6 +45,7 @@ export const SourceControlPanel = observer(function SourceControlPanel({
   workspaceId,
   owner,
   repo,
+  onFileSelect,
 }: SourceControlPanelProps) {
   const gitStore = useGitStore();
   const { refresh, isFetching } = useGitStatus(
@@ -77,6 +83,17 @@ export const SourceControlPanel = observer(function SourceControlPanel({
   }, [gitStore]);
 
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
+
+  const handleFileSelect = useCallback(
+    (path: string) => {
+      setSelectedPath(path);
+      if (onFileSelect) {
+        const file = gitStore.changedFiles.find((f: ChangedFile) => f.path === path);
+        if (file) onFileSelect(file);
+      }
+    },
+    [onFileSelect, gitStore.changedFiles]
+  );
 
   const stagedFiles = gitStore.changedFiles.filter((f: ChangedFile) => f.staged);
   const unstagedFiles = gitStore.changedFiles.filter((f: ChangedFile) => !f.staged);
@@ -160,7 +177,7 @@ export const SourceControlPanel = observer(function SourceControlPanel({
           files={stagedFiles}
           onToggleStage={toggleStage}
           onUnstageAll={unstageAll}
-          onSelect={setSelectedPath}
+          onSelect={handleFileSelect}
           selectedPath={selectedPath}
         />
         <ChangedFileList
@@ -168,7 +185,7 @@ export const SourceControlPanel = observer(function SourceControlPanel({
           files={unstagedFiles}
           onToggleStage={toggleStage}
           onStageAll={stageAll}
-          onSelect={setSelectedPath}
+          onSelect={handleFileSelect}
           selectedPath={selectedPath}
         />
       </div>
