@@ -87,12 +87,6 @@ class TestGetArtifactContent:
                 prefix="/workspaces/{workspace_id}/projects/{project_id}/artifacts",
             )
 
-            # Override dependencies
-            from dependency_injector.wiring import Provide
-            from fastapi import Depends
-
-            from pilot_space.container.container import Container
-
             app.dependency_overrides[mock_svc] = lambda: mock_svc
 
             with TestClient(app, raise_server_exceptions=False) as client:
