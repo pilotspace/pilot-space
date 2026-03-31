@@ -119,6 +119,15 @@ SKILL_UI_METADATA: dict[str, SkillUIMetadata] = {
         icon="ShieldAlert",
         examples=["Scan this code for vulnerabilities", "Check for OWASP Top 10 issues"],
     ),
+    "skill-creator": SkillUIMetadata(
+        category="skills",
+        icon="Wand2",
+        examples=[
+            "Create a skill that reviews React components for accessibility",
+            "Build a code review skill for Python best practices",
+            "Make a skill that generates API documentation from code",
+        ],
+    ),
 }
 
 _DEFAULT_METADATA = SkillUIMetadata()

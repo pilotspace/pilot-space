@@ -518,6 +518,32 @@ def _cleanup_stale_plugin_skills(skills_dir: Path, expected_dirs: set[str]) -> N
                 logger.debug("Cleaned up stale plugin skill: %s", entry.name)
 
 
+async def hot_reload_skill(
+    skills_dir: Path,
+    skill_name: str,
+    content: str,
+    skill_id: str,
+) -> None:
+    """Write a single SKILL.md immediately for same-session pickup.
+
+    Used by skill_server.py MCP tools (create_skill, update_skill) to
+    materialize a skill into the sandbox without a full agent restart.
+
+    Args:
+        skills_dir: Path to ``.claude/skills/`` in the sandbox.
+        skill_name: Display name for the skill (will be sanitized).
+        content: Skill body content (without frontmatter).
+        skill_id: UUID string for the skill (used in dir name and frontmatter).
+    """
+    sanitized = _sanitize_skill_dir_name(skill_name, skill_id)
+    dir_name = f"{_SKILL_PREFIX}{sanitized}-{skill_id[:6]}"
+    skill_dir = skills_dir / dir_name
+    frontmatter = _build_frontmatter(name=skill_name, skill_id=skill_id)
+    full_content = f"{frontmatter}\n{content}"
+    await asyncio.to_thread(_write_skill_file, skill_dir, full_content)
+    logger.debug("hot_reload_skill", skill_name=skill_name, dir_name=dir_name)
+
+
 __all__ = [
     "_LEGACY_ROLE_PREFIX",
     "_SKILL_PREFIX",
@@ -525,6 +551,7 @@ __all__ = [
     "_build_workspace_frontmatter",
     "_cleanup_stale_role_skills",
     "_sanitize_skill_dir_name",
+    "hot_reload_skill",
     "materialize_plugin_skills",
     "materialize_role_skills",
 ]

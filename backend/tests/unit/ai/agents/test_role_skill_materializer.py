@@ -19,6 +19,7 @@ from pilot_space.ai.agents.role_skill_materializer import (
     _build_workspace_frontmatter,
     _cleanup_stale_role_skills,
     _sanitize_skill_dir_name,
+    hot_reload_skill,
     materialize_role_skills,
 )
 from pilot_space.infrastructure.database.models.skill_template import SkillTemplate
@@ -452,6 +453,95 @@ class TestMaterializeLegacyFallback:
         # In this test env, new tables exist so new path runs.
         # Legacy path tested via OperationalError mock in separate test below.
         assert count >= 0
+
+
+@pytest.mark.asyncio
+class TestHotReloadSkill:
+    """Tests for hot_reload_skill() — immediate SKILL.md write for same-session pickup."""
+
+    async def test_writes_skill_file_to_correct_path(self, tmp_path: Path) -> None:
+        """hot_reload_skill writes SKILL.md to skill-{name}-{id[:6]}/ directory."""
+        skills_dir = tmp_path / "skills"
+        skills_dir.mkdir()
+        skill_id = "abcdef12-0000-0000-0000-000000000000"
+
+        await hot_reload_skill(
+            skills_dir=skills_dir,
+            skill_name="my-test-skill",
+            content="# My Test Skill\n\nDoes things.",
+            skill_id=skill_id,
+        )
+
+        # Directory should be skill-my-test-skill-abcdef (first 6 chars of id)
+        expected_dir = skills_dir / "skill-my-test-skill-abcdef"
+        assert expected_dir.is_dir(), f"Expected directory {expected_dir} to exist"
+        assert (expected_dir / "SKILL.md").exists()
+
+    async def test_skill_file_contains_frontmatter(self, tmp_path: Path) -> None:
+        """hot_reload_skill writes frontmatter above the content body."""
+        skills_dir = tmp_path / "skills"
+        skills_dir.mkdir()
+        skill_id = "deadbeef-0000-0000-0000-000000000000"
+        body = "# My Skill\n\nDo this task."
+
+        await hot_reload_skill(
+            skills_dir=skills_dir,
+            skill_name="my-skill",
+            content=body,
+            skill_id=skill_id,
+        )
+
+        skill_file = skills_dir / "skill-my-skill-deadbe" / "SKILL.md"
+        assert skill_file.exists()
+        content = skill_file.read_text(encoding="utf-8")
+
+        # Should have YAML frontmatter
+        assert content.startswith("---")
+        assert "name: skill-my-skill" in content
+        # Should have the body content
+        assert "# My Skill" in content
+        assert "Do this task." in content
+
+    async def test_creates_parent_directory_if_missing(self, tmp_path: Path) -> None:
+        """hot_reload_skill creates skills_dir subdirectory if it doesn't exist."""
+        skills_dir = tmp_path / "skills"
+        # Do NOT mkdir — hot_reload_skill should create it
+        skill_id = "cafebabe-0000-0000-0000-000000000000"
+
+        await hot_reload_skill(
+            skills_dir=skills_dir,
+            skill_name="new-skill",
+            content="# New Skill",
+            skill_id=skill_id,
+        )
+
+        # Should have created the directory
+        skill_file = skills_dir / "skill-new-skill-cafeba" / "SKILL.md"
+        assert skill_file.exists()
+
+    async def test_overwrites_existing_file(self, tmp_path: Path) -> None:
+        """hot_reload_skill overwrites existing SKILL.md on second call."""
+        skills_dir = tmp_path / "skills"
+        skills_dir.mkdir()
+        skill_id = "11111111-0000-0000-0000-000000000000"
+
+        await hot_reload_skill(
+            skills_dir=skills_dir,
+            skill_name="my-skill",
+            content="# Version 1",
+            skill_id=skill_id,
+        )
+        await hot_reload_skill(
+            skills_dir=skills_dir,
+            skill_name="my-skill",
+            content="# Version 2",
+            skill_id=skill_id,
+        )
+
+        skill_file = skills_dir / "skill-my-skill-111111" / "SKILL.md"
+        content = skill_file.read_text(encoding="utf-8")
+        assert "Version 2" in content
+        assert "Version 1" not in content
 
 
 @pytest.mark.asyncio
