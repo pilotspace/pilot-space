@@ -49,6 +49,7 @@ import { apiClient } from '@/services/api/client';
 import type { Artifact } from '@/types/artifact';
 import type { ChangedFile } from '../git-types';
 import { getLanguageFromPath } from '../hooks/useFileDiff';
+import { getLanguageLabel } from '../types';
 
 // ─── CSS Custom Properties ────────────────────────────────────────────────────
 // These are injected inline on the layout root element:
@@ -218,8 +219,7 @@ export const EditorLayout = observer(function EditorLayout({
     async (fileId: string, content: string) => {
       await apiClient.put(
         `/workspaces/${workspaceId}/projects/${projectId}/artifacts/${fileId}/content`,
-        content,
-        { headers: { 'Content-Type': 'text/plain' } }
+        { content }
       );
     },
     [workspaceId, projectId]
@@ -255,7 +255,7 @@ export const EditorLayout = observer(function EditorLayout({
         id: artifact.id,
         name: artifact.filename,
         path: artifact.filename,
-        language: 'plaintext',
+        language: getLanguageLabel(artifact.filename),
         isDirty: false,
         content: null, // content loaded lazily
         lastAccessed: Date.now(),
@@ -360,10 +360,12 @@ export const EditorLayout = observer(function EditorLayout({
       <ResizablePanelGroup orientation="horizontal" className="flex-1">
         {/* ── Left: FileTree ─────────────────────────────────────────── */}
         <ResizablePanel
-          defaultSize={isTablet ? 0 : 20}
-          minSize={0}
-          maxSize={30}
+          id="code-filetree"
+          defaultSize={isTablet ? '0%' : '25%'}
+          minSize="15%"
+          maxSize="40%"
           collapsible
+          className="min-w-0"
         >
           <FileTree
             artifacts={artifacts}
@@ -376,7 +378,7 @@ export const EditorLayout = observer(function EditorLayout({
         <ResizableHandle withHandle />
 
         {/* ── Center: Editor / DiffViewer ─────────────────────────── */}
-        <ResizablePanel defaultSize={isTablet ? 100 : 80} minSize={40}>
+        <ResizablePanel id="code-editor" defaultSize={isTablet ? '100%' : '75%'} minSize="40%" className="min-w-0">
           <div className="flex h-full flex-col">
             {/* Breadcrumb bar — hidden on mobile via CSS in BreadcrumbBar */}
             <BreadcrumbBar />
@@ -433,11 +435,13 @@ export const EditorLayout = observer(function EditorLayout({
           <>
             <ResizableHandle withHandle />
             <ResizablePanel
+              id="code-source-control"
               panelRef={rightPanelRef}
-              defaultSize={0}
-              minSize={25}
-              maxSize={40}
+              defaultSize="0%"
+              minSize="25%"
+              maxSize="40%"
               collapsible
+              className="min-w-0"
             >
               <div className="h-full">
                 {rightPanelMode === 'source-control' && (

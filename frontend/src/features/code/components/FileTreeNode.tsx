@@ -84,52 +84,57 @@ export const FileTreeNode = memo(function FileTreeNode({
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <div
-          role="treeitem"
-          aria-expanded={item.type === 'directory' ? item.isExpanded : undefined}
-          aria-selected={isSelected}
-          tabIndex={isSelected ? 0 : -1}
-          className={cn(
-            'flex h-[28px] cursor-pointer select-none items-center gap-1 pr-2 text-sm',
-            'transition-colors duration-100',
-            isSelected
-              ? 'border-l-2 border-primary bg-background/80'
-              : 'border-l-2 border-transparent hover:bg-muted/50'
-          )}
-          style={{ paddingLeft: item.depth * 16 + 8 }}
-          onClick={handleClick}
-          onContextMenu={() => {
-            onSelect();
-          }}
-        >
-          {/* Chevron for directories */}
-          {item.type === 'directory' ? (
-            <ChevronRight
-              className={cn(
-                'h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-150 ease-out',
-                item.isExpanded && 'rotate-90'
-              )}
-            />
-          ) : (
-            <span className="w-4 shrink-0" aria-hidden="true" />
-          )}
+      <div
+        role="treeitem"
+        aria-expanded={item.type === 'directory' ? item.isExpanded : undefined}
+        aria-selected={isSelected}
+        tabIndex={isSelected ? 0 : -1}
+        className={cn(
+          'flex h-[28px] cursor-pointer select-none items-center gap-1.5 pr-2 text-sm min-w-0',
+          'transition-colors duration-100',
+          isSelected
+            ? 'border-l-2 border-primary bg-background/80'
+            : 'border-l-2 border-transparent hover:bg-muted/50'
+        )}
+        style={{ paddingLeft: item.depth * 16 + 8 }}
+        onClick={handleClick}
+      >
+        {/* Chevron for directories */}
+        {item.type === 'directory' ? (
+          <ChevronRight
+            className={cn(
+              'h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-150 ease-out',
+              item.isExpanded && 'rotate-90'
+            )}
+          />
+        ) : (
+          <span className="w-4 shrink-0" aria-hidden="true" />
+        )}
 
-          {/* Icon */}
-          {item.type === 'directory' ? (
-            item.isExpanded ? (
-              <FolderOpen className="h-4 w-4 shrink-0 text-muted-foreground" />
-            ) : (
-              <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
-            )
+        {/* Icon */}
+        {item.type === 'directory' ? (
+          item.isExpanded ? (
+            <FolderOpen className="h-4 w-4 shrink-0 text-muted-foreground" />
           ) : (
-            <FileIconForName name={item.name} />
-          )}
+            <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
+          )
+        ) : (
+          <FileIconForName name={item.name} />
+        )}
 
-          {/* Name */}
-          <span className="truncate">{item.name}</span>
-        </div>
-      </DropdownMenuTrigger>
+        {/* Name */}
+        <DropdownMenuTrigger asChild>
+          <span
+            className="truncate min-w-0 flex-1"
+            onContextMenu={(e) => {
+              e.preventDefault();
+              onSelect();
+            }}
+          >
+            {item.name}
+          </span>
+        </DropdownMenuTrigger>
+      </div>
 
       <DropdownMenuContent align="start" className="w-48">
         <DropdownMenuItem
@@ -144,7 +149,6 @@ export const FileTreeNode = memo(function FileTreeNode({
           Open
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={handleCopyPath}>Copy Path</DropdownMenuItem>
-        {/* Rename and Delete are future actions */}
         <DropdownMenuItem disabled>Rename</DropdownMenuItem>
         <DropdownMenuItem disabled>Delete</DropdownMenuItem>
       </DropdownMenuContent>

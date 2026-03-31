@@ -2,8 +2,6 @@
 
 import { useCallback } from 'react';
 import { observer } from 'mobx-react-lite';
-import { Virtuoso } from 'react-virtuoso';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { useFileStore } from '@/stores/RootStore';
 import { useFileTree, type FileTreeItem } from '../hooks/useFileTree';
 import { FileTreeNode } from './FileTreeNode';
@@ -94,26 +92,20 @@ export const FileTree = observer(function FileTree({
         </span>
       </div>
 
-      {/* Virtualized tree */}
-      <ScrollArea className="flex-1">
-        <Virtuoso
-          totalCount={flattenedItems.length}
-          itemContent={(index) => {
-            const item = flattenedItems[index]!;
-            return (
-              <FileTreeNode
-                key={item.id}
-                item={item}
-                isSelected={selectedId === item.id}
-                onSelect={() => setSelectedId(item.id)}
-                onToggle={() => toggleExpand(item.id)}
-                onOpen={handleOpenFile}
-              />
-            );
-          }}
-          style={{ height: '100%' }}
-        />
-      </ScrollArea>
+      {/* File list — uses native overflow scroll; Virtuoso needs a parent with
+          a definite pixel height which ScrollArea's viewport doesn't provide. */}
+      <div className="flex-1 overflow-y-auto min-h-0">
+        {flattenedItems.map((item) => (
+          <FileTreeNode
+            key={item.id}
+            item={item}
+            isSelected={selectedId === item.id}
+            onSelect={() => setSelectedId(item.id)}
+            onToggle={() => toggleExpand(item.id)}
+            onOpen={handleOpenFile}
+          />
+        ))}
+      </div>
     </div>
   );
 });

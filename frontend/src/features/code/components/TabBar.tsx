@@ -102,17 +102,22 @@ export const TabBar = observer(function TabBar() {
   const tabs = fileStore.tabOrder.map((id) => fileStore.openFiles.get(id)!).filter(Boolean) as OpenFile[];
   const activeFileId = fileStore.activeFileId;
 
-  // Detect overflow with ResizeObserver
+  // Keep a ref to tabs so the ResizeObserver callback reads the latest without re-subscribing
+  const tabsRef = useRef(tabs);
+  tabsRef.current = tabs;
+
+  // Detect overflow with ResizeObserver — re-attach only when tab count changes
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
     const checkOverflow = () => {
+      const currentTabs = tabsRef.current;
       const children = Array.from(container.children) as HTMLElement[];
       const hidden: OpenFile[] = [];
       for (const child of children) {
         if (child.dataset.tabId && child.offsetLeft + child.offsetWidth > container.clientWidth) {
-          const tab = tabs.find((t) => t.id === child.dataset.tabId);
+          const tab = currentTabs.find((t) => t.id === child.dataset.tabId);
           if (tab) hidden.push(tab);
         }
       }
@@ -124,7 +129,8 @@ export const TabBar = observer(function TabBar() {
     checkOverflow();
 
     return () => observer.disconnect();
-  }, [tabs]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tabs.length, activeFileId]);
 
   // Progressive disclosure: hidden when no tabs are open
   if (tabs.length === 0) return null;

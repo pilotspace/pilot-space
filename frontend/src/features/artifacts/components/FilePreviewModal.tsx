@@ -110,6 +110,8 @@ export interface FilePreviewModalProps {
   mimeType: string;
   signedUrl: string;
   sizeBytes?: number;
+  /** Explicit projectId — needed when route params don't contain projectId (e.g. note pages). */
+  projectId?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -123,13 +125,14 @@ export const FilePreviewModal = observer(function FilePreviewModal({
   mimeType,
   signedUrl,
   sizeBytes = 0,
+  projectId: projectIdProp,
 }: FilePreviewModalProps) {
   // Workspace and user context — needed for annotation API calls
   const params = useParams<{ workspaceSlug?: string; projectId?: string }>();
   const router = useRouter();
   const { workspaceStore, authStore } = useStore();
   const workspaceId = workspaceStore.currentWorkspace?.id ?? '';
-  const projectId = params.projectId ?? '';
+  const resolvedProjectId = projectIdProp || params.projectId || '';
   const currentUserId = authStore.user?.id ?? '';
 
   const [isMaximized, setIsMaximized] = React.useState(false);
@@ -201,12 +204,11 @@ export const FilePreviewModal = observer(function FilePreviewModal({
 
   const handleEditInIde = React.useCallback(() => {
     const workspaceSlug = params.workspaceSlug ?? '';
-    const pid = params.projectId ?? projectId;
-    if (workspaceSlug && pid) {
-      router.push(`/${workspaceSlug}/projects/${pid}/code/${filename}`);
+    if (workspaceSlug && resolvedProjectId) {
+      router.push(`/${workspaceSlug}/projects/${resolvedProjectId}/code/${filename}`);
       onOpenChange(false);
     }
-  }, [params.workspaceSlug, params.projectId, projectId, filename, router, onOpenChange]);
+  }, [params.workspaceSlug, resolvedProjectId, filename, router, onOpenChange]);
 
   /** Legacy Office formats (.doc, .ppt) degrade to download — skip content fetch */
   const isLegacyOffice = React.useMemo(() => isLegacyOfficeFormat(filename), [filename]);
@@ -411,13 +413,13 @@ export const FilePreviewModal = observer(function FilePreviewModal({
               </div>
             </div>
             {/* Annotation panel — right side; hidden in fullscreen for clean slide view */}
-            {!isFullscreen && workspaceId && projectId && (
+            {!isFullscreen && workspaceId && resolvedProjectId && (
               <React.Suspense
                 fallback={<div className="w-80 shrink-0 border-l p-4 animate-pulse" />}
               >
                 <PptxAnnotationPanel
                   workspaceId={workspaceId}
-                  projectId={projectId}
+                  projectId={resolvedProjectId}
                   artifactId={artifactId}
                   currentSlide={currentSlide}
                   currentUserId={currentUserId}
@@ -673,7 +675,7 @@ export const FilePreviewModal = observer(function FilePreviewModal({
                     isLoading={extraction.isLoading}
                     artifactId={artifactId}
                     workspaceId={workspaceId}
-                    projectId={projectId}
+                    projectId={resolvedProjectId}
                   />
                 </React.Suspense>
               </TabsContent>

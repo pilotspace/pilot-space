@@ -1,6 +1,8 @@
 'use client';
 
 import { observer } from 'mobx-react-lite';
+import { useTheme } from 'next-themes';
+import { Moon, Sun, Monitor } from 'lucide-react';
 import { useFileStore } from '@/stores/RootStore';
 import { getLanguageLabel } from '../types';
 
@@ -13,14 +15,16 @@ interface StatusBarProps {
   isSaving?: boolean;
 }
 
+const THEME_CYCLE = ['light', 'dark', 'system'] as const;
+const THEME_ICON = { light: Sun, dark: Moon, system: Monitor } as const;
+const THEME_LABEL = { light: 'Light', dark: 'Dark', system: 'System' } as const;
+
 /**
- * StatusBar — IDE status bar with line/col, language, encoding, and branch.
+ * StatusBar — IDE status bar with line/col, language, encoding, theme toggle, and branch.
  *
  * Height: 22px (h-[22px]).
  * Font: text-[11px].
  * Background: bg-muted/50.
- *
- * Receives cursor position from MonacoFileEditor onDidChangeCursorPosition.
  */
 export const StatusBar = observer(function StatusBar({
   line = 1,
@@ -29,10 +33,20 @@ export const StatusBar = observer(function StatusBar({
 }: StatusBarProps) {
   const fileStore = useFileStore();
   const activeFile = fileStore.activeFile;
+  const { theme, setTheme } = useTheme();
 
   const language = activeFile ? getLanguageLabel(activeFile.name) : '';
-  // Placeholder branch name — real branch from GitStore added in Plan 05
   const branch = 'main';
+
+  const currentTheme = (theme ?? 'system') as (typeof THEME_CYCLE)[number];
+  const ThemeIcon = THEME_ICON[currentTheme] ?? Monitor;
+  const themeLabel = THEME_LABEL[currentTheme] ?? 'System';
+
+  const cycleTheme = () => {
+    const idx = THEME_CYCLE.indexOf(currentTheme);
+    const next = THEME_CYCLE[(idx + 1) % THEME_CYCLE.length]!;
+    setTheme(next);
+  };
 
   return (
     <div
@@ -63,6 +77,17 @@ export const StatusBar = observer(function StatusBar({
         {!isSaving && activeFile?.isDirty && (
           <span className="text-[11px] text-amber-500">Unsaved</span>
         )}
+        {/* Theme toggle — cycles light → dark → system */}
+        <button
+          type="button"
+          onClick={cycleTheme}
+          className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+          aria-label={`Theme: ${themeLabel}. Click to change.`}
+          title={`Theme: ${themeLabel}`}
+        >
+          <ThemeIcon className="size-3" />
+          <span>{themeLabel}</span>
+        </button>
         <span className="text-[11px] text-muted-foreground">{branch}</span>
       </div>
     </div>
