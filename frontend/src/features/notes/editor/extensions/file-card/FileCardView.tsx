@@ -167,7 +167,13 @@ export const FileCardView = observer(function FileCardView() {
           artifactId={artifactId ?? ''}
           signedUrl={signedUrl}
           onCopy={async () => {
-            if (content && typeof content === 'string') await navigator.clipboard.writeText(content);
+            if (content && typeof content === 'string') {
+              try {
+                await navigator.clipboard.writeText(content);
+              } catch (err) {
+                console.error('Clipboard write failed:', err);
+              }
+            }
           }}
           onExpandToModal={dispatchPreviewEvent}
         />
@@ -238,29 +244,11 @@ export const FileCardView = observer(function FileCardView() {
       role="button"
       tabIndex={0}
       aria-label={`Open file: ${filename}`}
-      onClick={() => {
-        if (!artifactId) return;
-        // Defer dispatch so React state updates from the event listener run outside
-        // TipTap's ReactRenderer cycle (prevents residual flushSync warnings).
-        queueMicrotask(() => {
-          window.dispatchEvent(
-            new CustomEvent('pilot:preview-artifact', {
-              detail: { artifactId, filename, mimeType },
-            })
-          );
-        });
-      }}
+      onClick={dispatchPreviewEvent}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
-          if (!artifactId) return;
-          queueMicrotask(() => {
-            window.dispatchEvent(
-              new CustomEvent('pilot:preview-artifact', {
-                detail: { artifactId, filename, mimeType },
-              })
-            );
-          });
+          dispatchPreviewEvent();
         }
       }}
     >

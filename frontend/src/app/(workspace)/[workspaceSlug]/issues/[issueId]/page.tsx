@@ -440,7 +440,7 @@ const IssueDetailPage = observer(function IssueDetailPage() {
       <FilePreviewConfigContext.Provider
         value={{ workspaceId, projectId: issue.projectId ?? '' }}
       >
-      <div className="flex h-full bg-background overflow-hidden" data-testid="issue-detail">
+        <div className="flex h-full bg-background overflow-hidden" data-testid="issue-detail">
         <IssueNoteLayout
           headerContent={header}
           editorContent={editorContent}
@@ -486,7 +486,7 @@ const IssueDetailPage = observer(function IssueDetailPage() {
           onReject={handleRejectAction}
           onClose={() => setDestructiveModalOpen(false)}
         />
-      </div>
+        </div>
       </FilePreviewConfigContext.Provider>
     </IssueNoteContext.Provider>
   );

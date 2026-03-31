@@ -30,8 +30,6 @@ import { resolveRenderer } from '@/features/artifacts/utils/mime-type-router';
 function renderFileIcon(mimeType: string) {
   const className = 'h-4 w-4 shrink-0 text-muted-foreground';
   if (mimeType.startsWith('image/')) return <Image className={className} />;
-  if (mimeType === 'application/pdf' || mimeType.startsWith('text/'))
-    return <FileText className={className} />;
   if (mimeType === 'text/csv' || mimeType.includes('spreadsheet') || mimeType.includes('excel'))
     return <FileSpreadsheet className={className} />;
   if (
@@ -41,6 +39,8 @@ function renderFileIcon(mimeType: string) {
     mimeType.includes('css')
   )
     return <FileCode className={className} />;
+  if (mimeType === 'application/pdf' || mimeType.startsWith('text/'))
+    return <FileText className={className} />;
   return <File className={className} />;
 }
 
@@ -62,6 +62,13 @@ export function InlinePreviewHeader({
   onExpandToModal,
 }: InlinePreviewHeaderProps) {
   const [copied, setCopied] = React.useState(false);
+  const copyTimeoutRef = React.useRef<ReturnType<typeof setTimeout>>(null);
+
+  React.useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+    };
+  }, []);
 
   // Only show the IDE button for code files
   const showIdeButton = resolveRenderer(mimeType, filename) === 'code';
@@ -70,7 +77,8 @@ export function InlinePreviewHeader({
     e.stopPropagation();
     onCopy();
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+    copyTimeoutRef.current = setTimeout(() => setCopied(false), 2000);
   }
 
   function handleDownload(e: React.MouseEvent) {
@@ -157,6 +165,9 @@ export function InlinePreviewHeader({
           <Maximize2 className="h-3.5 w-3.5" />
         </Button>
       </div>
+      <span className="sr-only" aria-live="polite" role="status">
+        {copied ? 'Copied' : ''}
+      </span>
     </div>
   );
 }

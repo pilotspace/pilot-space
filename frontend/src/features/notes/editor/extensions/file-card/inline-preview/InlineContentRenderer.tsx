@@ -301,6 +301,7 @@ export function InlineContentRenderer({
               onClick={() => setCurrentSlide(Math.max(0, currentSlide - 1))}
               disabled={currentSlide === 0}
               className="px-2 py-0.5 rounded hover:bg-muted disabled:opacity-40"
+              aria-label="Previous slide"
             >
               ←
             </button>
@@ -311,6 +312,7 @@ export function InlineContentRenderer({
               onClick={() => setCurrentSlide(Math.min(slideCount - 1, currentSlide + 1))}
               disabled={currentSlide >= slideCount - 1}
               className="px-2 py-0.5 rounded hover:bg-muted disabled:opacity-40"
+              aria-label="Next slide"
             >
               →
             </button>
