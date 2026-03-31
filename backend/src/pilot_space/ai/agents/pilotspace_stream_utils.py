@@ -53,6 +53,11 @@ from pilot_space.ai.mcp.project_server import (
     SERVER_NAME as PROJECT_SERVER_NAME,
     create_project_tools_server,
 )
+from pilot_space.ai.mcp.skill_server import (
+    SERVER_NAME as SKILL_SERVER_NAME,
+    TOOL_NAMES as SKILL_TOOL_NAMES,
+    create_skill_tools_server,
+)
 from pilot_space.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
@@ -92,7 +97,7 @@ def build_mcp_servers(
     """Build the MCP server dict and block-reference map for an SDK session.
 
     Constructs a ¶N block reference map from the note context (if present)
-    and instantiates all 8 MCP tool servers (7 domain + 1 interaction).
+    and instantiates all 9 MCP tool servers (8 domain + 1 interaction).
 
     When *feature_toggles* is provided, servers whose feature module is
     disabled are excluded from the returned dict.  ``None`` (no stored config)
@@ -161,6 +166,13 @@ def build_mcp_servers(
             publisher=publisher,
             tool_context=tool_context,
         )
+
+    # Skill creator tools — always available (no feature toggle gate)
+    servers[SKILL_SERVER_NAME] = create_skill_tools_server(
+        publisher,
+        tool_context=tool_context,
+        skills_dir=None,  # TODO: pass from agent config when SpaceManager available
+    )
 
     return servers, ref_map
 
