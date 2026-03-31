@@ -25,6 +25,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from pilot_space.application.services.artifact.artifact_content_service import (
+    _BUCKET,
+    _MAX_TEXT_BYTES,
+)
 from pilot_space.domain.exceptions import NotFoundError, ValidationError
 
 # ---------------------------------------------------------------------------
@@ -37,7 +41,6 @@ _ARTIFACT_ID = uuid.UUID("33333333-3333-3333-3333-333333333333")
 _OTHER_WORKSPACE_ID = uuid.UUID("99999999-9999-9999-9999-999999999999")
 _OTHER_PROJECT_ID = uuid.UUID("88888888-8888-8888-8888-888888888888")
 _STORAGE_KEY = f"{_WORKSPACE_ID}/{_PROJECT_ID}/{_ARTIFACT_ID}/main.py"
-_MAX_TEXT_BYTES = 1_048_576  # 1 MB
 
 
 # ---------------------------------------------------------------------------
@@ -134,7 +137,7 @@ class TestDownloadObject:
         mock_supabase.storage = mock_storage
         client._client = mock_supabase  # type: ignore[assignment]
 
-        result = await client.download_object(bucket="note-artifacts", key="ws/proj/file.py")
+        result = await client.download_object(bucket=_BUCKET, key="ws/proj/file.py")
 
         assert result == b"file content"
         mock_storage.from_.assert_called_once_with("note-artifacts")
@@ -160,7 +163,7 @@ class TestDownloadObject:
         client._client = mock_supabase  # type: ignore[assignment]
 
         with pytest.raises(StorageDownloadError, match="Failed to download"):
-            await client.download_object(bucket="note-artifacts", key="ws/proj/file.py")
+            await client.download_object(bucket=_BUCKET, key="ws/proj/file.py")
 
 
 # ===========================================================================
@@ -193,7 +196,7 @@ class TestGetContent:
         assert result.filename == "main.py"
         assert result.content_type == "text/x-python"
         mock_storage_client.download_object.assert_awaited_once_with(
-            bucket="note-artifacts",
+            bucket=_BUCKET,
             key=_STORAGE_KEY,
         )
 
@@ -300,7 +303,7 @@ class TestUpdateContent:
 
         encoded = new_content.encode("utf-8")
         mock_storage_client.upload_object.assert_awaited_once_with(
-            bucket="note-artifacts",
+            bucket=_BUCKET,
             key=_STORAGE_KEY,
             data=encoded,
             content_type="text/plain",

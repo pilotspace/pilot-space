@@ -16,7 +16,7 @@ from typing import Any
 
 import httpx
 
-from pilot_space.domain.exceptions import AppError
+from pilot_space.domain.exceptions import AppError, ConflictError, ValidationError
 from pilot_space.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
@@ -296,7 +296,10 @@ class GitHubGitProvider(GitProvider):
         params: dict[str, Any] | None = None,
     ) -> dict[str, Any] | list[Any]:
         """Make a GitHub API request and map errors to domain exceptions."""
-        response = await self._client.request(method, path, json=json, params=params)
+        try:
+            response = await self._client.request(method, path, json=json, params=params)
+        except httpx.RequestError as err:
+            raise GitProviderError(f"GitHub API connection failed: {err}") from err
 
         if response.status_code == 401:
             raise GitProviderAuthError("GitHub authentication failed")
@@ -326,6 +329,14 @@ class GitHubGitProvider(GitProvider):
                 "GitHub rate limit exceeded",
                 retry_after=retry_after,
             )
+
+        if response.status_code == 409:
+            body = response.json() if response.content else {}
+            raise ConflictError(f"GitHub conflict: {body.get('message', response.text)}")
+
+        if response.status_code in (400, 422):
+            body = response.json() if response.content else {}
+            raise ValidationError(f"GitHub validation error: {body.get('message', response.text)}")
 
         if response.status_code >= 400:
             body = response.json() if response.content else {}
@@ -402,13 +413,21 @@ class GitHubGitProvider(GitProvider):
     # ------------------------------------------------------------------
 
     async def get_branches(self) -> list[BranchInfo]:
-        data = await self._request(
-            "GET",
-            f"/repos/{self._owner}/{self._repo}/branches",
-            params={"per_page": 100},
-        )
-        if not isinstance(data, list):
-            raise GitProviderError("Unexpected response from GitHub branches endpoint")
+        per_page = 100
+        max_pages = 10  # Safety cap: 1000 branches max
+        all_branches: list[dict[str, Any]] = []
+
+        for page in range(1, max_pages + 1):
+            data = await self._request(
+                "GET",
+                f"/repos/{self._owner}/{self._repo}/branches",
+                params={"per_page": per_page, "page": page},
+            )
+            if not isinstance(data, list):
+                raise GitProviderError("Unexpected response from GitHub branches endpoint")
+            all_branches.extend(data)
+            if len(data) < per_page:
+                break
 
         # Fetch default branch to mark it
         default = await self.get_default_branch()
@@ -420,7 +439,7 @@ class GitHubGitProvider(GitProvider):
                 is_default=(b["name"] == default),
                 is_protected=b.get("protected", False),
             )
-            for b in data
+            for b in all_branches
         ]
 
     async def get_default_branch(self) -> str:
@@ -466,7 +485,13 @@ class GitHubGitProvider(GitProvider):
 
         if encoding == "base64":
             # GitHub wraps base64 with newlines
-            decoded = base64.b64decode(raw_content.replace("\n", "")).decode("utf-8")
+            try:
+                decoded = base64.b64decode(raw_content.replace("\n", "")).decode("utf-8")
+            except UnicodeDecodeError as err:
+                raise AppError(
+                    f"File contains non-UTF-8 content and cannot be displayed: {path}",
+                    error_code="binary_file_content",
+                ) from err
         else:
             decoded = raw_content
 
@@ -519,12 +544,16 @@ class GitHubGitProvider(GitProvider):
         new_tree_sha = await self._create_tree(base_tree_sha, tree_entries)
         new_commit_sha = await self._create_git_commit(message, new_tree_sha, [head_sha])
 
-        # Update ref — retry once on stale 422
+        # Update ref — retry once on stale 422 by rebuilding against fresh HEAD
         try:
             await self._update_ref(branch, new_commit_sha)
         except GitProviderError as exc:
             if "422" in str(exc):
-                logger.warning("Stale ref on update, retrying once")
+                logger.warning("Stale ref on update, re-fetching HEAD and rebuilding commit")
+                head_sha = await self._get_head_sha(branch)
+                base_tree_sha = await self._get_commit_tree_sha(head_sha)
+                new_tree_sha = await self._create_tree(base_tree_sha, tree_entries)
+                new_commit_sha = await self._create_git_commit(message, new_tree_sha, [head_sha])
                 await self._update_ref(branch, new_commit_sha)
             else:
                 raise

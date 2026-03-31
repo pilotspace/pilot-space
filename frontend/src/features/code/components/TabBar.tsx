@@ -49,10 +49,21 @@ function TabItem({ file, isActive, onActivate, onClose }: TabItemProps) {
     [confirmAndClose]
   );
 
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        if (e.key === ' ') e.preventDefault(); // Prevent scroll
+        onActivate();
+      }
+    },
+    [onActivate]
+  );
+
   return (
     <div
       role="tab"
       aria-selected={isActive}
+      tabIndex={isActive ? 0 : -1}
       className={cn(
         'group relative flex shrink-0 cursor-pointer select-none items-center gap-1.5 px-3 text-sm',
         'animate-in fade-in slide-in-from-left-2 duration-150 ease-out',
@@ -63,6 +74,7 @@ function TabItem({ file, isActive, onActivate, onClose }: TabItemProps) {
       )}
       onClick={onActivate}
       onAuxClick={handleAuxClick}
+      onKeyDown={handleKeyDown}
     >
       {/* Dirty indicator dot */}
       {file.isDirty && (
@@ -84,7 +96,7 @@ function TabItem({ file, isActive, onActivate, onClose }: TabItemProps) {
       {/* Close button — visible on hover */}
       <button
         type="button"
-        className="invisible shrink-0 rounded p-0.5 hover:bg-muted group-hover:visible"
+        className="invisible shrink-0 rounded p-0.5 hover:bg-muted group-hover:visible focus:visible group-focus-within:visible"
         onClick={handleCloseClick}
         aria-label={`Close ${file.name}`}
       >
@@ -109,7 +121,7 @@ export const TabBar = observer(function TabBar() {
   const [overflowTabs, setOverflowTabs] = useState<OpenFile[]>([]);
 
   // Derive ordered tabs from openFiles map using tabOrder
-  const tabs = fileStore.tabOrder.map((id) => fileStore.openFiles.get(id)!).filter(Boolean) as OpenFile[];
+  const tabs = fileStore.tabOrder.map((id) => fileStore.openFiles.get(id)).filter((f): f is OpenFile => f !== undefined);
   const activeFileId = fileStore.activeFileId;
 
   // Keep a ref to tabs so the ResizeObserver callback reads the latest without re-subscribing

@@ -218,11 +218,13 @@ async def get_file_content(
     owner: Annotated[str, Path(description="Repository owner")],
     repo: Annotated[str, Path(description="Repository name")],
     path: Annotated[str, Path(description="File path within the repository")],
-    ref: Annotated[str, Query(description="Branch name or commit SHA")] = "main",
+    ref: str | None = Query(None, description="Branch or SHA (defaults to repo default branch)"),
 ) -> FileContentResponse:
     """Get file content at a specific ref (branch or SHA)."""
     provider = await _get_provider(session, workspace_id, owner, repo)
     try:
+        if not ref:
+            ref = await provider.get_default_branch()
         file_content = await provider.get_file_content(path, ref)
 
         # HTTP-level size guard (1 MB)
