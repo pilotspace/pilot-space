@@ -24,6 +24,7 @@ import dynamic from 'next/dynamic';
 import { SkeletonPreviewCard } from './SkeletonPreviewCard';
 import type { InlineRendererType } from './is-inline-previewable';
 import { getLanguageForFile } from '@/features/artifacts/utils/mime-type-router';
+import { Button } from '@/components/ui/button';
 
 // ---------------------------------------------------------------------------
 // Dynamic imports with SkeletonPreviewCard as fallback
@@ -108,9 +109,19 @@ export interface TruncationInfo {
   label: string;
 }
 
+/** Pretty-print JSON if valid, otherwise return as-is. Shared by renderer and truncation. */
+function formatJsonSafe(raw: string): string {
+  try {
+    return JSON.stringify(JSON.parse(raw), null, 2);
+  } catch {
+    return raw;
+  }
+}
+
 /**
  * Returns truncation metadata for the footer expand link.
  * CSV row counts are estimated from line count (header not counted in rows).
+ * For JSON, content is pretty-printed first so line count matches the rendered output.
  * For markdown, html-preview, and binary types, truncation is not applied.
  */
 export function getTruncationInfo(
@@ -147,8 +158,9 @@ export function getTruncationInfo(
     };
   }
 
-  // code / json / text
-  const lines = content.split('\n');
+  // JSON: pretty-print before counting so line count matches rendered output
+  const effective = rendererType === 'json' ? formatJsonSafe(content) : content;
+  const lines = effective.split('\n');
   const totalLines = lines.length;
   const wasTruncated = !expanded && totalLines > 30;
   return {
@@ -179,9 +191,25 @@ export function InlineContentRenderer({
   expanded,
   signedUrl = '',
 }: InlineContentRendererProps) {
-  // PPTX slide state
+  // PPTX slide state — reset when content changes (different file)
   const [currentSlide, setCurrentSlide] = React.useState(0);
   const [slideCount, setSlideCount] = React.useState(0);
+  const contentRef = React.useRef(content);
+
+  React.useEffect(() => {
+    if (contentRef.current !== content) {
+      contentRef.current = content;
+      setCurrentSlide(0);
+      setSlideCount(0);
+    }
+  }, [content]);
+
+  // Clamp currentSlide when slideCount changes (e.g. after PPTX parse)
+  React.useEffect(() => {
+    if (slideCount > 0 && currentSlide >= slideCount) {
+      setCurrentSlide(Math.max(0, slideCount - 1));
+    }
+  }, [slideCount, currentSlide]);
 
   if (rendererType === 'markdown') {
     // Full content, scroll within the 300px card container.
@@ -208,13 +236,7 @@ export function InlineContentRenderer({
   }
 
   if (rendererType === 'json') {
-    // Format JSON then truncate
-    let formatted = content as string;
-    try {
-      formatted = JSON.stringify(JSON.parse(formatted), null, 2);
-    } catch {
-      // Malformed JSON — render as-is
-    }
+    const formatted = formatJsonSafe(content as string);
     const { truncated } = truncateLines(formatted, expanded ? Infinity : 30);
     const wrappedContent = '```json\n' + truncated + '\n```';
     return (
@@ -297,25 +319,29 @@ export function InlineContentRenderer({
         </React.Suspense>
         {slideCount > 1 && (
           <div className="flex items-center justify-center gap-2 py-1 text-xs text-muted-foreground border-t border-border">
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-xs"
               onClick={() => setCurrentSlide(Math.max(0, currentSlide - 1))}
               disabled={currentSlide === 0}
-              className="px-2 py-0.5 rounded hover:bg-muted disabled:opacity-40"
               aria-label="Previous slide"
             >
               ←
-            </button>
+            </Button>
             <span>
               {currentSlide + 1} / {slideCount}
             </span>
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-xs"
               onClick={() => setCurrentSlide(Math.min(slideCount - 1, currentSlide + 1))}
               disabled={currentSlide >= slideCount - 1}
-              className="px-2 py-0.5 rounded hover:bg-muted disabled:opacity-40"
               aria-label="Next slide"
             >
               →
-            </button>
+            </Button>
           </div>
         )}
       </div>
