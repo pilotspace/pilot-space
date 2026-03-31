@@ -119,7 +119,7 @@ class FileChange:
     """A file to be included in a commit."""
 
     path: str
-    content: str
+    content: str | None = None
     encoding: str = "utf-8"
     action: str = "update"  # update, create, delete
 
@@ -502,6 +502,10 @@ class GitHubGitProvider(GitProvider):
                     }
                 )
             else:
+                if fc.content is None:
+                    raise GitProviderError(
+                        f"File content required for {fc.action} action: {fc.path}"
+                    )
                 blob_sha = await self._create_blob(fc.content, fc.encoding)
                 tree_entries.append(
                     {
