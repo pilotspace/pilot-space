@@ -32,6 +32,9 @@ import type {
   IntentCompletedEvent,
   SkillCompletedEvent,
   QueueUpdateEvent,
+  SkillPreviewEvent,
+  TestResultEvent,
+  SkillSavedEvent,
 } from './events';
 
 /**
@@ -233,6 +236,32 @@ export function isQueueUpdateEvent(event: SSEEvent): event is QueueUpdateEvent {
   return event.type === 'queue_update';
 }
 
+// Phase 64: Chat-first skill refinement event guards
+
+/**
+ * Type guard for SkillPreviewEvent.
+ * Narrows an SSEEvent to SkillPreviewEvent when type is 'skill_preview'.
+ */
+export function isSkillPreviewEvent(event: SSEEvent): event is SkillPreviewEvent {
+  return event.type === 'skill_preview';
+}
+
+/**
+ * Type guard for TestResultEvent.
+ * Narrows an SSEEvent to TestResultEvent when type is 'test_result'.
+ */
+export function isTestResultEvent(event: SSEEvent): event is TestResultEvent {
+  return event.type === 'test_result';
+}
+
+/**
+ * Type guard for SkillSavedEvent.
+ * Narrows an SSEEvent to SkillSavedEvent when type is 'skill_saved'.
+ */
+export function isSkillSavedEvent(event: SSEEvent): event is SkillSavedEvent {
+  return event.type === 'skill_saved';
+}
+
 const KNOWN_EVENT_TYPES = new Set([
   'message_start',
   'content_block_start',
@@ -259,6 +288,10 @@ const KNOWN_EVENT_TYPES = new Set([
   'intent_completed',
   'skill_completed',
   'queue_update',
+  // Phase 64: Chat-first skill refinement
+  'skill_preview',
+  'test_result',
+  'skill_saved',
 ]);
 
 /**

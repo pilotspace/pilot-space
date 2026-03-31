@@ -41,7 +41,11 @@ export type SSEEventType =
   | 'intent_executing'
   | 'intent_completed'
   | 'queue_update'
-  | 'skill_completed';
+  | 'skill_completed'
+  // Phase 64: Chat-first skill refinement events
+  | 'skill_preview'
+  | 'test_result'
+  | 'skill_saved';
 
 /**
  * Base SSE event structure.
@@ -626,6 +630,66 @@ export interface FocusBlockEvent extends SSEEvent {
   };
 }
 
+// Phase 64: Chat-first skill refinement — skill creation/test/save SSE events.
+
+/**
+ * Skill preview event.
+ * Emitted by create_skill / update_skill MCP tools after the skill YAML is drafted.
+ * Frontend renders an inline SkillPreviewCard in ChatView so the user can review
+ * the skill before confirming the save.
+ */
+export interface SkillPreviewEvent extends SSEEvent {
+  type: 'skill_preview';
+  data: {
+    /** Canonical skill file name (e.g. "review-pr") */
+    skillName: string;
+    /** Parsed YAML frontmatter key-value pairs */
+    frontmatter: Record<string, string>;
+    /** Full skill Markdown content (instructions body) */
+    content: string;
+    /** True when updating an existing skill, false when creating a new one */
+    isUpdate: boolean;
+  };
+}
+
+/**
+ * Test result event.
+ * Emitted by the test_skill MCP tool after running the eval suite.
+ * Frontend renders an inline TestResultCard with pass/fail breakdown.
+ */
+export interface TestResultEvent extends SSEEvent {
+  type: 'test_result';
+  data: {
+    /** Skill that was tested */
+    skillName: string;
+    /** Aggregate score 0.0–1.0 */
+    score: number;
+    /** Descriptions of passing test cases */
+    passed: string[];
+    /** Descriptions of failing test cases */
+    failed: string[];
+    /** Suggested improvements from the evaluator */
+    suggestions: string[];
+    /** Representative sample output from the skill execution */
+    sampleOutput: string;
+  };
+}
+
+/**
+ * Skill saved event.
+ * Emitted after the user confirms and the skill is persisted to disk/DB.
+ * Frontend clears the skill preview state and shows a success confirmation.
+ */
+export interface SkillSavedEvent extends SSEEvent {
+  type: 'skill_saved';
+  data: {
+    /** Canonical skill name that was saved */
+    skillName: string;
+    /** Template ID if the skill was also published as a marketplace template */
+    templateId?: string;
+  };
+}
+
 // Feature 015: Intent/skill lifecycle events extracted to events-workforce.ts.
 // Re-exported here for backward compatibility.
 export type {
@@ -665,4 +729,8 @@ export {
   isIntentCompletedEvent,
   isSkillCompletedEvent,
   isQueueUpdateEvent,
+  // Phase 64: Chat-first skill refinement
+  isSkillPreviewEvent,
+  isTestResultEvent,
+  isSkillSavedEvent,
 } from './event-guards';
