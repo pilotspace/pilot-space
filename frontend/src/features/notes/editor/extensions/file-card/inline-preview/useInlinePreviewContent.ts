@@ -20,7 +20,7 @@ import type { RefObject } from 'react';
 import type { RendererType } from '@/features/artifacts/utils/mime-type-router';
 import { useArtifactSignedUrl } from '@/features/artifacts/hooks/use-artifact-signed-url';
 import { useFileContent } from '@/features/artifacts/hooks/useFileContent';
-import { useFilePreviewConfig } from './FilePreviewConfigContext';
+import { useFilePreviewConfigSafe } from './FilePreviewConfigContext';
 import { getInlineRendererType } from './is-inline-previewable';
 import type { InlineRendererType } from './is-inline-previewable';
 
@@ -85,20 +85,22 @@ export function useInlinePreviewContent(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Read workspace/project IDs from context (provided by the editor page)
-  const { workspaceId, projectId } = useFilePreviewConfig();
+  // Read workspace/project IDs from context (provided by the editor page).
+  // Safe variant returns null when no provider is present — allows FileCardView
+  // to fall back to compact card behavior without throwing.
+  const config = useFilePreviewConfigSafe();
 
-  // Fetch signed URL only after IntersectionObserver fires.
-  // Pass null when not yet visible to keep the query disabled.
+  // Fetch signed URL only after IntersectionObserver fires AND we have a provider.
+  // Pass null when not yet visible or no config to keep the query disabled.
   const { data: urlData, isLoading: urlLoading } = useArtifactSignedUrl(
-    workspaceId,
-    projectId,
-    isVisible ? artifactId : null
+    config?.workspaceId ?? '',
+    config?.projectId ?? '',
+    isVisible && !!config ? artifactId : null
   );
 
   const signedUrl = urlData?.url ?? '';
 
-  // Fetch text content once we have a signed URL and the card is visible.
+  // Fetch text content once we have a signed URL, the card is visible, and config is present.
   // The `open` parameter in useFileContent maps to the `enabled` flag on the query.
   const fileContent = useFileContent(
     signedUrl,
@@ -106,7 +108,7 @@ export function useInlinePreviewContent(
     // If rendererType is null (non-previewable), this hook still runs but
     // enabled will be false (signedUrl is empty or isVisible is false).
     (rendererType ?? 'download') as RendererType,
-    isVisible && !!signedUrl
+    isVisible && !!signedUrl && !!config
   );
 
   return {
@@ -115,6 +117,7 @@ export function useInlinePreviewContent(
     signedUrl,
     isLoading: (urlLoading && isVisible) || fileContent.isLoading,
     isError: fileContent.isError,
-    rendererType,
+    // Return null rendererType when no provider present — FileCardView falls back to compact card
+    rendererType: config ? rendererType : null,
   };
 }

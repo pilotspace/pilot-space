@@ -38,3 +38,12 @@ export function useFilePreviewConfig(): FilePreviewConfig {
   }
   return ctx;
 }
+
+/**
+ * Safe variant that returns null when the context provider is absent.
+ * Used by useInlinePreviewContent to gracefully fall back to non-previewable
+ * behavior when a FileCard is rendered outside a page-level provider.
+ */
+export function useFilePreviewConfigSafe(): FilePreviewConfig | null {
+  return useContext(FilePreviewConfigContext);
+}

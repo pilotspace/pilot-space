@@ -14,6 +14,7 @@ export {
 export {
   FilePreviewConfigContext,
   useFilePreviewConfig,
+  useFilePreviewConfigSafe,
   type FilePreviewConfig,
 } from './FilePreviewConfigContext';
 
