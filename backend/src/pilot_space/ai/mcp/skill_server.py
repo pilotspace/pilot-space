@@ -190,9 +190,9 @@ def create_skill_tools_server(
                 from pilot_space.ai.agents.role_skill_materializer import hot_reload_skill
 
                 await hot_reload_skill(skills_dir, name, content, skill_id)
-                logger.info("skill_tool_create", skill_name=name, skill_id=skill_id[:8])
-            except Exception as exc:
-                logger.warning("skill_tool_create_write_failed", skill_name=name, error=str(exc))
+                logger.info("skill_tool_create", skill_name=name, skill_id=skill_id[:8], status="ok")
+            except OSError as exc:
+                logger.warning("skill_tool_create_write_failed", skill_name=name, error=str(exc), status="failed")
 
         # Emit skill_preview SSE event
         await publisher.publish(
@@ -250,9 +250,9 @@ def create_skill_tools_server(
                 from pilot_space.ai.agents.role_skill_materializer import hot_reload_skill
 
                 await hot_reload_skill(skills_dir, name, content, skill_id)
-                logger.info("skill_tool_update", skill_name=name, skill_id=skill_id[:8])
-            except Exception as exc:
-                logger.warning("skill_tool_update_write_failed", skill_name=name, error=str(exc))
+                logger.info("skill_tool_update", skill_name=name, skill_id=skill_id[:8], status="ok")
+            except OSError as exc:
+                logger.warning("skill_tool_update_write_failed", skill_name=name, error=str(exc), status="failed")
 
         # Emit skill_preview SSE event with isUpdate=True
         await publisher.publish(
@@ -337,6 +337,15 @@ def create_skill_tools_server(
                 with contextlib.suppress(OSError):
                     content = skill_file.read_text(encoding="utf-8")
 
+        if not content.strip():
+            return _text_result(json.dumps({
+                "score": 0,
+                "passed": [],
+                "failed": ["Skill content is empty or not found"],
+                "suggestions": ["Provide skill content or create the skill first"],
+                "sampleOutput": "",
+            }))
+
         # Phase 1: Rubric evaluation
         evaluation = _evaluate_skill(content)
 
@@ -385,6 +394,8 @@ def create_skill_tools_server(
                     "score": result["score"],
                     "passed": result["passed"],
                     "failed": result["failed"],
+                    "suggestions": result.get("suggestions", []),
+                    "sampleOutput": result.get("sampleOutput", ""),
                 },
             )
         )

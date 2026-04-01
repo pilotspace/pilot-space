@@ -662,7 +662,7 @@ export interface TestResultEvent extends SSEEvent {
   data: {
     /** Skill that was tested */
     skillName: string;
-    /** Aggregate score 0.0–1.0 */
+    /** Aggregate score 0–10 (5 rubric checks x 2 points each) */
     score: number;
     /** Descriptions of passing test cases */
     passed: string[];

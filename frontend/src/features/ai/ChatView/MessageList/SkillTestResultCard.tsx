@@ -25,8 +25,6 @@ export interface SkillTestResultCardProps {
   failed: string[];
   /** Suggested improvements */
   suggestions: string[];
-  /** Representative sample output */
-  sampleOutput: string;
   onRefine?: () => void;
 }
 
@@ -55,7 +53,6 @@ export const SkillTestResultCard = memo<SkillTestResultCardProps>(function Skill
   passed,
   failed,
   suggestions,
-  sampleOutput: _sampleOutput,
   onRefine,
 }) {
   const [isExpanded, setIsExpanded] = useState(false);

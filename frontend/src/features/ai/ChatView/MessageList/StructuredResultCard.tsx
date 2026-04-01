@@ -570,6 +570,9 @@ export const StructuredResultCard = memo<StructuredResultCardProps>(
           return <ContextNotesResultCard data={data} />;
         case 'context_issues_result':
           return <ContextIssuesResultCard data={data} />;
+        // Note: skill_preview and test_result are filtered by SKILL_SCHEMA_TYPES
+        // in AssistantMessage and handled by SystemMessage. These branches are
+        // retained for direct StructuredResultCard usage outside those paths.
         case 'skill_preview':
           return (
             <SkillCreatorCard
@@ -589,7 +592,6 @@ export const StructuredResultCard = memo<StructuredResultCardProps>(
               passed={(data['passed'] as string[]) ?? []}
               failed={(data['failed'] as string[]) ?? []}
               suggestions={(data['suggestions'] as string[]) ?? []}
-              sampleOutput={(data['sampleOutput'] as string) ?? ''}
               onRefine={onSkillRefine}
             />
           );

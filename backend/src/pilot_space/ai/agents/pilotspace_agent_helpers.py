@@ -194,8 +194,7 @@ def build_contextual_message(
     user_msg = input_data.message
     if user_msg.startswith(("\\", "/")):
         _parts = user_msg.split(None, 1)
-        if len(_parts) > 1:
-            user_msg = _parts[1]
+        user_msg = _parts[1] if len(_parts) > 1 else ""
 
     if parts:
         context_block = "\n\n".join(parts)

@@ -41,12 +41,6 @@ vi.mock('@codemirror/basic-setup', () => ({
   basicSetup: [],
 }));
 
-// Override useEffect for CodeMirror mount — mock attaches a div with testid
-vi.mock('../SkillCreatorCard', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../SkillCreatorCard')>();
-  return actual;
-});
-
 const defaultProps = {
   skillName: 'test-skill',
   frontmatter: { description: 'A test skill description' },

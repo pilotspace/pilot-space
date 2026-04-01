@@ -105,10 +105,13 @@ export const SkillCreatorCard = memo<SkillCreatorCardProps>(function SkillCreato
   const [isEditing, setIsEditing] = useState(false);
   const [localContent, setLocalContent] = useState(content);
 
-  // Sync from props when content changes externally (e.g., store update)
+  // Sync from props when content changes externally (e.g., store update).
+  // Skip sync while user is editing to avoid clobbering their changes.
   useEffect(() => {
-    setLocalContent(content);
-  }, [content]);
+    if (!isEditing) {
+      setLocalContent(content);
+    }
+  }, [content, isEditing]);
 
   return (
     <div

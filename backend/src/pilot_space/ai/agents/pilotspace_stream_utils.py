@@ -166,7 +166,9 @@ def build_mcp_servers(
             tool_context=tool_context,
         )
 
-    # Skill creator tools — always available (no feature toggle gate)
+    # Skill creator tools — registered unconditionally (no feature toggle).
+    # Unlike issue/project servers, skill creation is a core agent capability
+    # available to all workspaces. The tools handle skills_dir=None gracefully.
     servers[SKILL_SERVER_NAME] = create_skill_tools_server(
         publisher,
         tool_context=tool_context,

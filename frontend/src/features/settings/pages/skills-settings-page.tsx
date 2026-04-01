@@ -373,6 +373,8 @@ export const SkillsSettingsPage = observer(function SkillsSettingsPage() {
               <Button
                 size="sm"
                 variant="outline"
+                aria-expanded={isChatOpen}
+                aria-controls="skills-chat-panel"
                 onClick={() => {
                   setChatPrefill('/skill-creator');
                   setIsChatOpen(true);
@@ -556,6 +558,7 @@ export const SkillsSettingsPage = observer(function SkillsSettingsPage() {
           className="min-w-0"
         >
           <motion.aside
+            id="skills-chat-panel"
             aria-label="Skill Creator Chat"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}

@@ -225,9 +225,14 @@ async def validate_tenant(
     provider: str = ws_settings.get("default_llm_provider", "anthropic")
     base_url: str | None = None
     try:
-        # Try the configured provider first, then fall back to "anthropic"
+        # Try the configured provider first
         key_info = await key_storage.get_key_info(workspace_id, provider, "llm")
         if not key_info and provider != "anthropic":
+            logger.warning(
+                "ai_proxy_provider_key_missing",
+                workspace_id=str(workspace_id),
+                provider=provider,
+            )
             key_info = await key_storage.get_key_info(workspace_id, "anthropic", "llm")
         if key_info:
             base_url = key_info.base_url
@@ -356,10 +361,13 @@ def _anthropic_messages_to_openai(
                 if isinstance(block, str):
                     text_parts.append(block)
                 elif isinstance(block, dict):
-                    if block.get("type") == "text":
+                    block_type = block.get("type")
+                    if block_type == "text":
                         text_parts.append(block.get("text", ""))
-                    elif block.get("type") == "tool_result":
+                    elif block_type == "tool_result":
                         text_parts.append(str(block.get("content", "")))
+                    else:
+                        logger.debug("ai_proxy_unsupported_block_type", block_type=block_type)
             oai_messages.append({"role": role, "content": "\n".join(text_parts) or ""})
         else:
             oai_messages.append({"role": role, "content": str(content)})
@@ -367,11 +375,21 @@ def _anthropic_messages_to_openai(
     return oai_messages
 
 
+_FINISH_REASON_MAP: dict[str | None, str] = {
+    "stop": "end_turn",
+    "length": "max_tokens",
+    "content_filter": "content_filter",
+    "tool_calls": "tool_use",
+}
+
+
 def _openai_response_to_anthropic(oai_response: Any, model: str) -> dict[str, Any]:
     """Translate OpenAI Chat Completion response to Anthropic Messages format."""
     choice = oai_response.choices[0] if oai_response.choices else None
     text = choice.message.content if choice and choice.message else ""
     usage = oai_response.usage
+    finish_reason = choice.finish_reason if choice else None
+    stop_reason = _FINISH_REASON_MAP.get(finish_reason, finish_reason or "end_turn")
 
     return {
         "id": f"msg_{oai_response.id}" if oai_response.id else "msg_proxy",
@@ -379,7 +397,7 @@ def _openai_response_to_anthropic(oai_response: Any, model: str) -> dict[str, An
         "role": "assistant",
         "model": model,
         "content": [{"type": "text", "text": text or ""}],
-        "stop_reason": "end_turn",
+        "stop_reason": stop_reason,
         "stop_sequence": None,
         "usage": {
             "input_tokens": usage.prompt_tokens if usage else 0,
@@ -461,7 +479,7 @@ async def _handle_openai_compatible(
     anthropic_response = _openai_response_to_anthropic(response, model)
 
     usage = response.usage
-    if workspace_id and cost_tracker and usage:
+    if cost_tracker and usage:
         await track_llm_cost(
             cost_tracker,
             workspace_id=workspace_id,
@@ -521,7 +539,8 @@ async def _handle_openai_streaming(
                 if chunk.choices and chunk.choices[0].delta.content:
                     delta_text = chunk.choices[0].delta.content
                     collected_text += delta_text
-                    output_tokens += 1  # Approximate
+                    # Estimate tokens: ~4 chars per token (rough approximation)
+                    output_tokens += max(1, len(delta_text) // 4)
 
                     delta_event = {
                         "type": "content_block_delta",
@@ -530,12 +549,18 @@ async def _handle_openai_streaming(
                     }
                     yield f"event: content_block_delta\ndata: {json.dumps(delta_event)}\n\n".encode()
 
-                # Check for usage in the final chunk
+                # Use real usage from the final chunk when available
                 if hasattr(chunk, "usage") and chunk.usage:
                     input_tokens = chunk.usage.prompt_tokens or 0
                     output_tokens = chunk.usage.completion_tokens or output_tokens
         except Exception:
             logger.exception("ai_proxy_openai_stream_error")
+            err_event = {
+                "type": "error",
+                "error": {"type": "server_error", "message": "OpenAI-compatible stream failed"},
+            }
+            yield f"event: error\ndata: {json.dumps(err_event)}\n\n".encode()
+            return
 
         # Emit content_block_stop
         yield f"event: content_block_stop\ndata: {json.dumps({'type': 'content_block_stop', 'index': 0})}\n\n".encode()

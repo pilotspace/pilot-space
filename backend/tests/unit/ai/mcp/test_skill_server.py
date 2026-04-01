@@ -371,7 +371,11 @@ class TestTestSkillTool:
 
     @pytest.mark.asyncio
     async def test_score_higher_with_rich_content(self) -> None:
-        """test_skill gives higher score for skills with examples and output format."""
+        """test_skill gives higher score for skills with examples and output format.
+
+        Scoring is deterministic (keyword-based rubric, no LLM involved) so
+        the comparison rich >= minimal is stable across runs.
+        """
         queue: asyncio.Queue[str] = asyncio.Queue()
         publisher = EventPublisher(queue)
 

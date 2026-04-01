@@ -130,11 +130,12 @@ const ChatViewInternal = observer<ChatViewProps>(
     }, [initialPrompt, store]);
 
     // Pre-fill the input field from prefillValue prop (e.g., ?prefill=/skill-creator).
-    // Only fires once on mount; ignores subsequent prop changes to avoid fighting user edits.
-    const prefillAppliedRef = useRef(false);
+    // Re-applies when prefillValue changes to a new truthy string, but won't
+    // overwrite user edits for the same prefill value.
+    const lastPrefillRef = useRef<string | null>(null);
     useEffect(() => {
-      if (prefillValue && !prefillAppliedRef.current) {
-        prefillAppliedRef.current = true;
+      if (prefillValue && prefillValue !== lastPrefillRef.current) {
+        lastPrefillRef.current = prefillValue;
         setInputValue(prefillValue);
       }
     }, [prefillValue]);

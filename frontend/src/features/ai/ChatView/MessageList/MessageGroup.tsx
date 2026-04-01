@@ -18,9 +18,6 @@ interface MessageGroupProps {
 export const MessageGroup = memo<MessageGroupProps>(({ messages, userName, userAvatar }) => {
   if (messages.length === 0) return null;
 
-  const role = messages[0]?.role;
-  if (!role) return null;
-
   return (
     <div className="space-y-0">
       {messages.map((message) => {

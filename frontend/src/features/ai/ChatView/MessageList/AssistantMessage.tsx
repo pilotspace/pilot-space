@@ -515,7 +515,7 @@ const SkillCreatorCardInline = memo<{
   const handleTest = useCallback(
     async (_content: string) => {
       await pilotSpace.sendMessage(
-        `\\${data.skillName} analyze this your sample.`
+        `\\${data.skillName} analyze this sample.`
       );
     },
     [pilotSpace, data.skillName]
@@ -560,7 +560,6 @@ const SkillTestResultCardInline = memo<{
       passed={data.passed}
       failed={data.failed}
       suggestions={data.suggestions}
-      sampleOutput={data.sampleOutput}
       onRefine={handleRefine}
     />
   );

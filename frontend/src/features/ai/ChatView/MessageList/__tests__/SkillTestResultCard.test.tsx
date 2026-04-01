@@ -14,7 +14,6 @@ const defaultProps = {
   passed: ['Has trigger', 'Has examples'],
   failed: ['Missing description'],
   suggestions: ['Add examples', 'Improve trigger pattern'],
-  sampleOutput: 'Sample skill output here',
 };
 
 describe('SkillTestResultCard', () => {

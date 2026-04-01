@@ -108,7 +108,6 @@ export const SystemMessage = memo<SystemMessageProps>(function SystemMessage({ m
         passed={(data['passed'] as string[]) ?? []}
         failed={(data['failed'] as string[]) ?? []}
         suggestions={(data['suggestions'] as string[]) ?? []}
-        sampleOutput={(data['sampleOutput'] as string) ?? ''}
         onRefine={handleSkillRefine}
       />
     );
