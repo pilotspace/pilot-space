@@ -8,7 +8,7 @@
  * Phase 64-04
  */
 
-import { memo, useCallback, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
 import type { ChatMessage } from '@/stores/ai/types/conversation';
@@ -36,8 +36,8 @@ export const SystemMessage = memo<SystemMessageProps>(function SystemMessage({ m
 
   const sr = message.structuredResult;
 
-  // Extract skill data once for all handlers
-  const skillData = sr?.data ?? {};
+  // Extract skill data once for all handlers — memoized to stabilize useCallback deps
+  const skillData = useMemo(() => sr?.data ?? {}, [sr?.data]);
   const skillName = (skillData['skillName'] as string) ?? '';
 
   const handleSkillSave = useCallback(

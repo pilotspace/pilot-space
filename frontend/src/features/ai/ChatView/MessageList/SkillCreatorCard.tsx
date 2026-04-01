@@ -103,15 +103,9 @@ export const SkillCreatorCard = memo<SkillCreatorCardProps>(function SkillCreato
   isSaved = false,
 }) {
   const [isEditing, setIsEditing] = useState(false);
-  const [localContent, setLocalContent] = useState(content);
-
-  // Sync from props when content changes externally (e.g., store update).
-  // Skip sync while user is editing to avoid clobbering their changes.
-  useEffect(() => {
-    if (!isEditing) {
-      setLocalContent(content);
-    }
-  }, [content, isEditing]);
+  // Track user edits separately; when not editing, display prop content directly.
+  const [editedContent, setEditedContent] = useState(content);
+  const displayContent = isEditing ? editedContent : content;
 
   return (
     <div
@@ -145,10 +139,10 @@ export const SkillCreatorCard = memo<SkillCreatorCardProps>(function SkillCreato
       {/* Content — read mode or CodeMirror edit mode */}
       <div className="rounded-lg border bg-muted/50 mb-3 max-h-[300px] overflow-auto">
         {isEditing ? (
-          <SkillCodeMirrorEditor value={localContent} onChange={setLocalContent} />
+          <SkillCodeMirrorEditor value={displayContent} onChange={setEditedContent} />
         ) : (
           <pre className="text-sm font-mono whitespace-pre-wrap p-3 leading-relaxed">
-            {localContent}
+            {displayContent}
           </pre>
         )}
       </div>
@@ -172,7 +166,7 @@ export const SkillCreatorCard = memo<SkillCreatorCardProps>(function SkillCreato
           <Button
             size="sm"
             variant="outline"
-            onClick={() => onTest?.(localContent)}
+            onClick={() => onTest?.(displayContent)}
             aria-label="Test this skill"
           >
             <PlayCircle className="h-3 w-3 mr-1" aria-hidden="true" />
@@ -180,7 +174,7 @@ export const SkillCreatorCard = memo<SkillCreatorCardProps>(function SkillCreato
           </Button>
           <Button
             size="sm"
-            onClick={() => onSave?.(localContent)}
+            onClick={() => onSave?.(displayContent)}
             aria-label="Save this skill"
             disabled={isSaving}
           >
