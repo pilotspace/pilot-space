@@ -67,9 +67,9 @@ export const SystemMessage = memo<SystemMessageProps>(function SystemMessage({ m
   );
 
   const handleSkillTest = useCallback(
-    (content: string) => {
+    (_content: string) => {
       void pilotSpace.sendMessage(
-        `Please test the skill "${skillName}" with this content:\n\n${content}`
+        `\\${skillName} analyze this sample code:\n\n\`\`\`python\ndef hello():\n    print("world")\n\`\`\``
       );
     },
     [pilotSpace, skillName]

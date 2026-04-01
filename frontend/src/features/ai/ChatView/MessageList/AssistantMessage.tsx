@@ -513,9 +513,9 @@ const SkillCreatorCardInline = memo<{
   );
 
   const handleTest = useCallback(
-    async (content: string) => {
+    async (_content: string) => {
       await pilotSpace.sendMessage(
-        `Please test the skill "${data.skillName}" with this content:\n\n${content}`
+        `\\${data.skillName} analyze this your sample.`
       );
     },
     [pilotSpace, data.skillName]
