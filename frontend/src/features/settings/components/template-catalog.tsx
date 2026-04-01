@@ -19,7 +19,7 @@ import { TemplateCard } from './template-card';
 interface TemplateCatalogProps {
   workspaceSlug: string;
   isAdmin: boolean;
-  onUseThis: (template: SkillTemplate) => void;
+  onUseThis?: (template: SkillTemplate) => void;
   onEditTemplate?: (template: SkillTemplate) => void;
   onToggleTemplateActive?: (template: SkillTemplate) => void;
   onDeleteTemplate?: (template: SkillTemplate) => void;

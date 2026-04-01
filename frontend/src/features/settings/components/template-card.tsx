@@ -38,7 +38,7 @@ import type { SkillTemplate } from '@/services/api/skill-templates';
 
 interface TemplateCardProps {
   template: SkillTemplate;
-  onUseThis: (template: SkillTemplate) => void;
+  onUseThis?: (template: SkillTemplate) => void;
   onEdit?: (template: SkillTemplate) => void;
   onToggleActive?: (template: SkillTemplate) => void;
   onDelete?: (template: SkillTemplate) => void;
@@ -197,8 +197,8 @@ export function TemplateCard({
           {template.description}
         </p>
 
-        {/* Use This button */}
-        {template.is_active && (
+        {/* Use This button — hidden when onUseThis not provided (legacy Add Skill removed) */}
+        {template.is_active && onUseThis && (
           <Button
             size="sm"
             variant="outline"

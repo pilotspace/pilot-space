@@ -45,7 +45,6 @@ import { CreateTemplateModal } from '../components/create-template-modal';
 import { EditTemplateModal } from '../components/edit-template-modal';
 import { PluginsTabContent } from '../components/plugins-tab-content';
 import { ActionButtonsTabContent } from '../components/action-buttons-tab-content';
-import { SkillAddModal } from '../components/skill-add-modal';
 import { ConfirmActionDialog } from '../components/confirm-action-dialog';
 
 const ChatView = lazy(() =>
@@ -172,10 +171,6 @@ export const SkillsSettingsPage = observer(function SkillsSettingsPage() {
     }
   }, [currentWorkspace?.id, workspaceSlug, pilotSpaceStore]);
 
-  // Skill generator modal state
-  const [generatorOpen, setGeneratorOpen] = React.useState(false);
-  const [selectedTemplate, setSelectedTemplate] = React.useState<SkillTemplate | null>(null);
-
   // Create/edit template modal state
   const [createTemplateOpen, setCreateTemplateOpen] = React.useState(false);
   const [templateToEdit, setTemplateToEdit] = React.useState<SkillTemplate | null>(null);
@@ -250,11 +245,6 @@ export const SkillsSettingsPage = observer(function SkillsSettingsPage() {
   // ---------------------------------------------------------------------------
   // Handlers: Templates
   // ---------------------------------------------------------------------------
-
-  const handleUseThis = (template: SkillTemplate) => {
-    setSelectedTemplate(template);
-    setGeneratorOpen(true);
-  };
 
   const handleEditTemplate = (template: SkillTemplate) => {
     setTemplateToEdit(template);
@@ -391,10 +381,6 @@ export const SkillsSettingsPage = observer(function SkillsSettingsPage() {
                 <Wand2 className="mr-1.5 h-4 w-4" />
                 Create Skill
               </Button>
-              <Button size="sm" onClick={() => setGeneratorOpen(true)}>
-                <Plus className="mr-1.5 h-4 w-4" />
-                Add Skill
-              </Button>
             </div>
           )}
           {activeTab === 'plugins' && isAdmin && (
@@ -461,28 +447,12 @@ export const SkillsSettingsPage = observer(function SkillsSettingsPage() {
               <TemplateCatalog
                 workspaceSlug={workspaceSlug}
                 isAdmin={isAdmin}
-                onUseThis={handleUseThis}
                 onEditTemplate={isAdmin ? handleEditTemplate : undefined}
                 onToggleTemplateActive={isAdmin ? handleToggleTemplateActive : undefined}
                 onDeleteTemplate={isAdmin ? handleDeleteTemplate : undefined}
               />
             </section>
           </div>
-
-          {/* Add Skill Modal (dual-mode: Manual + AI Generate) */}
-          <SkillAddModal
-            open={generatorOpen}
-            onOpenChange={(v) => {
-              setGeneratorOpen(v);
-              if (!v) setTimeout(() => setSelectedTemplate(null), 200);
-            }}
-            defaultTab={selectedTemplate ? 'ai-generate' : 'manual'}
-            defaultMode="personal"
-            showModeToggle={isAdmin}
-            workspaceId={workspaceId}
-            workspaceSlug={workspaceSlug}
-            template={selectedTemplate}
-          />
 
           {/* Skill Detail Modal */}
           <SkillDetailModal

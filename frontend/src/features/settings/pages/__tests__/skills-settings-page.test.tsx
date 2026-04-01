@@ -266,18 +266,6 @@ describe('SkillsSettingsPage', () => {
       expect(screen.getByText('Custom Skill')).toBeInTheDocument();
     });
 
-    it('should render Add Skill button', () => {
-      mockUserSkills.mockReturnValue({
-        data: mockUserSkillsList,
-        isLoading: false,
-        isError: false,
-        error: null,
-      });
-
-      renderPage();
-      expect(screen.getByRole('button', { name: /Add Skill/ })).toBeEnabled();
-    });
-
     it('should show Skill Templates section heading', () => {
       mockUserSkills.mockReturnValue({
         data: [],
