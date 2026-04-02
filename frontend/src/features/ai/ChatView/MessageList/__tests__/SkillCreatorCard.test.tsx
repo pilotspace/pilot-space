@@ -3,17 +3,42 @@
  * Phase 64-03
  */
 
-import * as React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SkillCreatorCard } from '../SkillCreatorCard';
 
-// Mock MonacoFileEditor (lazy-loaded) — not renderable in jsdom
-vi.mock('@/features/code/components/MonacoFileEditor', () => ({
-  default: function MockMonacoEditor(props: { content: string }) {
-    return React.createElement('div', { 'data-testid': 'monaco-editor' }, props.content);
+// Mock CodeMirror 6 packages — editor is not renderable in jsdom
+vi.mock('@codemirror/view', () => ({
+  EditorView: Object.assign(
+    vi.fn().mockImplementation(() => ({
+      destroy: vi.fn(),
+      state: { doc: { toString: () => '' } },
+    })),
+    {
+      updateListener: { of: vi.fn(() => []) },
+      theme: vi.fn(() => []),
+    }
+  ),
+  keymap: { of: vi.fn(() => []) },
+}));
+
+vi.mock('@codemirror/state', () => ({
+  EditorState: {
+    create: vi.fn(() => ({})),
   },
+}));
+
+vi.mock('@codemirror/lang-markdown', () => ({
+  markdown: vi.fn(() => []),
+}));
+
+vi.mock('codemirror', () => ({
+  basicSetup: [],
+}));
+
+vi.mock('@codemirror/basic-setup', () => ({
+  basicSetup: [],
 }));
 
 const defaultProps = {
@@ -42,9 +67,11 @@ describe('SkillCreatorCard', () => {
     expect(screen.getByText('A test skill description')).toBeInTheDocument();
   });
 
-  it('shows content in compact preview by default', () => {
+  it('shows content in read-only mode by default', () => {
     render(<SkillCreatorCard {...defaultProps} onSave={onSave} onTest={onTest} />);
+    // Content is shown in a <pre> element; check for partial text
     expect(screen.getByText(/Do something useful/)).toBeInTheDocument();
+    expect(screen.queryByTestId('codemirror-editor')).not.toBeInTheDocument();
   });
 
   it('shows "Updated" badge when isUpdate=true', () => {
@@ -57,13 +84,14 @@ describe('SkillCreatorCard', () => {
     expect(screen.getByText('New')).toBeInTheDocument();
   });
 
-  it('clicking Edit button opens modal with Monaco editor', async () => {
+  it('clicking Edit button opens modal with CodeMirror editor', async () => {
     const user = userEvent.setup();
     render(<SkillCreatorCard {...defaultProps} onSave={onSave} onTest={onTest} />);
     const editButton = screen.getByRole('button', { name: /edit/i });
     await user.click(editButton);
+    // Modal opens with the skill name in the dialog title
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
-    expect(await screen.findByTestId('monaco-editor')).toBeInTheDocument();
+    expect(screen.getByTestId('codemirror-editor')).toBeInTheDocument();
   });
 
   it('calls onTest with current content when Test button clicked', async () => {

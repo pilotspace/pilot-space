@@ -2,21 +2,20 @@
  * SkillCreatorCard — inline skill preview and editor card in ChatView.
  *
  * Renders skill name, frontmatter description, and SKILL.md content.
- * Edit/Preview opens a large modal dialog with Monaco editor.
+ * Edit/Preview opens a large modal dialog with CodeMirror 6 editor.
  * Has Save and Test action buttons.
  *
- * CRITICAL: Must NOT be observer() — Monaco inside a MobX tracking scope causes
+ * CRITICAL: Must NOT be observer() — CodeMirror inside a MobX tracking scope causes
  * the same flushSync/React 19 issue as TipTap. Use React.memo + local useState.
  *
  * Phase 64-03
  */
 'use client';
 
-import { memo, useState, Suspense, lazy } from 'react';
+import { memo, useState, useEffect, useRef } from 'react';
 import { Wand2, Pencil, Eye, PlayCircle, Save, CheckCircle, Maximize2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
 import {
   Dialog,
   DialogContent,
@@ -24,8 +23,62 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 
-// Lazy-load Monaco — heavy bundle, only needed when modal opens
-const MonacoFileEditor = lazy(() => import('@/features/code/components/MonacoFileEditor'));
+// CodeMirror 6 — per locked user decision (not Monaco, not textarea)
+import { EditorView } from '@codemirror/view';
+import { EditorState } from '@codemirror/state';
+import { markdown } from '@codemirror/lang-markdown';
+import { basicSetup } from 'codemirror';
+
+interface SkillCodeMirrorEditorProps {
+  value: string;
+  onChange: (v: string) => void;
+  maxHeight?: string;
+}
+
+/**
+ * Thin CodeMirror 6 wrapper for markdown editing.
+ * Mounted once via useEffect; external content changes are NOT synced back
+ * (content flows out via onChange callback only).
+ * NOT observer() — lives outside MobX tracking.
+ */
+function SkillCodeMirrorEditor({ value, onChange, maxHeight = '250px' }: SkillCodeMirrorEditorProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const viewRef = useRef<EditorView | null>(null);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    const state = EditorState.create({
+      doc: value,
+      extensions: [
+        basicSetup,
+        markdown(),
+        EditorView.updateListener.of((update) => {
+          if (update.docChanged) {
+            onChange(update.state.doc.toString());
+          }
+        }),
+        EditorView.theme({
+          '&': { maxHeight, fontSize: '13px' },
+          '.cm-scroller': { overflow: 'auto', fontFamily: 'JetBrains Mono, monospace' },
+          '.cm-content': { padding: '12px' },
+        }),
+      ],
+    });
+
+    const view = new EditorView({ state, parent: containerRef.current });
+    viewRef.current = view;
+
+    return () => {
+      view.destroy();
+      viewRef.current = null;
+    };
+    // Mount once — content flows out via onChange
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return <div ref={containerRef} data-testid="codemirror-editor" />;
+}
 
 export interface SkillCreatorCardProps {
   skillName: string;
@@ -43,7 +96,7 @@ export interface SkillCreatorCardProps {
 /**
  * SkillCreatorCard — chat card for reviewing and editing a generated skill.
  *
- * memo() wrapper ensures no MobX observer() — Monaco must be outside
+ * memo() wrapper ensures no MobX observer() — CodeMirror 6 must be outside
  * MobX tracking to avoid nested flushSync errors in React 19.
  */
 export const SkillCreatorCard = memo<SkillCreatorCardProps>(function SkillCreatorCard({
@@ -148,7 +201,7 @@ export const SkillCreatorCard = memo<SkillCreatorCardProps>(function SkillCreato
         )}
       </div>
 
-      {/* Large editing/preview modal with Monaco */}
+      {/* Large editing/preview modal */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
         <DialogContent className="sm:max-w-3xl max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
           <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
@@ -207,19 +260,15 @@ export const SkillCreatorCard = memo<SkillCreatorCardProps>(function SkillCreato
             )}
           </DialogHeader>
 
-          <div className="flex-1 min-h-[400px]">
+          <div className="flex-1 overflow-y-auto">
             {isEditing ? (
-              <Suspense fallback={<Skeleton className="h-full w-full" />}>
-                <MonacoFileEditor
-                  fileId={`skill-${skillName}`}
-                  content={editedContent}
-                  language="markdown"
-                  onChange={(v) => setEditedContent(v)}
-                  onSave={() => onSave?.(editedContent)}
-                />
-              </Suspense>
+              <SkillCodeMirrorEditor
+                value={editedContent}
+                onChange={setEditedContent}
+                maxHeight="60vh"
+              />
             ) : (
-              <pre className="text-sm font-mono whitespace-pre-wrap p-6 leading-relaxed overflow-auto h-full">
+              <pre className="text-sm font-mono whitespace-pre-wrap p-6 leading-relaxed">
                 {displayContent}
               </pre>
             )}
