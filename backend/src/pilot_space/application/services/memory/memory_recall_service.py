@@ -20,6 +20,11 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import UUID
 
+from pilot_space.ai.telemetry.memory_metrics import (
+    record_recall_hit,
+    record_recall_latency_ms,
+    record_recall_miss,
+)
 from pilot_space.application.services.memory.graph_search_service import (
     GraphSearchPayload,
     GraphSearchService,
@@ -147,10 +152,13 @@ class MemoryRecallService:
         # 1. Fast-path cache check (no lock needed for read)
         cached = await self._cache_get(cache_input)
         if cached is not None:
+            elapsed_ms = (time.perf_counter() - t0) * 1000.0
+            record_recall_hit()
+            record_recall_latency_ms(elapsed_ms)
             return RecallResult(
                 items=cached,
                 cache_hit=True,
-                elapsed_ms=(time.perf_counter() - t0) * 1000.0,
+                elapsed_ms=elapsed_ms,
             )
 
         # 2. Single-flight: concurrent callers share one in-flight call
@@ -159,10 +167,13 @@ class MemoryRecallService:
             # 3. Re-check cache after acquiring the lock
             cached = await self._cache_get(cache_input)
             if cached is not None:
+                elapsed_ms = (time.perf_counter() - t0) * 1000.0
+                record_recall_hit()
+                record_recall_latency_ms(elapsed_ms)
                 return RecallResult(
                     items=cached,
                     cache_hit=True,
-                    elapsed_ms=(time.perf_counter() - t0) * 1000.0,
+                    elapsed_ms=elapsed_ms,
                 )
 
             # 4. Delegate to GraphSearchService
@@ -186,10 +197,13 @@ class MemoryRecallService:
             # 6. Cache the result
             await self._cache_set(cache_input, items)
 
+        elapsed_ms = (time.perf_counter() - t0) * 1000.0
+        record_recall_miss()
+        record_recall_latency_ms(elapsed_ms)
         return RecallResult(
             items=items,
             cache_hit=False,
-            elapsed_ms=(time.perf_counter() - t0) * 1000.0,
+            elapsed_ms=elapsed_ms,
         )
 
     # ------------------------------------------------------------------
