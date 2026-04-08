@@ -66,6 +66,28 @@ ACTION_CLASSIFICATIONS: dict[str, ActionClassification] = (
 )
 
 
+def _short_tool_name(tool_name: str) -> str:
+    """Strip the ``mcp__<server>__`` prefix from a fully qualified MCP tool.
+
+    ``ACTION_CLASSIFICATIONS`` is keyed by short names (e.g. ``update_issue``),
+    but ``ALL_TOOL_NAMES`` contains fully qualified MCP names
+    (e.g. ``mcp__pilot-issues__update_issue``). This helper bridges the two.
+    """
+    if tool_name.startswith("mcp__"):
+        _, _, rest = tool_name.partition("__")
+        if "__" in rest:
+            return rest.split("__", 1)[1]
+    return tool_name
+
+
+def _classify(tool_name: str) -> ActionClassification | None:
+    """Return the DD-003 classification for a tool, or ``None`` if unknown."""
+    if tool_name in ACTION_CLASSIFICATIONS:
+        return ACTION_CLASSIFICATIONS[tool_name]
+    short = _short_tool_name(tool_name)
+    return ACTION_CLASSIFICATIONS.get(short)
+
+
 @dataclass(frozen=True, slots=True)
 class ResolvedToolPermission:
     """Merged per-tool view returned from ``list(workspace_id)``."""
@@ -87,7 +109,7 @@ class BulkApplyResult:
 
 def _default_mode_for(tool_name: str) -> ToolPermissionMode:
     """Translate DD-003 default classification to a ``ToolPermissionMode``."""
-    c = ACTION_CLASSIFICATIONS.get(tool_name, ActionClassification.DEFAULT_REQUIRE_APPROVAL)
+    c = _classify(tool_name) or ActionClassification.DEFAULT_REQUIRE_APPROVAL
     if c is ActionClassification.AUTO_EXECUTE:
         return ToolPermissionMode.AUTO
     return ToolPermissionMode.ASK
@@ -199,7 +221,7 @@ class PermissionService:
                 )
 
         # Tier 4: DD-003 default classification.
-        if tool_name in ACTION_CLASSIFICATIONS:
+        if _classify(tool_name) is not None:
             return _default_mode_for(tool_name)
 
         # Tier 5: unknown tool — safe default.
@@ -226,8 +248,7 @@ class PermissionService:
         """
         # DD-003 invariant — mirrors permission_handler.py:273-284.
         if (
-            ACTION_CLASSIFICATIONS.get(tool_name)
-            is ActionClassification.CRITICAL_REQUIRE_APPROVAL
+            _classify(tool_name) is ActionClassification.CRITICAL_REQUIRE_APPROVAL
             and mode is ToolPermissionMode.AUTO
         ):
             raise InvalidPolicyError(
