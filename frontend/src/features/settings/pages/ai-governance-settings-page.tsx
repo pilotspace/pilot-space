@@ -29,6 +29,12 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { apiClient } from '@/services/api';
+import { useStore } from '@/stores';
+import { ToolPermissionsTable } from '../components/tool-permissions-table';
+import { PolicyTemplatePicker } from '../components/policy-template-picker';
+import { PermissionAuditLog } from '../components/permission-audit-log';
+import { MemoryRecallPlayground } from '../components/memory-recall-playground';
+import { GdprForgetUserCard } from '../components/gdpr-forget-user-card';
 
 // ---- Types ----
 
@@ -250,6 +256,9 @@ function PolicyRowItem({
 export function AIGovernanceSettingsPage() {
   const params = useParams();
   const workspaceSlug = params?.workspaceSlug as string;
+  // Phase 69 endpoints use workspace UUID, not slug.
+  const { workspaceStore } = useStore();
+  const workspaceId = workspaceStore.currentWorkspace?.id;
 
   const { data: policyRows, isLoading } = useAIPolicy(workspaceSlug);
   const setPolicy = useSetAIPolicy(workspaceSlug);
@@ -365,6 +374,33 @@ export function AIGovernanceSettingsPage() {
           Owner-role policies are not configurable. Owners always have auto-execute authority over
           all AI actions. To restrict an owner, change their workspace role.
         </p>
+
+        {/* Phase 69 — Granular Tool Permissions (DD-003) */}
+        <div className="space-y-4 border-t pt-6">
+          <div className="space-y-1">
+            <h2 className="text-lg font-semibold tracking-tight">Granular Tool Permissions</h2>
+            <p className="text-sm text-muted-foreground">
+              Per-MCP-tool approval mode. Apply a preset template or tune individual tools.
+              Tools that always require approval (DD-003) cannot be set to Auto.
+            </p>
+          </div>
+          <PolicyTemplatePicker workspaceId={workspaceId} />
+          <ToolPermissionsTable workspaceId={workspaceId} />
+          <PermissionAuditLog workspaceId={workspaceId} />
+        </div>
+
+        {/* Phase 69 — Long-term memory admin */}
+        <div className="space-y-4 border-t pt-6">
+          <div className="space-y-1">
+            <h2 className="text-lg font-semibold tracking-tight">Long-term Memory</h2>
+            <p className="text-sm text-muted-foreground">
+              Inspect what the AI will recall, pin essentials, forget noise. Use the GDPR action
+              for compliance-driven erasure.
+            </p>
+          </div>
+          <MemoryRecallPlayground workspaceId={workspaceId} />
+          <GdprForgetUserCard workspaceId={workspaceId} />
+        </div>
       </div>
     </div>
   );
