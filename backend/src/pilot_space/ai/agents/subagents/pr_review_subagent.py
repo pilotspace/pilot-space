@@ -209,17 +209,39 @@ class PRReviewSubagent(StreamingSDKBaseAgent[PRReviewInput, PRReviewOutput]):
                 enqueue_pr_review_findings,
             )
 
-            return asyncio.create_task(
-                enqueue_pr_review_findings(
+            async def _gated_enqueue() -> None:
+                """Phase 70-06: resolve the workspace opt-out flag at
+                call time, then delegate to the producer. Runs in the
+                background task so the sync emit_review_findings entry
+                point stays non-blocking."""
+                resolved_enabled = enabled
+                try:
+                    from pilot_space.application.services.workspace_ai_settings_toggles import (
+                        get_producer_toggles,
+                    )
+                    from pilot_space.infrastructure.database import get_db_session
+
+                    async with get_db_session() as _s:
+                        _toggles = await get_producer_toggles(_s, context.workspace_id)
+                    resolved_enabled = enabled and _toggles.pr_review_finding
+                except Exception:
+                    _logger.exception(
+                        "pr_review_finding producer: settings read failed "
+                        "(workspace=%s) — falling back to enabled=%s",
+                        context.workspace_id,
+                        enabled,
+                    )
+                await enqueue_pr_review_findings(
                     queue_client=self._queue_client,
                     workspace_id=context.workspace_id,
                     actor_user_id=context.user_id,
                     repo=repo,
                     pr_number=pr_number,
                     comments=comments,
-                    enabled=enabled,
+                    enabled=resolved_enabled,
                 )
-            )
+
+            return asyncio.create_task(_gated_enqueue())
         except Exception:
             _logger.exception("pr_review_finding_producer_schedule_failed")
             return None

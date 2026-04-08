@@ -49,6 +49,7 @@ TASK_GRAPH_EXPIRATION = "graph_expiration"
 TASK_DOCUMENT_INGESTION = "document_ingestion"
 TASK_ARTIFACT_CLEANUP = "artifact_cleanup"
 TASK_SEND_INVITATION_EMAIL = "send_invitation_email"
+TASK_SUMMARIZE_NOTE = "summarize_note"  # Phase 70-06
 
 # RLS bypass allowlist (PROD-04): task types that are intentionally
 # cross-workspace or system-scoped. MemoryWorker skips set_rls_context
@@ -102,12 +103,19 @@ class MemoryWorker:
         ollama_base_url: str = "http://localhost:11434",
         anthropic_api_key: str | None = None,
         storage_client: SupabaseStorageClient | None = None,
+        llm_gateway: object | None = None,
+        redis_client: object | None = None,
     ) -> None:
         self.queue = queue
         self._session_factory = session_factory
         self._google_api_key = google_api_key
         self._anthropic_api_key = anthropic_api_key
         self._storage_client = storage_client
+        # Phase 70-06: LLMGateway + Redis are optional; only the
+        # summarize_note handler uses them. When unset, summarize_note
+        # still runs but short-circuits on the LLM call.
+        self._llm_gateway = llm_gateway
+        self._redis_client = redis_client
         self._embedding_service = EmbeddingService(
             EmbeddingConfig(openai_api_key=openai_api_key, ollama_base_url=ollama_base_url)
         )
@@ -196,6 +204,7 @@ class MemoryWorker:
             TASK_DOCUMENT_INGESTION,
             TASK_ARTIFACT_CLEANUP,
             TASK_SEND_INVITATION_EMAIL,
+            TASK_SUMMARIZE_NOTE,
         ):
             logger.debug("MemoryWorker: skipping unknown task_type %s", task_type)
             await self.queue.nack(
@@ -354,6 +363,19 @@ class MemoryWorker:
                 return {"task_type": task_type, "deleted_count": 0, "skipped": True}
             count = await run_artifact_cleanup(session, self._storage_client)
             return {"task_type": task_type, "deleted_count": count}
+
+        if task_type == TASK_SUMMARIZE_NOTE:
+            from pilot_space.infrastructure.queue.handlers.summarize_note_handler import (
+                SummarizeNoteHandler,
+            )
+
+            handler = SummarizeNoteHandler(  # type: ignore[assignment]
+                session=session,
+                llm_gateway=self._llm_gateway,  # type: ignore[arg-type]
+                queue=self.queue,
+                redis_client=self._redis_client,
+            )
+            return await handler.handle(payload)
 
         if task_type == TASK_SEND_INVITATION_EMAIL:
             from pilot_space.infrastructure.queue.handlers.invitation_email_handler import (

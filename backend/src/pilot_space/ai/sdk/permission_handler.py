@@ -289,7 +289,41 @@ class PermissionHandler:
         self._workspace_settings = workspace_settings or {}
         self._permission_service = permission_service
         self._queue_client = queue_client
+        # Wave 2 placeholder retained as a "default" for environments
+        # without a DB session on the approval service. The real lookup
+        # happens in ``_is_user_correction_enabled`` below (Phase 70-06
+        # Task 3) on every producer invocation.
         self._user_correction_enabled = user_correction_enabled
+
+    async def _is_user_correction_enabled(self, workspace_id: UUID | None) -> bool:
+        """Read the workspace user_correction opt-out flag at call time.
+
+        Per-call lookup (no caching) — producers are rare and the
+        ``workspaces`` row is typically hot in the session cache. On any
+        error we fall back to the constructor default so the corrective
+        signal is still persisted by default.
+        """
+        if workspace_id is None:
+            return self._user_correction_enabled
+        try:
+            from sqlalchemy.ext.asyncio import AsyncSession
+
+            session = getattr(self._approval_service, "session", None)
+            if not isinstance(session, AsyncSession):
+                return self._user_correction_enabled
+            from pilot_space.application.services.workspace_ai_settings_toggles import (
+                get_producer_toggles,
+            )
+
+            toggles = await get_producer_toggles(session, workspace_id)
+            return toggles.user_correction
+        except Exception:
+            logger.exception(
+                "permission_handler: user_correction settings read failed "
+                "(workspace=%s) — falling back to default",
+                workspace_id,
+            )
+            return self._user_correction_enabled
 
     def _get_classification(
         self,
@@ -395,6 +429,7 @@ class PermissionHandler:
                         enqueue_user_correction_memory,
                     )
 
+                    _uc_enabled = await self._is_user_correction_enabled(workspace_id)
                     await enqueue_user_correction_memory(
                         queue_client=self._queue_client,
                         workspace_id=workspace_id,
@@ -404,7 +439,7 @@ class PermissionHandler:
                         tool_name=action_name,
                         reason=f"Tool {action_name!r} denied by workspace policy",
                         referenced_turn_index=None,
-                        enabled=self._user_correction_enabled,
+                        enabled=_uc_enabled,
                     )
                 except Exception:  # must never block the deny raise
                     logger.exception(
@@ -558,16 +593,18 @@ class PermissionHandler:
                     if isinstance(action_data, dict)
                     else None
                 ) or getattr(request, "action_type", None)
+                _reject_ws = getattr(request, "workspace_id", None)
+                _uc_enabled_rej = await self._is_user_correction_enabled(_reject_ws)
                 await enqueue_user_correction_memory(
                     queue_client=self._queue_client,
-                    workspace_id=getattr(request, "workspace_id", None),
+                    workspace_id=_reject_ws,
                     actor_user_id=reviewed_by,
                     session_id="",
                     subtype="user_reject",
                     tool_name=str(tool_name) if tool_name is not None else None,
                     reason=reason or "user rejected approval request",
                     referenced_turn_index=None,
-                    enabled=self._user_correction_enabled,
+                    enabled=_uc_enabled_rej,
                 )
         except Exception:  # must never interfere with reject flow
             logger.exception(

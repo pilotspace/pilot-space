@@ -46,6 +46,7 @@ from pilot_space.infrastructure.database.models.project import Project as Projec
 from pilot_space.infrastructure.database.repositories.knowledge_graph_repository import (
     KnowledgeGraphRepository,
 )
+from pilot_space.infrastructure.queue.models import QueueName
 from pilot_space.infrastructure.queue.supabase_queue import SupabaseQueueClient
 
 __all__ = ["TASK_KG_POPULATE", "KgPopulateHandler"]
@@ -57,6 +58,12 @@ TASK_KG_POPULATE = "kg_populate"
 _SIMILARITY_THRESHOLD = 0.75
 _MAX_SIMILAR_EDGES = 5
 _MIN_CHUNK_CHARS = 50  # merge heading sections shorter than this
+
+# Phase 70-06: delay before the summarizer fires for a note after the raw
+# chunks land. The delay is a debounce window — concurrent updates to the
+# same note inside the window are collapsed via the pre-enqueue pgmq dedup
+# check below.
+_SUMMARIZE_DELAY_SECONDS = 300
 
 
 @dataclass(frozen=True, slots=True)
@@ -536,12 +543,91 @@ class KgPopulateHandler:
             edges_created,
             belongs_to,
         )
+
+        # Phase 70-06: schedule a delayed summarize_note job. Non-fatal —
+        # failure does not affect the note_chunk write result. Gated on
+        # the workspace opt-in toggle (default OFF).
+        await self._maybe_enqueue_summarize(
+            workspace_id=note.workspace_id,
+            actor_user_id=p.actor_user_id,
+            note_id=p.entity_id,
+        )
+
         return {
             "success": True,
             "node_ids": [str(n) for n in all_node_ids],
             "chunks": len(chunks),
             "edges": edges_created,
         }
+
+    async def _maybe_enqueue_summarize(
+        self,
+        *,
+        workspace_id: UUID,
+        actor_user_id: UUID,
+        note_id: UUID,
+    ) -> None:
+        """Schedule a delayed summarize_note job if the workspace opts in.
+
+        Dedup: skip if an unconsumed ``summarize_note`` message for the
+        same ``note_id`` is already queued (pgmq query). On any error
+        (settings read, pgmq query, enqueue) the call is a no-op — the
+        summarizer is a background best-effort producer and must never
+        fail the primary note write path.
+        """
+        if self._queue is None:
+            return
+        try:
+            from pilot_space.application.services.workspace_ai_settings_toggles import (
+                get_producer_toggles,
+            )
+
+            toggles = await get_producer_toggles(self._session, workspace_id)
+            if not toggles.summarizer:
+                return
+        except Exception:
+            logger.exception(
+                "KgPopulateHandler: summarize opt-in read failed (workspace=%s) — skip",
+                workspace_id,
+            )
+            return
+
+        # Dedup against pgmq.q_ai_normal. SQLite / test envs lack the
+        # pgmq schema — contextlib.suppress keeps those paths silent so
+        # unit tests can exercise the enqueue without a real queue.
+        with contextlib.suppress(Exception):
+            dup_stmt = text(
+                """
+                SELECT 1 FROM pgmq.q_ai_normal
+                WHERE (message->>'task_type') = 'summarize_note'
+                  AND (message->>'note_id') = :note_id
+                LIMIT 1
+                """
+            )
+            result = await self._session.execute(dup_stmt, {"note_id": str(note_id)})
+            if result.first() is not None:
+                logger.debug(
+                    "KgPopulateHandler: summarize_note dedup hit for note %s", note_id
+                )
+                return
+
+        try:
+            await self._queue.enqueue(
+                QueueName.AI_NORMAL,
+                {
+                    "task_type": "summarize_note",
+                    "workspace_id": str(workspace_id),
+                    "actor_user_id": str(actor_user_id),
+                    "note_id": str(note_id),
+                },
+                delay_seconds=_SUMMARIZE_DELAY_SECONDS,
+            )
+        except Exception:
+            logger.exception(
+                "KgPopulateHandler: summarize_note enqueue failed (workspace=%s note=%s)",
+                workspace_id,
+                note_id,
+            )
 
     async def _handle_project(self, p: _KgPopulatePayload) -> dict[str, Any]:
         project = await self._session.get(ProjectModel, p.entity_id)

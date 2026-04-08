@@ -1330,6 +1330,30 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
                                     enqueue_agent_turn_memory,
                                 )
 
+                                # Phase 70-06 (Task 3): read the workspace
+                                # opt-out flag BEFORE scheduling the
+                                # background task. We must not do the DB
+                                # lookup inside the create_task closure
+                                # because the request session may be
+                                # closed by the time it runs.
+                                _agent_turn_enabled = True
+                                try:
+                                    from pilot_space.application.services.workspace_ai_settings_toggles import (
+                                        get_producer_toggles,
+                                    )
+
+                                    if db_session is not None:
+                                        _toggles = await get_producer_toggles(
+                                            db_session, context.workspace_id
+                                        )
+                                        _agent_turn_enabled = _toggles.agent_turn
+                                except Exception:
+                                    logger.exception(
+                                        "agent_turn producer: settings read failed "
+                                        "(workspace=%s) — defaulting to enabled",
+                                        context.workspace_id,
+                                    )
+
                                 _ttft_val = locals().get("ttft")
                                 _ttft_ms = (
                                     round(_ttft_val * 1000, 1) if _ttft_val else None
@@ -1348,7 +1372,7 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
                                             "ttft_ms": _ttft_ms,
                                             "duration_ms": _duration_val,
                                         },
-                                        enabled=True,
+                                        enabled=_agent_turn_enabled,
                                     )
                                 )
                                 self._background_tasks.add(_turn_task)
