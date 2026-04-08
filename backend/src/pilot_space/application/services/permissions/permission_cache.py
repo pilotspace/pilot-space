@@ -153,3 +153,16 @@ class PermissionCache:
         self._subscriber_task = asyncio.create_task(
             _run(), name="permissions-invalidate-subscriber"
         )
+
+    async def stop(self) -> None:
+        """Cancel the invalidation subscriber task (shutdown hook)."""
+        task = self._subscriber_task
+        if task is None or task.done():
+            return
+        task.cancel()
+        try:
+            await task
+        except (asyncio.CancelledError, Exception):
+            pass
+        finally:
+            self._subscriber_task = None

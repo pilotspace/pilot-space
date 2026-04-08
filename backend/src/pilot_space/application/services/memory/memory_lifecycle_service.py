@@ -23,6 +23,7 @@ from uuid import UUID
 from sqlalchemy import and_, delete, select, update
 
 from pilot_space.domain.exceptions import ForbiddenError, NotFoundError
+from pilot_space.domain.memory.memory_type import MEMORY_TYPE_TO_NODE_TYPE
 from pilot_space.infrastructure.database.models.graph_node import GraphNodeModel
 from pilot_space.infrastructure.logging import get_logger
 
@@ -49,6 +50,7 @@ class ForgetPayload:
 @dataclass(frozen=True, slots=True)
 class GDPRForgetPayload:
     user_id: UUID
+    workspace_id: UUID
 
 
 class MemoryLifecycleService:
@@ -124,16 +126,30 @@ class MemoryLifecycleService:
     # ------------------------------------------------------------------
 
     async def gdpr_forget_user(self, payload: GDPRForgetPayload) -> int:
-        """Hard-delete every graph node whose ``user_id`` matches.
+        """Hard-delete memory nodes owned by ``user_id`` within a workspace.
 
-        Caller MUST be in a service-role / admin context. Returns the
+        Scoped to (workspace_id, user_id) and restricted to Phase 69 memory
+        node types — a workspace admin cannot purge another workspace's data,
+        and non-memory nodes (issues, notes, etc.) are untouched. Returns the
         number of nodes deleted.
         """
+        memory_node_types = {nt.value for nt in MEMORY_TYPE_TO_NODE_TYPE.values()}
         result = await self._session.execute(
-            delete(GraphNodeModel).where(GraphNodeModel.user_id == payload.user_id)
+            delete(GraphNodeModel).where(
+                and_(
+                    GraphNodeModel.user_id == payload.user_id,
+                    GraphNodeModel.workspace_id == payload.workspace_id,
+                    GraphNodeModel.node_type.in_(memory_node_types),
+                )
+            )
         )
         deleted = getattr(result, "rowcount", 0) or 0
-        logger.info("memory_lifecycle: gdpr_forget user=%s deleted=%d", payload.user_id, deleted)
+        logger.info(
+            "memory_lifecycle: gdpr_forget workspace=%s user=%s deleted=%d",
+            payload.workspace_id,
+            payload.user_id,
+            deleted,
+        )
         return deleted
 
     # ------------------------------------------------------------------

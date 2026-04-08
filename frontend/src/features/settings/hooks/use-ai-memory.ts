@@ -66,7 +66,9 @@ export function usePinMemory(workspaceId: string | undefined) {
 export function useForgetMemory(workspaceId: string | undefined) {
   return useMutation({
     mutationFn: (memoryId: string) =>
-      apiClient.delete(`/workspaces/${workspaceId}/ai/memory/${memoryId}`),
+      apiClient.delete<{ forgotten: boolean }>(
+        `/workspaces/${workspaceId}/ai/memory/${memoryId}`
+      ),
     onSuccess: () => toast.success('Memory forgotten'),
     onError: (err) => toast.error(err instanceof Error ? err.message : 'Failed to forget memory'),
   });

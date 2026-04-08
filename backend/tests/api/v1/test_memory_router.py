@@ -230,7 +230,7 @@ async def test_admin_can_pin(
 ) -> None:
     resp = await admin_client.post(f"{BASE}/{MEMORY_ID}/pin")
     assert resp.status_code == 200, resp.text
-    assert resp.json() == {"success": True}
+    assert resp.json() == {"pinned": True}
     assert len(fake_lifecycle.pin_calls) == 1
     assert fake_lifecycle.pin_calls[0].node_id == MEMORY_ID
     assert fake_lifecycle.pin_calls[0].workspace_id == WORKSPACE_ID
@@ -247,7 +247,7 @@ async def test_admin_can_forget(
 ) -> None:
     resp = await admin_client.delete(f"{BASE}/{MEMORY_ID}")
     assert resp.status_code == 200, resp.text
-    assert resp.json() == {"success": True}
+    assert resp.json() == {"forgotten": True}
     assert len(fake_lifecycle.forget_calls) == 1
     assert fake_lifecycle.forget_calls[0].node_id == MEMORY_ID
 
@@ -268,9 +268,10 @@ async def test_admin_can_gdpr_forget(
         json={"user_id": str(TARGET_USER_ID)},
     )
     assert resp.status_code == 200, resp.text
-    assert resp.json() == {"success": True}
+    assert resp.json() == {"deleted": 3}
     assert len(fake_lifecycle.gdpr_calls) == 1
     assert fake_lifecycle.gdpr_calls[0].user_id == TARGET_USER_ID
+    assert fake_lifecycle.gdpr_calls[0].workspace_id == WORKSPACE_ID
 
 
 def test_routes_use_empty_string_on_collection_roots() -> None:

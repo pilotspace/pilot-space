@@ -250,6 +250,18 @@ class SuccessResponse(BaseModel):
     success: bool
 
 
+class PinResponse(BaseModel):
+    pinned: bool
+
+
+class ForgetResponse(BaseModel):
+    forgotten: bool
+
+
+class GdprForgetResponse(BaseModel):
+    deleted: int
+
+
 @router.post(
     "/workspaces/{workspace_id}/ai/memory/recall",
     response_model=RecallResponse,
@@ -298,7 +310,7 @@ async def recall_memory(
 
 @router.post(
     "/workspaces/{workspace_id}/ai/memory/{memory_id}/pin",
-    response_model=SuccessResponse,
+    response_model=PinResponse,
     summary="Pin a memory node",
 )
 async def pin_memory(
@@ -307,7 +319,7 @@ async def pin_memory(
     current_user: CurrentUser,
     session: DbSession,
     service: MemoryLifecycleServiceDep,
-) -> SuccessResponse:
+) -> PinResponse:
     """Pin a memory node so it survives decay sweeps. Admin-only."""
     _ = session
     await service.pin(
@@ -317,12 +329,12 @@ async def pin_memory(
             actor_user_id=current_user.user_id,
         )
     )
-    return SuccessResponse(success=True)
+    return PinResponse(pinned=True)
 
 
 @router.delete(
     "/workspaces/{workspace_id}/ai/memory/{memory_id}",
-    response_model=SuccessResponse,
+    response_model=ForgetResponse,
     summary="Forget (soft-delete) a memory node",
 )
 async def forget_memory(
@@ -331,7 +343,7 @@ async def forget_memory(
     current_user: CurrentUser,
     session: DbSession,
     service: MemoryLifecycleServiceDep,
-) -> SuccessResponse:
+) -> ForgetResponse:
     """Soft-delete a memory node. Admin-only."""
     _ = session
     await service.forget(
@@ -341,29 +353,28 @@ async def forget_memory(
             actor_user_id=current_user.user_id,
         )
     )
-    return SuccessResponse(success=True)
+    return ForgetResponse(forgotten=True)
 
 
 @router.post(
     "/workspaces/{workspace_id}/ai/memory/gdpr-forget-user",
-    response_model=SuccessResponse,
-    summary="GDPR hard-delete all memories for a user",
+    response_model=GdprForgetResponse,
+    summary="GDPR hard-delete a user's memories within this workspace",
 )
 async def gdpr_forget_user(
     workspace_id: WorkspaceAdminId,
     body: GdprForgetRequest,
     session: DbSession,
     service: MemoryLifecycleServiceDep,
-) -> SuccessResponse:
-    """Hard-delete every memory node owned by ``user_id``. Admin-only.
+) -> GdprForgetResponse:
+    """Hard-delete every memory node owned by ``user_id`` within the
+    enclosing workspace. Admin-only.
 
-    Note: ``workspace_id`` from the path is intentionally NOT forwarded to
-    the service. ``MemoryLifecycleService.gdpr_forget_user`` is a global
-    hard delete keyed only on ``user_id`` (per its docstring); admin
-    authorization on the enclosing workspace is the actual access guard
-    for this endpoint.
+    Scoped to ``workspace_id`` so a workspace admin cannot purge data from
+    other workspaces. Restricted to Phase 69 memory node types only.
     """
     _ = session
-    _ = workspace_id  # admin auth guard only; service is global-scope
-    await service.gdpr_forget_user(GDPRForgetPayload(user_id=body.user_id))
-    return SuccessResponse(success=True)
+    deleted = await service.gdpr_forget_user(
+        GDPRForgetPayload(user_id=body.user_id, workspace_id=workspace_id)
+    )
+    return GdprForgetResponse(deleted=deleted)

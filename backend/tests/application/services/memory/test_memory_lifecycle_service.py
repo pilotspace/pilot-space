@@ -122,7 +122,9 @@ async def test_gdpr_forget_hard_deletes_by_user_id():
     session.execute = AsyncMock(return_value=result)
 
     svc = MemoryLifecycleService(session)
-    deleted = await svc.gdpr_forget_user(GDPRForgetPayload(user_id=uuid4()))
+    deleted = await svc.gdpr_forget_user(
+        GDPRForgetPayload(user_id=uuid4(), workspace_id=uuid4())
+    )
     assert deleted == 2
     assert session.execute.await_count == 1
 

@@ -165,6 +165,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             logger.warning("redis_connect_failed — running in degraded mode")
             redis_client = None
 
+    # Phase 69: subscribe permission cache to cross-worker invalidation channel
+    permission_cache = container.permission_cache()
+    if redis_client is not None and redis_client.client is not None:
+        try:
+            await permission_cache.subscribe_invalidations(redis_client.client)
+            logger.info("permission_cache_invalidations_subscribed")
+        except Exception:
+            logger.exception("permission_cache_subscribe_failed")
+
     # Start digest worker for homepage digest generation
     digest_worker_task: asyncio.Task[None] | None = None
     digest_worker = None
@@ -267,6 +276,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.info("notification_worker_stopped")
     if notification_worker_task:
         notification_worker_task.cancel()
+    try:
+        await permission_cache.stop()
+    except Exception:
+        logger.debug("permission_cache_stop_failed", exc_info=True)
     if redis_client is not None:
         await redis_client.disconnect()
         logger.info("redis_disconnected")
