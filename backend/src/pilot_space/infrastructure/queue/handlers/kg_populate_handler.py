@@ -233,19 +233,26 @@ class KgPopulateHandler:
                 )
             )
         except IntegrityError as exc:
-            # Partial unique index uq_graph_nodes_agent_turn_cache (migration 106)
-            # scopes agent_turn dedup to (workspace_id, session_id, turn_index).
-            # Replay hits the index — ACK the job and move on. Only treat as
-            # duplicate when the failing index matches; otherwise re-raise.
+            # Partial unique indexes shipped in migrations 106 / 107 scope
+            # dedup per memory type:
+            #   * uq_graph_nodes_agent_turn_cache      (migration 106)
+            #       (workspace_id, session_id, turn_index)
+            #   * uq_graph_nodes_pr_review_finding     (migration 107)
+            #       (workspace_id, repo, pr_number, file_path, line_number)
+            # Replay hits one of these — rollback, ACK, and move on. Only
+            # treat as duplicate when the failing index matches; otherwise
+            # re-raise.
             msg = str(exc.orig) if exc.orig is not None else str(exc)
-            if "uq_graph_nodes_agent_turn_cache" in msg:
+            known_dedup_indexes = (
+                "uq_graph_nodes_agent_turn_cache",
+                "uq_graph_nodes_pr_review_finding",
+            )
+            if any(name in msg for name in known_dedup_indexes):
                 await self._session.rollback()
                 logger.info(
-                    "KgPopulateHandler: duplicate %s replay (workspace=%s session=%s turn=%s) — ACK",
+                    "KgPopulateHandler: duplicate %s replay (workspace=%s) — ACK",
                     memory_type.value,
                     workspace_id,
-                    metadata.get("session_id"),
-                    metadata.get("turn_index"),
                 )
                 return {
                     "success": True,
