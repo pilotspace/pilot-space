@@ -13,9 +13,10 @@ Create Date: 2026-04-07
 from __future__ import annotations
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy import text
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "105_workspace_tool_permissions"
