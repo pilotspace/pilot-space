@@ -875,11 +875,44 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
             sdk_params.get("model", self.DEFAULT_MODEL_TIER.model_id),
             bool(provider_config.base_url),
         )
+        # Phase 69-05: filter DENY-mode tools out of allowed_tools before
+        # handing them to the SDK. The permission_handler also fails closed
+        # at call time, but removing from advertised tool list is the
+        # defence-in-depth first line.
+        raw_allowed_tools = sdk_params.get("allowed_tools", [])
+        filtered_allowed_tools = raw_allowed_tools
+        try:
+            from pilot_space.ai.sdk.permission_handler import filter_denied_tools
+            from pilot_space.container.container import get_container
+            from pilot_space.domain.permissions.tool_permission_mode import (
+                ToolPermissionMode,
+            )
+
+            _perm_svc = get_container().permission_service()
+            _resolved = await _perm_svc.list_all(context.workspace_id)
+            _denied_names = {
+                r.tool_name for r in _resolved if r.mode is ToolPermissionMode.DENY
+            }
+            if _denied_names:
+                filtered_allowed_tools = filter_denied_tools(
+                    raw_allowed_tools, _denied_names
+                )
+                logger.info(
+                    "[SDK/Space] Filtered %d denied tools from allowed_tools",
+                    len(raw_allowed_tools) - len(filtered_allowed_tools),
+                )
+        except Exception:
+            logger.debug(
+                "[SDK/Space] Could not resolve PermissionService for DENY filter; "
+                "passing allowed_tools through unfiltered",
+                exc_info=True,
+            )
+
         sdk_options = ClaudeAgentOptions(
             model=_model,
             cwd=sdk_params.get("cwd"),
             setting_sources=sdk_params.get("setting_sources", ["project"]),
-            allowed_tools=sdk_params.get("allowed_tools", []),
+            allowed_tools=filtered_allowed_tools,
             mcp_servers=mcp_servers,
             sandbox=sdk_params.get("sandbox"),
             permission_mode=sdk_params.get("permission_mode", "default"),

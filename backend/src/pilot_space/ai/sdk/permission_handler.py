@@ -20,9 +20,27 @@ from pilot_space.ai.infrastructure.approval import ActionType
 from pilot_space.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from pilot_space.ai.infrastructure.approval import ApprovalService
+    from pilot_space.application.services.permissions.permission_service import (
+        PermissionService,
+    )
 
 logger = get_logger(__name__)
+
+
+def filter_denied_tools(
+    allowed_tools: list[str],
+    denied_tools: Iterable[str],
+) -> list[str]:
+    """Return ``allowed_tools`` with every name in ``denied_tools`` removed.
+
+    Pure function — unit-testable without mocks. Used at SDK config build
+    time so DENY-mode tools are never advertised to the model.
+    """
+    denied_set = set(denied_tools)
+    return [t for t in allowed_tools if t not in denied_set]
 
 
 class ActionClassification(StrEnum):
@@ -237,15 +255,23 @@ class PermissionHandler:
         self,
         approval_service: ApprovalService,
         workspace_settings: dict[str, Any] | None = None,
+        permission_service: PermissionService | None = None,
     ):
         """Initialize handler.
 
         Args:
             approval_service: ApprovalService for persistence
             workspace_settings: Optional workspace-specific overrides
+            permission_service: Optional granular tool permission service
+                (Phase 69). When provided, ``check_permission`` consults it
+                first — DENY raises ``PermissionDeniedError``, AUTO proceeds
+                unless the in-memory DD-003 classification is CRITICAL
+                (defense-in-depth — CRITICAL cannot be downgraded even if
+                the DB row was tampered with).
         """
         self._approval_service = approval_service
         self._workspace_settings = workspace_settings or {}
+        self._permission_service = permission_service
 
     def _get_classification(
         self,
@@ -311,11 +337,58 @@ class PermissionHandler:
         Returns:
             PermissionResult with approval decision
         """
-        # Get classification for this action
-        classification = self._get_classification(
+        # Default in-memory DD-003 classification (defense-in-depth baseline)
+        default_classification = self._get_classification(
             action_name,
             self._workspace_settings.get("approval_overrides"),
         )
+
+        # Phase 69: consult granular PermissionService when wired.
+        classification = default_classification
+        if self._permission_service is not None:
+            from pilot_space.application.services.permissions.exceptions import (
+                PermissionDeniedError,
+            )
+            from pilot_space.domain.permissions.tool_permission_mode import (
+                ToolPermissionMode,
+            )
+
+            try:
+                mode = await self._permission_service.resolve(
+                    workspace_id, action_name
+                )
+            except Exception:
+                logger.exception(
+                    "PermissionService.resolve failed for workspace=%s tool=%s; "
+                    "falling back to in-memory classification",
+                    workspace_id,
+                    action_name,
+                )
+                mode = None
+
+            if mode is ToolPermissionMode.DENY:
+                raise PermissionDeniedError(
+                    f"Tool {action_name!r} denied by workspace policy",
+                )
+            if mode is ToolPermissionMode.AUTO:
+                # DD-003 defense-in-depth: CRITICAL can never be auto-executed,
+                # even if the DB row (or a compromised override) says otherwise.
+                if (
+                    default_classification
+                    == ActionClassification.CRITICAL_REQUIRE_APPROVAL
+                ):
+                    classification = ActionClassification.CRITICAL_REQUIRE_APPROVAL
+                else:
+                    classification = ActionClassification.AUTO_EXECUTE
+            elif mode is ToolPermissionMode.ASK:
+                if (
+                    default_classification
+                    == ActionClassification.CRITICAL_REQUIRE_APPROVAL
+                ):
+                    classification = ActionClassification.CRITICAL_REQUIRE_APPROVAL
+                else:
+                    classification = ActionClassification.DEFAULT_REQUIRE_APPROVAL
+            # mode is None → use default_classification unchanged
 
         # AUTO_EXECUTE actions proceed immediately
         if classification == ActionClassification.AUTO_EXECUTE:
