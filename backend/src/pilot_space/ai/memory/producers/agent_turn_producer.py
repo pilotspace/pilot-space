@@ -130,6 +130,9 @@ async def enqueue_agent_turn_memory(
         "session_id": session_id,
         "turn_index": turn_index,
         "tools_used": list(tools_used or []),
+        # Phase 70-06: write-path discriminator — agent_turn rows are
+        # conversational cache entries. Recall path filters on this key.
+        "kind": "turn",
     }
 
     payload: dict[str, Any] = {

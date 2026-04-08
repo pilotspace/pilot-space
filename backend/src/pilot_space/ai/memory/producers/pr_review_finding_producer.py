@@ -97,6 +97,9 @@ def _build_payload(
         "category": category,
         "suggestion": comment.suggestion,
         "code_snippet": comment.code_snippet,
+        # Phase 70-06: write-path discriminator — PR review comments are
+        # durable "finding" records. Recall path filters on this key.
+        "kind": "finding",
     }
     label = f"{category}:{comment.file_path}:{comment.line_number}"
     return {

@@ -114,6 +114,9 @@ async def enqueue_user_correction_memory(
             "subtype": subtype,
             "tool_name": tool_name,
             "referenced_turn_index": referenced_turn_index,
+            # Phase 70-06: write-path discriminator — corrections are the
+            # "deny/refusal" bucket regardless of subtype. Recall path filters.
+            "kind": "deny",
         },
     }
 

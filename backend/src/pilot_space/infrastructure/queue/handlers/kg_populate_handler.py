@@ -338,6 +338,8 @@ class KgPopulateHandler:
                             "chunk_index": chunk.chunk_index,
                             "heading": chunk.heading,
                             "parent_issue_id": str(p.entity_id),
+                            # Phase 70-06: raw-content discriminator
+                            "kind": "raw",
                         },
                     )
                     for chunk in chunks
@@ -481,6 +483,8 @@ class KgPopulateHandler:
                         "heading_level": chunk.heading_level,
                         "parent_note_id": str(p.entity_id),
                         "project_id": str(note.project_id),
+                        # Phase 70-06: raw-content discriminator
+                        "kind": "raw",
                     },
                 )
                 for chunk in chunks

@@ -61,6 +61,13 @@ class RecallPayload:
         types: Restrict to these memory types (None = all 5).
         min_score: Minimum fused score threshold (items below are dropped).
         user_id: Optional user scope for surfacing personal context.
+        kind: Optional write-path discriminator filter (Phase 70-06).
+            ``None`` = no filter (all kinds, including legacy rows that
+            predate the discriminator). When set (e.g. ``"raw"``,
+            ``"summary"``, ``"turn"``, ``"deny"``, ``"finding"``), only
+            nodes whose ``properties.kind`` matches are returned. Rows
+            without a ``kind`` property are treated as ``"raw"`` so
+            pre-Phase-70 data keeps flowing into ``kind="raw"`` results.
     """
 
     workspace_id: UUID
@@ -69,6 +76,7 @@ class RecallPayload:
     types: tuple[MemoryType, ...] | None = None
     min_score: float = _DEFAULT_MIN_SCORE
     user_id: UUID | None = None
+    kind: str | None = None
 
 
 @dataclass(slots=True)
@@ -147,6 +155,7 @@ class MemoryRecallService:
             "k": payload.k,
             "min_score": payload.min_score,
             "user_id": str(payload.user_id) if payload.user_id else None,
+            "kind": payload.kind,
         }
 
         # 1. Fast-path cache check (no lock needed for read)
@@ -187,11 +196,15 @@ class MemoryRecallService:
                 )
             )
 
-            # 5. Filter by min_score + materialize MemoryItem
+            # 5. Filter by min_score + optional kind discriminator, then
+            # materialize MemoryItem. Legacy rows (no properties.kind) are
+            # treated as "raw" so pre-Phase-70 data keeps flowing when
+            # callers ask for kind="raw" or leave kind unset.
             items: list[MemoryItem] = [
                 _scored_to_memory_item(sn)
                 for sn in result.nodes
                 if sn.score >= payload.min_score
+                and _kind_matches(sn, payload.kind)
             ]
 
             # 6. Cache the result
@@ -263,6 +276,23 @@ def _stable_key(cache_input: Mapping[str, object]) -> str:
 
     payload = json.dumps(cache_input, sort_keys=True, default=str)
     return hashlib.sha256(payload.encode()).hexdigest()
+
+
+def _kind_matches(sn: object, wanted: str | None) -> bool:
+    """Return True if scored node matches the wanted ``properties.kind``.
+
+    ``wanted=None`` → no filter, everything matches.
+    Legacy rows without ``properties.kind`` are treated as ``"raw"`` so
+    pre-Phase-70 data keeps flowing when callers ask for ``kind="raw"``.
+    """
+    if wanted is None:
+        return True
+    node = getattr(sn, "node", None)
+    properties = getattr(node, "properties", None) or {}
+    actual = properties.get("kind") if isinstance(properties, dict) else None
+    if actual is None:
+        return wanted == "raw"
+    return actual == wanted
 
 
 def _scored_to_memory_item(sn: object) -> MemoryItem:
