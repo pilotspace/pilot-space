@@ -20,6 +20,7 @@ import type {
   ErrorEvent,
   CitationEvent,
   MemoryUpdateEvent,
+  MemoryUsedEvent,
   ToolInputDeltaEvent,
   FocusBlockEvent,
   SkillPreviewEvent,
@@ -43,6 +44,7 @@ import {
   isErrorEvent,
   isCitationEvent,
   isMemoryUpdateEvent,
+  isMemoryUsedEvent,
   isToolInputDeltaEvent,
   isContentUpdateEvent,
   isFocusBlockEvent,
@@ -143,6 +145,7 @@ export class PilotSpaceStreamHandler {
         | ErrorEvent
         | CitationEvent
         | MemoryUpdateEvent
+        | MemoryUsedEvent
         | ToolInputDeltaEvent
         | FocusBlockEvent
         | SkillPreviewEvent
@@ -178,6 +181,8 @@ export class PilotSpaceStreamHandler {
         this.handleCitation(event);
       } else if (isMemoryUpdateEvent(event)) {
         this.handleMemoryUpdate(event);
+      } else if (isMemoryUsedEvent(event)) {
+        this.handleMemoryUsed(event);
       } else if (isToolInputDeltaEvent(event)) {
         this.toolCallHandler.handleToolInputDelta(event);
       } else if (isMessageStopEvent(event)) {
@@ -508,6 +513,7 @@ export class PilotSpaceStreamHandler {
     // Consume buffered data from streaming phase (T63, T64)
     const toolCalls = this.store.consumePendingToolCalls();
     const citations = this.store.consumePendingCitations();
+    const memorySources = this.store.consumePendingMemorySources();
 
     // Resolve any tool calls still in 'pending' status (no tool_result received).
     // This happens with models that emit tool_use events without executing tools.
@@ -540,6 +546,7 @@ export class PilotSpaceStreamHandler {
       thinkingSignature: this.store.streamingState.thinkingSignature,
       toolCalls,
       citations,
+      memorySources,
       structuredResult: this.store.consumePendingStructuredResult(),
       questionData: this._pendingQuestionDataList[0],
       questionDataList:
@@ -617,6 +624,17 @@ export class PilotSpaceStreamHandler {
   /** Handle memory_update event — store for UI notification (T73). */
   handleMemoryUpdate(event: MemoryUpdateEvent): void {
     this.store.lastMemoryUpdate = event.data;
+  }
+
+  /**
+   * Phase 69: Handle `memory_used` event — buffer recall sources to attach
+   * to the in-flight assistant message at message_stop. Mirrors the citation
+   * pattern (handleCitation -> consumePendingCitations).
+   */
+  handleMemoryUsed(event: MemoryUsedEvent): void {
+    if (event.data?.sources?.length) {
+      this.store.addPendingMemorySources(event.data.sources);
+    }
   }
 
   // ========================================

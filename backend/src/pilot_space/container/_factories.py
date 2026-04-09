@@ -182,7 +182,23 @@ def create_pilotspace_agent(
     # is only active in request-scoped contexts with a live session.
     cost_tracker = CostTracker(session=None)  # type: ignore[arg-type]
     approval_service = ApprovalService(session=None)  # type: ignore[arg-type]
-    permission_handler = PermissionHandler(approval_service=approval_service)
+
+    # Phase 69-05: wire PermissionService into the handler. Resolved lazily
+    # from the global container to avoid a forward-reference inside the
+    # Container class declaration.
+    permission_service = None
+    try:
+        from pilot_space.container.container import get_container
+
+        permission_service = get_container().permission_service()
+    except Exception:
+        # PermissionService unavailable (e.g. tests without full container).
+        # Handler falls back to in-memory DD-003 classifications.
+        permission_service = None
+    permission_handler = PermissionHandler(
+        approval_service=approval_service,
+        permission_service=permission_service,
+    )
 
     # Skills are now loaded by PilotSpaceAgent from the space's .claude/skills/ directory
     # (DD-086 migration from siloed SkillRegistry to filesystem-based auto-discovery).

@@ -14,28 +14,54 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Path, Request, Response, status
+from fastapi import APIRouter, Depends, Path, Query, Request, Response, status
+from pydantic import Field
 
+from pilot_space.api.v1.dependencies import (
+    MemoryLifecycleServiceDep,
+    MemoryListServiceDep,
+    MemoryRecallServiceDep,
+)
+from pilot_space.api.v1.schemas.base import BaseSchema, BulkResponse
 from pilot_space.api.v1.schemas.memory import (
+    BulkMemoryRequest,
     ConstitutionIngestRequest,
     ConstitutionIngestResponse,
     ConstitutionVersionResponse,
+    MemoryDetailResponse,
+    MemoryListItem,
+    MemoryListResponse,
     MemorySearchEntry,
     MemorySearchRequest,
     MemorySearchResponse,
+    MemoryStatsResponse,
 )
 from pilot_space.application.services.memory.constitution_service import (
     ConstitutionIngestPayload,
     ConstitutionIngestService,
     ConstitutionRuleInput,
 )
+from pilot_space.application.services.memory.memory_lifecycle_service import (
+    ForgetPayload,
+    GDPRForgetPayload,
+    PinPayload,
+)
+from pilot_space.application.services.memory.memory_recall_service import RecallPayload
 from pilot_space.application.services.memory.memory_search_service import (
     MemorySearchPayload,
     MemorySearchService,
 )
 from pilot_space.config import get_settings
-from pilot_space.dependencies.auth import SessionDep, require_workspace_member
+from pilot_space.dependencies.auth import (
+    CurrentUser,
+    DbSession,
+    SessionDep,
+    WorkspaceAdminId,
+    WorkspaceMemberId,
+    require_workspace_member,
+)
 from pilot_space.domain.exceptions import ServiceUnavailableError
+from pilot_space.domain.memory.memory_type import MemoryType
 from pilot_space.infrastructure.database.repositories.constitution_repository import (
     ConstitutionRuleRepository,
 )
@@ -155,6 +181,7 @@ async def ingest_constitution(
     session: SessionDep,
     response: Response,
     _member: Annotated[UUID, Depends(require_workspace_member)],
+    current_user: CurrentUser,
 ) -> ConstitutionIngestResponse:
     """Ingest workspace constitution rules as a new version."""
     response.headers["Deprecation"] = "true"
@@ -183,6 +210,7 @@ async def ingest_constitution(
     result = await service.execute(
         ConstitutionIngestPayload(
             workspace_id=workspace_id,
+            actor_user_id=current_user.user_id,
             rules=rule_inputs,
         )
     )
@@ -191,4 +219,291 @@ async def ingest_constitution(
         version=result.version,
         rule_count=result.rule_count,
         indexing_enqueued=result.indexing_enqueued,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Phase 69 / 69-05-03 — recall + lifecycle (pin / forget / GDPR forget)
+# ---------------------------------------------------------------------------
+
+
+class RecallRequest(BaseSchema):
+    """Body for ``POST /workspaces/{workspace_id}/ai/memory/recall``."""
+
+    query: str = Field(..., min_length=1)
+    k: int = Field(default=8, ge=1, le=50)
+    types: list[str] | None = None
+    min_score: float = Field(default=0.0, ge=0.0, le=1.0)
+
+
+class MemoryItemResponse(BaseSchema):
+    id: str
+    type: str
+    score: float
+    content: str
+    source_id: str | None = None
+    source_type: str | None = None
+
+
+class RecallResponse(BaseSchema):
+    items: list[MemoryItemResponse]
+    cache_hit: bool
+    elapsed_ms: int
+
+
+class GdprForgetRequest(BaseSchema):
+    user_id: UUID
+
+
+class SuccessResponse(BaseSchema):
+    success: bool
+
+
+@router.post(
+    "/workspaces/{workspace_id}/ai/memory/recall",
+    response_model=RecallResponse,
+    summary="Semantic memory recall",
+)
+async def recall_memory(
+    workspace_id: WorkspaceMemberId,
+    body: RecallRequest,
+    current_user: CurrentUser,
+    session: DbSession,
+    service: MemoryRecallServiceDep,
+) -> RecallResponse:
+    """Hybrid semantic recall over the workspace knowledge graph."""
+    _ = session  # ContextVar population — required for DI session lookup.
+
+    types_tuple: tuple[MemoryType, ...] | None = None
+    if body.types is not None:
+        types_tuple = tuple(MemoryType(t) for t in body.types)
+
+    result = await service.recall(
+        RecallPayload(
+            workspace_id=workspace_id,
+            query=body.query,
+            k=body.k,
+            types=types_tuple,
+            min_score=body.min_score,
+            user_id=current_user.user_id,
+        )
+    )
+    return RecallResponse(
+        items=[
+            MemoryItemResponse(
+                id=item.node_id,
+                type=item.source_type,
+                score=item.score,
+                content=item.snippet,
+                source_id=item.source_id,
+                source_type=item.source_type,
+            )
+            for item in result.items
+        ],
+        cache_hit=result.cache_hit,
+        elapsed_ms=int(result.elapsed_ms),
+    )
+
+
+@router.post(
+    "/workspaces/{workspace_id}/ai/memory/{memory_id}/pin",
+    response_model=SuccessResponse,
+    summary="Pin a memory node",
+)
+async def pin_memory(
+    workspace_id: WorkspaceAdminId,
+    memory_id: UUID,
+    current_user: CurrentUser,
+    session: DbSession,
+    service: MemoryLifecycleServiceDep,
+) -> SuccessResponse:
+    """Pin a memory node so it survives decay sweeps. Admin-only."""
+    _ = session
+    await service.pin(
+        PinPayload(
+            workspace_id=workspace_id,
+            node_id=memory_id,
+            actor_user_id=current_user.user_id,
+        )
+    )
+    return SuccessResponse(success=True)
+
+
+@router.delete(
+    "/workspaces/{workspace_id}/ai/memory/{memory_id}",
+    response_model=SuccessResponse,
+    summary="Forget (soft-delete) a memory node",
+)
+async def forget_memory(
+    workspace_id: WorkspaceAdminId,
+    memory_id: UUID,
+    current_user: CurrentUser,
+    session: DbSession,
+    service: MemoryLifecycleServiceDep,
+) -> SuccessResponse:
+    """Soft-delete a memory node. Admin-only."""
+    _ = session
+    await service.forget(
+        ForgetPayload(
+            workspace_id=workspace_id,
+            node_id=memory_id,
+            actor_user_id=current_user.user_id,
+        )
+    )
+    return SuccessResponse(success=True)
+
+
+@router.post(
+    "/workspaces/{workspace_id}/ai/memory/gdpr-forget-user",
+    response_model=SuccessResponse,
+    summary="GDPR hard-delete all memories for a user",
+)
+async def gdpr_forget_user(
+    workspace_id: WorkspaceAdminId,
+    body: GdprForgetRequest,
+    session: DbSession,
+    service: MemoryLifecycleServiceDep,
+) -> SuccessResponse:
+    """Hard-delete memory nodes owned by ``user_id`` within this workspace.
+
+    Scoped to the workspace — an admin of workspace A cannot erase memories
+    belonging to workspace B. For platform-wide GDPR erasure, use a
+    service-role call with ``workspace_id=None``.
+    """
+    _ = session
+    await service.gdpr_forget_user(
+        GDPRForgetPayload(user_id=body.user_id, workspace_id=workspace_id)
+    )
+    return SuccessResponse(success=True)
+
+
+# ---------------------------------------------------------------------------
+# Phase 71: Memory browse — list, stats, bulk, detail (admin-only)
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/workspaces/{workspace_id}/ai/memory/stats",
+    response_model=MemoryStatsResponse,
+    summary="Memory aggregated stats (admin only)",
+)
+async def memory_stats(
+    workspace_id: WorkspaceAdminId,
+    session: DbSession,
+    service: MemoryListServiceDep,
+) -> MemoryStatsResponse:
+    """Return aggregated memory counts by type, pinned count, and last ingestion."""
+    _ = session
+    r = await service.get_stats(workspace_id)
+    return MemoryStatsResponse(
+        total=r.total,
+        by_type=r.by_type,
+        pinned_count=r.pinned_count,
+        last_ingestion=r.last_ingestion,
+    )
+
+
+@router.post(
+    "/workspaces/{workspace_id}/ai/memory/bulk",
+    response_model=BulkResponse[UUID],
+    summary="Bulk pin or forget memories (admin only)",
+)
+async def bulk_memory_action(
+    workspace_id: WorkspaceAdminId,
+    body: BulkMemoryRequest,
+    session: DbSession,
+    service: MemoryListServiceDep,
+    current_user: CurrentUser,
+) -> BulkResponse[UUID]:
+    """Pin or forget multiple memory nodes in one request. Admin-only."""
+    _ = session
+    r = await service.bulk_action(
+        workspace_id, body.action, body.memory_ids, actor_user_id=current_user.user_id
+    )
+    return BulkResponse[UUID](
+        succeeded=r.succeeded,
+        failed=r.failed,
+        total_processed=r.total_processed,
+    )
+
+
+@router.get(
+    "/workspaces/{workspace_id}/ai/memory/{node_id}",
+    response_model=MemoryDetailResponse,
+    summary="Memory node detail with provenance (admin only)",
+)
+async def memory_detail(
+    workspace_id: WorkspaceAdminId,
+    node_id: UUID,
+    session: DbSession,
+    service: MemoryListServiceDep,
+) -> MemoryDetailResponse:
+    """Return full content, properties, and provenance for a single memory node."""
+    _ = session
+    r = await service.get_detail(workspace_id, node_id)
+    return MemoryDetailResponse(
+        id=r.id,
+        node_type=r.node_type,
+        kind=r.kind,
+        label=r.label,
+        content=r.content,
+        properties=r.properties,
+        pinned=r.pinned,
+        source_type=r.source_type,
+        source_id=r.source_id,
+        source_label=r.source_label,
+        source_url=r.source_url,
+        embedding_dim=r.embedding_dim,
+        created_at=r.created_at,
+        updated_at=r.updated_at,
+    )
+
+
+@router.get(
+    "/workspaces/{workspace_id}/ai/memory",
+    response_model=MemoryListResponse,
+    summary="List workspace memories (admin only)",
+)
+async def list_memories(
+    workspace_id: WorkspaceAdminId,
+    session: DbSession,
+    service: MemoryListServiceDep,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=100),
+    node_type: list[str] | None = Query(default=None, alias="type"),
+    kind: str | None = Query(default=None),
+    pinned: bool | None = Query(default=None),
+    q: str | None = Query(default=None, min_length=1),
+) -> MemoryListResponse:
+    """Return a paginated, filterable list of workspace memory nodes. Admin-only."""
+    _ = session
+    r = await service.list_memories(
+        workspace_id,
+        node_types=node_type,
+        kind=kind,
+        pinned=pinned,
+        q=q,
+        offset=offset,
+        limit=limit,
+    )
+    return MemoryListResponse(
+        items=[
+            MemoryListItem(
+                id=item.id,
+                node_type=item.node_type,
+                kind=item.kind,
+                label=item.label,
+                content_snippet=item.content_snippet,
+                pinned=item.pinned,
+                score=item.score,
+                source_type=item.source_type,
+                source_id=item.source_id,
+                created_at=item.created_at,
+            )
+            for item in r.items
+        ],
+        total=r.total,
+        offset=r.offset,
+        limit=r.limit,
+        has_next=r.has_next,
     )

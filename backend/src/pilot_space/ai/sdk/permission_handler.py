@@ -6,6 +6,11 @@ Implements DD-003 (Human-in-the-Loop) approval mechanism:
 - CRITICAL_REQUIRE_APPROVAL: Destructive actions (delete, merge)
 
 Reference: docs/DESIGN_DECISIONS.md#dd-003
+
+NOTE: Edit-before-accept capture (PROD-02 sub-requirement) is descoped to
+Phase 71 — the approval flow is currently approve/reject binary and lacks
+diff plumbing from the frontend. The free-form chat correction heuristic
+is gated behind a Wave 3 sub-toggle (default OFF) and is NOT wired here.
 """
 
 from __future__ import annotations
@@ -20,9 +25,28 @@ from pilot_space.ai.infrastructure.approval import ActionType
 from pilot_space.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from pilot_space.ai.infrastructure.approval import ApprovalService
+    from pilot_space.application.services.permissions.permission_service import (
+        PermissionService,
+    )
+    from pilot_space.infrastructure.queue.supabase_queue import SupabaseQueueClient
 
 logger = get_logger(__name__)
+
+
+def filter_denied_tools(
+    allowed_tools: list[str],
+    denied_tools: Iterable[str],
+) -> list[str]:
+    """Return ``allowed_tools`` with every name in ``denied_tools`` removed.
+
+    Pure function — unit-testable without mocks. Used at SDK config build
+    time so DENY-mode tools are never advertised to the model.
+    """
+    denied_set = set(denied_tools)
+    return [t for t in allowed_tools if t not in denied_set]
 
 
 class ActionClassification(StrEnum):
@@ -237,15 +261,69 @@ class PermissionHandler:
         self,
         approval_service: ApprovalService,
         workspace_settings: dict[str, Any] | None = None,
+        permission_service: PermissionService | None = None,
+        *,
+        queue_client: SupabaseQueueClient | None = None,
+        user_correction_enabled: bool = True,
     ):
         """Initialize handler.
 
         Args:
             approval_service: ApprovalService for persistence
             workspace_settings: Optional workspace-specific overrides
+            permission_service: Optional granular tool permission service
+                (Phase 69). When provided, ``check_permission`` consults it
+                first — DENY raises ``PermissionDeniedError``, AUTO proceeds
+                unless the in-memory DD-003 classification is CRITICAL
+                (defense-in-depth — CRITICAL cannot be downgraded even if
+                the DB row was tampered with).
+            queue_client: Optional ``SupabaseQueueClient`` used by the
+                PROD-02 ``user_correction`` producer. When ``None``, the
+                producer is a no-op (drops with ``enqueue_error``). Wave 3
+                will wire this from the request-scoped container.
+            user_correction_enabled: Wave 3 opt-out flag for the
+                ``user_correction`` producer. Defaults to ``True``;
+                Wave 3 (plan 70-06) threads the real workspace setting.
         """
         self._approval_service = approval_service
         self._workspace_settings = workspace_settings or {}
+        self._permission_service = permission_service
+        self._queue_client = queue_client
+        # Wave 2 placeholder retained as a "default" for environments
+        # without a DB session on the approval service. The real lookup
+        # happens in ``_is_user_correction_enabled`` below (Phase 70-06
+        # Task 3) on every producer invocation.
+        self._user_correction_enabled = user_correction_enabled
+
+    async def _is_user_correction_enabled(self, workspace_id: UUID | None) -> bool:
+        """Read the workspace user_correction opt-out flag at call time.
+
+        Per-call lookup (no caching) — producers are rare and the
+        ``workspaces`` row is typically hot in the session cache. On any
+        error we fall back to the constructor default so the corrective
+        signal is still persisted by default.
+        """
+        if workspace_id is None:
+            return self._user_correction_enabled
+        try:
+            from sqlalchemy.ext.asyncio import AsyncSession
+
+            session = getattr(self._approval_service, "session", None)
+            if not isinstance(session, AsyncSession):
+                return self._user_correction_enabled
+            from pilot_space.application.services.workspace_ai_settings_toggles import (
+                get_producer_toggles,
+            )
+
+            toggles = await get_producer_toggles(session, workspace_id)
+            return toggles.user_correction
+        except Exception:
+            logger.exception(
+                "permission_handler: user_correction settings read failed "
+                "(workspace=%s) — falling back to default",
+                workspace_id,
+            )
+            return self._user_correction_enabled
 
     def _get_classification(
         self,
@@ -311,11 +389,84 @@ class PermissionHandler:
         Returns:
             PermissionResult with approval decision
         """
-        # Get classification for this action
-        classification = self._get_classification(
+        # Default in-memory DD-003 classification (defense-in-depth baseline)
+        default_classification = self._get_classification(
             action_name,
             self._workspace_settings.get("approval_overrides"),
         )
+
+        # Phase 69: consult granular PermissionService when wired.
+        classification = default_classification
+        if self._permission_service is not None:
+            from pilot_space.application.services.permissions.exceptions import (
+                PermissionDeniedError,
+            )
+            from pilot_space.domain.permissions.tool_permission_mode import (
+                ToolPermissionMode,
+            )
+
+            try:
+                mode = await self._permission_service.resolve(
+                    workspace_id, action_name
+                )
+            except Exception:
+                logger.exception(
+                    "PermissionService.resolve failed for workspace=%s tool=%s; "
+                    "falling back to in-memory classification",
+                    workspace_id,
+                    action_name,
+                )
+                mode = None
+
+            if mode is ToolPermissionMode.DENY:
+                # PROD-02: user_correction producer (deny path — fire-and-forget).
+                # Awaited BEFORE the raise so the corrective signal is persisted
+                # even when the deny short-circuits the agent turn. Producer
+                # failures are swallowed inside the helper and must never block
+                # the raise — defensive try/except here is belt-and-braces.
+                try:
+                    from pilot_space.ai.memory.producers.user_correction_producer import (
+                        enqueue_user_correction_memory,
+                    )
+
+                    _uc_enabled = await self._is_user_correction_enabled(workspace_id)
+                    await enqueue_user_correction_memory(
+                        queue_client=self._queue_client,
+                        workspace_id=workspace_id,
+                        actor_user_id=user_id,
+                        session_id="",
+                        subtype="deny",
+                        tool_name=action_name,
+                        reason=f"Tool {action_name!r} denied by workspace policy",
+                        referenced_turn_index=None,
+                        enabled=_uc_enabled,
+                    )
+                except Exception:  # must never block the deny raise
+                    logger.exception(
+                        "user_correction producer failed on deny (non-fatal)"
+                    )
+                raise PermissionDeniedError(
+                    f"Tool {action_name!r} denied by workspace policy",
+                )
+            if mode is ToolPermissionMode.AUTO:
+                # DD-003 defense-in-depth: CRITICAL can never be auto-executed,
+                # even if the DB row (or a compromised override) says otherwise.
+                if (
+                    default_classification
+                    == ActionClassification.CRITICAL_REQUIRE_APPROVAL
+                ):
+                    classification = ActionClassification.CRITICAL_REQUIRE_APPROVAL
+                else:
+                    classification = ActionClassification.AUTO_EXECUTE
+            elif mode is ToolPermissionMode.ASK:
+                if (
+                    default_classification
+                    == ActionClassification.CRITICAL_REQUIRE_APPROVAL
+                ):
+                    classification = ActionClassification.CRITICAL_REQUIRE_APPROVAL
+                else:
+                    classification = ActionClassification.DEFAULT_REQUIRE_APPROVAL
+            # mode is None → use default_classification unchanged
 
         # AUTO_EXECUTE actions proceed immediately
         if classification == ActionClassification.AUTO_EXECUTE:
@@ -424,3 +575,38 @@ class PermissionHandler:
             resolved_by=reviewed_by,
             resolution_note=reason,
         )
+
+        # PROD-02: user_correction producer (user_reject path — fire-and-forget).
+        # Persisted after the reject is committed so the correction reflects
+        # the final state. Producer failures are swallowed — this path must
+        # never fail a successful rejection.
+        try:
+            from pilot_space.ai.memory.producers.user_correction_producer import (
+                enqueue_user_correction_memory,
+            )
+
+            request = await self._approval_service.get_request(approval_id)
+            if request is not None:
+                action_data = getattr(request, "action_data", None) or {}
+                tool_name = (
+                    action_data.get("action_name")
+                    if isinstance(action_data, dict)
+                    else None
+                ) or getattr(request, "action_type", None)
+                _reject_ws = getattr(request, "workspace_id", None)
+                _uc_enabled_rej = await self._is_user_correction_enabled(_reject_ws)
+                await enqueue_user_correction_memory(
+                    queue_client=self._queue_client,
+                    workspace_id=_reject_ws,
+                    actor_user_id=reviewed_by,
+                    session_id="",
+                    subtype="user_reject",
+                    tool_name=str(tool_name) if tool_name is not None else None,
+                    reason=reason or "user rejected approval request",
+                    referenced_turn_index=None,
+                    enabled=_uc_enabled_rej,
+                )
+        except Exception:  # must never interfere with reject flow
+            logger.exception(
+                "user_correction producer failed on user_reject (non-fatal)"
+            )
