@@ -92,7 +92,12 @@ export function MemoryDetailDrawer({
     <Sheet open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <SheetContent side="right" aria-label="Memory detail drawer">
         {isLoading || !detail ? (
-          <DetailSkeleton />
+          <>
+            <SheetHeader>
+              <SheetTitle className="sr-only">Loading memory detail</SheetTitle>
+            </SheetHeader>
+            <DetailSkeleton />
+          </>
         ) : (
           <div className="flex h-full flex-col">
             <SheetHeader>
