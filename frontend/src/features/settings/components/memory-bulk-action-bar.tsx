@@ -38,9 +38,8 @@ export function MemoryBulkActionBar({
       className="sticky bottom-0 flex items-center gap-3 rounded-lg border border-border bg-background p-3 shadow-warm-sm"
       role="toolbar"
       aria-label="Bulk memory actions"
-      aria-live="polite"
     >
-      <span className="text-sm font-medium text-foreground">
+      <span className="text-sm font-medium text-foreground" aria-live="polite" aria-atomic="true">
         {selectedCount} selected
       </span>
 

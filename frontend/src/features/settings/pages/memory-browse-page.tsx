@@ -42,7 +42,7 @@ export function MemoryBrowsePage() {
     [offset, filters, searchQuery],
   );
 
-  const { data: listData } = useMemoryList(workspaceId, params);
+  const { data: listData, isLoading } = useMemoryList(workspaceId, params);
   const resultCount = listData?.total ?? 0;
 
   const bulkAction = useBulkMemoryAction(workspaceId);
@@ -99,9 +99,11 @@ export function MemoryBrowsePage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="relative flex-1 min-w-0">
           <MemorySearchBar value={searchQuery} onChange={handleSearchChange} />
-          <span id="memory-search-results" className="sr-only" aria-live="polite">
-            {resultCount} {resultCount === 1 ? 'result' : 'results'} found
-          </span>
+          {!isLoading && (
+            <span id="memory-search-results" className="sr-only" aria-live="polite" aria-atomic="true">
+              {resultCount} {resultCount === 1 ? 'result' : 'results'} found
+            </span>
+          )}
         </div>
         <MemoryFacetBar filters={filters} onChange={handleFiltersChange} />
       </div>

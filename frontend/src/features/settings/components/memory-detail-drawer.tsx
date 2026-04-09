@@ -124,7 +124,7 @@ export function MemoryDetailDrawer({
                   <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
                     Content
                   </h4>
-                  <pre className="whitespace-pre-wrap text-sm text-foreground bg-muted/30 rounded-md p-3 max-h-64 overflow-y-auto">
+                  <pre className="whitespace-pre-wrap text-sm text-foreground bg-muted/30 rounded-md p-3 max-h-[50vh] overflow-y-auto overflow-x-auto">
                     {detail.content}
                   </pre>
                 </section>

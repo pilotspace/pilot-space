@@ -110,7 +110,7 @@ export function MemoryTelemetryCard({ workspaceId }: MemoryTelemetryCardProps) {
                     <TableCell className="text-right tabular-nums">{enqueued}</TableCell>
                     <TableCell className="text-right tabular-nums">
                       {dropped > 0 ? (
-                        <span className="text-amber-600 dark:text-amber-400">{dropped}</span>
+                        <span className="text-destructive">{dropped}</span>
                       ) : (
                         '0'
                       )}

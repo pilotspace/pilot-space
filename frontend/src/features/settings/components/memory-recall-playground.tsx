@@ -59,12 +59,15 @@ export function MemoryRecallPlayground({ workspaceId }: MemoryRecallPlaygroundPr
       </CardHeader>
       <CardContent className="space-y-3">
         <form onSubmit={handleSubmit} className="space-y-2">
+          <label htmlFor="recall-query" className="text-sm font-medium text-foreground">
+            Query
+          </label>
           <Textarea
+            id="recall-query"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="e.g. authentication architecture decisions"
             rows={2}
-            aria-label="Recall query"
           />
           <div className="flex items-center justify-between">
             {meta && (

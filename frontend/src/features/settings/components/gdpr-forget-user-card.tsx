@@ -69,10 +69,11 @@ export function GdprForgetUserCard({ workspaceId }: GdprForgetUserCardProps) {
             onChange={(e) => setUserId(e.target.value)}
             placeholder="00000000-0000-0000-0000-000000000000"
             aria-invalid={userId.length > 0 && !isValid}
+            aria-describedby={userId.length > 0 && !isValid ? 'gdpr-error' : undefined}
             className="font-mono text-xs"
           />
           {userId.length > 0 && !isValid && (
-            <p className="text-xs text-destructive">Must be a valid UUID.</p>
+            <p id="gdpr-error" className="text-xs text-destructive" role="alert">Must be a valid UUID.</p>
           )}
         </div>
         <Button

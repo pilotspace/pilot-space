@@ -170,6 +170,7 @@ export function MemoryBrowseTable({
           <TableHeader>
             <TableRow>
               <TableHead className="w-[40px]">
+                <span className="sr-only">Selection</span>
                 <Checkbox
                   checked={allOnPageSelected && items.length > 0 ? true : false}
                   onCheckedChange={handleSelectAll}
@@ -205,6 +206,7 @@ export function MemoryBrowseTable({
                   onClick={(e) => handleRowClick(item, e)}
                   onKeyDown={(e) => handleRowKeyDown(item, e)}
                   aria-selected={selectedIds.has(item.id)}
+                  aria-label={`Memory: ${item.label || item.nodeType}`}
                   data-state={selectedIds.has(item.id) ? 'selected' : undefined}
                 >
                   <TableCell>

@@ -208,7 +208,7 @@ function PolicyCell({
           checked={requiresApproval}
           onCheckedChange={(checked) => onToggle(role, actionType, checked)}
           aria-label={`${role} ${actionType}: ${requiresApproval ? 'approval required' : 'auto'}`}
-          className="data-[state=checked]:bg-amber-500"
+          className="data-[state=checked]:bg-warning"
         />
         <span className="text-xs text-muted-foreground min-w-[52px]">
           {requiresApproval ? 'Approval' : 'Auto'}

@@ -80,7 +80,7 @@ export function MemoryFacetBar({ filters, onChange }: MemoryFacetBarProps) {
         value={filters.type?.[0] ?? 'all'}
         onValueChange={handleTypeChange}
       >
-        <SelectTrigger className="w-[160px]" aria-label="Filter by type">
+        <SelectTrigger className="w-full sm:w-[160px]" aria-label="Filter by type">
           <SelectValue placeholder="All Types" />
         </SelectTrigger>
         <SelectContent>
@@ -97,7 +97,7 @@ export function MemoryFacetBar({ filters, onChange }: MemoryFacetBarProps) {
         value={filters.kind ?? 'all'}
         onValueChange={handleKindChange}
       >
-        <SelectTrigger className="w-[130px]" aria-label="Filter by kind">
+        <SelectTrigger className="w-full sm:w-[130px]" aria-label="Filter by kind">
           <SelectValue placeholder="All Kinds" />
         </SelectTrigger>
         <SelectContent>

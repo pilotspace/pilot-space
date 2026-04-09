@@ -54,17 +54,17 @@ const MODE_META: Record<
   auto: {
     label: 'Auto',
     Icon: Shield,
-    activeClass: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/40',
+    activeClass: 'bg-primary/10 text-primary border-primary/30',
   },
   ask: {
     label: 'Ask',
     Icon: ShieldAlert,
-    activeClass: 'bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/40',
+    activeClass: 'bg-warning/10 text-warning border-warning/30',
   },
   deny: {
     label: 'Deny',
     Icon: ShieldOff,
-    activeClass: 'bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/40',
+    activeClass: 'bg-destructive/10 text-destructive border-destructive/30',
   },
 };
 
