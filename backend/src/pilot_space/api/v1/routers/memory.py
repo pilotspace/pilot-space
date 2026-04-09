@@ -58,6 +58,7 @@ from pilot_space.dependencies.auth import (
     SessionDep,
     WorkspaceAdminId,
     WorkspaceMemberId,
+    require_workspace_admin,
     require_workspace_member,
 )
 from pilot_space.domain.exceptions import ServiceUnavailableError
@@ -180,8 +181,8 @@ async def ingest_constitution(
     fastapi_request: Request,
     session: SessionDep,
     response: Response,
-    _member: Annotated[UUID, Depends(require_workspace_member)],
-    current_user: CurrentUser,
+    # SEC-04: constitution ingest is admin-only — rules affect all workspace members
+    _admin: Annotated[UUID, Depends(require_workspace_admin)],
 ) -> ConstitutionIngestResponse:
     """Ingest workspace constitution rules as a new version."""
     response.headers["Deprecation"] = "true"
