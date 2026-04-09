@@ -15,14 +15,14 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Path, Query, Request, Response, status
-from pydantic import BaseModel, Field
+from pydantic import Field
 
 from pilot_space.api.v1.dependencies import (
     MemoryLifecycleServiceDep,
     MemoryListServiceDep,
     MemoryRecallServiceDep,
 )
-from pilot_space.api.v1.schemas.base import BulkResponse
+from pilot_space.api.v1.schemas.base import BaseSchema, BulkResponse
 from pilot_space.api.v1.schemas.memory import (
     BulkMemoryRequest,
     ConstitutionIngestRequest,
@@ -227,7 +227,7 @@ async def ingest_constitution(
 # ---------------------------------------------------------------------------
 
 
-class RecallRequest(BaseModel):
+class RecallRequest(BaseSchema):
     """Body for ``POST /workspaces/{workspace_id}/ai/memory/recall``."""
 
     query: str = Field(..., min_length=1)
@@ -236,7 +236,7 @@ class RecallRequest(BaseModel):
     min_score: float = Field(default=0.7, ge=0.0, le=1.0)
 
 
-class MemoryItemResponse(BaseModel):
+class MemoryItemResponse(BaseSchema):
     id: str
     type: str
     score: float
@@ -245,17 +245,17 @@ class MemoryItemResponse(BaseModel):
     source_type: str | None = None
 
 
-class RecallResponse(BaseModel):
+class RecallResponse(BaseSchema):
     items: list[MemoryItemResponse]
     cache_hit: bool
     elapsed_ms: int
 
 
-class GdprForgetRequest(BaseModel):
+class GdprForgetRequest(BaseSchema):
     user_id: UUID
 
 
-class SuccessResponse(BaseModel):
+class SuccessResponse(BaseSchema):
     success: bool
 
 

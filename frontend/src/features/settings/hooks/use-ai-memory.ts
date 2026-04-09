@@ -19,21 +19,21 @@ export interface MemoryItem {
   type: string;
   score: number;
   content: string;
-  source_id?: string | null;
-  source_type?: string | null;
+  sourceId?: string | null;
+  sourceType?: string | null;
 }
 
 export interface MemoryRecallRequest {
   query: string;
   k?: number;
   types?: string[];
-  min_score?: number;
+  minScore?: number;
 }
 
 export interface MemoryRecallResponse {
   items: MemoryItem[];
-  cache_hit: boolean;
-  elapsed_ms: number;
+  cacheHit: boolean;
+  elapsedMs: number;
 }
 
 // ---- Hooks ----

@@ -204,8 +204,8 @@ async def test_member_can_recall(
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert "items" in body
-    assert body["cache_hit"] is False
-    assert isinstance(body["elapsed_ms"], int)
+    assert body["cacheHit"] is False
+    assert isinstance(body["elapsedMs"], int)
     assert len(body["items"]) == 1
     assert body["items"][0]["score"] == pytest.approx(0.91)
     # Service was called with the right payload

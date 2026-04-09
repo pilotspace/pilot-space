@@ -37,7 +37,7 @@ export function MemoryRecallPlayground({ workspaceId }: MemoryRecallPlaygroundPr
     if (!query.trim()) return;
     const data = await recall.mutateAsync({ query: query.trim(), k: 8 });
     setResults(data.items);
-    setMeta({ cacheHit: data.cache_hit, elapsedMs: data.elapsed_ms });
+    setMeta({ cacheHit: data.cacheHit, elapsedMs: data.elapsedMs });
   };
 
   const handleForget = (id: string) => {
@@ -102,9 +102,9 @@ export function MemoryRecallPlayground({ workspaceId }: MemoryRecallPlaygroundPr
                       <span className="text-[11px] text-muted-foreground">
                         score {item.score.toFixed(2)}
                       </span>
-                      {item.source_id && (
+                      {item.sourceId && (
                         <code className="text-[10px] text-muted-foreground">
-                          {item.source_type}/{item.source_id.slice(0, 8)}
+                          {item.sourceType}/{item.sourceId.slice(0, 8)}
                         </code>
                       )}
                     </div>
