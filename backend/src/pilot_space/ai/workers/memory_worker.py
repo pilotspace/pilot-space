@@ -74,6 +74,10 @@ _MAX_NACK_ATTEMPTS = 2
 _EXPIRATION_INTERVAL_S = 24 * 3600
 # Enqueue artifact_cleanup once per hour per worker process.
 _ARTIFACT_CLEANUP_INTERVAL_S = 3600
+# Re-embed graph nodes with NULL embeddings once per hour.
+_EMBEDDING_BACKFILL_INTERVAL_S = 3600
+# Max nodes to re-embed per backfill sweep (avoid flooding the queue).
+_EMBEDDING_BACKFILL_BATCH = 50
 
 
 class MemoryWorker:
@@ -125,6 +129,7 @@ class MemoryWorker:
         # Resets on worker restart, which is acceptable — daily cleanup is best-effort.
         self._last_expiration_enqueue: float = float("-inf")
         self._last_artifact_cleanup_enqueue: float = float("-inf")
+        self._last_embedding_backfill: float = float("-inf")
 
     async def start(self) -> None:
         """Poll loop: dequeue → process → ack/nack."""
@@ -142,6 +147,7 @@ class MemoryWorker:
                 else:
                     await self._maybe_enqueue_expiration()
                     await self._maybe_enqueue_artifact_cleanup()
+                    await self._maybe_backfill_embeddings()
                     await asyncio.sleep(_SLEEP_EMPTY_S)
             except asyncio.CancelledError:
                 logger.info("MemoryWorker cancelled")
@@ -183,6 +189,63 @@ class MemoryWorker:
             logger.info("MemoryWorker: enqueued artifact_cleanup task")
         except Exception:
             logger.exception("MemoryWorker: failed to enqueue artifact_cleanup")
+
+    async def _maybe_backfill_embeddings(self) -> None:
+        """Re-enqueue graph_embedding tasks for nodes with NULL embeddings.
+
+        Runs once per hour. Catches nodes that failed embedding because
+        the provider was down (e.g., Ollama not running). When the provider
+        comes back, these nodes get embedded automatically without manual
+        intervention.
+        """
+        now = time.monotonic()
+        if now - self._last_embedding_backfill < _EMBEDDING_BACKFILL_INTERVAL_S:
+            return
+        self._last_embedding_backfill = now
+
+        try:
+            from sqlalchemy import text
+
+            async with self._session_factory() as session:
+                rows = (
+                    await session.execute(
+                        text(
+                            "SELECT id, workspace_id FROM graph_nodes "
+                            "WHERE embedding IS NULL "
+                            "AND is_deleted = false "
+                            "AND coalesce(content, label, '') != '' "
+                            "ORDER BY created_at DESC "
+                            f"LIMIT {_EMBEDDING_BACKFILL_BATCH}"
+                        )
+                    )
+                ).fetchall()
+
+            if not rows:
+                return
+
+            enqueued = 0
+            for row in rows:
+                try:
+                    await self.queue.enqueue(
+                        QueueName.AI_NORMAL,
+                        {
+                            "task_type": TASK_GRAPH_EMBEDDING,
+                            "node_id": str(row[0]),
+                            "workspace_id": str(row[1]),
+                        },
+                    )
+                    enqueued += 1
+                except Exception:
+                    break  # Queue issue — stop flooding
+
+            if enqueued > 0:
+                logger.info(
+                    "MemoryWorker: backfill enqueued %d graph_embedding tasks "
+                    "for nodes with missing embeddings",
+                    enqueued,
+                )
+        except Exception:
+            logger.exception("MemoryWorker: embedding backfill sweep failed")
 
     async def _process(self, message: object) -> None:
         """Process a single queue message by routing to the correct handler.
