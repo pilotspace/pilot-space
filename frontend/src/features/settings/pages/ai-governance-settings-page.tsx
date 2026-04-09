@@ -281,15 +281,15 @@ export function AIGovernanceSettingsPage() {
 
   return (
     <div className="max-w-5xl px-4 py-6 sm:px-6 lg:px-8">
-      <div className="space-y-6">
+      <div className="space-y-8">
         {/* Page Header */}
         <div className="flex items-start gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted shrink-0">
             <ShieldCheck className="h-5 w-5 text-muted-foreground" />
           </div>
-          <div className="space-y-0.5">
+          <div className="space-y-1">
             <h1 className="text-2xl font-semibold tracking-tight">AI Governance</h1>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-muted-foreground max-w-lg">
               Configure which AI actions require human approval per role. Changes take effect
               immediately for new AI-initiated actions.
             </p>
@@ -297,7 +297,7 @@ export function AIGovernanceSettingsPage() {
         </div>
 
         {/* Legend */}
-        <div className="flex items-center gap-4 text-xs text-muted-foreground">
+        <div className="flex items-center gap-4 text-xs text-muted-foreground border-b pb-4">
           <div className="flex items-center gap-1.5">
             <Switch checked={false} className="h-4 w-7 pointer-events-none" aria-hidden />
             <span>Auto — AI executes without review</span>
@@ -305,7 +305,7 @@ export function AIGovernanceSettingsPage() {
           <div className="flex items-center gap-1.5">
             <Switch
               checked
-              className="h-4 w-7 pointer-events-none data-[state=checked]:bg-amber-500"
+              className="h-4 w-7 pointer-events-none data-[state=checked]:bg-warning"
               aria-hidden
             />
             <span>Approval — requires human review</span>
@@ -378,7 +378,7 @@ export function AIGovernanceSettingsPage() {
         </p>
 
         {/* Phase 69 — Granular Tool Permissions (DD-003) */}
-        <div className="space-y-4 border-t pt-6">
+        <div className="space-y-4 border-t pt-8">
           <div className="space-y-1">
             <h2 className="text-lg font-semibold tracking-tight">Granular Tool Permissions</h2>
             <p className="text-sm text-muted-foreground">
@@ -392,7 +392,7 @@ export function AIGovernanceSettingsPage() {
         </div>
 
         {/* Phase 69 — Long-term memory admin */}
-        <div className="space-y-4 border-t pt-6">
+        <div className="space-y-4 border-t pt-8">
           <div className="space-y-1">
             <h2 className="text-lg font-semibold tracking-tight">Long-term Memory</h2>
             <p className="text-sm text-muted-foreground">
@@ -405,7 +405,7 @@ export function AIGovernanceSettingsPage() {
         </div>
 
         {/* Phase 70 — Memory Intelligence (producers + telemetry) */}
-        <div className="space-y-4 border-t pt-6">
+        <div className="space-y-4 border-t pt-8">
           <div className="space-y-1">
             <h2 className="text-lg font-semibold tracking-tight">Memory Intelligence</h2>
             <p className="text-sm text-muted-foreground">

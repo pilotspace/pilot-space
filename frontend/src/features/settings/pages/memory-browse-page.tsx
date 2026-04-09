@@ -87,16 +87,16 @@ export function MemoryBrowsePage() {
 
   return (
     <div className="px-4 py-6 sm:px-6 lg:px-8 space-y-6">
-      <div className="mb-2">
+      <div>
         <h2 className="text-lg font-semibold text-foreground">Memory</h2>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-muted-foreground max-w-lg">
           Browse, search, and manage AI memory for this workspace.
         </p>
       </div>
 
       <MemoryStatsHeader workspaceId={workspaceId} />
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center border-b pb-4">
         <div className="relative flex-1 min-w-0">
           <MemorySearchBar value={searchQuery} onChange={handleSearchChange} />
           {!isLoading && (
