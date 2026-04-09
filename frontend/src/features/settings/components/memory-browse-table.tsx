@@ -76,7 +76,7 @@ export function MemoryBrowseTable({
   onPageChange,
 }: MemoryBrowseTableProps) {
   const { data, isLoading } = useMemoryList(workspaceId, params);
-  const items = data?.items ?? [];
+  const items = React.useMemo(() => data?.items ?? [], [data?.items]);
   const total = data?.total ?? 0;
   const hasNext = data?.hasNext ?? false;
   const showScore = !!params.q;
