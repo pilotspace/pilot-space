@@ -199,6 +199,7 @@ export function MemoryDetailDrawer({
                 onClick={handlePin}
                 disabled={pinMutation.isPending}
                 className="gap-1"
+                aria-label={detail.pinned ? 'Unpin this memory' : 'Pin this memory'}
               >
                 {detail.pinned ? (
                   <>
@@ -218,6 +219,7 @@ export function MemoryDetailDrawer({
                     size="sm"
                     disabled={forgetMutation.isPending}
                     className="gap-1"
+                    aria-label="Forget this memory"
                   >
                     <Trash2 className="h-3.5 w-3.5" /> Forget
                   </Button>

@@ -51,7 +51,9 @@ export function MemorySearchBar({ value, onChange }: MemorySearchBarProps) {
     <div className="relative flex-1 min-w-[200px]">
       <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
       <Input
-        aria-label="Search memories semantically"
+        role="searchbox"
+        aria-label="Search memories"
+        aria-describedby="memory-search-results"
         placeholder="Search memories semantically..."
         value={local}
         onChange={handleChange}
@@ -61,7 +63,7 @@ export function MemorySearchBar({ value, onChange }: MemorySearchBarProps) {
         <button
           type="button"
           onClick={handleClear}
-          className="absolute right-2 top-1/2 -translate-y-1/2 rounded-sm p-0.5 text-muted-foreground hover:text-foreground transition-colors"
+          className="absolute right-2 top-1/2 -translate-y-1/2 rounded-sm p-0.5 text-muted-foreground hover:text-foreground transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           aria-label="Clear search"
         >
           <X className="h-3.5 w-3.5" />

@@ -15,7 +15,7 @@ import { MemoryFacetBar } from '../components/memory-facet-bar';
 import { MemoryBrowseTable } from '../components/memory-browse-table';
 import { MemoryBulkActionBar } from '../components/memory-bulk-action-bar';
 import { MemoryDetailDrawer } from '../components/memory-detail-drawer';
-import { useBulkMemoryAction } from '../hooks/use-ai-memory';
+import { useBulkMemoryAction, useMemoryList } from '../hooks/use-ai-memory';
 import type { MemoryListParams } from '../hooks/use-ai-memory';
 
 const DEFAULT_LIMIT = 50;
@@ -41,6 +41,9 @@ export function MemoryBrowsePage() {
     }),
     [offset, filters, searchQuery],
   );
+
+  const { data: listData } = useMemoryList(workspaceId, params);
+  const resultCount = listData?.total ?? 0;
 
   const bulkAction = useBulkMemoryAction(workspaceId);
 
@@ -94,7 +97,12 @@ export function MemoryBrowsePage() {
       <MemoryStatsHeader workspaceId={workspaceId} />
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <MemorySearchBar value={searchQuery} onChange={handleSearchChange} />
+        <div className="relative flex-1 min-w-0">
+          <MemorySearchBar value={searchQuery} onChange={handleSearchChange} />
+          <span id="memory-search-results" className="sr-only" aria-live="polite">
+            {resultCount} {resultCount === 1 ? 'result' : 'results'} found
+          </span>
+        </div>
         <MemoryFacetBar filters={filters} onChange={handleFiltersChange} />
       </div>
 
@@ -109,14 +117,16 @@ export function MemoryBrowsePage() {
         onPageChange={handlePageChange}
       />
 
-      {selectedIds.size > 0 && (
-        <MemoryBulkActionBar
-          selectedCount={selectedIds.size}
-          onPin={handleBulkPin}
-          onForget={handleBulkForget}
-          isPending={bulkAction.isPending}
-        />
-      )}
+      <div role="status" aria-live="polite">
+        {selectedIds.size > 0 && (
+          <MemoryBulkActionBar
+            selectedCount={selectedIds.size}
+            onPin={handleBulkPin}
+            onForget={handleBulkForget}
+            isPending={bulkAction.isPending}
+          />
+        )}
+      </div>
 
       <MemoryDetailDrawer
         workspaceId={workspaceId}

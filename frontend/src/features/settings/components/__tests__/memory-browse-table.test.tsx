@@ -156,4 +156,67 @@ describe('MemoryBrowseTable', () => {
     const nextButton = screen.getByRole('button', { name: /next page/i });
     expect(nextButton).toBeDisabled();
   });
+
+  it('calls onRowClick when Enter is pressed on a focused row', async () => {
+    mockUseMemoryList.mockReturnValue(mockResponse(threeItems, 10));
+    const onRowClick = vi.fn();
+    const user = userEvent.setup();
+
+    render(<MemoryBrowseTable {...defaultProps} onRowClick={onRowClick} />);
+
+    const rows = screen.getAllByRole('row');
+    // rows[0] is header, rows[1..3] are data rows
+    const firstDataRow = rows[1]!;
+    firstDataRow.focus();
+    await user.keyboard('{Enter}');
+
+    expect(onRowClick).toHaveBeenCalledWith('mem-1');
+  });
+
+  it('moves focus to next row on ArrowDown', async () => {
+    mockUseMemoryList.mockReturnValue(mockResponse(threeItems, 10));
+    const user = userEvent.setup();
+
+    render(<MemoryBrowseTable {...defaultProps} />);
+
+    const rows = screen.getAllByRole('row');
+    const firstDataRow = rows[1]!;
+    const secondDataRow = rows[2]!;
+    firstDataRow.focus();
+    await user.keyboard('{ArrowDown}');
+
+    expect(document.activeElement).toBe(secondDataRow);
+  });
+
+  it('toggles selection when Space is pressed on a focused row', async () => {
+    mockUseMemoryList.mockReturnValue(mockResponse(threeItems, 10));
+    const onSelectionChange = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <MemoryBrowseTable {...defaultProps} onSelectionChange={onSelectionChange} />,
+    );
+
+    const rows = screen.getAllByRole('row');
+    const firstDataRow = rows[1]!;
+    firstDataRow.focus();
+    await user.keyboard(' ');
+
+    expect(onSelectionChange).toHaveBeenCalledWith(new Set(['mem-1']));
+  });
+
+  it('rows have aria-selected attribute matching selection state', () => {
+    mockUseMemoryList.mockReturnValue(mockResponse(threeItems, 10));
+    render(
+      <MemoryBrowseTable
+        {...defaultProps}
+        selectedIds={new Set(['mem-2'])}
+      />,
+    );
+
+    const rows = screen.getAllByRole('row');
+    // rows[1] = mem-1 (not selected), rows[2] = mem-2 (selected)
+    expect(rows[1]).toHaveAttribute('aria-selected', 'false');
+    expect(rows[2]).toHaveAttribute('aria-selected', 'true');
+  });
 });

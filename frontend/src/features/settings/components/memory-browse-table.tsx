@@ -121,13 +121,42 @@ export function MemoryBrowseTable({
   );
 
   const handleRowKeyDown = React.useCallback(
-    (item: MemoryListItem, e: React.KeyboardEvent) => {
-      if (e.key === 'Enter' || e.key === ' ') {
+    (item: MemoryListItem, e: React.KeyboardEvent<HTMLTableRowElement>) => {
+      if (e.key === 'Enter') {
         e.preventDefault();
         onRowClick(item.id);
+        return;
+      }
+      if (e.key === ' ') {
+        e.preventDefault();
+        // Space toggles selection (like checkbox)
+        const next = new Set(selectedIds);
+        if (next.has(item.id)) {
+          next.delete(item.id);
+        } else {
+          next.add(item.id);
+        }
+        onSelectionChange(next);
+        return;
+      }
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        const nextRow = (e.currentTarget as HTMLElement).nextElementSibling as HTMLElement | null;
+        nextRow?.focus();
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        const prevRow = (e.currentTarget as HTMLElement).previousElementSibling as HTMLElement | null;
+        prevRow?.focus();
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        (e.currentTarget as HTMLElement).blur();
       }
     },
-    [onRowClick],
+    [onRowClick, selectedIds, onSelectionChange],
   );
 
   const columnCount = showScore ? 8 : 7;
@@ -172,9 +201,10 @@ export function MemoryBrowseTable({
                 <TableRow
                   key={item.id}
                   tabIndex={0}
-                  className="cursor-pointer"
+                  className="cursor-pointer focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                   onClick={(e) => handleRowClick(item, e)}
                   onKeyDown={(e) => handleRowKeyDown(item, e)}
+                  aria-selected={selectedIds.has(item.id)}
                   data-state={selectedIds.has(item.id) ? 'selected' : undefined}
                 >
                   <TableCell>

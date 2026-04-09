@@ -4,6 +4,10 @@ Covers MEM-UI-01 and MEM-UI-02 requirements.
 
 Uses AsyncMock for SQLAlchemy session and mocked recall/lifecycle services
 to avoid SQLite/PostgreSQL divergence (JSONB @> operator).
+
+Performance expectation: list endpoint with type filter p95 < 300ms on seeded
+test data (100-1000 nodes). This is validated manually against the dev database
+since SQLite test DB has different performance characteristics. Not measured in CI.
 """
 
 from __future__ import annotations
