@@ -193,15 +193,34 @@ class MemoryWorker:
     async def _maybe_backfill_embeddings(self) -> None:
         """Re-enqueue graph_embedding tasks for nodes with NULL embeddings.
 
-        Runs once per hour. Catches nodes that failed embedding because
-        the provider was down (e.g., Ollama not running). When the provider
-        comes back, these nodes get embedded automatically without manual
-        intervention.
+        Runs on first idle cycle after startup, then hourly. Catches nodes
+        that failed embedding because the provider was down (e.g., Ollama
+        not running). When the provider comes back, these nodes get embedded
+        automatically — no manual scripts needed.
+
+        Flow: check provider health → find NULL-embedding nodes → enqueue.
+        If the provider is still down, skip silently (no point re-enqueuing
+        tasks that will fail again immediately).
         """
         now = time.monotonic()
         if now - self._last_embedding_backfill < _EMBEDDING_BACKFILL_INTERVAL_S:
             return
         self._last_embedding_backfill = now
+
+        try:
+            # Quick health check: can we embed right now?
+            probe = await self._embedding_service.embed("health check")
+            if probe is None:
+                logger.debug(
+                    "MemoryWorker: embedding provider unavailable, skipping backfill"
+                )
+                # Reset timer so we retry sooner (5 min) instead of waiting a full hour
+                self._last_embedding_backfill = now - _EMBEDDING_BACKFILL_INTERVAL_S + 300
+                return
+        except Exception:
+            logger.debug("MemoryWorker: embedding health check failed, skipping backfill")
+            self._last_embedding_backfill = now - _EMBEDDING_BACKFILL_INTERVAL_S + 300
+            return
 
         try:
             from sqlalchemy import text
