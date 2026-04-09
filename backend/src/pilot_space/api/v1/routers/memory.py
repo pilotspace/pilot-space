@@ -233,7 +233,7 @@ class RecallRequest(BaseSchema):
     query: str = Field(..., min_length=1)
     k: int = Field(default=8, ge=1, le=50)
     types: list[str] | None = None
-    min_score: float = Field(default=0.7, ge=0.0, le=1.0)
+    min_score: float = Field(default=0.0, ge=0.0, le=1.0)
 
 
 class MemoryItemResponse(BaseSchema):

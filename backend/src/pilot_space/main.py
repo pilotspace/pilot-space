@@ -97,6 +97,7 @@ from pilot_space.api.v1.routers import (
     workspace_tasks_router,
     workspaces_router,
 )
+from pilot_space.api.v1.routers.my_projects import router as my_projects_router
 from pilot_space.api.v1.routers.skill_templates import (
     router as skill_templates_router,
 )
@@ -324,6 +325,7 @@ app.include_router(auth_router, prefix=API_V1_PREFIX)
 app.include_router(auth_sso_router, prefix=API_V1_PREFIX)
 app.include_router(custom_roles_router, prefix=API_V1_PREFIX)
 app.include_router(workspaces_router, prefix=API_V1_PREFIX)
+app.include_router(my_projects_router, prefix=f"{API_V1_PREFIX}/workspaces")
 app.include_router(projects_router, prefix=API_V1_PREFIX)
 app.include_router(issues_router, prefix=API_V1_PREFIX)
 app.include_router(issue_implement_router, prefix=API_V1_PREFIX)

@@ -41,7 +41,7 @@ logger = get_logger(__name__)
 
 _CACHE_AGENT_NAME = "memory_recall"
 _DEFAULT_K = 8
-_DEFAULT_MIN_SCORE = 0.7
+_DEFAULT_MIN_SCORE = 0.0
 
 # Module-level single-flight lock registry keyed by cache key.
 # Prevents thundering-herd: concurrent identical recalls share one in-flight
