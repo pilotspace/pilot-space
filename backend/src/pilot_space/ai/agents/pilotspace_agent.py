@@ -838,9 +838,7 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
                     ),
                     "sources": [
                         {
-                            "type": str(
-                                e.get("source_type") or e.get("node_type") or "unknown"
-                            ),
+                            "type": str(e.get("source_type") or e.get("node_type") or "unknown"),
                             "id": str(
                                 e.get("source_id") or e.get("node_id") or e.get("label") or ""
                             ),
@@ -849,9 +847,7 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
                         for e in graph_context
                     ],
                 }
-                await tool_event_queue.put(
-                    format_sse_event("memory_used", _mem_payload)
-                )
+                await tool_event_queue.put(format_sse_event("memory_used", _mem_payload))
             except Exception:
                 logger.debug(
                     "[SDK/Space] Failed to emit memory_used SSE event",
@@ -1377,9 +1373,7 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
                                     )
 
                                 _ttft_val = locals().get("ttft")
-                                _ttft_ms = (
-                                    round(_ttft_val * 1000, 1) if _ttft_val else None
-                                )
+                                _ttft_ms = round(_ttft_val * 1000, 1) if _ttft_val else None
                                 _duration_val = locals().get("duration_ms")
                                 _turn_task = asyncio.create_task(
                                     enqueue_agent_turn_memory(
@@ -1398,13 +1392,9 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
                                     )
                                 )
                                 self._background_tasks.add(_turn_task)
-                                _turn_task.add_done_callback(
-                                    self._background_tasks.discard
-                                )
+                                _turn_task.add_done_callback(self._background_tasks.discard)
                         except Exception:
-                            logger.exception(
-                                "agent_turn producer enqueue failed (non-fatal)"
-                            )
+                            logger.exception("agent_turn producer enqueue failed (non-fatal)")
 
                     await client.disconnect()
                 clear_context()

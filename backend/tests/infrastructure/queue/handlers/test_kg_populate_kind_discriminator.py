@@ -158,9 +158,7 @@ def test_note_chunk_properties_include_kind_raw_in_source() -> None:
     """
     from pathlib import Path
 
-    src = Path(
-        "src/pilot_space/infrastructure/queue/handlers/kg_populate_handler.py"
-    ).read_text()
+    src = Path("src/pilot_space/infrastructure/queue/handlers/kg_populate_handler.py").read_text()
 
     # Locate the note-chunk NodeInput properties dict and assert kind.
     assert '"parent_note_id": str(p.entity_id)' in src
@@ -173,9 +171,7 @@ def test_issue_chunk_properties_include_kind_raw_in_source() -> None:
     """The handler source literally stamps ``kind='raw'`` on issue chunks."""
     from pathlib import Path
 
-    src = Path(
-        "src/pilot_space/infrastructure/queue/handlers/kg_populate_handler.py"
-    ).read_text()
+    src = Path("src/pilot_space/infrastructure/queue/handlers/kg_populate_handler.py").read_text()
 
     assert '"parent_issue_id": str(p.entity_id)' in src
     issue_chunk_block = src.split('"parent_issue_id": str(p.entity_id)', 1)[1][:300]

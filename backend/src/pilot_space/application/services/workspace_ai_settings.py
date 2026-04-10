@@ -415,7 +415,6 @@ class WorkspaceAISettingsService:
             provider_label,
         )
 
-
     # ------------------------------------------------------------------
     # Phase 70-06 — memory producer opt-out toggles
     # ------------------------------------------------------------------
@@ -438,9 +437,7 @@ class WorkspaceAISettingsService:
 
         Raises ``ValidationError`` for unknown producer names.
         """
-        toggles = await set_producer_toggle(
-            self._session, workspace_id, producer, enabled
-        )
+        toggles = await set_producer_toggle(self._session, workspace_id, producer, enabled)
         await self._session.commit()
         return toggles
 

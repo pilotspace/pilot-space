@@ -36,7 +36,7 @@ def _mock_session_returning(node_or_none):
             return node_or_none
 
         def scalars(self_inner):
-            return SimpleNamespace(all=lambda: ([node_or_none] if node_or_none else []))
+            return SimpleNamespace(all=lambda: [node_or_none] if node_or_none else [])
 
         rowcount = 1
 
@@ -56,9 +56,7 @@ async def test_pin_sets_metadata_pinned_true():
     session = _mock_session_returning(fake_node)
 
     svc = MemoryLifecycleService(session)
-    await svc.pin(
-        PinPayload(workspace_id=workspace_id, node_id=node_id, actor_user_id=uuid4())
-    )
+    await svc.pin(PinPayload(workspace_id=workspace_id, node_id=node_id, actor_user_id=uuid4()))
 
     # Expect: one SELECT for load_node, one UPDATE for pin
     assert session.execute.await_count == 2
@@ -86,9 +84,7 @@ async def test_forget_soft_deletes_node():
 @pytest.mark.asyncio
 async def test_forget_rejects_cross_workspace_node():
     node_id = uuid4()
-    fake_node = SimpleNamespace(
-        id=node_id, workspace_id=uuid4(), properties={}
-    )
+    fake_node = SimpleNamespace(id=node_id, workspace_id=uuid4(), properties={})
     session = _mock_session_returning(fake_node)
     svc = MemoryLifecycleService(session)
 
@@ -108,9 +104,7 @@ async def test_forget_missing_node_raises_not_found():
     svc = MemoryLifecycleService(session)
     with pytest.raises(NotFoundError):
         await svc.forget(
-            ForgetPayload(
-                workspace_id=uuid4(), node_id=uuid4(), actor_user_id=uuid4()
-            )
+            ForgetPayload(workspace_id=uuid4(), node_id=uuid4(), actor_user_id=uuid4())
         )
 
 
@@ -210,9 +204,7 @@ async def test_kg_populate_routes_agent_turn_to_correct_node_type(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_kg_populate_rejects_unknown_memory_type():
-    handler = KgPopulateHandler(
-        session=MagicMock(), embedding_service=AsyncMock(), queue=None
-    )
+    handler = KgPopulateHandler(session=MagicMock(), embedding_service=AsyncMock(), queue=None)
     result = await handler.handle(
         {"memory_type": "bogus", "workspace_id": str(uuid4()), "content": "x"}
     )

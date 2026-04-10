@@ -52,6 +52,7 @@ class _FakeSession:
         class _Result:
             def scalar_one_or_none(self):
                 return self._workspace.settings if self._workspace else None
+
         r = _Result()
         r._workspace = self._workspace
         return r

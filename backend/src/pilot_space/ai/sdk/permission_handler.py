@@ -487,9 +487,7 @@ class PermissionHandler:
 
         if self._permission_service is not None:
             try:
-                mode = await self._permission_service.resolve(
-                    workspace_id, tool_name
-                )
+                mode = await self._permission_service.resolve(workspace_id, tool_name)
             except Exception:
                 # SEC-03: Fail-closed — if PermissionService is degraded, deny
                 # the tool rather than falling back to a potentially permissive

@@ -263,16 +263,20 @@ async def test_root_path_has_no_trailing_slash_no_307(admin_client: AsyncClient)
             )
 
     # Also verify the actual request (no 307)
-    with patch(
-        "pilot_space.api.v1.routers.ai_memory_telemetry.memory_metrics.snapshot",
-        return_value=_MOCK_SNAPSHOT,
-    ), patch(
-        "pilot_space.api.v1.routers.ai_memory_telemetry.memory_metrics.get_producer_counters",
-        return_value=_MOCK_PRODUCER_COUNTERS,
-    ), patch(
-        "pilot_space.api.v1.routers.ai_memory_telemetry.get_producer_toggles",
-        new_callable=AsyncMock,
-    ) as mock_toggles:
+    with (
+        patch(
+            "pilot_space.api.v1.routers.ai_memory_telemetry.memory_metrics.snapshot",
+            return_value=_MOCK_SNAPSHOT,
+        ),
+        patch(
+            "pilot_space.api.v1.routers.ai_memory_telemetry.memory_metrics.get_producer_counters",
+            return_value=_MOCK_PRODUCER_COUNTERS,
+        ),
+        patch(
+            "pilot_space.api.v1.routers.ai_memory_telemetry.get_producer_toggles",
+            new_callable=AsyncMock,
+        ) as mock_toggles,
+    ):
         from pilot_space.application.services.workspace_ai_settings_toggles import (
             ProducerToggles,
         )

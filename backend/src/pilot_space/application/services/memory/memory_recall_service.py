@@ -225,8 +225,7 @@ class MemoryRecallService:
             items: list[MemoryItem] = [
                 _scored_to_memory_item(sn)
                 for sn in result.nodes
-                if sn.score >= payload.min_score
-                and _kind_matches(sn, payload.kind)
+                if sn.score >= payload.min_score and _kind_matches(sn, payload.kind)
             ]
 
             # 6. Cache the result
@@ -259,9 +258,7 @@ class MemoryRecallService:
             return None
         return [MemoryItem(**item) for item in raw if isinstance(item, dict)]
 
-    async def _cache_set(
-        self, cache_input: Mapping[str, object], items: list[MemoryItem]
-    ) -> None:
+    async def _cache_set(self, cache_input: Mapping[str, object], items: list[MemoryItem]) -> None:
         if self._cache is None:
             return
         try:

@@ -71,13 +71,9 @@ async def test_recall_without_kind_filter_returns_all_rows() -> None:
         _scored_node(0.9, None, "legacy"),
         _scored_node(0.9, "turn", "d"),
     )
-    svc = MemoryRecallService(
-        graph_search=graph_search, embedding=AsyncMock(), cache=None
-    )
+    svc = MemoryRecallService(graph_search=graph_search, embedding=AsyncMock(), cache=None)
 
-    result = await svc.recall(
-        RecallPayload(workspace_id=uuid4(), query="q", k=10, min_score=0.0)
-    )
+    result = await svc.recall(RecallPayload(workspace_id=uuid4(), query="q", k=10, min_score=0.0))
 
     assert len(result.items) == 4
 
@@ -91,9 +87,7 @@ async def test_recall_with_kind_summary_returns_only_summary_rows() -> None:
         _scored_node(0.9, None, "legacy"),
         _scored_node(0.9, "summary", "c"),
     )
-    svc = MemoryRecallService(
-        graph_search=graph_search, embedding=AsyncMock(), cache=None
-    )
+    svc = MemoryRecallService(graph_search=graph_search, embedding=AsyncMock(), cache=None)
 
     result = await svc.recall(
         RecallPayload(
@@ -119,9 +113,7 @@ async def test_recall_with_kind_raw_includes_legacy_rows() -> None:
         _scored_node(0.9, None, "legacy"),
         _scored_node(0.9, "turn", "d"),
     )
-    svc = MemoryRecallService(
-        graph_search=graph_search, embedding=AsyncMock(), cache=None
-    )
+    svc = MemoryRecallService(graph_search=graph_search, embedding=AsyncMock(), cache=None)
 
     result = await svc.recall(
         RecallPayload(
@@ -144,14 +136,10 @@ async def test_recall_with_kind_raw_includes_legacy_rows() -> None:
 async def test_recall_empty_result_returns_empty_list() -> None:
     graph_search = AsyncMock()
     graph_search.execute.return_value = _search_result()
-    svc = MemoryRecallService(
-        graph_search=graph_search, embedding=AsyncMock(), cache=None
-    )
+    svc = MemoryRecallService(graph_search=graph_search, embedding=AsyncMock(), cache=None)
 
     result = await svc.recall(
-        RecallPayload(
-            workspace_id=uuid4(), query="q", k=10, min_score=0.0, kind="summary"
-        )
+        RecallPayload(workspace_id=uuid4(), query="q", k=10, min_score=0.0, kind="summary")
     )
 
     assert result.items == []

@@ -235,9 +235,7 @@ class MemoryWorker:
             # Quick health check: can we embed right now?
             probe = await self._embedding_service.embed("health check")
             if probe is None:
-                logger.debug(
-                    "MemoryWorker: embedding provider unavailable, skipping backfill"
-                )
+                logger.debug("MemoryWorker: embedding provider unavailable, skipping backfill")
                 # Reset timer so we retry sooner (5 min) instead of waiting a full hour
                 self._last_embedding_backfill = now - _EMBEDDING_BACKFILL_INTERVAL_S + 300
                 return

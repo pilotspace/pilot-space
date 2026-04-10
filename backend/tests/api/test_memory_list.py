@@ -75,9 +75,7 @@ def _mock_session_for_list(nodes, total=None):
             # COUNT query
             return SimpleNamespace(scalar=lambda: actual_total)
         # Items query
-        return SimpleNamespace(
-            scalars=lambda: SimpleNamespace(all=lambda: nodes)
-        )
+        return SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: nodes))
 
     session.execute = AsyncMock(side_effect=side_effect)
     return session
@@ -164,9 +162,7 @@ async def test_semantic_search_empty_recall_returns_empty():
     workspace_id = uuid4()
 
     recall = AsyncMock(spec=MemoryRecallService)
-    recall.recall = AsyncMock(
-        return_value=RecallResult(items=[], cache_hit=False, elapsed_ms=10.0)
-    )
+    recall.recall = AsyncMock(return_value=RecallResult(items=[], cache_hit=False, elapsed_ms=10.0))
 
     session = AsyncMock()
     lifecycle = MagicMock(spec=MemoryLifecycleService)

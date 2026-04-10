@@ -136,7 +136,9 @@ class MemorySaveService:
         entry_id = created.id  # type: ignore[assignment]
 
         # Enqueue embedding generation (J-3) — fire and forget
-        enqueued = await self._enqueue_embedding(entry_id, payload.workspace_id, payload.actor_user_id)
+        enqueued = await self._enqueue_embedding(
+            entry_id, payload.workspace_id, payload.actor_user_id
+        )
 
         logger.info(
             "MemorySaveService: persisted entry %s for workspace %s (embedding_enqueued=%s)",

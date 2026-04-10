@@ -136,10 +136,13 @@ class MemoryDLQJobHandler:
                         entry.id,
                     )
                     continue
-                await self._queue.enqueue(QueueName.AI_NORMAL, {
-                    **job_payload,
-                    "actor_user_id": job_payload.get("actor_user_id"),
-                })
+                await self._queue.enqueue(
+                    QueueName.AI_NORMAL,
+                    {
+                        **job_payload,
+                        "actor_user_id": job_payload.get("actor_user_id"),
+                    },
+                )
 
                 # Update attempts and next_retry_at
                 entry.attempts = (entry.attempts or 0) + 1  # type: ignore[operator]

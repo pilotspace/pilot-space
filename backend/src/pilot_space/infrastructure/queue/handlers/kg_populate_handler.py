@@ -249,10 +249,12 @@ class KgPopulateHandler:
             # Replay hits one of these — rollback, ACK, and move on. Only
             # treat as duplicate when the failing constraint matches;
             # otherwise re-raise so FK/CHECK violations propagate.
-            _KNOWN_DEDUP_INDEXES = frozenset({
-                "uq_graph_nodes_agent_turn_cache",
-                "uq_graph_nodes_pr_review_finding",
-            })
+            _KNOWN_DEDUP_INDEXES = frozenset(
+                {
+                    "uq_graph_nodes_agent_turn_cache",
+                    "uq_graph_nodes_pr_review_finding",
+                }
+            )
             # Prefer the DB driver's parsed constraint name (psycopg2/asyncpg
             # expose it on the original exception). Fall back to message
             # substring only when the driver doesn't provide the name.
@@ -626,9 +628,7 @@ class KgPopulateHandler:
             )
             result = await self._session.execute(dup_stmt, {"note_id": str(note_id)})
             if result.first() is not None:
-                logger.debug(
-                    "KgPopulateHandler: summarize_note dedup hit for note %s", note_id
-                )
+                logger.debug("KgPopulateHandler: summarize_note dedup hit for note %s", note_id)
                 return
 
         try:

@@ -102,9 +102,7 @@ async def test_handler_produces_summary_with_kind_summary() -> None:
     mock_session.get = AsyncMock(return_value=None)  # not used directly
 
     mock_llm = AsyncMock()
-    mock_llm.complete = AsyncMock(
-        return_value=SimpleNamespace(text="Summary of note sections.")
-    )
+    mock_llm.complete = AsyncMock(return_value=SimpleNamespace(text="Summary of note sections."))
 
     written_payloads: list = []
 
@@ -113,19 +111,22 @@ async def test_handler_produces_summary_with_kind_summary() -> None:
         return SimpleNamespace(node_ids=[uuid4()])
 
     # Patch get_producer_toggles to return summarizer=True
-    with patch(
-        "pilot_space.infrastructure.queue.handlers.summarize_note_handler.get_producer_toggles",
-        AsyncMock(
-            return_value=SimpleNamespace(
-                agent_turn=True,
-                user_correction=True,
-                pr_review_finding=True,
-                summarizer=True,
-            )
+    with (
+        patch(
+            "pilot_space.infrastructure.queue.handlers.summarize_note_handler.get_producer_toggles",
+            AsyncMock(
+                return_value=SimpleNamespace(
+                    agent_turn=True,
+                    user_correction=True,
+                    pr_review_finding=True,
+                    summarizer=True,
+                )
+            ),
         ),
-    ), patch(
-        "pilot_space.infrastructure.queue.handlers.summarize_note_handler.GraphWriteService"
-    ) as mock_gws_cls:
+        patch(
+            "pilot_space.infrastructure.queue.handlers.summarize_note_handler.GraphWriteService"
+        ) as mock_gws_cls,
+    ):
         mock_gws_instance = MagicMock()
         mock_gws_instance.execute = AsyncMock(side_effect=_fake_gws_execute)
         mock_gws_cls.return_value = mock_gws_instance
@@ -136,9 +137,7 @@ async def test_handler_produces_summary_with_kind_summary() -> None:
             queue=None,
             redis_client=_FakeRedis(),
         )
-        result = await handler.handle(
-            _make_payload(workspace_id=workspace_id, note_id=note_id)
-        )
+        result = await handler.handle(_make_payload(workspace_id=workspace_id, note_id=note_id))
 
     assert result["success"] is True
     assert len(written_payloads) == 1
@@ -164,9 +163,7 @@ async def test_handler_summary_has_source_note_id_backref() -> None:
     mock_session.flush = AsyncMock()
 
     mock_llm = AsyncMock()
-    mock_llm.complete = AsyncMock(
-        return_value=SimpleNamespace(text="The summary.")
-    )
+    mock_llm.complete = AsyncMock(return_value=SimpleNamespace(text="The summary."))
 
     written_nodes: list = []
 
@@ -174,14 +171,22 @@ async def test_handler_summary_has_source_note_id_backref() -> None:
         written_nodes.extend(payload.nodes)
         return SimpleNamespace(node_ids=[uuid4()])
 
-    with patch(
-        "pilot_space.infrastructure.queue.handlers.summarize_note_handler.get_producer_toggles",
-        AsyncMock(return_value=SimpleNamespace(
-            agent_turn=True, user_correction=True, pr_review_finding=True, summarizer=True,
-        )),
-    ), patch(
-        "pilot_space.infrastructure.queue.handlers.summarize_note_handler.GraphWriteService"
-    ) as mock_gws_cls:
+    with (
+        patch(
+            "pilot_space.infrastructure.queue.handlers.summarize_note_handler.get_producer_toggles",
+            AsyncMock(
+                return_value=SimpleNamespace(
+                    agent_turn=True,
+                    user_correction=True,
+                    pr_review_finding=True,
+                    summarizer=True,
+                )
+            ),
+        ),
+        patch(
+            "pilot_space.infrastructure.queue.handlers.summarize_note_handler.GraphWriteService"
+        ) as mock_gws_cls,
+    ):
         mock_gws_cls.return_value.execute = AsyncMock(side_effect=_capture)
 
         handler = SummarizeNoteHandler(
@@ -189,9 +194,7 @@ async def test_handler_summary_has_source_note_id_backref() -> None:
             llm_gateway=mock_llm,
             redis_client=_FakeRedis(),
         )
-        await handler.handle(
-            _make_payload(workspace_id=workspace_id, note_id=note_id)
-        )
+        await handler.handle(_make_payload(workspace_id=workspace_id, note_id=note_id))
 
     assert written_nodes
     assert written_nodes[0].properties["source_note_id"] == str(note_id)
@@ -206,13 +209,16 @@ async def test_summarizer_disabled_skips() -> None:
 
     with patch(
         "pilot_space.infrastructure.queue.handlers.summarize_note_handler.get_producer_toggles",
-        AsyncMock(return_value=SimpleNamespace(
-            agent_turn=True, user_correction=True, pr_review_finding=True, summarizer=False,
-        )),
+        AsyncMock(
+            return_value=SimpleNamespace(
+                agent_turn=True,
+                user_correction=True,
+                pr_review_finding=True,
+                summarizer=False,
+            )
+        ),
     ):
-        handler = SummarizeNoteHandler(
-            session=mock_session, llm_gateway=mock_llm
-        )
+        handler = SummarizeNoteHandler(session=mock_session, llm_gateway=mock_llm)
         result = await handler.handle(_make_payload())
 
     assert result["skipped"] == "opt_in_off"
@@ -231,18 +237,21 @@ async def test_throttle_exceeded_skips() -> None:
 
     with patch(
         "pilot_space.infrastructure.queue.handlers.summarize_note_handler.get_producer_toggles",
-        AsyncMock(return_value=SimpleNamespace(
-            agent_turn=True, user_correction=True, pr_review_finding=True, summarizer=True,
-        )),
+        AsyncMock(
+            return_value=SimpleNamespace(
+                agent_turn=True,
+                user_correction=True,
+                pr_review_finding=True,
+                summarizer=True,
+            )
+        ),
     ):
         handler = SummarizeNoteHandler(
             session=mock_session,
             llm_gateway=mock_llm,
             redis_client=redis,
         )
-        result = await handler.handle(
-            _make_payload(workspace_id=workspace_id)
-        )
+        result = await handler.handle(_make_payload(workspace_id=workspace_id))
 
     assert result["skipped"] == "throttled"
     mock_llm.complete.assert_not_awaited()
@@ -265,18 +274,21 @@ async def test_llm_failure_swallowed() -> None:
 
     with patch(
         "pilot_space.infrastructure.queue.handlers.summarize_note_handler.get_producer_toggles",
-        AsyncMock(return_value=SimpleNamespace(
-            agent_turn=True, user_correction=True, pr_review_finding=True, summarizer=True,
-        )),
+        AsyncMock(
+            return_value=SimpleNamespace(
+                agent_turn=True,
+                user_correction=True,
+                pr_review_finding=True,
+                summarizer=True,
+            )
+        ),
     ):
         handler = SummarizeNoteHandler(
             session=mock_session,
             llm_gateway=mock_llm,
             redis_client=_FakeRedis(),
         )
-        result = await handler.handle(
-            _make_payload(workspace_id=workspace_id, note_id=note_id)
-        )
+        result = await handler.handle(_make_payload(workspace_id=workspace_id, note_id=note_id))
 
     assert result["success"] is False
     assert result["error"] == "llm_failed"
@@ -295,9 +307,14 @@ async def test_empty_chunk_list_skips_gracefully() -> None:
 
     with patch(
         "pilot_space.infrastructure.queue.handlers.summarize_note_handler.get_producer_toggles",
-        AsyncMock(return_value=SimpleNamespace(
-            agent_turn=True, user_correction=True, pr_review_finding=True, summarizer=True,
-        )),
+        AsyncMock(
+            return_value=SimpleNamespace(
+                agent_turn=True,
+                user_correction=True,
+                pr_review_finding=True,
+                summarizer=True,
+            )
+        ),
     ):
         handler = SummarizeNoteHandler(
             session=mock_session, llm_gateway=mock_llm, redis_client=_FakeRedis()
@@ -329,6 +346,7 @@ async def test_delayed_enqueue_deduplicates_bursts() -> None:
     fake_queue.enqueue = AsyncMock()
 
     session = AsyncMock()
+
     # Simulate the pgmq table not existing (SQLite): raise on the pgmq
     # dedup query. contextlib.suppress in the handler catches this.
     async def _execute_side_effect(stmt, *a, **kw):
@@ -342,9 +360,14 @@ async def test_delayed_enqueue_deduplicates_bursts() -> None:
     # get_producer_toggles returns summarizer=True
     with patch(
         "pilot_space.application.services.workspace_ai_settings_toggles.get_producer_toggles",
-        AsyncMock(return_value=SimpleNamespace(
-            agent_turn=True, user_correction=True, pr_review_finding=True, summarizer=True,
-        )),
+        AsyncMock(
+            return_value=SimpleNamespace(
+                agent_turn=True,
+                user_correction=True,
+                pr_review_finding=True,
+                summarizer=True,
+            )
+        ),
     ):
         handler = KgPopulateHandler(
             session=session,
@@ -378,9 +401,14 @@ async def test_opt_in_toggle_off_skips_enqueue() -> None:
     session = AsyncMock()
     with patch(
         "pilot_space.application.services.workspace_ai_settings_toggles.get_producer_toggles",
-        AsyncMock(return_value=SimpleNamespace(
-            agent_turn=True, user_correction=True, pr_review_finding=True, summarizer=False,
-        )),
+        AsyncMock(
+            return_value=SimpleNamespace(
+                agent_turn=True,
+                user_correction=True,
+                pr_review_finding=True,
+                summarizer=False,
+            )
+        ),
     ):
         handler = KgPopulateHandler(
             session=session,

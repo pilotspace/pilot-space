@@ -141,9 +141,7 @@ async def test_failing_enqueue_for_one_comment_does_not_stop_others() -> None:
     queue_client = MagicMock()
 
     # First call raises; second and third succeed.
-    queue_client.enqueue = AsyncMock(
-        side_effect=[RuntimeError("boom"), "ok-2", "ok-3"]
-    )
+    queue_client.enqueue = AsyncMock(side_effect=[RuntimeError("boom"), "ok-2", "ok-3"])
 
     await enqueue_pr_review_findings(
         queue_client=queue_client,
@@ -183,8 +181,7 @@ async def test_same_file_different_lines_produce_separate_enqueues() -> None:
 
     assert queue_client.enqueue.await_count == 3
     lines = [
-        call.args[1]["properties"]["line_number"]
-        for call in queue_client.enqueue.await_args_list
+        call.args[1]["properties"]["line_number"] for call in queue_client.enqueue.await_args_list
     ]
     assert lines == ["10", "20", "30"]
 

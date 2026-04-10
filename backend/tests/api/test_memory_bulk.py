@@ -80,9 +80,7 @@ async def test_bulk_partial_failure():
     lifecycle.pin = AsyncMock(side_effect=pin_side_effect)
 
     svc = MemoryListService(session, recall, lifecycle)
-    result = await svc.bulk_action(
-        workspace_id, "pin", [good_id, bad_id], actor_user_id=uuid4()
-    )
+    result = await svc.bulk_action(workspace_id, "pin", [good_id, bad_id], actor_user_id=uuid4())
 
     assert result.total_processed == 2
     assert len(result.succeeded) == 1

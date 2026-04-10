@@ -220,17 +220,13 @@ class SummarizeNoteHandler:
                 workspace_id,
             )
 
-    async def _fetch_raw_chunks(
-        self, workspace_id: UUID, note_id: UUID
-    ) -> list[GraphNodeModel]:
+    async def _fetch_raw_chunks(self, workspace_id: UUID, note_id: UUID) -> list[GraphNodeModel]:
         """Fetch all raw NOTE_CHUNK rows for a note, oldest first."""
         stmt = (
             select(GraphNodeModel)
             .where(GraphNodeModel.workspace_id == workspace_id)
             .where(GraphNodeModel.node_type == NodeType.NOTE_CHUNK.value)
-            .where(
-                GraphNodeModel.properties["parent_note_id"].as_string() == str(note_id)
-            )
+            .where(GraphNodeModel.properties["parent_note_id"].as_string() == str(note_id))
             .where(GraphNodeModel.is_deleted == False)  # noqa: E712
             .order_by(GraphNodeModel.created_at.asc())
         )
@@ -238,11 +234,7 @@ class SummarizeNoteHandler:
         rows = list(result.scalars().all())
         # Prefer rows explicitly tagged kind='raw'; fall back to legacy
         # (kind-absent) rows which Task 1 treats as raw semantically.
-        return [
-            r
-            for r in rows
-            if (r.properties or {}).get("kind", "raw") == "raw"
-        ]
+        return [r for r in rows if (r.properties or {}).get("kind", "raw") == "raw"]
 
     def _concat_chunks(self, chunks: list[GraphNodeModel]) -> str:
         parts: list[str] = []

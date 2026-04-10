@@ -39,9 +39,7 @@ async def test_stats_returns_aggregates():
         call_count += 1
         if call_count == 1:
             # GROUP BY node_type query returns list of (type, count) tuples
-            return SimpleNamespace(
-                all=lambda: [("note", 30), ("issue", 20), ("decision", 10)]
-            )
+            return SimpleNamespace(all=lambda: [("note", 30), ("issue", 20), ("decision", 10)])
         if call_count == 2:
             # Pinned count
             return SimpleNamespace(scalar=lambda: 5)

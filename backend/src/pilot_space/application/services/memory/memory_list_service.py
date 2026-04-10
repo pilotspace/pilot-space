@@ -213,10 +213,7 @@ class MemoryListService:
         pinned_count = (await self._session.execute(pinned_stmt)).scalar() or 0
 
         # Last ingestion timestamp
-        last_stmt = (
-            select(func.max(GraphNodeModel.created_at))
-            .where(base_where)
-        )
+        last_stmt = select(func.max(GraphNodeModel.created_at)).where(base_where)
         last_ingestion = (await self._session.execute(last_stmt)).scalar()
 
         return MemoryStatsResult(
@@ -259,9 +256,7 @@ class MemoryListService:
                 with contextlib.suppress(ValueError, TypeError):
                     provenance_id = UUID(str(raw_parent))
         if provenance_id is not None:
-            source_label, source_url = await self._resolve_provenance(
-                node.node_type, provenance_id
-            )
+            source_label, source_url = await self._resolve_provenance(node.node_type, provenance_id)
 
         embedding_dim: int | None = None
         if node.embedding is not None:
@@ -395,14 +390,10 @@ class MemoryListService:
         )
 
         if not recall_result.items:
-            return MemoryListResult(
-                items=[], total=0, offset=offset, limit=limit, has_next=False
-            )
+            return MemoryListResult(items=[], total=0, offset=offset, limit=limit, has_next=False)
 
         # Build score lookup: node_id -> score
-        score_map: dict[str, float] = {
-            item.node_id: item.score for item in recall_result.items
-        }
+        score_map: dict[str, float] = {item.node_id: item.score for item in recall_result.items}
         recalled_ids = [UUID(nid) for nid in score_map]
 
         # Second pass: apply additional filters on the recalled set
@@ -418,19 +409,11 @@ class MemoryListService:
         count_stmt = select(func.count()).select_from(GraphNodeModel).where(where)
         total = (await self._session.execute(count_stmt)).scalar() or 0
 
-        items_stmt = (
-            select(GraphNodeModel)
-            .where(where)
-            .offset(offset)
-            .limit(limit)
-        )
+        items_stmt = select(GraphNodeModel).where(where).offset(offset).limit(limit)
         rows = (await self._session.execute(items_stmt)).scalars().all()
 
         # Attach scores and sort by score DESC
-        items = [
-            self._node_to_item(row, score=score_map.get(str(row.id)))
-            for row in rows
-        ]
+        items = [self._node_to_item(row, score=score_map.get(str(row.id))) for row in rows]
         items.sort(key=lambda i: i.score or 0.0, reverse=True)
 
         return MemoryListResult(
@@ -503,15 +486,11 @@ class MemoryListService:
             )
         if pinned is True:
             clauses.append(
-                cast(GraphNodeModel.properties, JSONB).op("@>")(
-                    cast('{"pinned": true}', JSONB)
-                )
+                cast(GraphNodeModel.properties, JSONB).op("@>")(cast('{"pinned": true}', JSONB))
             )
         elif pinned is False:
             clauses.append(
-                ~cast(GraphNodeModel.properties, JSONB).op("@>")(
-                    cast('{"pinned": true}', JSONB)
-                )
+                ~cast(GraphNodeModel.properties, JSONB).op("@>")(cast('{"pinned": true}', JSONB))
             )
         return clauses
 
@@ -519,12 +498,8 @@ class MemoryListService:
     def _pinned_filter(*, value: bool) -> Any:
         """Return a pinned containment filter clause."""
         if value:
-            return cast(GraphNodeModel.properties, JSONB).op("@>")(
-                cast('{"pinned": true}', JSONB)
-            )
-        return ~cast(GraphNodeModel.properties, JSONB).op("@>")(
-            cast('{"pinned": true}', JSONB)
-        )
+            return cast(GraphNodeModel.properties, JSONB).op("@>")(cast('{"pinned": true}', JSONB))
+        return ~cast(GraphNodeModel.properties, JSONB).op("@>")(cast('{"pinned": true}', JSONB))
 
     async def _resolve_provenance(
         self,

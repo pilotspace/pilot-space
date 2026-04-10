@@ -244,7 +244,9 @@ class GraphWriteService:
         # doesn't leave nodes without embeddings (C-2 fix)
         node_ids = [n.id for n in persisted_nodes]
         embedding_enqueued = (
-            await self._enqueue_embedding_jobs(node_ids, payload.workspace_id, payload.actor_user_id)
+            await self._enqueue_embedding_jobs(
+                node_ids, payload.workspace_id, payload.actor_user_id
+            )
             if self._queue is not None
             else False
         )

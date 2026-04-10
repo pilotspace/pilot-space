@@ -32,7 +32,7 @@ pytestmark = pytest.mark.postgres
 def _alembic_config() -> Config:
     # backend/ is the alembic project root; tests run from backend/ cwd.
     cfg = Config("alembic.ini")
-    if (url := os.environ.get("TEST_DATABASE_URL")):
+    if url := os.environ.get("TEST_DATABASE_URL"):
         cfg.set_main_option("sqlalchemy.url", url)
     return cfg
 
@@ -125,9 +125,7 @@ def test_downgrade_reverts_columns_and_index(pg_url: str) -> None:
             )
         ).all()
         idx = conn.execute(
-            text(
-                "SELECT 1 FROM pg_indexes WHERE indexname = 'uq_graph_nodes_pr_review_finding'"
-            )
+            text("SELECT 1 FROM pg_indexes WHERE indexname = 'uq_graph_nodes_pr_review_finding'")
         ).first()
     assert cols == [], f"Expected all memory_* cols dropped, got {cols}"
     assert idx is None

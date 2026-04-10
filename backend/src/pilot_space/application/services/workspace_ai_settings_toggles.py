@@ -131,8 +131,7 @@ async def set_producer_toggle(
     """
     if producer not in _VALID_PRODUCERS:
         raise ValidationError(
-            f"unknown memory producer: {producer!r}; "
-            f"expected one of {sorted(_VALID_PRODUCERS)}"
+            f"unknown memory producer: {producer!r}; expected one of {sorted(_VALID_PRODUCERS)}"
         )
 
     workspace = await session.get(Workspace, workspace_id)
