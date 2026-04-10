@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { Menu } from 'lucide-react';
 import { useUIStore } from '@/stores';
 import { useResponsive } from '@/hooks/useMediaQuery';
+import { useRouteArtifact } from '@/hooks/useRouteArtifact';
 import { ConversationSidebar } from './conversation-sidebar';
 import { ArtifactPanel } from './artifact-panel';
 import { CommandPalette } from '@/components/search/CommandPalette';
@@ -25,6 +26,9 @@ export const ChatFirstShell = observer(function ChatFirstShell({
   const uiStore = useUIStore();
   const { isMobile, isTablet } = useResponsive();
 
+  // When the current route maps to an artifact, render children in the artifact panel
+  const isRouteArtifact = useRouteArtifact(true);
+
   useEffect(() => {
     uiStore.hydrate();
   }, [uiStore]);
@@ -40,6 +44,12 @@ export const ChatFirstShell = observer(function ChatFirstShell({
 
   const showArtifactPanel = uiStore.layoutMode !== 'chat-first';
   const sidebarCollapsed = uiStore.sidebarCollapsed;
+
+  // Determine where to render children:
+  // - If current route is an artifact (notes, issues, etc.), render in artifact panel
+  // - Otherwise (homepage), render in the chat/main column
+  const chatColumnContent = isRouteArtifact ? null : children;
+  const artifactContent = isRouteArtifact ? children : null;
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">
@@ -65,7 +75,7 @@ export const ChatFirstShell = observer(function ChatFirstShell({
         )}
       </AnimatePresence>
 
-      {/* Sidebar — fixed on mobile, flex on desktop */}
+      {/* Sidebar */}
       <div className={cn(isMobile && !sidebarCollapsed && 'fixed left-0 top-0 z-50 h-full')}>
         <ConversationSidebar />
       </div>
@@ -109,7 +119,7 @@ export const ChatFirstShell = observer(function ChatFirstShell({
             className="min-w-0"
           >
             <main id="main-content" className="h-full overflow-auto">
-              {children}
+              {chatColumnContent}
             </main>
           </ResizablePanel>
 
@@ -121,12 +131,14 @@ export const ChatFirstShell = observer(function ChatFirstShell({
             minSize="30%"
             className="min-w-0"
           >
-            <ArtifactPanel />
+            <ArtifactPanel>
+              {artifactContent}
+            </ArtifactPanel>
           </ResizablePanel>
         </ResizablePanelGroup>
       ) : (
         <main id="main-content" className="flex-1 overflow-auto">
-          {children}
+          {chatColumnContent ?? children}
         </main>
       )}
     </div>

@@ -3,17 +3,20 @@
 import { useEffect } from 'react';
 import { observer } from 'mobx-react-lite';
 import { reaction } from 'mobx';
-import { useRouter } from 'next/navigation';
 import { Maximize2, Minimize2 } from 'lucide-react';
 import { useArtifactPanelStore, useUIStore } from '@/stores';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ArtifactTabBar } from './artifact-tab-bar';
+import type { ReactNode } from 'react';
 
-export const ArtifactPanel = observer(function ArtifactPanel() {
+interface ArtifactPanelProps {
+  children?: ReactNode;
+}
+
+export const ArtifactPanel = observer(function ArtifactPanel({ children }: ArtifactPanelProps) {
   const artifactPanel = useArtifactPanelStore();
   const uiStore = useUIStore();
-  const router = useRouter();
 
   // Auto-transition layoutMode when tabs open/close
   useEffect(() => {
@@ -39,16 +42,6 @@ export const ArtifactPanel = observer(function ArtifactPanel() {
       uiStore.setLayoutMode('canvas-first');
     }
   };
-
-  // Navigate to the artifact's route when active tab changes
-  useEffect(() => {
-    const tab = artifactPanel.activeTab;
-    if (!tab) return;
-
-    // Map artifact type → route
-    // Navigation happens via the normal Next.js routing
-    // The content renders as {children} through the workspace layout
-  }, [artifactPanel.activeTab, router]);
 
   return (
     <div className="flex h-full flex-col bg-background border-l border-border">
@@ -87,17 +80,13 @@ export const ArtifactPanel = observer(function ArtifactPanel() {
 
       {/* Content area */}
       <div className="flex-1 overflow-auto">
-        {artifactPanel.hasOpenTabs ? (
-          <div className="h-full">
-            {/* Active artifact content will be rendered here.
-                In the current architecture, content comes through {children}
-                via Next.js routing into the ChatFirstShell's main area.
-                Future phases will render artifact content inline here. */}
-            <div className="flex h-full items-center justify-center">
-              <p className="text-sm text-muted-foreground">
-                {artifactPanel.activeTab?.title ?? 'Loading...'}
-              </p>
-            </div>
+        {children ? (
+          <div className="h-full">{children}</div>
+        ) : artifactPanel.hasOpenTabs ? (
+          <div className="flex h-full items-center justify-center">
+            <p className="text-sm text-muted-foreground">
+              {artifactPanel.activeTab?.title ?? 'Loading...'}
+            </p>
           </div>
         ) : (
           <div className="flex h-full items-center justify-center">
