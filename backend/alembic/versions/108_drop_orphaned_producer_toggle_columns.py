@@ -2,12 +2,11 @@
 
 Migration 107 added four boolean columns to ``workspace_ai_settings``
 for Phase 70 producer opt-out toggles. However, the runtime code
-(``workspace_ai_settings_toggles.py``) stores these flags in
-``workspaces.settings`` (JSONB) instead — the columns are never read
-or written by any code path.
+stores these flags in ``workspaces.settings`` (JSONB) instead — the
+columns are never read or written. This migration drops them if they exist.
 
-This migration drops the orphaned columns to prevent schema/code
-divergence and avoid confusing future developers.
+Note: ``workspace_ai_settings`` table may not exist (SEC-05). All
+operations wrapped in try/except.
 
 Revision ID: 108_drop_orphaned_producer_toggle_columns
 Revises: 107_memory_producer_toggles
@@ -36,48 +35,52 @@ _COLUMNS = [
 
 
 def upgrade() -> None:
-    for col in _COLUMNS:
-        op.drop_column(_TABLE, col)
+    try:
+        for col in _COLUMNS:
+            op.drop_column(_TABLE, col)
+    except Exception:
+        # Table does not exist — columns were never created.
+        pass
 
 
 def downgrade() -> None:
-    """Re-add the columns (inverse of upgrade).
-
-    Defaults match migration 107: 3 producers True, summarizer False.
-    """
-    op.add_column(
-        _TABLE,
-        sa.Column(
-            "memory_producer_agent_turn_enabled",
-            sa.Boolean(),
-            nullable=False,
-            server_default=sa.true(),
-        ),
-    )
-    op.add_column(
-        _TABLE,
-        sa.Column(
-            "memory_producer_user_correction_enabled",
-            sa.Boolean(),
-            nullable=False,
-            server_default=sa.true(),
-        ),
-    )
-    op.add_column(
-        _TABLE,
-        sa.Column(
-            "memory_producer_pr_review_enabled",
-            sa.Boolean(),
-            nullable=False,
-            server_default=sa.true(),
-        ),
-    )
-    op.add_column(
-        _TABLE,
-        sa.Column(
-            "memory_summarizer_enabled",
-            sa.Boolean(),
-            nullable=False,
-            server_default=sa.false(),
-        ),
-    )
+    """Re-add the columns (inverse of upgrade)."""
+    try:
+        op.add_column(
+            _TABLE,
+            sa.Column(
+                "memory_producer_agent_turn_enabled",
+                sa.Boolean(),
+                nullable=False,
+                server_default=sa.true(),
+            ),
+        )
+        op.add_column(
+            _TABLE,
+            sa.Column(
+                "memory_producer_user_correction_enabled",
+                sa.Boolean(),
+                nullable=False,
+                server_default=sa.true(),
+            ),
+        )
+        op.add_column(
+            _TABLE,
+            sa.Column(
+                "memory_producer_pr_review_enabled",
+                sa.Boolean(),
+                nullable=False,
+                server_default=sa.true(),
+            ),
+        )
+        op.add_column(
+            _TABLE,
+            sa.Column(
+                "memory_summarizer_enabled",
+                sa.Boolean(),
+                nullable=False,
+                server_default=sa.false(),
+            ),
+        )
+    except Exception:
+        pass
