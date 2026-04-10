@@ -60,9 +60,15 @@ function formatTimestamp(iso: string): string {
 
 /** Strip markdown headings + HTML comments for cleaner display. */
 function cleanContent(raw: string): string {
-  return raw
-    .replace(/<!--[\s\S]*?-->/g, '') // TipTap block IDs
-    .replace(/^#{1,6}\s+/gm, '')     // markdown headings (## Foo → Foo)
+  // Loop to handle nested/adjacent HTML comments (CodeQL js/incomplete-multi-character-sanitization)
+  let result = raw;
+  let prev = '';
+  while (prev !== result) {
+    prev = result;
+    result = result.replace(/<!--[^]*?-->/g, '');
+  }
+  return result
+    .replace(/^#{1,6}\s+/gm, '') // markdown headings (## Foo → Foo)
     .trim();
 }
 

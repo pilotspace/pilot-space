@@ -36,6 +36,17 @@ const NODE_TYPE_DISPLAY: Record<string, string> = {
   learned_pattern: 'Pattern',
 };
 
+/** Strip HTML comments (looped for nested) + markdown headings for display. */
+function stripMarkdownDisplay(raw: string): string {
+  let result = raw;
+  let prev = '';
+  while (prev !== result) {
+    prev = result;
+    result = result.replace(/<!--[^]*?-->/g, '');
+  }
+  return result.replace(/^#{1,6}\s+/gm, '').trim();
+}
+
 interface MemoryBrowseTableProps {
   workspaceId: string;
   params: MemoryListParams;
@@ -257,10 +268,7 @@ export function MemoryBrowseTable({
                   </TableCell>
                   <TableCell>
                     <span className="text-sm text-muted-foreground line-clamp-1">
-                      {item.contentSnippet
-                        .replace(/<!--[\s\S]*?-->/g, '')
-                        .replace(/^#{1,6}\s+/gm, '')
-                        .trim() || '(empty)'}
+                      {stripMarkdownDisplay(item.contentSnippet) || '(empty)'}
                     </span>
                   </TableCell>
                   {showScore && (
