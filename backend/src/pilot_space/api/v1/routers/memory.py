@@ -181,6 +181,7 @@ async def ingest_constitution(
     fastapi_request: Request,
     session: SessionDep,
     response: Response,
+    current_user: CurrentUser,
     # SEC-04: constitution ingest is admin-only — rules affect all workspace members
     _admin: Annotated[UUID, Depends(require_workspace_admin)],
 ) -> ConstitutionIngestResponse:

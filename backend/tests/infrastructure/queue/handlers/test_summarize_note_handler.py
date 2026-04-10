@@ -13,11 +13,10 @@ from uuid import UUID, uuid4
 import pytest
 
 from pilot_space.infrastructure.queue.handlers.summarize_note_handler import (
+    _THROTTLE_LIMIT,
     TASK_SUMMARIZE_NOTE,
     SummarizeNoteHandler,
-    _THROTTLE_LIMIT,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -335,7 +334,7 @@ async def test_delayed_enqueue_deduplicates_bursts() -> None:
     async def _execute_side_effect(stmt, *a, **kw):
         sql_text = str(getattr(stmt, "text", stmt))
         if "pgmq.q_ai_normal" in sql_text:
-            raise Exception("no such table: pgmq.q_ai_normal")
+            raise RuntimeError("no such table: pgmq.q_ai_normal")
         return MagicMock()
 
     session.execute = AsyncMock(side_effect=_execute_side_effect)

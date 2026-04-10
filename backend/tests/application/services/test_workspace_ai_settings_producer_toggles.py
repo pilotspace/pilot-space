@@ -11,10 +11,6 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
-# SQLAlchemy's flag_modified requires _sa_instance_state; our fake
-# workspace SimpleNamespace doesn't have it. Patch it for all set tests.
-_FM_PATCH = "pilot_space.application.services.workspace_ai_settings_toggles.flag_modified"
-
 import pytest
 
 from pilot_space.application.services.workspace_ai_settings import (
@@ -26,6 +22,9 @@ from pilot_space.application.services.workspace_ai_settings_toggles import (
     set_producer_toggle,
 )
 
+# SQLAlchemy's flag_modified requires _sa_instance_state; our fake
+# workspace SimpleNamespace doesn't have it. Patch it for all set tests.
+_FM_PATCH = "pilot_space.application.services.workspace_ai_settings_toggles.flag_modified"
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -34,11 +33,10 @@ from pilot_space.application.services.workspace_ai_settings_toggles import (
 
 def _workspace_row(settings: dict | None = None) -> SimpleNamespace:
     """Simulate a Workspace ORM model row."""
-    row = SimpleNamespace(
+    return SimpleNamespace(
         id=uuid4(),
         settings=settings,
     )
-    return row
 
 
 class _FakeSession:
@@ -167,7 +165,6 @@ async def test_patch_settings_then_producer_drops_when_disabled() -> None:
     from pilot_space.ai.memory.producers.agent_turn_producer import (
         enqueue_agent_turn_memory,
     )
-    from pilot_space.infrastructure.queue.models import QueueName
 
     workspace_id = uuid4()
     ws = _workspace_row(settings={})

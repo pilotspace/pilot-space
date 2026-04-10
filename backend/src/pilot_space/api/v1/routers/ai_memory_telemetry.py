@@ -11,9 +11,9 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter
-from pilot_space.api.v1.schemas.base import BaseSchema
 
 from pilot_space.ai.telemetry import memory_metrics
+from pilot_space.api.v1.schemas.base import BaseSchema
 from pilot_space.application.services.workspace_ai_settings_toggles import (
     get_producer_toggles,
     set_producer_toggle,

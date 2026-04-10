@@ -252,7 +252,6 @@ async def test_unknown_producer_returns_422(
 
 async def test_root_path_has_no_trailing_slash_no_307(admin_client: AsyncClient) -> None:
     """Verify the route does NOT redirect on the trailing-slash-free path."""
-    import inspect
 
     from pilot_space.api.v1.routers.ai_memory_telemetry import router
 
