@@ -1,14 +1,17 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { observer } from 'mobx-react-lite';
 import { AnimatePresence, motion } from 'motion/react';
 import { Menu } from 'lucide-react';
-import { useUIStore } from '@/stores';
+import { useUIStore, useAuthStore } from '@/stores';
+import { getAIStore } from '@/stores/ai/AIStore';
 import { useResponsive } from '@/hooks/useMediaQuery';
 import { useRouteArtifact } from '@/hooks/useRouteArtifact';
 import { ConversationSidebar } from './conversation-sidebar';
 import { ArtifactPanel } from './artifact-panel';
+import { ChatView } from '@/features/ai/ChatView';
+import { ChatEmptyState } from '@/features/ai/ChatView/ChatEmptyState';
 import { CommandPalette } from '@/components/search/CommandPalette';
 import { useCommandPaletteShortcut } from '@/hooks/useCommandPaletteShortcut';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
@@ -24,11 +27,31 @@ export const ChatFirstShell = observer(function ChatFirstShell({
   children,
 }: ChatFirstShellProps) {
   const uiStore = useUIStore();
+  const authStore = useAuthStore();
   const { isMobile, isTablet } = useResponsive();
   const isSmallScreen = isMobile || isTablet;
 
-  // When the current route maps to an artifact, render children in the artifact panel
+  // Detect if current route maps to an artifact (notes, issues, etc.)
   const isRouteArtifact = useRouteArtifact(true);
+
+  // Persistent AI store — lives in the shell, not in routing
+  const aiStore = getAIStore();
+  const pilotSpaceStore = aiStore.pilotSpace;
+
+  // Prefill for ChatEmptyState prompt clicks
+  const [prefillValue, setPrefillValue] = useState<string | undefined>(undefined);
+
+  const handlePromptClick = useCallback((prompt: string) => {
+    setPrefillValue(prompt);
+  }, []);
+
+  // Clear prefill after consumed by ChatView
+  useEffect(() => {
+    if (prefillValue) {
+      const timer = setTimeout(() => setPrefillValue(undefined), 100);
+      return () => clearTimeout(timer);
+    }
+  }, [prefillValue]);
 
   useEffect(() => {
     uiStore.hydrate();
@@ -45,6 +68,23 @@ export const ChatFirstShell = observer(function ChatFirstShell({
 
   const showArtifactPanel = uiStore.layoutMode !== 'chat-first' && !isSmallScreen;
   const sidebarCollapsed = uiStore.sidebarCollapsed;
+
+  // Persistent ChatView component — always available in the chat column
+  const chatViewElement = pilotSpaceStore ? (
+    <ChatView
+      store={pilotSpaceStore}
+      approvalStore={aiStore.approval}
+      userName={authStore.userDisplayName || 'User'}
+      className="h-full"
+      autoFocus={!isRouteArtifact}
+      prefillValue={prefillValue}
+      emptyStateSlot={<ChatEmptyState onPromptClick={handlePromptClick} />}
+    />
+  ) : (
+    <div className="flex h-full items-center justify-center">
+      <p className="text-muted-foreground">Loading AI Chat...</p>
+    </div>
+  );
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">
@@ -107,12 +147,12 @@ export const ChatFirstShell = observer(function ChatFirstShell({
 
       {/* Main content area */}
       {isSmallScreen ? (
-        // Mobile/tablet: full-screen, no split panel
-        <main id="main-content" className="flex-1 overflow-auto">
-          {children}
+        // Mobile/tablet: show route content full-screen, or ChatView on homepage
+        <main id="main-content" className="flex-1 overflow-hidden">
+          {isRouteArtifact ? children : chatViewElement}
         </main>
-      ) : showArtifactPanel ? (
-        // Desktop with artifact panel: split view
+      ) : showArtifactPanel && isRouteArtifact ? (
+        // Desktop with artifact: chat column (left) + artifact panel (right)
         <ResizablePanelGroup orientation="horizontal" className="flex-1">
           <ResizablePanel
             id="chat-column"
@@ -120,9 +160,9 @@ export const ChatFirstShell = observer(function ChatFirstShell({
             minSize="15%"
             className="min-w-0"
           >
-            <main id="main-content" className="h-full overflow-auto">
-              {isRouteArtifact ? null : children}
-            </main>
+            <div id="main-content" className="h-full overflow-hidden">
+              {chatViewElement}
+            </div>
           </ResizablePanel>
 
           <ResizableHandle withHandle />
@@ -134,14 +174,14 @@ export const ChatFirstShell = observer(function ChatFirstShell({
             className="min-w-0"
           >
             <ArtifactPanel>
-              {isRouteArtifact ? children : null}
+              {children}
             </ArtifactPanel>
           </ResizablePanel>
         </ResizablePanelGroup>
       ) : (
-        // Desktop without artifact: full-width main content
-        <main id="main-content" className="flex-1 overflow-auto">
-          {children}
+        // Desktop without artifact: full-width ChatView (homepage)
+        <main id="main-content" className="flex-1 overflow-hidden">
+          {isRouteArtifact ? children : chatViewElement}
         </main>
       )}
     </div>

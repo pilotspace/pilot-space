@@ -6,12 +6,18 @@ import { useWorkspace } from '@/components/workspace-guard';
 import { useWorkspaceStore } from '@/stores';
 import { OnboardingChecklist } from '@/features/onboarding';
 import { HomepageHub } from '@/features/homepage';
-import { ChatEmptyState } from '@/features/ai/ChatView/ChatEmptyState';
 
 interface WorkspaceHomePageProps {
   params: Promise<{ workspaceSlug: string }>;
 }
 
+/**
+ * Workspace homepage.
+ *
+ * When layout_v2 is OFF: renders the traditional HomepageHub (DailyBrief + ChatView).
+ * When layout_v2 is ON: renders nothing — ChatFirstShell owns the persistent ChatView
+ * in the chat column and shows ChatEmptyState as its empty slot.
+ */
 const WorkspaceHomePage = observer(function WorkspaceHomePage({ params }: WorkspaceHomePageProps) {
   const { workspaceSlug } = use(params);
   const { workspace } = useWorkspace();
@@ -22,11 +28,7 @@ const WorkspaceHomePage = observer(function WorkspaceHomePage({ params }: Worksp
     <div className="flex h-full flex-col">
       <OnboardingChecklist workspaceId={workspace.id} workspaceSlug={workspaceSlug} />
 
-      {useV2Layout ? (
-        <ChatEmptyState />
-      ) : (
-        <HomepageHub workspaceSlug={workspaceSlug} />
-      )}
+      {!useV2Layout && <HomepageHub workspaceSlug={workspaceSlug} />}
     </div>
   );
 });
