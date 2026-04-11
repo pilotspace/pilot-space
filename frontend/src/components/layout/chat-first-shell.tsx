@@ -79,7 +79,13 @@ export const ChatFirstShell = observer(function ChatFirstShell({
       autoFocus={!isRouteArtifact}
       prefillValue={prefillValue}
       persistentMode
-      emptyStateSlot={<ChatEmptyState onPromptClick={handlePromptClick} />}
+      emptyStateSlot={
+        <ChatEmptyState
+          onPromptClick={handlePromptClick}
+          userName={authStore.userDisplayName || undefined}
+          sidebarCollapsed={sidebarCollapsed}
+        />
+      }
     />
   ) : (
     <div className="flex h-full items-center justify-center">
@@ -97,6 +103,11 @@ export const ChatFirstShell = observer(function ChatFirstShell({
       >
         Skip to main content
       </a>
+
+      {/* Screen reader announcement for layout transitions */}
+      <div aria-live="polite" className="sr-only">
+        {showArtifactPanel && isRouteArtifact ? 'Artifact panel opened' : ''}
+      </div>
 
       {/* Mobile sidebar overlay */}
       <AnimatePresence>

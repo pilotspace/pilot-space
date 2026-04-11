@@ -67,15 +67,17 @@ export const ArtifactTabBar = observer(function ArtifactTabBar() {
           >
             <span className="truncate max-w-[120px]">{tab.title}</span>
             {tab.isPinned && <Pin className="h-2.5 w-2.5 text-muted-foreground" />}
-            <span
-              role="button"
-              tabIndex={-1}
+            <button
+              type="button"
+              tabIndex={0}
               aria-label={`Close ${tab.title}`}
               className={cn(
                 'inline-flex items-center justify-center rounded-sm',
                 'h-5 w-5 min-h-[20px] min-w-[20px]',
                 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100',
-                'transition-opacity hover:bg-accent-foreground/10'
+                'focus:opacity-100',
+                'transition-opacity hover:bg-accent-foreground/10',
+                'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
               )}
               onClick={(e) => {
                 e.stopPropagation();
@@ -83,7 +85,7 @@ export const ArtifactTabBar = observer(function ArtifactTabBar() {
               }}
             >
               <X className="h-3 w-3" />
-            </span>
+            </button>
           </button>
         );
       })}

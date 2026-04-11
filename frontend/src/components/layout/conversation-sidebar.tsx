@@ -135,6 +135,7 @@ export const ConversationSidebar = observer(function ConversationSidebar() {
               <button
                 key={session.sessionId}
                 type="button"
+                aria-label={`Resume conversation: ${session.title || `Session ${session.sessionId.slice(0, 8)}`}`}
                 className={cn(
                   'group flex items-start gap-2 rounded-lg px-2.5 py-2 text-left text-xs transition-colors',
                   'text-sidebar-foreground hover:bg-sidebar-accent/50',
@@ -145,17 +146,17 @@ export const ConversationSidebar = observer(function ConversationSidebar() {
                 }}
               >
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium truncate">
+                  <span className="block font-medium truncate">
                     {session.title || `Session ${session.sessionId.slice(0, 8)}`}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                  </span>
+                  <span className="block text-[10px] text-muted-foreground mt-0.5">
                     {new Date(session.updatedAt).toLocaleDateString([], {
                       month: 'short',
                       day: 'numeric',
                     })}
                     {' · '}
                     {session.turnCount} turns
-                  </p>
+                  </span>
                 </div>
               </button>
             ))
