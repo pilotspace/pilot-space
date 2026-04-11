@@ -1,6 +1,7 @@
 'use client';
 
-import { useRouter, usePathname } from 'next/navigation';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { Compass, FileText, LayoutGrid, FolderKanban, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -22,14 +23,13 @@ interface ChatEmptyStateProps {
 }
 
 export function ChatEmptyState({ onPromptClick }: ChatEmptyStateProps) {
-  const router = useRouter();
   const pathname = usePathname();
   const segments = pathname.split('/').filter(Boolean);
   const workspaceSlug = segments[0] ?? '';
 
   return (
-    <div className="flex h-full flex-col items-center justify-center px-4">
-      <div className="w-full max-w-xl space-y-10">
+    <div className="flex h-full flex-col items-center justify-center overflow-auto px-4 py-6">
+      <div className="w-full max-w-xl space-y-6 sm:space-y-10">
         {/* Logo + greeting */}
         <div className="text-center space-y-3">
           <div className="flex justify-center">
@@ -65,25 +65,24 @@ export function ChatEmptyState({ onPromptClick }: ChatEmptyStateProps) {
           ))}
         </div>
 
-        {/* Quick navigation */}
-        <div className="flex items-center justify-center gap-2">
+        {/* Quick navigation — uses Link for no useRouter re-renders */}
+        <nav aria-label="Quick navigation" className="flex items-center justify-center gap-2">
           {QUICK_ACTIONS.map(({ label, path, icon: Icon }) => (
-            <button
+            <Link
               key={label}
-              type="button"
+              href={`/${workspaceSlug}/${path}`}
               className={cn(
                 'flex items-center gap-1.5 rounded-lg px-3 py-1.5',
                 'text-xs font-medium text-muted-foreground',
                 'transition-colors hover:bg-accent hover:text-foreground',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
               )}
-              onClick={() => router.push(`/${workspaceSlug}/${path}`)}
             >
               <Icon className="h-3.5 w-3.5" />
               {label}
-            </button>
+            </Link>
           ))}
-        </div>
+        </nav>
       </div>
     </div>
   );

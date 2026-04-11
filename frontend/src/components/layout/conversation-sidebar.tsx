@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -60,14 +60,15 @@ export const ConversationSidebar = observer(function ConversationSidebar() {
     workspaceStore.currentWorkspaceId ??
     workspaceSlug;
 
-  // Create session list store lazily, tied to the PilotSpaceStore
+  // Create session list store, re-create when pilotSpaceStore becomes available
   const aiStore = getAIStore();
   const pilotSpaceStore = aiStore.pilotSpace;
-  const [sessionListStore] = useState(() =>
-    pilotSpaceStore ? new SessionListStore(pilotSpaceStore) : null
+  const sessionListStore = useMemo(
+    () => (pilotSpaceStore ? new SessionListStore(pilotSpaceStore) : null),
+    [pilotSpaceStore]
   );
 
-  // Fetch sessions on mount
+  // Fetch sessions on mount or when store changes
   useEffect(() => {
     sessionListStore?.fetchSessions();
   }, [sessionListStore]);
@@ -97,8 +98,9 @@ export const ConversationSidebar = observer(function ConversationSidebar() {
   return (
     <aside
       className={cn(
-        'flex h-full shrink-0 flex-col border-r border-sidebar-border bg-sidebar transition-[width] duration-200',
-        collapsed ? 'w-0 overflow-hidden' : 'w-[260px]'
+        'flex h-full w-[260px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar',
+        'transition-transform duration-200 ease-out',
+        collapsed && '-translate-x-full absolute -z-10'
       )}
     >
       {/* Header — workspace switcher */}
@@ -135,7 +137,8 @@ export const ConversationSidebar = observer(function ConversationSidebar() {
                 type="button"
                 className={cn(
                   'group flex items-start gap-2 rounded-lg px-2.5 py-2 text-left text-xs transition-colors',
-                  'text-sidebar-foreground hover:bg-sidebar-accent/50'
+                  'text-sidebar-foreground hover:bg-sidebar-accent/50',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring'
                 )}
                 onClick={() => {
                   sessionListStore?.resumeSession(session.sessionId);
@@ -171,7 +174,7 @@ export const ConversationSidebar = observer(function ConversationSidebar() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 text-muted-foreground hover:text-sidebar-foreground"
+                  className="h-10 w-10 text-muted-foreground hover:text-sidebar-foreground"
                   asChild
                 >
                   <Link href={`/${workspaceSlug}/${path}`}>

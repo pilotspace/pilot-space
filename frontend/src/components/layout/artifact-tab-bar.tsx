@@ -1,48 +1,92 @@
 'use client';
 
+import { useCallback } from 'react';
 import { observer } from 'mobx-react-lite';
 import { X, Pin } from 'lucide-react';
 import { useArtifactPanelStore } from '@/stores';
-import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 export const ArtifactTabBar = observer(function ArtifactTabBar() {
   const artifactPanel = useArtifactPanelStore();
   const { openTabs, activeTabId } = artifactPanel;
 
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent, index: number) => {
+      let nextIndex: number | null = null;
+
+      if (e.key === 'ArrowRight') {
+        nextIndex = (index + 1) % openTabs.length;
+      } else if (e.key === 'ArrowLeft') {
+        nextIndex = (index - 1 + openTabs.length) % openTabs.length;
+      } else if (e.key === 'Home') {
+        nextIndex = 0;
+      } else if (e.key === 'End') {
+        nextIndex = openTabs.length - 1;
+      }
+
+      if (nextIndex !== null) {
+        e.preventDefault();
+        const tab = openTabs[nextIndex];
+        if (tab) {
+          artifactPanel.setActiveTab(tab.id);
+          // Focus the tab element
+          const tabEl = e.currentTarget.parentElement?.children[nextIndex] as HTMLElement;
+          tabEl?.focus();
+        }
+      }
+    },
+    [openTabs, artifactPanel]
+  );
+
   if (openTabs.length === 0) return null;
 
   return (
-    <div className="flex h-10 items-center border-b border-border px-2 gap-1 overflow-x-auto">
-      {openTabs.map((tab) => (
-        <div
-          key={tab.id}
-          role="tab"
-          aria-selected={tab.id === activeTabId}
-          className={cn(
-            'group flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs cursor-pointer transition-colors',
-            tab.id === activeTabId
-              ? 'bg-accent text-accent-foreground font-medium'
-              : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
-          )}
-          onClick={() => artifactPanel.setActiveTab(tab.id)}
-        >
-          <span className="truncate max-w-[120px]">{tab.title}</span>
-          {tab.isPinned && <Pin className="h-2.5 w-2.5 text-muted-foreground" />}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity"
-            onClick={(e) => {
-              e.stopPropagation();
-              artifactPanel.closeTab(tab.id);
-            }}
+    <div
+      role="tablist"
+      aria-label="Open artifacts"
+      className="flex h-10 items-center border-b border-border px-2 gap-1 overflow-x-auto"
+    >
+      {openTabs.map((tab, index) => {
+        const isActive = tab.id === activeTabId;
+        return (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={isActive}
+            tabIndex={isActive ? 0 : -1}
+            className={cn(
+              'group flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs transition-colors',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              isActive
+                ? 'bg-accent text-accent-foreground font-medium'
+                : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+            )}
+            onClick={() => artifactPanel.setActiveTab(tab.id)}
+            onKeyDown={(e) => handleKeyDown(e, index)}
           >
-            <X className="h-3 w-3" />
-            <span className="sr-only">Close tab</span>
-          </Button>
-        </div>
-      ))}
+            <span className="truncate max-w-[120px]">{tab.title}</span>
+            {tab.isPinned && <Pin className="h-2.5 w-2.5 text-muted-foreground" />}
+            <span
+              role="button"
+              tabIndex={-1}
+              aria-label={`Close ${tab.title}`}
+              className={cn(
+                'inline-flex items-center justify-center rounded-sm',
+                'h-5 w-5 min-h-[20px] min-w-[20px]',
+                'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100',
+                'transition-opacity hover:bg-accent-foreground/10'
+              )}
+              onClick={(e) => {
+                e.stopPropagation();
+                artifactPanel.closeTab(tab.id);
+              }}
+            >
+              <X className="h-3 w-3" />
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 });

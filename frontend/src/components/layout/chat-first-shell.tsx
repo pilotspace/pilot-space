@@ -104,6 +104,7 @@ export const ChatFirstShell = observer(function ChatFirstShell({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            aria-hidden="true"
             className="fixed inset-0 z-40 bg-black/50"
             onClick={() => uiStore.setSidebarCollapsed(true)}
           />
@@ -160,7 +161,7 @@ export const ChatFirstShell = observer(function ChatFirstShell({
             minSize="15%"
             className="min-w-0"
           >
-            <div id="main-content" className="h-full overflow-hidden">
+            <div className="h-full overflow-hidden">
               {chatViewElement}
             </div>
           </ResizablePanel>
@@ -173,9 +174,11 @@ export const ChatFirstShell = observer(function ChatFirstShell({
             minSize="30%"
             className="min-w-0"
           >
-            <ArtifactPanel>
-              {children}
-            </ArtifactPanel>
+            <div id="main-content">
+              <ArtifactPanel>
+                {children}
+              </ArtifactPanel>
+            </div>
           </ResizablePanel>
         </ResizablePanelGroup>
       ) : (
