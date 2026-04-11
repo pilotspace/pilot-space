@@ -12,20 +12,29 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
+  MoreHorizontal,
+  Trash2,
+  Search,
 } from 'lucide-react';
 import {
   useUIStore,
   useAuthStore,
   useNotificationStore,
   useWorkspaceStore,
+  useArtifactPanelStore,
 } from '@/stores';
 import { getAIStore } from '@/stores/ai/AIStore';
-import { SessionListStore } from '@/stores/ai/SessionListStore';
+import { SessionListStore, type SessionSummary } from '@/stores/ai/SessionListStore';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { WorkspaceSwitcher } from '@/components/layout/workspace-switcher';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { SidebarUserControls } from '@/components/layout/sidebar';
 import { useResponsive } from '@/hooks/useMediaQuery';
 import { cn } from '@/lib/utils';
@@ -50,6 +59,7 @@ export const ConversationSidebar = observer(function ConversationSidebar() {
   const authStore = useAuthStore();
   const notificationStore = useNotificationStore();
   const workspaceStore = useWorkspaceStore();
+  const artifactPanel = useArtifactPanelStore();
   const pathname = usePathname();
   const { isSmallScreen } = useResponsive();
   const collapsed = uiStore.sidebarCollapsed;
@@ -103,17 +113,24 @@ export const ConversationSidebar = observer(function ConversationSidebar() {
         collapsed && '-translate-x-full absolute -z-10'
       )}
     >
-      {/* Header — workspace switcher */}
+      {/* Header — workspace name (switcher moved to user menu) */}
       <div className="flex h-10 shrink-0 items-center gap-2 border-b border-sidebar-border px-3">
-        <WorkspaceSwitcher currentSlug={workspaceSlug} />
+        <span className="text-xs font-semibold text-sidebar-foreground truncate flex-1">
+          {workspaceStore.currentWorkspace?.name ?? workspaceSlug}
+        </span>
       </div>
 
-      {/* New Chat button */}
+      {/* New Chat button — resets to chat-first mode */}
       <div className="shrink-0 p-2">
         <Button
           variant="default"
           size="sm"
           className="w-full shadow-warm-sm text-xs"
+          onClick={() => {
+            uiStore.setLayoutMode('chat-first');
+            artifactPanel.closeAllUnpinned();
+            pilotSpaceStore?.clearConversation();
+          }}
           asChild
         >
           <Link href={`/${workspaceSlug}`}>
@@ -123,7 +140,22 @@ export const ConversationSidebar = observer(function ConversationSidebar() {
         </Button>
       </div>
 
-      {/* Conversation history */}
+      {/* Search sessions */}
+      <div className="shrink-0 px-2 pb-1">
+        <div className="flex items-center gap-2 rounded-lg bg-sidebar-accent/30 px-2.5 py-1.5">
+          <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          <input
+            type="text"
+            placeholder="Search conversations..."
+            className="flex-1 bg-transparent text-xs text-sidebar-foreground placeholder:text-muted-foreground/50 outline-none"
+            onChange={(e) => {
+              sessionListStore?.searchSessions(e.target.value);
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Conversation history — grouped by date */}
       <ScrollArea className="flex-1 min-h-0">
         <div className="flex flex-col gap-0.5 p-2">
           {sessions.length === 0 ? (
@@ -131,35 +163,71 @@ export const ConversationSidebar = observer(function ConversationSidebar() {
               No conversations yet
             </p>
           ) : (
-            sessions.slice(0, 20).map((session) => (
-              <button
-                key={session.sessionId}
-                type="button"
-                aria-label={`Resume conversation: ${session.title || `Session ${session.sessionId.slice(0, 8)}`}`}
-                className={cn(
-                  'group flex items-start gap-2 rounded-lg px-2.5 py-2 text-left text-xs transition-colors',
-                  'text-sidebar-foreground hover:bg-sidebar-accent/50',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring'
-                )}
-                onClick={() => {
-                  sessionListStore?.resumeSession(session.sessionId);
-                }}
-              >
-                <div className="flex-1 min-w-0">
-                  <span className="block font-medium truncate">
-                    {session.title || `Session ${session.sessionId.slice(0, 8)}`}
-                  </span>
-                  <span className="block text-[10px] text-muted-foreground mt-0.5">
-                    {new Date(session.updatedAt).toLocaleDateString([], {
-                      month: 'short',
-                      day: 'numeric',
-                    })}
-                    {' · '}
-                    {session.turnCount} turns
-                  </span>
+            Array.from(sessionListStore?.sessionsGroupedByDate ?? new Map<string, SessionSummary[]>()).map(
+              ([dateLabel, groupSessions]) => (
+                <div key={dateLabel}>
+                  <div className="sticky top-0 z-10 bg-sidebar px-2.5 py-1.5">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50">
+                      {dateLabel}
+                    </span>
+                  </div>
+                  {groupSessions.map((session) => (
+                    <div
+                      key={session.sessionId}
+                      className={cn(
+                        'group flex w-full items-center rounded-lg text-left text-xs transition-colors',
+                        'text-sidebar-foreground hover:bg-sidebar-accent/50'
+                      )}
+                    >
+                      <button
+                        type="button"
+                        aria-label={`Resume conversation: ${session.title || `Session ${session.sessionId.slice(0, 8)}`}`}
+                        className="flex-1 min-w-0 px-2.5 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring rounded-l-lg"
+                        onClick={() => {
+                          sessionListStore?.resumeSession(session.sessionId);
+                        }}
+                      >
+                        <span className="block font-medium truncate">
+                          {session.title || `Session ${session.sessionId.slice(0, 8)}`}
+                        </span>
+                        <span className="block text-[10px] text-muted-foreground mt-0.5">
+                          {session.turnCount} turns
+                        </span>
+                      </button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            type="button"
+                            aria-label="Session options"
+                            className={cn(
+                              'shrink-0 p-1.5 rounded-r-lg',
+                              'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100',
+                              'focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring',
+                              'hover:bg-sidebar-accent transition-opacity'
+                            )}
+                          >
+                            <MoreHorizontal className="h-3.5 w-3.5 text-muted-foreground" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent side="right" align="start" className="w-40">
+                          <DropdownMenuItem
+                            className="text-xs gap-2 text-destructive focus:text-destructive"
+                            onSelect={() => {
+                              if (confirm('Delete this conversation?')) {
+                                sessionListStore?.deleteSession(session.sessionId);
+                              }
+                            }}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  ))}
                 </div>
-              </button>
-            ))
+              )
+            )
           )}
         </div>
       </ScrollArea>
@@ -175,7 +243,7 @@ export const ConversationSidebar = observer(function ConversationSidebar() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-10 w-10 text-muted-foreground hover:text-sidebar-foreground"
+                  className="h-11 w-11 text-muted-foreground hover:text-sidebar-foreground"
                   asChild
                 >
                   <Link href={`/${workspaceSlug}/${path}`}>

@@ -2,7 +2,7 @@
 
 import { useCallback } from 'react';
 import { observer } from 'mobx-react-lite';
-import { X, Pin } from 'lucide-react';
+import { X, Pin, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useArtifactPanelStore } from '@/stores';
 import { cn } from '@/lib/utils';
 
@@ -41,11 +41,31 @@ export const ArtifactTabBar = observer(function ArtifactTabBar() {
   if (openTabs.length === 0) return null;
 
   return (
-    <div
-      role="tablist"
-      aria-label="Open artifacts"
-      className="flex h-10 items-center border-b border-border px-2 gap-1 overflow-x-auto"
-    >
+    <div className="flex h-10 items-center border-b border-border px-2 gap-1">
+      {/* Back/forward navigation */}
+      <div className="flex items-center gap-0.5 shrink-0 mr-1">
+        <button
+          type="button"
+          disabled={!artifactPanel.canGoBack}
+          aria-label="Go back"
+          className="inline-flex h-6 w-6 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground hover:bg-accent/50 disabled:opacity-30 disabled:pointer-events-none transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          onClick={() => artifactPanel.goBack()}
+        >
+          <ChevronLeft className="h-3.5 w-3.5" />
+        </button>
+        <button
+          type="button"
+          disabled={!artifactPanel.canGoForward}
+          aria-label="Go forward"
+          className="inline-flex h-6 w-6 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground hover:bg-accent/50 disabled:opacity-30 disabled:pointer-events-none transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          onClick={() => artifactPanel.goForward()}
+        >
+          <ChevronRight className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      {/* Tabs */}
+      <div role="tablist" aria-label="Open artifacts" className="flex items-center gap-1 overflow-x-auto flex-1">
       {openTabs.map((tab, index) => {
         const isActive = tab.id === activeTabId;
         return (
@@ -89,6 +109,7 @@ export const ArtifactTabBar = observer(function ArtifactTabBar() {
           </button>
         );
       })}
+      </div>
     </div>
   );
 });

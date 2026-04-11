@@ -16,6 +16,9 @@ export class ArtifactPanelStore {
   openTabs: ArtifactTab[] = [];
   activeTabId: string | null = null;
   pinnedTabIds: Set<string> = new Set<string>();
+  /** Navigation history stack for back/forward within the artifact panel */
+  private history: string[] = [];
+  private historyIndex = -1;
 
   constructor() {
     makeAutoObservable(this, {
@@ -23,6 +26,8 @@ export class ArtifactPanelStore {
       activeTab: computed,
       hasOpenTabs: computed,
       tabCount: computed,
+      canGoBack: computed,
+      canGoForward: computed,
     });
   }
 
@@ -38,15 +43,52 @@ export class ArtifactPanelStore {
     return this.openTabs.length;
   }
 
+  get canGoBack(): boolean {
+    return this.historyIndex > 0;
+  }
+
+  get canGoForward(): boolean {
+    return this.historyIndex < this.history.length - 1;
+  }
+
   openTab(tab: Omit<ArtifactTab, 'isPinned'>): void {
     const existing = this.openTabs.find((t) => t.id === tab.id);
     if (existing) {
-      this.activeTabId = tab.id;
+      if (this.activeTabId !== tab.id) {
+        this.activeTabId = tab.id;
+        this.pushHistory(tab.id);
+      }
       return;
     }
 
     this.openTabs.push({ ...tab, isPinned: false });
     this.activeTabId = tab.id;
+    this.pushHistory(tab.id);
+  }
+
+  private pushHistory(tabId: string): void {
+    // Truncate forward history when navigating to a new tab
+    this.history = this.history.slice(0, this.historyIndex + 1);
+    this.history.push(tabId);
+    this.historyIndex = this.history.length - 1;
+  }
+
+  goBack(): void {
+    if (!this.canGoBack) return;
+    this.historyIndex--;
+    const tabId = this.history[this.historyIndex];
+    if (tabId && this.openTabs.some((t) => t.id === tabId)) {
+      this.activeTabId = tabId;
+    }
+  }
+
+  goForward(): void {
+    if (!this.canGoForward) return;
+    this.historyIndex++;
+    const tabId = this.history[this.historyIndex];
+    if (tabId && this.openTabs.some((t) => t.id === tabId)) {
+      this.activeTabId = tabId;
+    }
   }
 
   closeTab(tabId: string): void {
@@ -95,5 +137,7 @@ export class ArtifactPanelStore {
     this.openTabs = [];
     this.activeTabId = null;
     this.pinnedTabIds.clear();
+    this.history = [];
+    this.historyIndex = -1;
   }
 }

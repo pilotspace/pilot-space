@@ -2,15 +2,27 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Compass, FileText, LayoutGrid, FolderKanban, Sparkles, GitPullRequest } from 'lucide-react';
+import {
+  Compass,
+  FileText,
+  LayoutGrid,
+  FolderKanban,
+  Sparkles,
+  GitPullRequest,
+  SplitSquareVertical,
+  Search,
+  type LucideIcon,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
+import type { ArtifactTab } from '@/stores/ArtifactPanelStore';
 
 interface PromptCategory {
   label: string;
-  prompts: readonly { text: string; icon: typeof FileText }[];
+  prompts: readonly { text: string; icon: LucideIcon }[];
 }
 
-const PROMPT_CATEGORIES: PromptCategory[] = [
+// Default prompts (homepage, no artifact context)
+const DEFAULT_CATEGORIES: PromptCategory[] = [
   {
     label: 'Write',
     prompts: [
@@ -34,6 +46,42 @@ const PROMPT_CATEGORIES: PromptCategory[] = [
   },
 ];
 
+// Note-context prompts (when a note is open in the artifact panel)
+const NOTE_CATEGORIES: PromptCategory[] = [
+  {
+    label: 'This note',
+    prompts: [
+      { text: 'Summarize this note', icon: FileText },
+      { text: 'Extract issues from this note', icon: LayoutGrid },
+    ],
+  },
+  {
+    label: 'Continue',
+    prompts: [
+      { text: 'Help me continue writing', icon: Sparkles },
+      { text: 'Suggest improvements', icon: Search },
+    ],
+  },
+];
+
+// Issue-context prompts (when an issue is open)
+const ISSUE_CATEGORIES: PromptCategory[] = [
+  {
+    label: 'This issue',
+    prompts: [
+      { text: 'Break this into subtasks', icon: SplitSquareVertical },
+      { text: 'Find similar issues', icon: Search },
+    ],
+  },
+  {
+    label: 'Work',
+    prompts: [
+      { text: 'Suggest an implementation approach', icon: Sparkles },
+      { text: 'Show related pull requests', icon: GitPullRequest },
+    ],
+  },
+];
+
 const QUICK_ACTIONS = [
   { label: 'Notes', path: 'notes', icon: FileText },
   { label: 'Issues', path: 'issues', icon: LayoutGrid },
@@ -47,13 +95,30 @@ function getGreeting(): string {
   return 'Good evening';
 }
 
+function getCategoriesForContext(artifactContext?: ArtifactTab['type']): PromptCategory[] {
+  switch (artifactContext) {
+    case 'note':
+      return NOTE_CATEGORIES;
+    case 'issue':
+      return ISSUE_CATEGORIES;
+    default:
+      return DEFAULT_CATEGORIES;
+  }
+}
+
 interface ChatEmptyStateProps {
   onPromptClick?: (prompt: string) => void;
   userName?: string;
   sidebarCollapsed?: boolean;
+  artifactContext?: ArtifactTab['type'];
 }
 
-export function ChatEmptyState({ onPromptClick, userName, sidebarCollapsed }: ChatEmptyStateProps) {
+export function ChatEmptyState({
+  onPromptClick,
+  userName,
+  sidebarCollapsed,
+  artifactContext,
+}: ChatEmptyStateProps) {
   const pathname = usePathname();
   const segments = pathname.split('/').filter(Boolean);
   const workspaceSlug = segments[0] ?? '';
@@ -61,6 +126,8 @@ export function ChatEmptyState({ onPromptClick, userName, sidebarCollapsed }: Ch
   const greeting = userName
     ? `${getGreeting()}, ${userName.split(' ')[0]}.`
     : `${getGreeting()}.`;
+
+  const categories = getCategoriesForContext(artifactContext);
 
   return (
     <div className="flex h-full flex-col items-center justify-center overflow-auto px-4 py-6">
@@ -76,7 +143,9 @@ export function ChatEmptyState({ onPromptClick, userName, sidebarCollapsed }: Ch
                 {greeting}
               </h2>
               <p className="text-sm text-muted-foreground">
-                Write notes, plan projects, extract issues, review code.
+                {artifactContext
+                  ? 'Ask anything about what you\'re viewing.'
+                  : 'Write notes, plan projects, extract issues, review code.'}
               </p>
             </div>
           </div>
@@ -84,7 +153,7 @@ export function ChatEmptyState({ onPromptClick, userName, sidebarCollapsed }: Ch
 
         {/* Categorized prompts */}
         <div className="space-y-4">
-          {PROMPT_CATEGORIES.map((category) => (
+          {categories.map((category) => (
             <div key={category.label}>
               <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
                 {category.label}
@@ -111,8 +180,8 @@ export function ChatEmptyState({ onPromptClick, userName, sidebarCollapsed }: Ch
           ))}
         </div>
 
-        {/* Quick navigation — only when sidebar is collapsed */}
-        {sidebarCollapsed && (
+        {/* Quick navigation — only when sidebar is collapsed and no artifact context */}
+        {sidebarCollapsed && !artifactContext && (
           <nav aria-label="Quick navigation" className="flex items-center justify-center gap-2">
             {QUICK_ACTIONS.map(({ label, path, icon: Icon }) => (
               <Link

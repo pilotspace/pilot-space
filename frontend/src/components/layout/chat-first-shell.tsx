@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { observer } from 'mobx-react-lite';
 import { AnimatePresence, motion } from 'motion/react';
 import { Menu } from 'lucide-react';
-import { useUIStore, useAuthStore } from '@/stores';
+import { useUIStore, useAuthStore, useArtifactPanelStore } from '@/stores';
 import { getAIStore } from '@/stores/ai/AIStore';
 import { useResponsive } from '@/hooks/useMediaQuery';
 import { useRouteArtifact } from '@/hooks/useRouteArtifact';
@@ -14,10 +14,64 @@ import { ChatView } from '@/features/ai/ChatView';
 import { ChatEmptyState } from '@/features/ai/ChatView/ChatEmptyState';
 import { CommandPalette } from '@/components/search/CommandPalette';
 import { useCommandPaletteShortcut } from '@/hooks/useCommandPaletteShortcut';
+import { useChatFirstShortcuts } from '@/hooks/useChatFirstShortcuts';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { ReactNode } from 'react';
+
+function AILoadingSkeleton() {
+  const [showHint, setShowHint] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setShowHint(true), 5000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  return (
+    <div className="flex h-full flex-col items-center justify-center px-4 gap-4">
+      {/* Shimmer skeleton matching ChatEmptyState layout */}
+      <div className="w-full max-w-xl space-y-6 animate-pulse">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-2xl bg-muted" />
+          <div className="space-y-2 flex-1">
+            <div className="h-4 w-32 rounded bg-muted" />
+            <div className="h-3 w-48 rounded bg-muted" />
+          </div>
+        </div>
+        <div className="space-y-2">
+          <div className="h-3 w-12 rounded bg-muted" />
+          <div className="grid grid-cols-2 gap-2">
+            <div className="h-10 rounded-xl bg-muted" />
+            <div className="h-10 rounded-xl bg-muted" />
+          </div>
+        </div>
+        <div className="space-y-2">
+          <div className="h-3 w-10 rounded bg-muted" />
+          <div className="grid grid-cols-2 gap-2">
+            <div className="h-10 rounded-xl bg-muted" />
+            <div className="h-10 rounded-xl bg-muted" />
+          </div>
+        </div>
+      </div>
+      {showHint && (
+        <p className="text-xs text-muted-foreground text-center">
+          Taking longer than expected.{' '}
+          <button
+            type="button"
+            className="underline hover:text-foreground transition-colors"
+            onClick={() => {
+              // Navigate to settings via DOM event (settings modal is external)
+              window.dispatchEvent(new CustomEvent('pilot:open-settings', { detail: { tab: 'ai-providers' } }));
+            }}
+          >
+            Check AI provider settings
+          </button>
+        </p>
+      )}
+    </div>
+  );
+}
 
 interface ChatFirstShellProps {
   children: ReactNode;
@@ -28,6 +82,7 @@ export const ChatFirstShell = observer(function ChatFirstShell({
 }: ChatFirstShellProps) {
   const uiStore = useUIStore();
   const authStore = useAuthStore();
+  const artifactPanelStore = useArtifactPanelStore();
   const { isMobile, isTablet } = useResponsive();
   const isSmallScreen = isMobile || isTablet;
 
@@ -58,6 +113,7 @@ export const ChatFirstShell = observer(function ChatFirstShell({
   }, [uiStore]);
 
   useCommandPaletteShortcut();
+  useChatFirstShortcuts();
 
   // Auto-collapse sidebar on mobile/tablet
   useEffect(() => {
@@ -84,13 +140,12 @@ export const ChatFirstShell = observer(function ChatFirstShell({
           onPromptClick={handlePromptClick}
           userName={authStore.userDisplayName || undefined}
           sidebarCollapsed={sidebarCollapsed}
+          artifactContext={artifactPanelStore.activeTab?.type}
         />
       }
     />
   ) : (
-    <div className="flex h-full items-center justify-center">
-      <p className="text-muted-foreground">Loading AI Chat...</p>
-    </div>
+    <AILoadingSkeleton />
   );
 
   return (
@@ -186,11 +241,17 @@ export const ChatFirstShell = observer(function ChatFirstShell({
             minSize="30%"
             className="min-w-0"
           >
-            <div id="main-content">
+            <motion.div
+              id="main-content"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
+              className="h-full"
+            >
               <ArtifactPanel>
                 {children}
               </ArtifactPanel>
-            </div>
+            </motion.div>
           </ResizablePanel>
         </ResizablePanelGroup>
       ) : (
