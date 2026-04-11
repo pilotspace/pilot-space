@@ -78,6 +78,7 @@ export const ChatFirstShell = observer(function ChatFirstShell({
       className="h-full"
       autoFocus={!isRouteArtifact}
       prefillValue={prefillValue}
+      persistentMode
       emptyStateSlot={<ChatEmptyState onPromptClick={handlePromptClick} />}
     />
   ) : (
