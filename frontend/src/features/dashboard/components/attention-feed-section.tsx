@@ -45,8 +45,9 @@ export const AttentionFeedSection = React.memo(function AttentionFeedSection({
       pending_approval: [],
     };
     for (const item of attentionItems) {
-      if (map[item.type]) {
-        map[item.type].push(item);
+      const bucket = map[item.type];
+      if (bucket) {
+        bucket.push(item);
       }
     }
     return map;

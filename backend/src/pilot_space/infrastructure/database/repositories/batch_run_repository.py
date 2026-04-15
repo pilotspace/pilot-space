@@ -9,7 +9,7 @@ Phase 76 Plan 01 — sprint batch implementation foundation.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 

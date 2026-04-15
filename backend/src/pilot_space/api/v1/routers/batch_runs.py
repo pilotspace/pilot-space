@@ -487,7 +487,7 @@ async def get_batch_run_dashboard(
             issue_id=item.issue_id,
             issue_identifier=item.issue.identifier if item.issue else None,
             issue_title=item.issue.name if item.issue else None,
-            status=item.status.value,
+            status="done" if item.status.value == "completed" else item.status.value,
             execution_order=item.execution_order,
             current_stage=item.current_stage,
             pr_url=item.pr_url,
