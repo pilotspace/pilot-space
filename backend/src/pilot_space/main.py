@@ -36,6 +36,7 @@ from pilot_space.api.v1.routers import (
     audit_router,
     auth_router,
     auth_sso_router,
+    batch_runs_router,
     block_ownership_router,
     custom_roles_router,
     cycles_router,
@@ -373,6 +374,7 @@ app.include_router(workspace_encryption_router, prefix=f"{API_V1_PREFIX}/workspa
 app.include_router(workspace_feature_toggles_router, prefix=f"{API_V1_PREFIX}/workspaces")
 app.include_router(workspace_quota_router, prefix=f"{API_V1_PREFIX}/workspaces")
 app.include_router(workspace_cycles_router, prefix=f"{API_V1_PREFIX}/workspaces")
+app.include_router(batch_runs_router, prefix=API_V1_PREFIX)
 app.include_router(workspace_issues_router, prefix=f"{API_V1_PREFIX}/workspaces")
 app.include_router(related_issues_router, prefix=f"{API_V1_PREFIX}/workspaces")
 app.include_router(workspace_role_skills_router, prefix=f"{API_V1_PREFIX}/workspaces")
