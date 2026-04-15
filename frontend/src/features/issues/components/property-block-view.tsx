@@ -30,6 +30,85 @@ import { STATE_ICON, PRIORITY_ICON } from './property-block-constants';
 import { PropertyChip } from './property-chip';
 import { PropertyBlockCollapsed } from './property-block-collapsed';
 import { EffortField } from './effort-field';
+import { ExternalLink } from 'lucide-react';
+import { ImplementationStatusBadge } from './implementation-status-badge';
+import { useBatchRun } from '../hooks/use-batch-run';
+
+// ---------------------------------------------------------------------------
+// ImplementationPropertyRow - plain component (NOT observer) that reads
+// batch run data via TanStack Query. Must never be wrapped in observer() —
+// the TipTap context bridge pattern requires this.
+// ---------------------------------------------------------------------------
+
+function formatPrRef(prUrl: string): string {
+  try {
+    const url = new URL(prUrl);
+    const parts = url.pathname.split('/');
+    const repo = parts[2] ?? '';
+    const number = parts[4] ?? '';
+    if (repo && number) return `${repo}#${number}`;
+    return prUrl.length > 30 ? `${prUrl.slice(0, 30)}…` : prUrl;
+  } catch {
+    return prUrl.length > 30 ? `${prUrl.slice(0, 30)}…` : prUrl;
+  }
+}
+
+/**
+ * ImplementationPropertyRow - plain component (NOT observer).
+ *
+ * Shows the Implementation status + PR link row below property chips.
+ * Reads batch run issue data via TanStack Query (never MobX).
+ *
+ * batchRunId wiring: provided by parent via context or props once a batch run
+ * is associated with this issue. When null, the query is disabled and the
+ * row shows "Not started".
+ */
+interface ImplementationPropertyRowProps {
+  /** Pass batchRunId when a batch run is associated with this issue. null = disabled. */
+  batchRunId?: string | null;
+  workspaceSlug?: string;
+  issueId: string;
+}
+
+function ImplementationPropertyRow({
+  batchRunId = null,
+  workspaceSlug = '',
+  issueId,
+}: ImplementationPropertyRowProps) {
+  const { data: batchRun } = useBatchRun(workspaceSlug, batchRunId);
+  const batchIssue = batchRun?.items.find((item) => item.issueId === issueId);
+
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap mt-2 pt-2 border-t border-border/40">
+      <span className="text-xs text-muted-foreground pr-1">Implementation:</span>
+      {batchIssue ? (
+        <>
+          <ImplementationStatusBadge status={batchIssue.status} stage={batchIssue.currentStage} />
+          {batchIssue.prUrl && (
+            <a
+              href={batchIssue.prUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`${issueId} pull request (opens in new tab)`}
+              className="inline-flex items-center gap-0.5 text-xs text-muted-foreground hover:text-primary transition-colors"
+            >
+              {formatPrRef(batchIssue.prUrl)}
+              <ExternalLink className="size-3 ml-0.5" aria-hidden="true" />
+            </a>
+          )}
+        </>
+      ) : (
+        <span
+          className="inline-flex items-center gap-1 rounded-[6px] px-2 py-0.5 text-xs text-muted-foreground bg-muted/50"
+          aria-label="Implementation status: Not started"
+        >
+          Not started
+        </span>
+      )}
+    </div>
+  );
+}
+
 
 // ---------------------------------------------------------------------------
 // Storage key for collapsed state
@@ -346,6 +425,9 @@ export const PropertyBlockView = observer(function PropertyBlockView() {
             <ChevronUp className="size-3" />
           </button>
         </div>
+
+        {/* Row 3: Implementation status (reads from TanStack Query, NOT MobX) */}
+        <ImplementationPropertyRow issueId={issue.id} />
       </div>
     </NodeViewWrapper>
   );

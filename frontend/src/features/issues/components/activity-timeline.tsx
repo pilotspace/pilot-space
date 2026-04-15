@@ -10,9 +10,16 @@ import * as React from 'react';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ActivityEntry } from './activity-entry';
+import { BatchRunActivityEntry, type ImplementationActivityType } from './batch-run-activity-entry';
 import { CommentInput } from './comment-input';
 import { useActivities } from '../hooks/use-activities';
 import { useAddComment } from '../hooks/use-add-comment';
+
+const IMPLEMENTATION_ACTIVITY_TYPES: ReadonlySet<string> = new Set([
+  'implementation_started',
+  'pr_created',
+  'implementation_failed',
+]);
 
 export interface ActivityTimelineProps {
   issueId: string;
@@ -97,11 +104,27 @@ export function ActivityTimeline({
         <p className="py-8 text-center text-sm text-muted-foreground">No activity yet</p>
       ) : (
         <div role="list" aria-label="Activity entries">
-          {activities.map((activity, index) => (
-            <div role="listitem" key={activity.id}>
-              <ActivityEntry activity={activity} isLast={index === activities.length - 1} />
-            </div>
-          ))}
+          {activities.map((activity, index) => {
+            const isLast = index === activities.length - 1;
+            if (IMPLEMENTATION_ACTIVITY_TYPES.has(activity.activityType)) {
+              return (
+                <div role="listitem" key={activity.id}>
+                  <BatchRunActivityEntry
+                    activityType={activity.activityType as ImplementationActivityType}
+                    createdAt={activity.createdAt}
+                    prUrl={activity.metadata?.pr_url as string | undefined}
+                    errorReason={activity.metadata?.error_reason as string | undefined}
+                    isLast={isLast}
+                  />
+                </div>
+              );
+            }
+            return (
+              <div role="listitem" key={activity.id}>
+                <ActivityEntry activity={activity} isLast={isLast} />
+              </div>
+            );
+          })}
         </div>
       )}
 
