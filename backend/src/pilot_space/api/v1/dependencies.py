@@ -69,6 +69,7 @@ from pilot_space.application.services.issue import (
     ListIssuesService,
     UpdateIssueService,
 )
+from pilot_space.application.services.batch_run_service import BatchRunService
 from pilot_space.application.services.issue.batch_create_issues_service import (
     BatchCreateIssuesService,
 )
@@ -1041,6 +1042,19 @@ def _get_memory_list_service(
 MemoryListServiceDep = Annotated[MemoryListService, Depends(_get_memory_list_service)]
 
 
+# ===== Sprint Batch Run Service Dependencies (Phase 76) =====
+
+
+@inject
+def _get_batch_run_service(
+    svc: BatchRunService = Depends(Provide[Container.batch_run_service]),
+) -> BatchRunService:
+    return svc
+
+
+BatchRunServiceDep = Annotated[BatchRunService, Depends(_get_batch_run_service)]
+
+
 __all__ = [  # noqa: RUF022
     "ActionButtonServiceDep",
     "ActivityRepositoryDep",
@@ -1138,6 +1152,7 @@ __all__ = [  # noqa: RUF022
     "MemoryRecallServiceDep",
     "MemoryLifecycleServiceDep",
     "MemoryListServiceDep",
+    "BatchRunServiceDep",
 ]
 
 
