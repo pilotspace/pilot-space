@@ -1,27 +1,35 @@
 'use client';
 
 /**
- * HomepageHub (H047) -- Two-column layout: DailyBrief + ChatView.
+ * HomepageHub — Chat-First Homepage layout.
  *
- * Layout (desktop, lg+):
- * - Left column (flex-1): DailyBrief document
- * - Right column (w-[380px]): Full ChatView as persistent command center
+ * Implements UIX-05 — redesigned Homepage with chat-first paradigm.
  *
- * Layout (mobile, < lg):
- * - Single column: DailyBrief only. Users navigate to /chat on mobile.
+ * Layout:
+ * [Header bar — 48px, existing]
+ * [Hero section — centered, ~280px tall]
+ *   "What would you like to build?" ← Fraunces 28px/600
+ *   [Chat input — 56px, warm surface, full width max 680px]
+ * [Quick Action grid — 2x2, gap 16px, max 680px wide]
+ * [Recent Conversations — horizontal scroll, max 680px wide]
  *
- * Replaces the previous 3-zone layout (CompactChatView, ActivityFeed, DigestPanel)
- * with a cleaner 2-panel approach.
+ * The previous 2-panel layout has been replaced with a chat-first
+ * hero per the locked design decision (UIX-05).
  */
 
-import { useEffect, useMemo } from 'react';
-import { observer } from 'mobx-react-lite';
-import { useAuthStore, useWorkspaceStore } from '@/stores/RootStore';
+import { useEffect, useState } from 'react';
+import { Lightbulb, GitPullRequest, FileText, BarChart3 } from 'lucide-react';
 import { getAIStore } from '@/stores/ai/AIStore';
-import { ChatView } from '@/features/ai/ChatView';
-import { DailyBrief } from './DailyBrief';
-import { useWorkspaceDigest } from '../hooks/useWorkspaceDigest';
+import { SessionListStore } from '@/stores/ai/SessionListStore';
+import type { SessionSummary } from '@/stores/ai/SessionListStore';
 import type { DigestCategoryGroup } from '../hooks/useWorkspaceDigest';
+import { ChatHeroInput } from './ChatHeroInput';
+import { QuickActionCard } from './QuickActionCard';
+import { RecentConversationCard } from './RecentConversationCard';
+
+// ── Backward-compatible export ───────────────────────────────────────────────
+// buildContextualPrompts was exported from the old HomepageHub and has existing
+// tests. Retained here for API compatibility while the chat-first redesign is live.
 
 /** Fallback prompts when no digest data is available */
 const FALLBACK_PROMPTS = [
@@ -65,7 +73,9 @@ export function buildContextualPrompts(groups: DigestCategoryGroup[]): readonly 
         prompts.push(`${count} overdue item${count !== 1 ? 's' : ''} need attention`);
         break;
       case 'unassigned_priority':
-        prompts.push(`${count} priority item${count !== 1 ? 's are' : ' is'} unassigned — assign?`);
+        prompts.push(
+          `${count} priority item${count !== 1 ? 's are' : ' is'} unassigned — assign?`
+        );
         break;
     }
   }
@@ -82,98 +92,111 @@ export function buildContextualPrompts(groups: DigestCategoryGroup[]): readonly 
 
   return prompts;
 }
+// ────────────────────────────────────────────────────────────────────────────
+
+/** Quick action definitions per UI-SPEC copywriting contract */
+const QUICK_ACTIONS = [
+  {
+    icon: Lightbulb,
+    label: 'Create issues from idea',
+    sublabel: 'Turn your description into tracked issues',
+    prompt: 'Create issues from this idea: ',
+  },
+  {
+    icon: GitPullRequest,
+    label: 'Review my PR',
+    sublabel: 'Get a code review on an open pull request',
+    prompt: 'Review my pull request: ',
+  },
+  {
+    icon: FileText,
+    label: 'Generate spec from notes',
+    sublabel: 'Convert a note into a feature specification',
+    prompt: 'Generate a spec from my notes about: ',
+  },
+  {
+    icon: BarChart3,
+    label: 'Check sprint status',
+    sublabel: "Summarize what's in progress and what's blocked",
+    prompt: "What's the current sprint status?",
+  },
+] as const;
 
 interface HomepageHubProps {
   /** Workspace slug for navigation links */
   workspaceSlug: string;
 }
 
-export const HomepageHub = observer(function HomepageHub({ workspaceSlug }: HomepageHubProps) {
-  const authStore = useAuthStore();
-  const workspaceStore = useWorkspaceStore();
-  const workspaceId = workspaceStore.currentWorkspace?.id ?? '';
-  const aiStore = getAIStore();
-  const store = aiStore.pilotSpace;
-  const userName = authStore.userDisplayName || 'User';
+export function HomepageHub({ workspaceSlug }: HomepageHubProps) {
+  const [recentSessions, setRecentSessions] = useState<SessionSummary[]>([]);
 
-  const { groups, suggestionCount } = useWorkspaceDigest({ workspaceId });
-
-  const suggestedPrompts = useMemo(() => buildContextualPrompts(groups), [groups]);
-
-  // Set workspace on AI store when it changes
+  // Load recent sessions client-side only to avoid SSR issues (RESEARCH Pitfall 5)
   useEffect(() => {
-    if (store && workspaceId && store.workspaceId !== workspaceId) {
-      store.setWorkspaceId(workspaceId);
-    }
-  }, [store, workspaceId]);
+    const aiStore = getAIStore();
+    const pilotSpace = aiStore.pilotSpace;
+    if (!pilotSpace) return;
 
-  // Inject homepage context into AI store for context-aware chat (T033)
-  useEffect(() => {
-    if (!store || !workspaceId) return;
+    const sessionListStore = new SessionListStore(pilotSpace);
 
-    const staleCount = groups
-      .filter((g) => g.category === 'stale_issues')
-      .reduce((sum, g) => sum + g.items.length, 0);
-    const cycleRiskCount = groups
-      .filter((g) => g.category === 'cycle_risk')
-      .reduce((sum, g) => sum + g.items.length, 0);
-    const blockedCount = groups
-      .filter((g) => g.category === 'blocked_dependencies')
-      .reduce((sum, g) => sum + g.items.length, 0);
-    const noteGroups = groups.filter((g) => g.category === 'unlinked_notes');
-    const recentNotes = noteGroups.flatMap((g) =>
-      g.items.map((item) => ({ id: item.entityId ?? item.id, title: item.title }))
-    );
-
-    const parts: string[] = [];
-    if (staleCount > 0) parts.push(`${staleCount} stale issues`);
-    if (cycleRiskCount > 0) parts.push(`${cycleRiskCount} cycle risks`);
-    if (blockedCount > 0) parts.push(`${blockedCount} blocked items`);
-    if (recentNotes.length > 0) parts.push(`${recentNotes.length} recent notes active`);
-    const digestSummary =
-      parts.length > 0
-        ? `Workspace has ${parts.join(', ')}.`
-        : `Workspace has ${suggestionCount} suggestions.`;
-
-    store.setHomepageContext({
-      digestSummary,
-      totalSuggestionCount: suggestionCount,
-      staleIssueCount: staleCount,
-      cycleRiskCount,
-      recentNotes,
-    });
-
-    return () => {
-      store.clearHomepageContext();
-    };
-  }, [store, workspaceId, groups, suggestionCount]);
+    sessionListStore
+      .fetchSessions(8)
+      .then(() => {
+        setRecentSessions([...sessionListStore.sessions].slice(0, 8));
+      })
+      .catch(() => {
+        // Non-fatal — recent conversations section will be hidden
+      });
+  }, []);
 
   return (
-    <div className="mx-auto flex flex-col min-h-0 w-full flex-1 lg:flex-row">
-      {/* Left: Daily Brief document (scrolls independently) */}
-      <section className="min-w-0 flex-1 overflow-y-auto px-6 py-6 lg:px-10 lg:py-8">
-        <DailyBrief workspaceSlug={workspaceSlug} />
-      </section>
+    <div className="flex-1 overflow-y-auto bg-background">
+      <div className="max-w-[680px] mx-auto px-6 py-12">
 
-      {/* Right: ChatView command center (desktop only, viewport-pinned) */}
-      <aside
-        className="hidden lg:flex lg:flex-col lg:w-[380px] lg:shrink-0 lg:border-l lg:border-border"
-        aria-label="AI command center"
-      >
-        {store ? (
-          <ChatView
-            store={store}
-            userName={userName}
-            className="h-full w-full"
-            autoFocus={false}
-            suggestedPrompts={suggestedPrompts}
-          />
-        ) : (
-          <div className="flex h-full items-center justify-center">
-            <p className="text-sm text-muted-foreground">Loading AI...</p>
+        {/* Hero section */}
+        <section className="flex flex-col items-center text-center" aria-label="Chat hero">
+          <h1 className="font-display text-[28px] font-semibold leading-[1.2] text-foreground">
+            What would you like to build?
+          </h1>
+
+          <div className="mt-8 w-full">
+            <ChatHeroInput workspaceSlug={workspaceSlug} />
           </div>
+        </section>
+
+        {/* Quick action grid — 2x2 */}
+        <section className="mt-8" aria-label="Quick actions">
+          <div className="grid grid-cols-2 gap-4">
+            {QUICK_ACTIONS.map((action) => (
+              <QuickActionCard
+                key={action.label}
+                icon={action.icon}
+                label={action.label}
+                sublabel={action.sublabel}
+                prompt={action.prompt}
+                workspaceSlug={workspaceSlug}
+              />
+            ))}
+          </div>
+        </section>
+
+        {/* Recent conversations — horizontal scroll */}
+        {recentSessions.length > 0 && (
+          <section className="mt-8" aria-label="Recent conversations">
+            <h2 className="mb-3 text-sm font-semibold text-muted-foreground">
+              Recent Conversations
+            </h2>
+            <div className="flex gap-3 overflow-x-auto pb-2">
+              {recentSessions.map((session) => (
+                <RecentConversationCard
+                  key={session.sessionId}
+                  session={session}
+                  workspaceSlug={workspaceSlug}
+                />
+              ))}
+            </div>
+          </section>
         )}
-      </aside>
+      </div>
     </div>
   );
-});
+}
