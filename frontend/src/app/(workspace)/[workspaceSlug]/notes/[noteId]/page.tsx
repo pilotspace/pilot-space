@@ -16,6 +16,7 @@ import { VersionHistoryPanel, type NoteVersion } from '@/components/editor/Versi
 import { EditorFilePreview } from '@/features/artifacts/components/EditorFilePreview';
 import { FilePreviewConfigContext } from '@/features/notes/editor/extensions/file-card/inline-preview';
 import { useNote, useUpdateNote, useAutoSave } from '@/features/notes/hooks';
+import { LivingSpecSidebar } from '@/features/notes/components/living-spec-sidebar';
 import { useDeleteNote } from '@/features/notes/hooks/useDeleteNote';
 import { useTogglePin } from '@/hooks/useTogglePin';
 import { useNoteVersions, useRestoreNoteVersion } from '@/hooks/useNoteVersions';
@@ -217,6 +218,14 @@ function NoteDetailPage() {
   // Version history state
   const [showVersionHistory, setShowVersionHistory] = useState(false);
 
+  // Living spec sidebar state — open by default on lg, collapsed on md, hidden on sm
+  // Default: open (responsive hiding is done via CSS classes on sm)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
+    // Default open on lg screens (1024px+), collapsed on md
+    if (typeof window === 'undefined') return true;
+    return window.innerWidth >= 1024;
+  });
+
   // Fetch versions when panel is open
   const { data: versions, isLoading: isLoadingVersions } = useNoteVersions({
     workspaceId,
@@ -394,65 +403,81 @@ function NoteDetailPage() {
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col bg-[#f7f7f5]">
       {/* Editor with merged header - Three-column layout per Prototype v4 */}
-      <div className="relative flex-1 overflow-hidden">
-        <FilePreviewConfigContext.Provider
-          value={{ workspaceId, projectId: note.projectId ?? '' }}
-        >
-          <NoteCanvas
-            key={noteId}
-            noteId={noteId}
-            content={sanitizedContent}
-            readOnly={false}
-            onChange={handleContentChange}
-            onSave={handleSave}
-            workspaceId={workspaceId}
-            // Merged header props per Prototype v4
-            title={note.title}
-            author={note.owner}
-            createdAt={note.createdAt}
-            updatedAt={note.updatedAt}
-            wordCount={note.wordCount}
-            isPinned={note.isPinned}
-            isAIAssisted={note.isAIAssisted}
-            topics={note.topics}
-            workspaceSlug={workspaceSlug}
-            onTitleChange={handleTitleChange}
-            onShare={handleShare}
-            onExport={handleExport}
-            onDelete={handleDelete}
-            onTogglePin={handleTogglePin}
-            onVersionHistory={handleVersionHistory}
-            onMove={handleMove}
-            projectId={note.projectId}
-            linkedIssues={note.linkedIssues}
-            iconEmoji={note.iconEmoji}
-            isFocusMode={isFocusMode}
-            onToggleFocusMode={handleToggleFocusMode}
-          />
-
-          {/* File preview modal — self-contained to isolate state from EditorContent */}
-          <EditorFilePreview workspaceId={workspaceId} projectId={note.projectId ?? ''} />
-        </FilePreviewConfigContext.Provider>
-
-        {/* Version History Panel - slides in from right */}
-        {showVersionHistory && (
-          <motion.div
-            initial={{ x: '100%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '100%' }}
-            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="absolute right-0 top-0 bottom-0 w-80 border-l border-border bg-background shadow-lg z-10"
+      <div className="relative flex flex-1 overflow-hidden">
+        {/* NoteCanvas area — flex-1 takes remaining space */}
+        <div className="flex-1 min-w-0 relative">
+          <FilePreviewConfigContext.Provider
+            value={{ workspaceId, projectId: note.projectId ?? '' }}
           >
-            <VersionHistoryPanel
-              versions={versions ?? []}
-              currentVersionId={versions?.[0]?.id}
-              isLoading={isLoadingVersions}
-              onRestore={handleRestoreVersion}
+            <NoteCanvas
+              key={noteId}
+              noteId={noteId}
+              content={sanitizedContent}
+              readOnly={false}
+              onChange={handleContentChange}
+              onSave={handleSave}
+              workspaceId={workspaceId}
+              // Merged header props per Prototype v4
+              title={note.title}
+              author={note.owner}
+              createdAt={note.createdAt}
+              updatedAt={note.updatedAt}
+              wordCount={note.wordCount}
+              isPinned={note.isPinned}
+              isAIAssisted={note.isAIAssisted}
+              topics={note.topics}
+              workspaceSlug={workspaceSlug}
+              onTitleChange={handleTitleChange}
+              onShare={handleShare}
+              onExport={handleExport}
+              onDelete={handleDelete}
+              onTogglePin={handleTogglePin}
+              onVersionHistory={handleVersionHistory}
+              onMove={handleMove}
+              projectId={note.projectId}
+              linkedIssues={note.linkedIssues}
+              iconEmoji={note.iconEmoji}
+              isFocusMode={isFocusMode}
+              onToggleFocusMode={handleToggleFocusMode}
             />
-          </motion.div>
-        )}
+
+            {/* File preview modal — self-contained to isolate state from EditorContent */}
+            <EditorFilePreview workspaceId={workspaceId} projectId={note.projectId ?? ''} />
+          </FilePreviewConfigContext.Provider>
+
+          {/* Version History Panel - slides in from right */}
+          {showVersionHistory && (
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="absolute right-0 top-0 bottom-0 w-80 border-l border-border bg-background shadow-lg z-10"
+            >
+              <VersionHistoryPanel
+                versions={versions ?? []}
+                currentVersionId={versions?.[0]?.id}
+                isLoading={isLoadingVersions}
+                onRestore={handleRestoreVersion}
+              />
+            </motion.div>
+          )}
+        </div>
+
+        {/* Living Spec Sidebar — hidden on sm (<768px), visible on md+ */}
+        {/* Version history takes precedence over sidebar */}
+        <div className="hidden md:flex">
+          <LivingSpecSidebar
+            noteId={noteId}
+            workspaceId={workspaceId}
+            isOpen={isSidebarOpen}
+            onToggle={() => setIsSidebarOpen((prev) => !prev)}
+            editor={null}
+            showVersionHistory={showVersionHistory}
+          />
+        </div>
       </div>
     </div>
   );

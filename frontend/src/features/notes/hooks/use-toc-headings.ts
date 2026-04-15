@@ -37,6 +37,7 @@ export function useTocHeadings(editor: Editor | null): { headings: TocHeading[] 
 
   useEffect(() => {
     if (!editor) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- reset on editor unmount is correct
       setHeadings([]);
       return;
     }
@@ -80,7 +81,8 @@ export function useTocHeadings(editor: Editor | null): { headings: TocHeading[] 
       setHeadings(result);
     }
 
-    // Extract immediately on mount
+    // Extract immediately — this is a subscription setup (subscribe to editor events),
+    // so initial extraction is part of external system sync.
     extractHeadings();
 
     // Re-extract on every editor update

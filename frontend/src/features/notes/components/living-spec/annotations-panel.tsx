@@ -32,16 +32,15 @@ export const AnnotationsPanel = React.memo(function AnnotationsPanel({
 }: AnnotationsPanelProps) {
   const [open, setOpen] = React.useState(true);
 
-  const annotationList = annotations ?? [];
-  const count = annotationList.length;
+  const count = annotations?.length ?? 0;
 
   // Sort by createdAt descending (newest first)
   const sorted = React.useMemo(
     () =>
-      [...annotationList].sort(
+      [...(annotations ?? [])].sort(
         (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       ),
-    [annotationList]
+    [annotations]
   );
 
   return (
