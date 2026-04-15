@@ -358,9 +358,62 @@ class AIUpdateResponse(BaseSchema):
     )
 
 
+# ============================================================
+# Living Specs schemas (Phase 78)
+# ============================================================
+
+
+class LinkedIssueResponse(BaseSchema):
+    """Response schema for an issue linked to a note via source_note_id.
+
+    Provides enough context for the Living Specs sidebar to render
+    issue status without a full Issue detail fetch.
+    """
+
+    id: UUID = Field(description="Issue UUID")
+    identifier: str = Field(description="Human-readable identifier e.g. PS-42")
+    title: str = Field(description="Issue title")
+    state_name: str = Field(description="Current state name e.g. 'In Progress'")
+    state_group: str = Field(
+        description="State group: backlog | unstarted | started | completed | cancelled"
+    )
+    batch_status: str | None = Field(
+        default=None,
+        description="Most-recent BatchRunIssueStatus if this issue has been batch-implemented",
+    )
+
+
+class SpecAnnotationResponse(BaseSchema):
+    """Response schema for a single entry in the spec_annotations JSONB array.
+
+    Two annotation types are stored:
+    - 'deviation': AI-detected deviation between PR diff and source spec.
+    - 'decision': Human decision record appended on batch approval/rejection.
+    """
+
+    type: str = Field(description="'deviation' | 'decision'")
+    content: str = Field(description="Human-readable annotation text")
+    issue_id: UUID | None = Field(default=None, description="Related issue UUID if applicable")
+    created_at: str = Field(description="ISO-8601 creation timestamp")
+    pr_url: str | None = Field(default=None, description="PR URL that triggered this annotation")
+    action: str | None = Field(
+        default=None,
+        description="Decision action: 'approved' | 'rejected' (for decision type)",
+    )
+    issues: list[str] | None = Field(
+        default=None,
+        description="Issue titles included in the decision (for decision type)",
+    )
+    user_id: UUID | None = Field(
+        default=None,
+        description="User UUID who made the decision (for decision type)",
+    )
+
+
 __all__ = [
     "AIUpdateRequest",
     "AIUpdateResponse",
+    "LinkedIssueResponse",
     "MovePageRequest",
     "NoteBlockSchema",
     "NoteCreate",
@@ -374,6 +427,7 @@ __all__ = [
     "NoteUpdate",
     "PageTreeResponse",
     "ReorderPageRequest",
+    "SpecAnnotationResponse",
     "TipTapContentSchema",
     "extract_blocks_from_tiptap",
     "extract_text_from_tiptap",

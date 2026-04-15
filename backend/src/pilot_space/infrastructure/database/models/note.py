@@ -22,6 +22,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+
 from pilot_space.infrastructure.database.base import WorkspaceScopedModel
 from pilot_space.infrastructure.database.types import JSONBCompat
 
@@ -164,6 +165,16 @@ class Note(WorkspaceScopedModel):
         nullable=True,
         default=None,
         doc="Emoji icon for page visual identity (e.g. a single emoji character)",
+    )
+
+    # Living Specs: AI deviation annotations and batch decision records (Phase 78)
+    # JSONB array of {type, content, issue_id, created_at, pr_url, action, issues, user_id}
+    # Name chosen to avoid collision with the `annotations` ORM relationship (NoteAnnotation margin annotations).
+    spec_annotations: Mapped[list[dict[str, Any]] | None] = mapped_column(
+        JSONBCompat,
+        nullable=True,
+        default=list,
+        server_default=text("'[]'::jsonb"),
     )
 
     # Relationships

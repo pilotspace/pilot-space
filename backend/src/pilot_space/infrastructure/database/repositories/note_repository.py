@@ -5,7 +5,7 @@ Provides specialized methods for Note-related queries with eager loading support
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import joinedload, selectinload
@@ -444,3 +444,91 @@ class NoteRepository(BaseRepository[Note]):
         query = query.order_by(Note.created_at.desc()).limit(limit)
         result = await self.session.execute(query)
         return result.scalars().all()
+
+    async def get_linked_issues(self, note_id: UUID) -> list[dict[str, Any]]:
+        """Get all issues that originate from the given note.
+
+        Returns issues where source_note_id == note_id (not deleted),
+        including their state info and most-recent batch run status.
+
+        Args:
+            note_id: The source note UUID.
+
+        Returns:
+            List of dicts with id, identifier, title, state_name, state_group, batch_status.
+        """
+        from pilot_space.infrastructure.database.models.batch_run_issue import (
+            BatchRunIssue,
+        )
+        from pilot_space.infrastructure.database.models.issue import Issue
+        from pilot_space.infrastructure.database.models.state import State
+
+        # Load issues with state eagerly
+        stmt = (
+            select(Issue)
+            .options(selectinload(Issue.state))
+            .where(
+                Issue.source_note_id == note_id,
+                Issue.is_deleted == False,  # noqa: E712
+            )
+            .order_by(Issue.created_at.asc())
+        )
+        result = await self.session.execute(stmt)
+        issues = result.scalars().all()
+
+        if not issues:
+            return []
+
+        # Load most-recent BatchRunIssue per issue (if any)
+        issue_ids = [i.id for i in issues]
+        batch_stmt = (
+            select(BatchRunIssue)
+            .where(BatchRunIssue.issue_id.in_(issue_ids))
+            .order_by(BatchRunIssue.created_at.desc())
+        )
+        batch_result = await self.session.execute(batch_stmt)
+        all_batch_issues = batch_result.scalars().all()
+
+        # Map issue_id -> most-recent batch status
+        batch_status_map: dict[Any, str | None] = {}
+        for bri in all_batch_issues:
+            if bri.issue_id not in batch_status_map:
+                batch_status_map[bri.issue_id] = bri.status.value
+
+        rows: list[dict[str, Any]] = []
+        for issue in issues:
+            state: State | None = issue.state  # type: ignore[assignment]
+            rows.append(
+                {
+                    "id": issue.id,
+                    "identifier": issue.identifier,
+                    "title": issue.name,
+                    "state_name": state.name if state else "",
+                    "state_group": state.group if state else "backlog",
+                    "batch_status": batch_status_map.get(issue.id),
+                }
+            )
+        return rows
+
+    async def append_spec_annotation(self, note_id: UUID, annotation: dict[str, Any]) -> bool:
+        """Append a single annotation dict to the note's spec_annotations JSONB array.
+
+        Loads the current array, appends the new entry, and writes back.
+        Caller is responsible for committing the session.
+
+        Args:
+            note_id: The note UUID to update.
+            annotation: The annotation dict to append.
+
+        Returns:
+            True if note was found and updated, False if note not found.
+        """
+        stmt = select(Note).where(Note.id == note_id, Note.is_deleted == False)  # noqa: E712
+        result = await self.session.execute(stmt)
+        note = result.scalar_one_or_none()
+        if note is None:
+            return False
+
+        current: list[dict[str, Any]] = note.spec_annotations or []
+        note.spec_annotations = [*current, annotation]
+        return True
