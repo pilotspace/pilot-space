@@ -10,6 +10,7 @@ import { Bot, Plus, X } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { AIChatProjectSelector } from './AIChatProjectSelector';
 import { ModelSelector } from './ModelSelector';
+import { TokenRing } from './TokenRing';
 
 interface ChatHeaderProps {
   title?: string;
@@ -17,10 +18,12 @@ interface ChatHeaderProps {
   onNewSession?: () => void;
   onClose?: () => void;
   className?: string;
+  /** Total tokens used in the current session (from PilotSpaceStore.sessionState.totalTokens) */
+  totalTokens?: number;
 }
 
 export const ChatHeader = observer<ChatHeaderProps>(
-  ({ title, isStreaming, onNewSession, onClose, className }) => {
+  ({ title, isStreaming, onNewSession, onClose, className, totalTokens = 0 }) => {
     return (
       <div
         className={cn(
@@ -52,6 +55,8 @@ export const ChatHeader = observer<ChatHeaderProps>(
           <div className="flex-1 min-w-2 flex justify-center items-center gap-1.5">
             <AIChatProjectSelector />
             <ModelSelector />
+            {/* TokenRing: right of ModelSelector, left of action buttons; self-hides when totalTokens=0 */}
+            <TokenRing totalTokens={totalTokens} />
           </div>
 
           {/* Action buttons */}

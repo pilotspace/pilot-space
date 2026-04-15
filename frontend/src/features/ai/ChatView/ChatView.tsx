@@ -448,6 +448,7 @@ const ChatViewInternal = observer<ChatViewProps>(
           isStreaming={store.isStreaming}
           onNewSession={handleNewSession}
           onClose={onClose}
+          totalTokens={store.sessionState?.totalTokens ?? 0}
         />
 
         {/* Main content area - relative for floating abort button */}
