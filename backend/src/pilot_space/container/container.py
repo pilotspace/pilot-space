@@ -77,6 +77,9 @@ from pilot_space.application.services.issue import (
     ListIssuesService,
     UpdateIssueService,
 )
+from pilot_space.application.services.issue.batch_create_issues_service import (
+    BatchCreateIssuesService,
+)
 from pilot_space.application.services.issue.rich_context_assembler import RichContextAssembler
 from pilot_space.application.services.mcp_oauth import McpOAuthService
 from pilot_space.application.services.mcp_server import McpServerService
@@ -518,6 +521,12 @@ class Container(SkillContainer, PluginContainer):
         label_repository=InfraContainer.label_repository,
         queue=InfraContainer.queue_client,
         audit_log_repository=audit_log_repository,
+    )
+
+    batch_create_issues_service = providers.Factory(
+        BatchCreateIssuesService,
+        session=providers.Callable(get_current_session),
+        create_issue_service=create_issue_service,
     )
 
     update_issue_service = providers.Factory(

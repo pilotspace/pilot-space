@@ -69,6 +69,9 @@ from pilot_space.application.services.issue import (
     ListIssuesService,
     UpdateIssueService,
 )
+from pilot_space.application.services.issue.batch_create_issues_service import (
+    BatchCreateIssuesService,
+)
 from pilot_space.application.services.mcp_oauth import McpOAuthService
 from pilot_space.application.services.mcp_server import McpServerService
 from pilot_space.application.services.mcp_tool_execution import MCPToolExecutionService
@@ -253,6 +256,18 @@ def _get_activity_service(
 
 
 ActivityServiceDep = Annotated[ActivityService, Depends(_get_activity_service)]
+
+
+@inject
+def _get_batch_create_issues_service(
+    svc: BatchCreateIssuesService = Depends(Provide[Container.batch_create_issues_service]),
+) -> BatchCreateIssuesService:
+    return svc
+
+
+BatchCreateIssuesServiceDep = Annotated[
+    BatchCreateIssuesService, Depends(_get_batch_create_issues_service)
+]
 
 # ===== Note Service Dependencies =====
 
@@ -1051,6 +1066,7 @@ __all__ = [  # noqa: RUF022
     "CreateCycleServiceDep",
     "CreateDiscussionServiceDep",
     "CreateGuidedNoteServiceDep",
+    "BatchCreateIssuesServiceDep",
     "CreateIssueServiceDep",
     "CreateNoteFromChatServiceDep",
     "CreateNoteServiceDep",

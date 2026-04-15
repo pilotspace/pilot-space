@@ -435,9 +435,58 @@ class StateUpdateRequest(BaseSchema):
     state: str
 
 
+# ============================================================================
+# Batch Issue Creation Schemas (Phase 75 — CIP-01, CIP-02, CIP-05)
+# ============================================================================
+
+
+class BatchIssueItemRequest(BaseSchema):
+    """A single issue item in a batch create request."""
+
+    title: str = Field(..., min_length=1, max_length=255)
+    description: str | None = None
+    acceptance_criteria: list[dict[str, Any]] | None = None
+    priority: str = Field(default="medium")
+
+
+class BatchCreateIssueRequest(BaseSchema):
+    """Request to create a batch of issues from a PM chat description.
+
+    Uses BaseSchema (NOT BaseModel) for camelCase contract:
+      - sourceNoteId  → source_note_id
+      - projectId     → project_id
+      - acceptanceCriteria → acceptance_criteria
+    """
+
+    issues: list[BatchIssueItemRequest] = Field(..., min_length=1)
+    source_note_id: UUID | None = None
+    project_id: UUID
+
+
+class BatchCreateIssueResult(BaseSchema):
+    """Per-issue result in a batch create response."""
+
+    index: int
+    success: bool
+    issue_id: UUID | None = None
+    error: str | None = None
+
+
+class BatchCreateIssueResponse(BaseSchema):
+    """Response for POST /issues/batch endpoint."""
+
+    results: list[BatchCreateIssueResult]
+    created_count: int
+    failed_count: int
+
+
 __all__ = [
     "ActivityResponse",
     "ActivityTimelineResponse",
+    "BatchCreateIssueRequest",
+    "BatchCreateIssueResponse",
+    "BatchCreateIssueResult",
+    "BatchIssueItemRequest",
     "CommentCreateRequest",
     "IssueBriefResponse",
     "IssueCreateRequest",
