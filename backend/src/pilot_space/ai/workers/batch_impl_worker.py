@@ -483,6 +483,7 @@ class BatchImplWorker:
                     session_factory=self._session_factory,
                     redis_client=self._redis,
                     active_procs=self._active_procs,
+                    queue_client=self._queue,
                 )
                 await handler.execute(
                     batch_run_issue_id=issue.id,
