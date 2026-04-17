@@ -4,12 +4,10 @@ import { observer } from 'mobx-react-lite';
 import { motion, useReducedMotion } from 'motion/react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Home,
   FileText,
-  LayoutGrid,
-  FolderKanban,
   Users,
   DollarSign,
   Settings,
@@ -17,27 +15,28 @@ import {
   ChevronRight,
   Plus,
   Compass,
-  PinIcon,
   Loader2,
   LogOut,
   User,
-  UserCog,
   Sparkles,
   X,
   Sun,
   Moon,
   Monitor,
   CheckCircle2,
-  Network,
   BookOpen,
-  BarChart3,
+  Brain,
+  Zap,
+  CircleDot,
+  Folder,
+  MessageSquare,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useUIStore, useNotificationStore, useAuthStore, useWorkspaceStore } from '@/stores';
 import { useCreateNote } from '@/features/notes/hooks';
 import { TemplatePicker } from '@/features/notes/components/TemplatePicker';
 import { useNewNoteFlow } from './useNewNoteFlow';
-import { useProjects } from '@/features/projects/hooks/useProjects';
+// useProjects removed — project sidebar tree replaced by recent chats
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -63,7 +62,10 @@ import { NotificationPanel } from '@/components/layout/notification-panel';
 import { addRecentWorkspace } from '@/components/workspace-selector';
 import { WorkspaceSwitcher } from '@/components/layout/workspace-switcher';
 import { usePendingApprovalCount } from '@/features/approvals/hooks/use-approvals';
-import { usePinnedNotes } from '@/hooks/usePinnedNotes';
+// usePinnedNotes removed — sidebar now shows recent chats instead
+import { getAIStore } from '@/stores/ai/AIStore';
+import { SessionListStore } from '@/stores/ai/SessionListStore';
+import type { SessionSummary } from '@/stores/ai/SessionListStore';
 import { useSettingsModal } from '@/features/settings/settings-modal-context';
 import type { WorkspaceFeatureToggles } from '@/types';
 
@@ -91,20 +93,25 @@ const navigationSections: NavSection[] = [
     label: 'Main',
     items: [
       { name: 'Home', path: '', icon: Home, testId: 'nav-home' },
+      { name: 'Pilot AI', path: 'chat', icon: Sparkles, testId: 'nav-pilot-ai' },
       { name: 'Notes', path: 'notes', icon: FileText, testId: 'nav-notes', featureKey: 'notes' },
-      { name: 'Issues', path: 'issues', icon: LayoutGrid, testId: 'nav-issues', featureKey: 'issues' },
-      { name: 'Dashboard', path: 'dashboard', icon: BarChart3, testId: 'nav-dashboard', badgeKey: 'dashboardAttention' },
-      { name: 'Projects', path: 'projects', icon: FolderKanban, testId: 'nav-projects', featureKey: 'projects' },
+      { name: 'Issues', path: 'issues', icon: CircleDot, testId: 'nav-issues', featureKey: 'issues' },
+      { name: 'Projects', path: 'projects', icon: Folder, testId: 'nav-projects', featureKey: 'projects' },
       { name: 'Members', path: 'members', icon: Users, testId: 'nav-members', featureKey: 'members' },
-      { name: 'Knowledge', path: 'knowledge', icon: Network, testId: 'nav-knowledge', featureKey: 'knowledge' },
+    ],
+  },
+  {
+    label: 'Workspace',
+    items: [
+      { name: 'Knowledge Graph', path: 'knowledge', icon: Brain, testId: 'nav-knowledge', featureKey: 'knowledge' },
       { name: 'Docs', path: 'docs', icon: BookOpen, testId: 'nav-docs', featureKey: 'docs' },
+      { name: 'Skills', path: 'skills', icon: Zap, testId: 'nav-skills', featureKey: 'skills' },
     ],
   },
   {
     label: 'AI',
     icon: Sparkles,
     items: [
-      { name: 'Skill', path: 'skills', icon: UserCog, testId: 'nav-roles', featureKey: 'skills' },
       { name: 'Costs', path: 'costs', icon: DollarSign, testId: 'nav-costs', featureKey: 'costs' },
       {
         name: 'Approvals',
@@ -131,12 +138,14 @@ export const SidebarUserControls = observer(function SidebarUserControls({
   authStore,
   notificationStore,
   uiStore,
+  workspaceStore,
 }: {
   collapsed: boolean;
   workspaceId: string;
   authStore: AuthStore;
   notificationStore: NotificationStore;
   uiStore: UIStore;
+  workspaceStore: { isOwner: boolean; isAdmin: boolean };
 }) {
   const settingsModal = useSettingsModal();
 
@@ -257,6 +266,9 @@ export const SidebarUserControls = observer(function SidebarUserControls({
             </Avatar>
             <div className="flex-1 min-w-0">
               <p className="text-xs font-medium text-sidebar-foreground truncate">{displayName}</p>
+              <p className="text-[10px] font-mono text-muted-foreground truncate">
+                {workspaceStore.isOwner ? 'Owner' : workspaceStore.isAdmin ? 'Admin' : 'Member'}
+              </p>
             </div>
           </button>
         </DropdownMenuTrigger>
@@ -349,12 +361,6 @@ export const Sidebar = observer(function Sidebar() {
     dashboardAttention: 0,
   };
 
-  // Workspace projects for sidebar tree sections
-  const { data: projectsData } = useProjects({
-    workspaceId,
-    enabled: !!workspaceId && isAuthenticated,
-  });
-
   const navigation = useMemo(() => {
     return navigationSections.map((section) => {
       const items = section.items
@@ -374,27 +380,22 @@ export const Sidebar = observer(function Sidebar() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceSlug, workspaceStore.featureToggles]);
 
-  const projectMap = useMemo(() => {
-    const map: Record<string, string> = {};
-    (projectsData?.items ?? []).forEach((p) => {
-      map[p.id] = p.name;
-    });
-    return map;
-  }, [projectsData]);
+  // projectMap and pinnedNotes removed — sidebar now shows recent chats instead
 
-  const { data: rawPinnedNotes = [] } = usePinnedNotes({
-    workspaceId: resolvedWorkspaceId ?? '',
-    enabled: !!resolvedWorkspaceId && isAuthenticated,
-  });
-
-  const pinnedNotes = useMemo(() => {
-    return rawPinnedNotes.slice(0, 5).map((note) => ({
-      id: note.id,
-      title: note.title,
-      projectId: note.projectId,
-      href: `/${workspaceSlug}/notes/${note.id}`,
-    }));
-  }, [rawPinnedNotes, workspaceSlug]);
+  // Recent chat sessions for sidebar
+  const [recentSessions, setRecentSessions] = useState<SessionSummary[]>([]);
+  useEffect(() => {
+    const aiStore = getAIStore();
+    const pilotSpace = aiStore.pilotSpace;
+    if (!pilotSpace) return;
+    const sessionListStore = new SessionListStore(pilotSpace);
+    sessionListStore
+      .fetchSessions(5)
+      .then(() => {
+        setRecentSessions([...sessionListStore.sessions].slice(0, 5));
+      })
+      .catch(() => {});
+  }, []);
 
   const newNoteFlow = useNewNoteFlow({
     onCreateNote: (data) => createNote.mutate(data),
@@ -554,31 +555,32 @@ export const Sidebar = observer(function Sidebar() {
 
           <Separator className="mx-2" />
 
-          {/* Pinned Notes — inside scrollable area */}
+          {/* Recents — recent chat sessions inside scrollable area */}
           {!collapsed && (
             <>
-              {/* Pinned Notes — hidden when notes feature is disabled */}
-              {isNotesEnabled && (
-              <div className="mb-3" data-testid="pinned-notes">
+              {recentSessions.length > 0 && (
+              <div className="mb-3" data-testid="recent-chats">
                 <div className="mb-1.5 flex items-center gap-1.5 px-1.5">
-                  <PinIcon className="h-2.5 w-2.5 text-muted-foreground" />
                   <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    Pinned
+                    Recents
                   </span>
                 </div>
                 <div className="space-y-px">
-                  {pinnedNotes.map((note, index) => {
-                    const isActive = pathname === note.href;
+                  {recentSessions.map((session, index) => {
+                    const href = `/${workspaceSlug}/chat?session=${session.sessionId}`;
+                    const isActive = pathname === href;
+                    const noteCount = session.contextHistory?.filter((c) => c.noteId).length ?? 0;
+                    const issueCount = session.contextHistory?.filter((c) => c.issueId).length ?? 0;
                     return (
                       <motion.div
-                        key={note.id}
+                        key={session.sessionId}
                         initial={shouldReduceMotion ? false : { opacity: 0, y: 8 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={shouldReduceMotion ? { duration: 0 } : { delay: index * 0.05 }}
                       >
                         <Link
-                          href={note.href}
-                          data-testid="note-item"
+                          href={href}
+                          data-testid="recent-chat-item"
                           aria-current={isActive ? 'page' : undefined}
                           className={cn(
                             'group relative flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs transition-colors outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-1 focus-visible:ring-offset-sidebar',
@@ -587,11 +589,12 @@ export const Sidebar = observer(function Sidebar() {
                               : 'text-sidebar-foreground hover:bg-sidebar-accent/50'
                           )}
                         >
-                          <FileText className="h-3 w-3 text-muted-foreground" />
-                          <span className="truncate">{note.title}</span>
-                          {note.projectId && projectMap[note.projectId] && (
-                            <span className="ml-auto shrink-0 text-[10px] text-muted-foreground/60 truncate max-w-[80px]">
-                              {projectMap[note.projectId]}
+                          <MessageSquare className="h-3 w-3 shrink-0 text-muted-foreground" />
+                          <span className="truncate">{session.title ?? 'Untitled chat'}</span>
+                          {(noteCount > 0 || issueCount > 0) && (
+                            <span className="ml-auto flex shrink-0 items-center gap-1 text-[10px] text-muted-foreground/60">
+                              {noteCount > 0 && <span>📝{noteCount}</span>}
+                              {issueCount > 0 && <span>🔗{issueCount}</span>}
                             </span>
                           )}
                         </Link>
@@ -654,6 +657,7 @@ export const Sidebar = observer(function Sidebar() {
           authStore={authStore}
           notificationStore={notificationStore}
           uiStore={uiStore}
+          workspaceStore={workspaceStore}
         />
 
         {/* Collapse/Expand Toggle — always visible at bottom */}

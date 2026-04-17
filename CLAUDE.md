@@ -17,7 +17,7 @@ infra/         Docker, Supabase local stack
 docs/          Design decisions, dev patterns, specs (synced from pilotspace/pilot-space-docs)
 specs/         Feature specifications (synced from pilotspace/pilot-space-docs)
 scripts/       Utility scripts
-design-system/ Design tokens and references
+.planning/     System docs, design tokens, v2 spec (design.md), UI-SPEC.md (canonical UI reference)
 ```
 
 ## Commands
@@ -159,6 +159,8 @@ Read index at `docs/claude-sdk.txt` for full documentation.
 
 11. **Exception handling — Infrastructure exceptions**: `EncryptionError`, `SamlValidationError`, `CreateBranchError`, `PluginRepoError`, `PluginRateLimitError` all extend `AppError`. They propagate to the global handler automatically. Exception: `EncryptionError` in `test_ai_configuration` endpoint has a justified graceful catch (returns `success=False` response instead of error).
 
+12. **Pencil `.pen` files**: Design mockup files in `design-system/` are encrypted. Use only `mcp__pencil__*` tools (batch_get, batch_design, get_screenshot) to read/edit them. Never use `Read` or `Grep` on `.pen` files.
+
 ---
 
 ## Design Context
@@ -179,4 +181,11 @@ Notion-like neutral base with editorial quality. Inspirations: Craft (layered su
 4. **Warmth through craft** — Every surface/shadow/transition feels intentional and human
 5. **Accessible by default** — WCAG 2.2 AA baseline, color never sole meaning carrier, keyboard-first
 
-Full design context: `.impeccable.md` | Full UI spec: `specs/001-pilot-space-mvp/ui-design-spec.md`
+### v2 Design System (feat/redesign)
+
+Full spec: `.planning/design.md` | Design context: `.impeccable.md`
+Key tokens: chatbox `#f0f4f9` (28px radius), artifact cards (22px radius), list cards (16px radius).
+Fraunces font for hero greeting ONLY (24px). JetBrains Mono for badges/timestamps.
+Depth: L0 flat → L1 surface fill → L2 bordered → L3 gradient. No arbitrary shadows.
+
+Full design context: `.impeccable.md` | Full UI spec: `.planning/UI-SPEC.md`

@@ -62,6 +62,10 @@
   --color-priority-low: var(--priority-low);
   --color-priority-none: var(--priority-none);
 
+  /* v2 Homepage surfaces */
+  --color-surface-chatbox: var(--surface-chatbox);
+  --color-border-toolbar: var(--border-toolbar);
+
   /* Sidebar */
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
@@ -80,12 +84,15 @@
     var(--font-geist-mono), 'Geist Mono', var(--font-jetbrains-mono), 'JetBrains Mono', 'SF Mono', 'Cascadia Code', 'Fira Code',
     ui-monospace, monospace;
 
-  /* Border radius (Apple squircle style) */
+  /* Border radius — v2 scale (design.md §3) */
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 14px;
+  --radius-card: 16px;
   --radius-xl: 18px;
+  --radius-signature: 22px;
   --radius-2xl: 24px;
+  --radius-chatbox: 28px;
   --radius-3xl: 2rem;
   --radius-full: 9999px;
 
@@ -212,6 +219,10 @@
   --sidebar-collapsed-width: 60px;
   --content-max-width: 1200px;
 
+  /* v2 Homepage surfaces (design.md §1) */
+  --surface-chatbox: #f0f4f9;
+  --border-toolbar: #c8d1db;
+
   /* Accessible text colors (AA compliant) */
   --primary-text: #1f7d66;
   --ai-text: #4a6f8f;
@@ -312,6 +323,10 @@
   --sidebar-accent-foreground: #ebebeb;
   --sidebar-border: #3c3c3c;
   --sidebar-ring: #3db896;
+
+  /* v2 Homepage surfaces (dark) */
+  --surface-chatbox: #1e2530;
+  --border-toolbar: #4a5568;
 
   /* Accessible text colors (AA compliant) */
   --primary-text: #4ecaa8;

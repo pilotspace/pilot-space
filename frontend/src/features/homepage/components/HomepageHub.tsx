@@ -1,35 +1,31 @@
 'use client';
 
 /**
- * HomepageHub — Chat-First Homepage layout.
+ * HomepageHub — v2 Chat-first homepage launchpad.
  *
- * Implements UIX-05 — redesigned Homepage with chat-first paradigm.
+ * 4-section dashboard per design.md §8:
+ *   WorkspacePill → Greeting → AI Prompt Hero →
+ *   Recent Artifacts → Active Routines → Sprint Progress
  *
- * Layout:
- * [Header bar — 48px, existing]
- * [Hero section — centered, ~280px tall]
- *   "What would you like to build?" ← Fraunces 28px/600
- *   [Chat input — 56px, warm surface, full width max 680px]
- * [Quick Action grid — 2x2, gap 16px, max 680px wide]
- * [Recent Conversations — horizontal scroll, max 680px wide]
- *
- * The previous 2-panel layout has been replaced with a chat-first
- * hero per the locked design decision (UIX-05).
+ * Design source: Pencil "Homepage v2 — Artifacts + Sprint Progress"
+ * Spacing: design.md §7 (36px pill→greeting, 36px greeting→chatbox, 80px chatbox→artifacts)
  */
 
-import { useEffect, useState } from 'react';
-import { Lightbulb, GitPullRequest, FileText, BarChart3 } from 'lucide-react';
+import { useEffect } from 'react';
+import { observer } from 'mobx-react-lite';
+import { useAuthStore, useWorkspaceStore } from '@/stores/RootStore';
 import { getAIStore } from '@/stores/ai/AIStore';
-import { SessionListStore } from '@/stores/ai/SessionListStore';
-import type { SessionSummary } from '@/stores/ai/SessionListStore';
+import { useWorkspaceDigest } from '../hooks/useWorkspaceDigest';
 import type { DigestCategoryGroup } from '../hooks/useWorkspaceDigest';
 import { ChatHeroInput } from './ChatHeroInput';
-import { QuickActionCard } from './QuickActionCard';
-import { RecentConversationCard } from './RecentConversationCard';
+import { ExamplePrompts } from './ExamplePrompts';
+import { RecentWorkSection } from './RecentWorkSection';
+import { ActiveRoutines } from './ActiveRoutines';
+import { SprintProgress } from './SprintProgress';
+import { RecentConversations } from './RecentConversations';
+import { WorkspacePill } from './WorkspacePill';
 
 // ── Backward-compatible export ───────────────────────────────────────────────
-// buildContextualPrompts was exported from the old HomepageHub and has existing
-// tests. Retained here for API compatibility while the chat-first redesign is live.
 
 /** Fallback prompts when no digest data is available */
 const FALLBACK_PROMPTS = [
@@ -39,11 +35,6 @@ const FALLBACK_PROMPTS = [
   'Find stale issues that need attention',
 ] as const;
 
-/**
- * Build contextual prompts from digest category groups.
- * Returns up to 4 prompts derived from active digest categories,
- * padded with fallback prompts if fewer than 4 categories are present.
- */
 export function buildContextualPrompts(groups: DigestCategoryGroup[]): readonly string[] {
   if (groups.length === 0) return FALLBACK_PROMPTS;
 
@@ -51,7 +42,6 @@ export function buildContextualPrompts(groups: DigestCategoryGroup[]): readonly 
 
   for (const group of groups) {
     if (prompts.length >= 4) break;
-
     const count = group.items.length;
 
     switch (group.category) {
@@ -80,7 +70,6 @@ export function buildContextualPrompts(groups: DigestCategoryGroup[]): readonly 
     }
   }
 
-  // Pad with fallback prompts to reach 4
   let fallbackIdx = 0;
   while (prompts.length < 4 && fallbackIdx < FALLBACK_PROMPTS.length) {
     const candidate = FALLBACK_PROMPTS[fallbackIdx]!;
@@ -92,111 +81,110 @@ export function buildContextualPrompts(groups: DigestCategoryGroup[]): readonly 
 
   return prompts;
 }
+
 // ────────────────────────────────────────────────────────────────────────────
 
-/** Quick action definitions per UI-SPEC copywriting contract */
-const QUICK_ACTIONS = [
-  {
-    icon: Lightbulb,
-    label: 'Create issues from idea',
-    sublabel: 'Turn your description into tracked issues',
-    prompt: 'Create issues from this idea: ',
-  },
-  {
-    icon: GitPullRequest,
-    label: 'Review my PR',
-    sublabel: 'Get a code review on an open pull request',
-    prompt: 'Review my pull request: ',
-  },
-  {
-    icon: FileText,
-    label: 'Generate spec from notes',
-    sublabel: 'Convert a note into a feature specification',
-    prompt: 'Generate a spec from my notes about: ',
-  },
-  {
-    icon: BarChart3,
-    label: 'Check sprint status',
-    sublabel: "Summarize what's in progress and what's blocked",
-    prompt: "What's the current sprint status?",
-  },
-] as const;
-
 interface HomepageHubProps {
-  /** Workspace slug for navigation links */
   workspaceSlug: string;
 }
 
-export function HomepageHub({ workspaceSlug }: HomepageHubProps) {
-  const [recentSessions, setRecentSessions] = useState<SessionSummary[]>([]);
+export const HomepageHub = observer(function HomepageHub({ workspaceSlug }: HomepageHubProps) {
+  const authStore = useAuthStore();
+  const workspaceStore = useWorkspaceStore();
+  const workspaceId = workspaceStore.currentWorkspace?.id ?? '';
 
-  // Load recent sessions client-side only to avoid SSR issues (RESEARCH Pitfall 5)
+  const rawDisplayName = authStore.userDisplayName ?? '';
+  const emailPrefix = authStore.user?.email?.split('@')[0] ?? '';
+  const firstName =
+    rawDisplayName && rawDisplayName !== emailPrefix ? rawDisplayName.split(' ')[0] : '';
+
+  const greeting = firstName
+    ? `Hi ${firstName}, what do you want to work on?`
+    : 'What do you want to work on?';
+
+  // ── AI context injection ─────────────────────────────────────────────────
+  const { groups, suggestionCount } = useWorkspaceDigest({ workspaceId });
+
   useEffect(() => {
-    const aiStore = getAIStore();
-    const pilotSpace = aiStore.pilotSpace;
-    if (!pilotSpace) return;
+    const store = getAIStore().pilotSpace;
+    if (!store || !workspaceId) return;
 
-    const sessionListStore = new SessionListStore(pilotSpace);
+    if (store.workspaceId !== workspaceId) {
+      store.setWorkspaceId(workspaceId);
+    }
 
-    sessionListStore
-      .fetchSessions(8)
-      .then(() => {
-        setRecentSessions([...sessionListStore.sessions].slice(0, 8));
-      })
-      .catch(() => {
-        // Non-fatal — recent conversations section will be hidden
-      });
-  }, []);
+    const staleCount = groups
+      .filter((g) => g.category === 'stale_issues')
+      .reduce((sum, g) => sum + g.items.length, 0);
+    const cycleRiskCount = groups
+      .filter((g) => g.category === 'cycle_risk')
+      .reduce((sum, g) => sum + g.items.length, 0);
+    const noteGroups = groups.filter((g) => g.category === 'unlinked_notes');
+    const recentNotes = noteGroups.flatMap((g) =>
+      g.items.map((item) => ({ id: item.entityId ?? item.id, title: item.title }))
+    );
+
+    const parts: string[] = [];
+    if (staleCount > 0) parts.push(`${staleCount} stale issues`);
+    if (cycleRiskCount > 0) parts.push(`${cycleRiskCount} cycle risks`);
+    if (recentNotes.length > 0) parts.push(`${recentNotes.length} recent notes active`);
+    const digestSummary =
+      parts.length > 0
+        ? `Workspace has ${parts.join(', ')}.`
+        : `Workspace has ${suggestionCount} suggestions.`;
+
+    store.setHomepageContext({
+      digestSummary,
+      totalSuggestionCount: suggestionCount,
+      staleIssueCount: staleCount,
+      cycleRiskCount,
+      recentNotes,
+    });
+
+    return () => {
+      store.clearHomepageContext();
+    };
+  }, [workspaceId, groups, suggestionCount]);
 
   return (
     <div className="flex-1 overflow-y-auto bg-background">
-      <div className="max-w-[680px] mx-auto px-6 py-12">
+      {/* Main content — design.md §7: 56px top, 60px sides */}
+      <div className="mx-auto max-w-[720px] px-[60px] pt-14 pb-16 max-sm:px-6">
+        {/* Workspace pill */}
+        <div className="flex justify-center">
+          <WorkspacePill />
+        </div>
 
-        {/* Hero section */}
-        <section className="flex flex-col items-center text-center" aria-label="Chat hero">
-          <h1 className="font-display text-[28px] font-semibold leading-[1.2] text-foreground">
-            What would you like to build?
-          </h1>
+        {/* Hero greeting — 36px below pill (mt-9) */}
+        <h1 className="mt-9 text-center font-display text-2xl font-normal leading-[1.2] tracking-[-1px] text-foreground">
+          {greeting}
+        </h1>
 
-          <div className="mt-8 w-full">
-            <ChatHeroInput workspaceSlug={workspaceSlug} />
-          </div>
-        </section>
+        {/* AI Prompt Hero — 36px below greeting, max-w 680px */}
+        <div className="mx-auto mt-9 max-w-[680px]">
+          <ChatHeroInput workspaceSlug={workspaceSlug} />
+        </div>
 
-        {/* Quick action grid — 2x2 */}
-        <section className="mt-8" aria-label="Quick actions">
-          <div className="grid grid-cols-2 gap-4">
-            {QUICK_ACTIONS.map((action) => (
-              <QuickActionCard
-                key={action.label}
-                icon={action.icon}
-                label={action.label}
-                sublabel={action.sublabel}
-                prompt={action.prompt}
-                workspaceSlug={workspaceSlug}
-              />
-            ))}
-          </div>
-        </section>
+        {/* Example prompts — discoverability for new users */}
+        <div className="mt-4">
+          <ExamplePrompts workspaceSlug={workspaceSlug} />
+        </div>
 
-        {/* Recent conversations — horizontal scroll */}
-        {recentSessions.length > 0 && (
-          <section className="mt-8" aria-label="Recent conversations">
-            <h2 className="mb-3 text-sm font-semibold text-muted-foreground">
-              Recent Conversations
-            </h2>
-            <div className="flex gap-3 overflow-x-auto pb-2">
-              {recentSessions.map((session) => (
-                <RecentConversationCard
-                  key={session.sessionId}
-                  session={session}
-                  workspaceSlug={workspaceSlug}
-                />
-              ))}
-            </div>
-          </section>
-        )}
+        {/* ── Content sections — 80px below chatbox ─────────────────── */}
+        <div className="mt-20">
+          {/* Recent Artifacts */}
+          <RecentWorkSection workspaceSlug={workspaceSlug} workspaceId={workspaceId} />
+
+          {/* Active Routines — 16px internal padding via py-4 */}
+          <ActiveRoutines workspaceSlug={workspaceSlug} />
+
+          {/* Sprint Progress — wired to cyclesApi */}
+          <SprintProgress workspaceSlug={workspaceSlug} workspaceId={workspaceId} />
+
+          {/* Recent Conversations — resume previous AI chats */}
+          <RecentConversations workspaceSlug={workspaceSlug} />
+        </div>
       </div>
     </div>
   );
-}
+});
