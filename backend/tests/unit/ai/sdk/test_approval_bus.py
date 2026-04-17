@@ -41,7 +41,7 @@ class TestUnifiedApprovalBus:
         result = bus.resolve(approval_id, "approved")
         assert result is True
 
-        decision = await bus.wait(approval_id, timeout=1.0)
+        decision = await bus.wait(approval_id, timeout_seconds=1.0)
         assert decision == "approved"
 
     @pytest.mark.asyncio
@@ -71,7 +71,7 @@ class TestUnifiedApprovalBus:
         approval_id = uuid4()
 
         bus.register(approval_id)
-        decision = await bus.wait(approval_id, timeout=0.01)
+        decision = await bus.wait(approval_id, timeout_seconds=0.01)
         assert decision == "expired"
 
     @pytest.mark.asyncio
@@ -82,7 +82,7 @@ class TestUnifiedApprovalBus:
 
         bus.register(approval_id)
         bus.resolve(approval_id, "approved")
-        await bus.wait(approval_id, timeout=1.0)
+        await bus.wait(approval_id, timeout_seconds=1.0)
 
         # _pending should be empty after wait completes
         assert approval_id not in bus._pending
@@ -91,7 +91,7 @@ class TestUnifiedApprovalBus:
     async def test_wait_unregistered_returns_expired(self) -> None:
         """Test 6: wait(unregistered_id) -> returns 'expired'."""
         bus = UnifiedApprovalBus()
-        decision = await bus.wait(uuid4(), timeout=1.0)
+        decision = await bus.wait(uuid4(), timeout_seconds=1.0)
         assert decision == "expired"
 
     @pytest.mark.asyncio
@@ -108,7 +108,7 @@ class TestUnifiedApprovalBus:
 
         # Start resolver and waiter concurrently
         task = asyncio.create_task(resolver())
-        decision = await bus.wait(approval_id, timeout=5.0)
+        decision = await bus.wait(approval_id, timeout_seconds=5.0)
         await task
 
         assert decision == "approved"
@@ -197,7 +197,7 @@ class TestBuildApprovalSseEvent:
 
     def test_sse_event_format(self) -> None:
         """Test 11: build_approval_sse_event produces valid SSE with event: approval_request prefix."""
-        with patch("pilot_space.ai.sdk.approval_bus.PermissionCheckHook") as mock_hook:
+        with patch("pilot_space.ai.sdk.hooks.PermissionCheckHook") as mock_hook:
             mock_hook.TOOL_ACTION_MAPPING = {"create_issue_in_db": "create_issue"}
             event = build_approval_sse_event(
                 approval_id=uuid4(),
