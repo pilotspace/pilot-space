@@ -30,11 +30,6 @@ from pilot_space.ai.agents.pilotspace_agent_helpers import (
     has_skill_files,
     transform_sdk_message as transform_sdk_message_helper,
 )
-from pilot_space.ai.agents.pilotspace_intent_pipeline import (
-    ConfirmationBus,
-    recall_graph_context,
-    run_intent_pipeline_step,
-)
 from pilot_space.ai.agents.pilotspace_stream_utils import (
     build_graph_search_service_for_session,
     build_graph_write_service_for_session,
@@ -57,6 +52,8 @@ from pilot_space.infrastructure.logging import get_logger
 from pilot_space.spaces.manager import SpaceManager
 
 if TYPE_CHECKING:
+    from datetime import datetime
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from pilot_space.ai.infrastructure.cost_tracker import CostTracker
@@ -67,8 +64,14 @@ if TYPE_CHECKING:
     from pilot_space.ai.sdk.permission_handler import PermissionHandler
     from pilot_space.ai.sdk.session_handler import SessionHandler
     from pilot_space.ai.tools.mcp_server import ToolRegistry
-    from pilot_space.application.services.intent.detection_service import (
-        IntentDetectionService,
+    from pilot_space.application.services.memory.graph_search_service import (
+        GraphSearchService,
+    )
+    from pilot_space.application.services.memory.graph_write_service import (
+        GraphWriteService,
+    )
+    from pilot_space.application.services.memory.memory_recall_service import (
+        MemoryRecallService,
     )
     from pilot_space.application.services.memory.memory_save_service import (
         MemorySaveService,
@@ -82,6 +85,227 @@ if TYPE_CHECKING:
 from pilot_space.domain.constants import SYSTEM_USER_ID
 
 logger = get_logger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Graph context helpers (relocated from pilotspace_intent_pipeline.py, Phase 79)
+# ---------------------------------------------------------------------------
+
+
+async def recall_graph_context(
+    workspace_id: UUID,
+    user_id: UUID | None,
+    query: str,
+    graph_search_service: GraphSearchService | None,
+    limit: int = 10,
+    since: datetime | None = None,
+    memory_recall_service: MemoryRecallService | None = None,
+) -> list[dict[str, Any]]:
+    """Graph-aware context recall replacing recall_workspace_context.
+
+    Phase 69-05: When ``memory_recall_service`` is provided, delegate the
+    recall to it (typed, cached, single-flight) and convert the resulting
+    ``MemoryItem`` objects to the legacy list-of-dict shape with added
+    provenance fields (``source_type``, ``source_id``, ``node_id``) so
+    the prompt assembler can render the ``<memory>`` XML block.
+
+    Args:
+        workspace_id: Current workspace UUID.
+        user_id: Optional user UUID for personal node filtering.
+        query: Search query derived from user message.
+        graph_search_service: Optional injected GraphSearchService.
+        limit: Maximum number of scored nodes to return.
+        since: Optional lower bound on updated_at for temporal filtering.
+        memory_recall_service: Optional MemoryRecallService (Phase 69 Wave 3).
+            When provided, takes precedence over ``graph_search_service``.
+
+    Returns:
+        List of graph context dicts; empty on failure or missing service.
+    """
+    # --- Phase 69-05 path: delegate to MemoryRecallService ------------------
+    if memory_recall_service is not None:
+        try:
+            from pilot_space.application.services.memory.memory_recall_service import (
+                RecallPayload,
+            )
+
+            recall_result = await memory_recall_service.recall(
+                RecallPayload(
+                    workspace_id=workspace_id,
+                    query=query,
+                    k=limit,
+                    user_id=user_id,
+                )
+            )
+            entries: list[dict[str, Any]] = [
+                {
+                    # Legacy fields (back-compat with format_graph_context
+                    # callers and existing tests).
+                    "content": item.snippet,
+                    "label": item.source_type,
+                    "node_type": item.source_type,
+                    "score": item.score,
+                    "properties": {"created_at": item.created_at},
+                    # Phase 69 provenance fields — consumed by the new
+                    # <memory> block renderer in prompt_assembler.
+                    "source_type": item.source_type,
+                    "source_id": item.source_id,
+                    "node_id": item.node_id,
+                }
+                for item in recall_result.items
+            ]
+            logger.debug(
+                "[Agent] MemoryRecallService returned %d items "
+                "workspace=%s cache_hit=%s elapsed_ms=%.1f",
+                len(entries),
+                workspace_id,
+                recall_result.cache_hit,
+                recall_result.elapsed_ms,
+            )
+            return entries
+        except Exception:
+            logger.warning(
+                "[Agent] MemoryRecallService failed, falling back to "
+                "graph_search_service path",
+                exc_info=True,
+            )
+            # Fall through to legacy path below.
+
+    if not graph_search_service:
+        logger.debug(
+            "[Agent] No GraphSearchService — skipping graph recall workspace=%s",
+            workspace_id,
+        )
+        return []
+
+    try:
+        from pilot_space.application.services.memory.graph_search_service import (
+            GraphSearchPayload,
+        )
+
+        payload = GraphSearchPayload(
+            query=query,
+            workspace_id=workspace_id,
+            user_id=user_id,
+            limit=limit,
+            since=since,
+        )
+        result = await graph_search_service.execute(payload)
+        entries = [
+            {
+                "content": n.node.content,
+                "label": n.node.label,
+                "node_type": n.node.node_type.value,
+                "score": n.score,
+                "properties": n.node.properties,
+            }
+            for n in result.nodes
+        ]
+        logger.debug(
+            "[Agent] Recalled %d graph nodes workspace=%s",
+            len(entries),
+            workspace_id,
+        )
+        return entries
+    except Exception:
+        logger.warning(
+            "[Agent] Graph recall failed, continuing without context",
+            exc_info=True,
+        )
+        return []
+
+
+async def extract_and_persist_to_graph(
+    graph_write_service: GraphWriteService,
+    workspace_id: UUID,
+    user_id: UUID | None,
+    messages: list[dict[str, str]],
+    issue_id: UUID | None = None,
+    anthropic_api_key: str | None = None,
+    base_url: str | None = None,
+    model_name: str | None = None,
+) -> bool:
+    """Extract structured knowledge from a conversation and persist to the graph.
+
+    Uses GraphExtractionService to identify decisions, patterns,
+    and user preferences via Anthropic-compatible API. Only saves when the LLM
+    finds meaningful content.
+
+    Args:
+        graph_write_service: Injected GraphWriteService.
+        workspace_id: Workspace to save nodes in.
+        user_id: Optional user scope for personal nodes.
+        messages: Conversation messages [{role, content}].
+        issue_id: Optional originating issue UUID.
+        anthropic_api_key: LLM API key. None -> returns False immediately
+            unless base_url is set (Ollama doesn't need a key).
+        base_url: Optional base URL for Anthropic-compatible providers.
+        model_name: Optional model name override.
+
+    Returns:
+        True if meaningful nodes were extracted and persisted, False otherwise.
+    """
+    if not messages:
+        return False
+    # Ollama workspaces have base_url but no API key; skip only when neither
+    if not anthropic_api_key and not base_url:
+        return False
+
+    try:
+        from pilot_space.application.services.memory.graph_extraction_service import (
+            ConversationExtractionPayload,
+            GraphExtractionService,
+        )
+        from pilot_space.application.services.memory.graph_write_service import GraphWritePayload
+
+        extraction_svc = GraphExtractionService()
+        result = await extraction_svc.execute(
+            ConversationExtractionPayload(
+                messages=messages,
+                workspace_id=workspace_id,
+                user_id=user_id,
+                issue_id=issue_id,
+                api_key=anthropic_api_key or "ollama",  # deprecated, kept for compat
+                base_url=base_url,
+                model_name=model_name,
+            )
+        )
+
+        if not result.nodes:
+            logger.debug(
+                "[Agent] No meaningful nodes extracted workspace=%s",
+                workspace_id,
+            )
+            return False
+
+        if user_id is None:
+            logger.warning(
+                "[Agent] Skipping KG write — no user_id in scope workspace=%s",
+                workspace_id,
+            )
+            return False
+        await graph_write_service.execute(
+            GraphWritePayload(
+                workspace_id=workspace_id,
+                actor_user_id=user_id,
+                nodes=result.nodes,
+                edges=result.edges,
+                user_id=user_id,
+            )
+        )
+        logger.info(
+            "[Agent] Extracted %d nodes, %d edges to knowledge graph workspace=%s",
+            len(result.nodes),
+            len(result.edges),
+            workspace_id,
+        )
+        return True
+    except Exception:
+        logger.warning(
+            "[Agent] Graph extraction/persistence failed (non-fatal)",
+            exc_info=True,
+        )
+        return False
 
 
 async def _background_graph_extraction(
@@ -352,7 +576,6 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
         space_manager: SpaceManager | None = None,
         subagents: dict[str, Any] | None = None,
         key_storage: SecureKeyStorage | None = None,
-        intent_detection_service: IntentDetectionService | None = None,
         memory_search_service: MemorySearchService | None = None,
         memory_save_service: MemorySaveService | None = None,
         graph_queue_client: SupabaseQueueClient | None = None,
@@ -368,7 +591,6 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
         self._space_manager = space_manager
         self._subagents = subagents or {}
         self._key_storage = key_storage
-        self._intent_detection_service = intent_detection_service
         self._memory_search_service = memory_search_service
         self._memory_save_service = memory_save_service
         self._graph_queue_client = graph_queue_client
@@ -546,30 +768,6 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
             )
             raise TimeoutError("Tool result submission timed out") from exc
         logger.info("[SDK/Answer] tool_call=%s session=%s", tool_call_id, session_id)
-
-    @staticmethod
-    def confirm_intent_event(
-        session_id: str,
-        *,
-        intent_id: str | None = None,
-        action: str = "confirmed",
-    ) -> bool:
-        """Signal the intent pipeline for session_id (T-018)."""
-        return ConfirmationBus.signal(session_id, intent_id=intent_id, action=action)
-
-    async def _detect_and_emit_intents(
-        self,
-        input_data: ChatInput,
-        context: AgentContext,
-    ) -> list[str]:
-        """Run intent detection and return SSE strings (T-016/T-017). No-ops if service not injected."""
-        return await run_intent_pipeline_step(
-            detection_service=self._intent_detection_service,
-            message=input_data.message,
-            workspace_id=context.workspace_id,
-            user_id=context.user_id,
-            session_id=input_data.session_id,
-        )
 
     async def _save_session_messages(
         self,
@@ -1146,9 +1344,6 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
 
                 self._active_clients[query_session_id] = client
 
-                # T-016/T-017: detect intents
-                intent_events = await self._detect_and_emit_intents(input_data, context)
-
                 enriched_message = build_contextual_message(
                     input_data,
                     block_ref_map=ref_map,
@@ -1165,11 +1360,6 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
                     )
                 else:
                     await client.query(enriched_message, session_id=query_session_id)
-
-                # Yield intent_detected events after query is dispatched
-                for intent_sse in intent_events:
-                    yield intent_sse
-                    capture_content_from_sse(intent_sse, content_blocks)
 
                 sdk_event_count = 0
                 transformed_count = 0
