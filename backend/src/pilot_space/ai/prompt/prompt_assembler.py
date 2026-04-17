@@ -35,8 +35,7 @@ from pilot_space.ai.prompt.models import (
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Inlined from intent_classifier.py (Phase 79). Phase 82 (PROM-02) removes
-# Layer 6 entirely.
+# Inlined regex classifier. Phase 82 (PROM-02) removes Layer 6 entirely.
 # ---------------------------------------------------------------------------
 
 _INTENT_PATTERNS: dict[UserIntent, list[re.Pattern[str]]] = {
@@ -477,8 +476,7 @@ def _build_session_section(config: PromptLayerConfig) -> list[str]:
 def format_memory_entries(memory_entries: list[dict[str, Any]]) -> str:
     """Format recalled memory entries as a system prompt section.
 
-    Replicates the logic from ``build_memory_context_prefix`` in
-    ``pilotspace_intent_pipeline.py``.
+    Formats memory entries as a markdown section for the system prompt.
     """
     lines = ["## Workspace Memory Context\n"]
     for entry in memory_entries:

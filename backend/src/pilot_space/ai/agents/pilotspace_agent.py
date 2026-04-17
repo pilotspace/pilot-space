@@ -88,7 +88,7 @@ logger = get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Graph context helpers (relocated from pilotspace_intent_pipeline.py, Phase 79)
+# Graph context helpers
 # ---------------------------------------------------------------------------
 
 

@@ -169,7 +169,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Start digest worker for homepage digest generation
     digest_worker_task: asyncio.Task[None] | None = None
     digest_worker = None
-    # T-069: Start memory worker for memory engine jobs (intent_dedup, embedding, DLQ)
+    # T-069: Start memory worker for memory engine jobs (embedding, DLQ)
     memory_worker_task: asyncio.Task[None] | None = None
     memory_worker = None
     # T-030: Start notification worker for persisting queued notifications
