@@ -197,6 +197,23 @@ export class PilotSpaceStore {
     return this.streamingState.isStreaming;
   }
 
+  /**
+   * Phase 75: Returns the assistant message currently being streamed (by currentMessageId),
+   * or the last assistant message if streaming is complete. Used by stream handler to attach
+   * batchProposal data to the message that triggered the event.
+   */
+  get currentAssistantMessage(): ChatMessage | undefined {
+    const currentId = this.streamingState.currentMessageId;
+    if (currentId) {
+      return this.messages.find((m) => m.id === currentId);
+    }
+    // Fall back to last assistant message (for post-stream event handling)
+    for (let i = this.messages.length - 1; i >= 0; i--) {
+      if (this.messages[i]!.role === 'assistant') return this.messages[i];
+    }
+    return undefined;
+  }
+
   get streamContent(): string {
     return this.streamingState.streamContent;
   }
@@ -375,6 +392,59 @@ export class PilotSpaceStore {
 
   removePendingApproval(requestId: string): void {
     this.pendingApprovals = this.pendingApprovals.filter((r) => r.requestId !== requestId);
+    // Clean up local approval callback if present
+    this._localApprovalCallbacks.delete(requestId);
+  }
+
+  /**
+   * Phase 75: Registry for frontend-initiated approval callbacks (DD-003 local gate).
+   * Keyed by requestId — consumed when user clicks Approve in DestructiveApprovalModal.
+   * Not observable (private implementation detail).
+   */
+  private readonly _localApprovalCallbacks = new Map<string, () => Promise<void>>();
+
+  /**
+   * Phase 75: Request a local (frontend-only) approval gate per DD-003.
+   *
+   * Creates a synthetic ApprovalRequest and queues it in pendingApprovals so the
+   * existing DestructiveApprovalModal renders a confirmation dialog. The onApproved
+   * callback fires when the user clicks Approve — no backend SSE round-trip needed.
+   *
+   * @param opts.action - Machine-readable action type string
+   * @param opts.description - Human-readable description shown in the modal
+   * @param opts.onApproved - Async callback executed after user confirms
+   */
+  requestApproval(opts: {
+    action: string;
+    description: string;
+    onApproved: () => Promise<void>;
+  }): void {
+    const requestId = `local_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    this._localApprovalCallbacks.set(requestId, opts.onApproved);
+
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+    this.addApproval({
+      requestId,
+      actionType: opts.action,
+      description: opts.description,
+      affectedEntities: [],
+      urgency: 'medium',
+      expiresAt,
+      createdAt: new Date(),
+    });
+  }
+
+  /**
+   * Phase 75: Consume and execute the local approval callback for a given requestId.
+   * Called by the approval flow after user clicks Approve. Returns true if a local
+   * callback was found and executed, false if this was a backend-driven approval.
+   */
+  async executeLocalApprovalCallback(requestId: string): Promise<boolean> {
+    const callback = this._localApprovalCallbacks.get(requestId);
+    if (!callback) return false;
+    this._localApprovalCallbacks.delete(requestId);
+    await callback();
+    return true;
   }
 
   clearConversation(): void {

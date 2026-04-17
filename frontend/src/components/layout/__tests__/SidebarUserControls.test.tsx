@@ -149,6 +149,7 @@ function renderControls({
         authStore={auth}
         notificationStore={notifications}
         uiStore={ui}
+        workspaceStore={{ isOwner: true, isAdmin: true }}
       />
     </TooltipProvider>
   );

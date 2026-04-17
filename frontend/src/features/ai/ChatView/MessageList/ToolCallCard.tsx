@@ -27,6 +27,12 @@ import type { ToolCall } from '@/stores/ai/types/conversation';
 interface ToolCallCardProps {
   toolCall: ToolCall;
   className?: string;
+  /**
+   * Visual variant for the card container.
+   * - 'default': minimal inline style (Claude.ai style, no border) — existing behavior
+   * - 'card': warm bordered surface for chat full page (bg-ai-bg border border-ai-border rounded-md px-3 py-2)
+   */
+  variant?: 'default' | 'card';
 }
 
 /** Format duration in milliseconds to a compact string (e.g., "0.8s", "2.1s") */
@@ -95,7 +101,7 @@ function getInputPreview(input: Record<string, unknown>, partialInput?: string):
   return null;
 }
 
-export const ToolCallCard = observer<ToolCallCardProps>(({ toolCall, className }) => {
+export const ToolCallCard = observer<ToolCallCardProps>(({ toolCall, className, variant = 'default' }) => {
   const status = toolCall.status || 'pending';
 
   // Hide interaction tools (ask_user) — QuestionBlock renders the UI instead
@@ -160,7 +166,13 @@ export const ToolCallCard = observer<ToolCallCardProps>(({ toolCall, className }
   const hasDetail = hasInput || hasOutput;
 
   return (
-    <div className={cn('text-sm', className)}>
+    <div
+      className={cn(
+        'text-sm',
+        variant === 'card' && 'bg-ai-bg border border-ai-border rounded-md px-3 py-2',
+        className
+      )}
+    >
       {/* Toggle row - inline style like Claude.ai */}
       <button
         type="button"

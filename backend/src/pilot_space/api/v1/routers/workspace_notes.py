@@ -38,6 +38,7 @@ from pilot_space.api.v1.schemas.annotation import (
 from pilot_space.api.v1.schemas.base import DeleteResponse, PaginatedResponse
 from pilot_space.api.v1.schemas.issue import IssueBriefResponse
 from pilot_space.api.v1.schemas.note import (
+    LinkedIssueResponse,
     NoteCreate,
     NoteDetailResponse,
     NoteMove,
@@ -45,6 +46,7 @@ from pilot_space.api.v1.schemas.note import (
     NoteUpdate,
     PageTreeResponse,
     ReorderPageRequest,
+    SpecAnnotationResponse,
     TipTapContentSchema,
 )
 from pilot_space.dependencies.auth import CurrentUserId, SessionDep, SyncedUserId
@@ -718,6 +720,73 @@ async def update_annotation_status(
     )
 
     return _annotation_to_response(result.annotation)
+
+
+@router.get(
+    "/{workspace_id}/notes/{note_id}/linked-issues",
+    response_model=list[LinkedIssueResponse],
+    tags=["workspace-notes", "living-specs"],
+    summary="Get issues linked to a note via source_note_id",
+)
+async def get_note_linked_issues(
+    session: SessionDep,
+    workspace_id: WorkspaceIdOrSlug,
+    note_id: NoteIdPath,
+    current_user_id: CurrentUserId,
+    note_repo: NoteRepositoryDep,
+    workspace_repo: WorkspaceRepositoryDep,
+) -> list[LinkedIssueResponse]:
+    """Return all issues where source_note_id == note_id.
+
+    Includes current state (name + group) and batch implementation status.
+    Used by the Living Specs sidebar to show linked issue status cards.
+    """
+    workspace = await _resolve_workspace(workspace_id, workspace_repo)
+    await set_rls_context(session, current_user_id, workspace.id)
+
+    note = await note_repo.get_by_id(note_id)
+    if not note or note.workspace_id != workspace.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Note not found",
+        )
+
+    rows = await note_repo.get_linked_issues(note_id)
+    return [LinkedIssueResponse(**row) for row in rows]
+
+
+@router.get(
+    "/{workspace_id}/notes/{note_id}/spec-annotations",
+    response_model=list[SpecAnnotationResponse],
+    tags=["workspace-notes", "living-specs"],
+    summary="Get spec annotations stored on a note",
+)
+async def get_note_spec_annotations(
+    session: SessionDep,
+    workspace_id: WorkspaceIdOrSlug,
+    note_id: NoteIdPath,
+    current_user_id: CurrentUserId,
+    note_repo: NoteRepositoryDep,
+    workspace_repo: WorkspaceRepositoryDep,
+) -> list[SpecAnnotationResponse]:
+    """Return the spec_annotations JSONB array from the note.
+
+    Includes both AI deviation annotations (appended after PR creation)
+    and human decision records (appended on batch approval/rejection).
+    Used by the Living Specs sidebar to show the annotation timeline.
+    """
+    workspace = await _resolve_workspace(workspace_id, workspace_repo)
+    await set_rls_context(session, current_user_id, workspace.id)
+
+    note = await note_repo.get_by_id(note_id)
+    if not note or note.workspace_id != workspace.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Note not found",
+        )
+
+    raw_annotations: list[dict] = note.spec_annotations or []  # type: ignore[assignment]
+    return [SpecAnnotationResponse(**ann) for ann in raw_annotations]
 
 
 __all__ = ["router"]

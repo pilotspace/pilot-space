@@ -91,6 +91,9 @@ def _make_issue(
     issue.labels = [_make_label()]
     issue.state = _make_state()
     issue.project = _make_project()
+    issue.cycle_id = None
+    issue.source_note_id = None
+    issue.acceptance_criteria = None
     return issue
 
 

@@ -152,6 +152,10 @@ async def seed_database(demo_user_id: uuid.UUID) -> None:
         )
         if result.scalar_one_or_none():
             print("⚠️  Demo data already exists. Clearing and reseeding...")
+            # Truncate audit_log first — RLS policy blocks DELETE on cascaded rows
+            await session.execute(
+                text("TRUNCATE audit_log CASCADE"),
+            )
             # Delete workspace first (CASCADE will handle related data)
             await session.execute(
                 text("DELETE FROM workspaces WHERE id = :id"),

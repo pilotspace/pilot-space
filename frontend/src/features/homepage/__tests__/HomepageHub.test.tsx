@@ -1,20 +1,27 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+// Mock next/navigation
+const mockPush = vi.fn();
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: mockPush }),
+}));
 
 // Mock MobX observer as passthrough
 vi.mock('mobx-react-lite', () => ({
   observer: (component: React.FC) => component,
 }));
 
-// Mock stores
-vi.mock('@/stores/RootStore', () => ({
-  useAuthStore: () => ({
-    userDisplayName: 'Tin Dang',
-  }),
-  useWorkspaceStore: () => ({
-    currentWorkspace: { id: 'ws-1', slug: 'test-ws' },
-  }),
+// Mock SessionListStore
+const mockFetchSessions = vi.fn().mockResolvedValue(undefined);
+const mockSessions: unknown[] = [];
+
+vi.mock('@/stores/ai/SessionListStore', () => ({
+  SessionListStore: vi.fn().mockImplementation(() => ({
+    sessions: mockSessions,
+    fetchSessions: mockFetchSessions,
+  })),
 }));
 
 // Mock AIStore
@@ -29,87 +36,96 @@ vi.mock('@/stores/ai/AIStore', () => ({
   }),
 }));
 
-// Mock child components
-vi.mock('../components/DailyBrief', () => ({
-  DailyBrief: ({ workspaceSlug }: { workspaceSlug: string }) => (
-    <div data-testid="daily-brief" data-workspace-slug={workspaceSlug} />
-  ),
-}));
-
-vi.mock('@/features/ai/ChatView', () => ({
-  ChatView: ({
-    className,
-    autoFocus,
-    userName,
-  }: {
-    store: unknown;
-    userName: string;
-    className?: string;
-    autoFocus?: boolean;
-  }) => (
-    <div
-      data-testid="chat-view"
-      data-class={className}
-      data-auto-focus={String(autoFocus)}
-      data-user-name={userName}
-    />
-  ),
-}));
-
 import { HomepageHub } from '../components/HomepageHub';
 
 describe('HomepageHub', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockPilotSpaceStore.workspaceId = '';
+    mockPush.mockReset();
   });
 
-  it('renders DailyBrief and ChatView', () => {
+  it('renders hero heading "What would you like to build?"', () => {
     render(<HomepageHub workspaceSlug="test-ws" />);
 
-    expect(screen.getByTestId('daily-brief')).toBeInTheDocument();
-    expect(screen.getByTestId('chat-view')).toBeInTheDocument();
+    expect(
+      screen.getByText('What would you like to build?')
+    ).toBeInTheDocument();
   });
 
-  it('passes workspaceSlug to DailyBrief', () => {
-    render(<HomepageHub workspaceSlug="my-workspace" />);
+  it('renders the chat hero input with correct placeholder', () => {
+    render(<HomepageHub workspaceSlug="test-ws" />);
 
-    expect(screen.getByTestId('daily-brief')).toHaveAttribute(
-      'data-workspace-slug',
-      'my-workspace'
+    const input = screen.getByPlaceholderText(
+      'Describe a feature, ask about your sprint, or request a PR review...'
+    );
+    expect(input).toBeInTheDocument();
+  });
+
+  it('renders 4 quick action cards', () => {
+    render(<HomepageHub workspaceSlug="test-ws" />);
+
+    expect(screen.getByText('Create issues from idea')).toBeInTheDocument();
+    expect(screen.getByText('Review my PR')).toBeInTheDocument();
+    expect(screen.getByText('Generate spec from notes')).toBeInTheDocument();
+    expect(screen.getByText('Check sprint status')).toBeInTheDocument();
+  });
+
+  it('quick action click navigates to /chat?prefill=...', () => {
+    render(<HomepageHub workspaceSlug="test-ws" />);
+
+    const card = screen.getByRole('button', { name: 'Create issues from idea' });
+    fireEvent.click(card);
+
+    expect(mockPush).toHaveBeenCalledWith(
+      expect.stringContaining('/test-ws/chat?prefill=')
+    );
+    expect(mockPush).toHaveBeenCalledWith(
+      expect.stringContaining('Create%20issues%20from%20this%20idea')
     );
   });
 
-  it('renders ChatView with autoFocus disabled', () => {
-    render(<HomepageHub workspaceSlug="test-ws" />);
+  it('quick action card navigates with encoded prompt', () => {
+    render(<HomepageHub workspaceSlug="my-ws" />);
 
-    expect(screen.getByTestId('chat-view')).toHaveAttribute('data-auto-focus', 'false');
+    const card = screen.getByRole('button', { name: 'Check sprint status' });
+    fireEvent.click(card);
+
+    expect(mockPush).toHaveBeenCalledWith(
+      expect.stringContaining('/my-ws/chat?prefill=')
+    );
   });
 
-  it('renders AI command center aside with ARIA label', () => {
+  it('does NOT render DailyBrief', () => {
     render(<HomepageHub workspaceSlug="test-ws" />);
 
-    const aside = screen.getByLabelText('AI command center');
-    expect(aside).toBeInTheDocument();
-    expect(aside.tagName).toBe('ASIDE');
+    expect(screen.queryByTestId('daily-brief')).not.toBeInTheDocument();
   });
 
-  it('sets workspace ID on AI store', () => {
+  it('does not render recent conversations section when no sessions', () => {
     render(<HomepageHub workspaceSlug="test-ws" />);
 
-    expect(mockPilotSpaceStore.setWorkspaceId).toHaveBeenCalledWith('ws-1');
+    expect(screen.queryByText('Recent Conversations')).not.toBeInTheDocument();
   });
 
-  it('does not set workspace ID when it matches', () => {
-    mockPilotSpaceStore.workspaceId = 'ws-1';
+  it('keyboard Enter on quick action card triggers navigation', () => {
     render(<HomepageHub workspaceSlug="test-ws" />);
 
-    expect(mockPilotSpaceStore.setWorkspaceId).not.toHaveBeenCalled();
+    const card = screen.getByRole('button', { name: 'Review my PR' });
+    fireEvent.keyDown(card, { key: 'Enter' });
+
+    expect(mockPush).toHaveBeenCalledWith(
+      expect.stringContaining('/test-ws/chat?prefill=')
+    );
   });
 
-  it('passes real userName to ChatView from auth store', () => {
+  it('keyboard Space on quick action card triggers navigation', () => {
     render(<HomepageHub workspaceSlug="test-ws" />);
 
-    expect(screen.getByTestId('chat-view')).toHaveAttribute('data-user-name', 'Tin Dang');
+    const card = screen.getByRole('button', { name: 'Generate spec from notes' });
+    fireEvent.keyDown(card, { key: ' ' });
+
+    expect(mockPush).toHaveBeenCalledWith(
+      expect.stringContaining('/test-ws/chat?prefill=')
+    );
   });
 });

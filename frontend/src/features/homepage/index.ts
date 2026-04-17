@@ -38,6 +38,17 @@ export {
 
 // Components
 export { HomepageHub } from './components/HomepageHub';
+export { HomepageV3 } from './components/HomepageV3';
+export { RedFlagRow } from './components/RedFlagRow';
+export { ContinueCard } from './components/ContinueCard';
+export { WorkspacePill } from './components/WorkspacePill';
+export { ChatHeroInput } from './components/ChatHeroInput';
+export { QuickActionCarousel } from './components/QuickActionCarousel';
+export { ExamplePrompts } from './components/ExamplePrompts';
+export { RecentWorkSection } from './components/RecentWorkSection';
+export { ActiveRoutines } from './components/ActiveRoutines';
+export { SprintProgress } from './components/SprintProgress';
+export { RecentConversations } from './components/RecentConversations';
 export {
   SectionDivider,
   NoteEntry,
