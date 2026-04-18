@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -27,6 +28,7 @@ from pilot_space.ai.mcp.comment_server import TOOL_NAMES as COMMENT_TOOL_NAMES
 from pilot_space.ai.mcp.interaction_server import TOOL_NAMES as INTERACTION_TOOL_NAMES
 from pilot_space.ai.mcp.issue_relation_server import TOOL_NAMES as ISSUE_REL_TOOL_NAMES
 from pilot_space.ai.mcp.issue_server import TOOL_NAMES as ISSUE_TOOL_NAMES
+from pilot_space.ai.mcp.memory_server import TOOL_NAMES as MEMORY_TOOL_NAMES
 from pilot_space.ai.mcp.note_content_server import TOOL_NAMES as NOTE_CONTENT_TOOL_NAMES
 from pilot_space.ai.mcp.note_query_server import TOOL_NAMES as NOTE_QUERY_TOOL_NAMES
 from pilot_space.ai.mcp.note_server import TOOL_NAMES as NOTE_TOOL_NAMES
@@ -51,6 +53,7 @@ ALL_TOOL_NAMES: list[str] = [
     *PROJECT_TOOL_NAMES,
     *COMMENT_TOOL_NAMES,
     *INTERACTION_TOOL_NAMES,
+    *MEMORY_TOOL_NAMES,
 ]
 
 
@@ -107,6 +110,49 @@ def build_subagent_definitions() -> dict[str, AgentDefinition]:
             model="sonnet",
         ),
     }
+
+
+def build_active_context_pointers(input_data: ChatInput) -> str:
+    """Build lightweight <active_context> metadata section (~50 tokens).
+
+    Contains entity IDs, titles, and types but NOT content.
+    Agent uses this to decide which MCP tools to call for context retrieval.
+
+    Args:
+        input_data: Chat input with message and context.
+
+    Returns:
+        <active_context> XML string, or empty string if no context entities.
+    """
+    pointers: list[str] = []
+
+    note = input_data.context.get("note")
+    note_id = input_data.context.get("note_id")
+    if note is not None and note_id:
+        title = getattr(note, "title", "Untitled") or "Untitled"
+        pointers.append(f'  <note id="{note_id}" title="{html.escape(str(title), quote=True)}" />')
+
+    issue = input_data.context.get("issue")
+    if issue is not None:
+        name = getattr(issue, "name", "Unknown")
+        identifier = getattr(issue, "identifier", None)
+        state = getattr(getattr(issue, "state", None), "name", None)
+        attrs = f'name="{html.escape(str(name), quote=True)}"'
+        if identifier:
+            attrs += f' identifier="{html.escape(str(identifier), quote=True)}"'
+        if state:
+            attrs += f' state="{html.escape(str(state), quote=True)}"'
+        pointers.append(f"  <issue {attrs} />")
+
+    selected_text = input_data.context.get("selected_text")
+    if selected_text:
+        preview = str(selected_text)[:80].replace('"', "'")
+        pointers.append(f'  <selection preview="{html.escape(preview, quote=True)}" />')
+
+    if not pointers:
+        return ""
+
+    return "<active_context>\n" + "\n".join(pointers) + "\n</active_context>"
 
 
 def build_contextual_message(
