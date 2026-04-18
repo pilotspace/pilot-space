@@ -155,6 +155,9 @@ from pilot_space.infrastructure.database.models.workspace_member import (
 from pilot_space.infrastructure.database.models.workspace_plugin import WorkspacePlugin
 from pilot_space.infrastructure.database.models.workspace_role_skill import WorkspaceRoleSkill
 from pilot_space.infrastructure.database.models.workspace_session import WorkspaceSession
+from pilot_space.infrastructure.database.models.workspace_hook_config import (
+    WorkspaceHookConfig,
+)
 from pilot_space.infrastructure.database.models.workspace_tool_permission import (
     WorkspaceToolPermission,
 )
@@ -258,6 +261,7 @@ __all__ = [
     "WorkspaceAPIKey",
     "WorkspaceDigest",
     "WorkspaceEncryptionKey",
+    "WorkspaceHookConfig",
     "WorkspaceGithubCredential",
     "WorkspaceInvitation",
     "WorkspaceMcpServer",
