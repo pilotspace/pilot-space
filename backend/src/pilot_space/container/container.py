@@ -48,6 +48,7 @@ from pilot_space.application.services.cycle import (
     UpdateCycleService,
 )
 from pilot_space.application.services.dependency_graph import DependencyGraphService
+from pilot_space.application.services.hooks.hook_rule_service import HookRuleService
 from pilot_space.application.services.discussion import CreateDiscussionService
 from pilot_space.application.services.document.office_extraction_service import (
     OfficeExtractionService,
@@ -1114,6 +1115,12 @@ class Container(SkillContainer, PluginContainer):
     permission_service = providers.Singleton(
         PermissionService,
         cache=permission_cache,
+        redis_client=InfraContainer.redis_client,
+    )
+
+    # Phase 83 -- Workspace Hook Rules
+    hook_rule_service = providers.Singleton(
+        HookRuleService,
         redis_client=InfraContainer.redis_client,
     )
 
