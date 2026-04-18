@@ -31,14 +31,12 @@ from pilot_space.ai.agents.pilotspace_agent_helpers import (
     transform_sdk_message as transform_sdk_message_helper,
 )
 from pilot_space.ai.agents.pilotspace_stream_utils import (
-    build_graph_search_service_for_session,
     build_graph_write_service_for_session,
     build_mcp_servers,
     capture_content_from_sse,
     classify_effort,
     detect_skill_from_message,
     estimate_tokens,
-    get_workspace_embedding_key,
     load_workspace_mcp_servers,
     merge_sdk_and_queue,
     save_session_messages,
@@ -52,8 +50,6 @@ from pilot_space.infrastructure.logging import get_logger
 from pilot_space.spaces.manager import SpaceManager
 
 if TYPE_CHECKING:
-    from datetime import datetime
-
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from pilot_space.ai.infrastructure.cost_tracker import CostTracker
@@ -64,14 +60,8 @@ if TYPE_CHECKING:
     from pilot_space.ai.sdk.permission_handler import PermissionHandler
     from pilot_space.ai.sdk.session_handler import SessionHandler
     from pilot_space.ai.tools.mcp_server import ToolRegistry
-    from pilot_space.application.services.memory.graph_search_service import (
-        GraphSearchService,
-    )
     from pilot_space.application.services.memory.graph_write_service import (
         GraphWriteService,
-    )
-    from pilot_space.application.services.memory.memory_recall_service import (
-        MemoryRecallService,
     )
     from pilot_space.application.services.memory.memory_save_service import (
         MemorySaveService,
@@ -85,134 +75,6 @@ if TYPE_CHECKING:
 from pilot_space.domain.constants import SYSTEM_USER_ID
 
 logger = get_logger(__name__)
-
-
-# ---------------------------------------------------------------------------
-# Graph context helpers
-# ---------------------------------------------------------------------------
-
-
-async def recall_graph_context(
-    workspace_id: UUID,
-    user_id: UUID | None,
-    query: str,
-    graph_search_service: GraphSearchService | None,
-    limit: int = 10,
-    since: datetime | None = None,
-    memory_recall_service: MemoryRecallService | None = None,
-) -> list[dict[str, Any]]:
-    """Graph-aware context recall replacing recall_workspace_context.
-
-    Phase 69-05: When ``memory_recall_service`` is provided, delegate the
-    recall to it (typed, cached, single-flight) and convert the resulting
-    ``MemoryItem`` objects to the legacy list-of-dict shape with added
-    provenance fields (``source_type``, ``source_id``, ``node_id``) so
-    the prompt assembler can render the ``<memory>`` XML block.
-
-    Args:
-        workspace_id: Current workspace UUID.
-        user_id: Optional user UUID for personal node filtering.
-        query: Search query derived from user message.
-        graph_search_service: Optional injected GraphSearchService.
-        limit: Maximum number of scored nodes to return.
-        since: Optional lower bound on updated_at for temporal filtering.
-        memory_recall_service: Optional MemoryRecallService (Phase 69 Wave 3).
-            When provided, takes precedence over ``graph_search_service``.
-
-    Returns:
-        List of graph context dicts; empty on failure or missing service.
-    """
-    # --- Phase 69-05 path: delegate to MemoryRecallService ------------------
-    if memory_recall_service is not None:
-        try:
-            from pilot_space.application.services.memory.memory_recall_service import (
-                RecallPayload,
-            )
-
-            recall_result = await memory_recall_service.recall(
-                RecallPayload(
-                    workspace_id=workspace_id,
-                    query=query,
-                    k=limit,
-                    user_id=user_id,
-                )
-            )
-            entries: list[dict[str, Any]] = [
-                {
-                    # Legacy fields (back-compat with format_graph_context
-                    # callers and existing tests).
-                    "content": item.snippet,
-                    "label": item.source_type,
-                    "node_type": item.source_type,
-                    "score": item.score,
-                    "properties": {"created_at": item.created_at},
-                    # Phase 69 provenance fields — consumed by the new
-                    # <memory> block renderer in prompt_assembler.
-                    "source_type": item.source_type,
-                    "source_id": item.source_id,
-                    "node_id": item.node_id,
-                }
-                for item in recall_result.items
-            ]
-            logger.debug(
-                "[Agent] MemoryRecallService returned %d items "
-                "workspace=%s cache_hit=%s elapsed_ms=%.1f",
-                len(entries),
-                workspace_id,
-                recall_result.cache_hit,
-                recall_result.elapsed_ms,
-            )
-            return entries
-        except Exception:
-            logger.warning(
-                "[Agent] MemoryRecallService failed, falling back to "
-                "graph_search_service path",
-                exc_info=True,
-            )
-            # Fall through to legacy path below.
-
-    if not graph_search_service:
-        logger.debug(
-            "[Agent] No GraphSearchService — skipping graph recall workspace=%s",
-            workspace_id,
-        )
-        return []
-
-    try:
-        from pilot_space.application.services.memory.graph_search_service import (
-            GraphSearchPayload,
-        )
-
-        payload = GraphSearchPayload(
-            query=query,
-            workspace_id=workspace_id,
-            user_id=user_id,
-            limit=limit,
-            since=since,
-        )
-        result = await graph_search_service.execute(payload)
-        entries = [
-            {
-                "content": n.node.content,
-                "label": n.node.label,
-                "node_type": n.node.node_type.value,
-                "score": n.score,
-                "properties": n.node.properties,
-            }
-            for n in result.nodes
-        ]
-        logger.debug(
-            "[Agent] Recalled %d graph nodes workspace=%s",
-            len(entries),
-            workspace_id,
-        )
-        return entries
-    except Exception:
-        logger.warning(
-            "[Agent] Graph recall failed, continuing without context",
-            exc_info=True,
-        )
-        return []
 
 
 async def extract_and_persist_to_graph(
@@ -984,83 +846,16 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
         effort = classify_effort(input_data.message)
         streaming_input = estimate_tokens(input_data) > 30_000
 
-        _openai_key_for_recall = await get_workspace_embedding_key(db_session, context.workspace_id)
-
-        # Phase 69-05: Resolve MemoryRecallService lazily from the container
-        # (same pattern as permission_service in Task 01). The service is
-        # request-scoped and wraps GraphSearchService with a hot cache +
-        # single-flight, so concurrent identical recalls collapse to one
-        # embed + DB round-trip. Graceful degradation: on any resolution
-        # failure we fall through to the legacy graph_search_service path.
-        _memory_recall_service: Any | None = None
-        try:
-            from pilot_space.container.container import get_container
-
-            _memory_recall_service = get_container().memory_recall_service()
-        except Exception:
-            logger.debug(
-                "[SDK/Space] Could not resolve MemoryRecallService; using legacy "
-                "graph_search_service recall path",
-                exc_info=True,
-            )
-
-        graph_context = await recall_graph_context(
-            workspace_id=context.workspace_id,
-            user_id=context.user_id,
-            query=input_data.message,
-            graph_search_service=build_graph_search_service_for_session(  # fresh per-req
-                db_session, openai_api_key=_openai_key_for_recall
-            ),
-            memory_recall_service=_memory_recall_service,
-        )
-
-        # Phase 69-05: Emit a `memory_used` SSE event BEFORE the assistant
-        # text starts streaming when recall returned items. We push directly
-        # onto tool_event_queue (already plumbed to the stream loop) so the
-        # event is yielded alongside tool-use events with no extra plumbing.
-        # Empty-result case: no event — avoid polluting the UI. Emission
-        # site chosen here (consumer) rather than inside recall_graph_context
-        # because the queue is already in scope and the helper is reused by
-        # non-streaming callers that do not have a queue.
-        if graph_context:
-            try:
-                from pilot_space.api.v1.streaming import format_sse_event
-
-                _mem_payload: dict[str, Any] = {
-                    "count": len(graph_context),
-                    "types": sorted(
-                        {
-                            str(e.get("source_type") or e.get("node_type") or "unknown")
-                            for e in graph_context
-                        }
-                    ),
-                    "sources": [
-                        {
-                            "type": str(e.get("source_type") or e.get("node_type") or "unknown"),
-                            "id": str(
-                                e.get("source_id") or e.get("node_id") or e.get("label") or ""
-                            ),
-                            "score": round(float(e.get("score", 0.0) or 0.0), 3),
-                        }
-                        for e in graph_context
-                    ],
-                }
-                await tool_event_queue.put(format_sse_event("memory_used", _mem_payload))
-            except Exception:
-                logger.debug(
-                    "[SDK/Space] Failed to emit memory_used SSE event",
-                    exc_info=True,
-                )
-
+        # Phase 81: Memory recall moved to MCP tool (recall_memory);
+        # context detection uses input_data.context dict directly.
         assembled = await assemble_system_prompt(
             PromptLayerConfig(
                 role_type=_role_type,
                 workspace_name=input_data.context.get("workspace_name"),
                 project_names=input_data.context.get("project_names"),
                 user_message=input_data.message,
-                has_note_context="<note_context>" in input_data.message,
+                has_note_context=input_data.context.get("note") is not None,
                 has_mention_context="@[" in input_data.message,
-                graph_context=graph_context,
                 user_skills=_user_skills_for_prompt,
                 feature_toggles=_feature_toggles,
             )

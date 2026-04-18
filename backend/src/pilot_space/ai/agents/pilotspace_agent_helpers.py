@@ -160,7 +160,11 @@ def build_contextual_message(
     *,
     block_ref_map: Any | None = None,
 ) -> str:
-    """Enrich user message with note/issue context for the SDK.
+    """Enrich user message with active context pointers for the SDK.
+
+    Phase 81: Replaced eager ``<note_context>``/``<issue_context>`` XML blocks
+    with lightweight ``<active_context>`` metadata pointers (~50 tokens).  The
+    agent now fetches full content on-demand via MCP tools.
 
     When ``block_ref_map`` is provided, block references use human-readable
     ¶N notation instead of raw UUIDs. The model is instructed to use ¶N
@@ -172,63 +176,19 @@ def build_contextual_message(
     """
     parts: list[str] = []
 
+    # Lightweight metadata pointers (Phase 81 — replaces <note_context>/<issue_context> XML)
+    active_context = build_active_context_pointers(input_data)
+    if active_context:
+        parts.append(active_context)
+
+    # Block reference map instructions (kept for note editing tools)
     note = input_data.context.get("note")
-    note_id = input_data.context.get("note_id")
-    if note is not None:
-        note_title = getattr(note, "title", "Untitled") or "Untitled"
-        note_content = getattr(note, "content", {})
-
-        note_header = f"# {note_title}"
-        if note_id:
-            note_header += f"\nnote_id: {note_id}"
-
-        selected_block_ids = input_data.context.get("selected_block_ids", [])
-        if selected_block_ids and block_ref_map is not None:
-            refs = [block_ref_map.to_ref(str(bid)) for bid in selected_block_ids]
-            note_header += f"\nselected_blocks: {', '.join(refs)}"
-        elif selected_block_ids:
-            note_header += (
-                f"\nselected_block_ids: {', '.join(str(bid) for bid in selected_block_ids)}"
-            )
-
-        if block_ref_map is not None and not block_ref_map.is_empty:
-            note_header += (
-                "\n\nBlocks are identified by ¶N references (e.g., ¶1, ¶2). "
-                'Use ¶N when calling note tools (e.g., block_id="¶3"). '
-                "Never expose raw block UUIDs to the user."
-            )
-
-        if note_content:
-            from pilot_space.application.services.note.content_converter import (
-                ContentConverter,
-            )
-
-            converter = ContentConverter()
-            markdown = converter.tiptap_to_markdown(
-                note_content,
-                block_ref_map=block_ref_map,
-            )
-            if markdown.strip():
-                parts.append(f"<note_context>\n{note_header}\n\n{markdown}\n</note_context>")
-        else:
-            parts.append(f"<note_context>\n{note_header}\n\n(empty note)\n</note_context>")
-
-    issue = input_data.context.get("issue")
-    if issue is not None:
-        name = getattr(issue, "name", "Unknown Issue")
-        desc = (getattr(issue, "description", None) or "").strip()
-        identifier = getattr(issue, "identifier", None)
-        state_name = getattr(getattr(issue, "state", None), "name", None)
-        priority = getattr(issue, "priority", None)
-        header = f"# {name}"
-        if identifier:
-            header += f"\nidentifier: {identifier}"
-        if priority is not None:
-            header += f"\npriority: {priority.value if hasattr(priority, 'value') else priority}"
-        if state_name:
-            header += f"\nstate: {state_name}"
-        body = desc or "(no description yet)"
-        parts.append(f"<issue_context>\n{header}\n\n{body}\n</issue_context>")
+    if note is not None and block_ref_map is not None and not block_ref_map.is_empty:
+        parts.append(
+            "Blocks are identified by ¶N references (e.g., ¶1, ¶2). "
+            'Use ¶N when calling note tools (e.g., block_id="¶3"). '
+            "Never expose raw block UUIDs to the user."
+        )
 
     selected_text = input_data.context.get("selected_text")
     if selected_text:
