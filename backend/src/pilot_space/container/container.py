@@ -48,7 +48,6 @@ from pilot_space.application.services.cycle import (
     UpdateCycleService,
 )
 from pilot_space.application.services.dependency_graph import DependencyGraphService
-from pilot_space.application.services.hooks.hook_rule_service import HookRuleService
 from pilot_space.application.services.discussion import CreateDiscussionService
 from pilot_space.application.services.document.office_extraction_service import (
     OfficeExtractionService,
@@ -59,6 +58,7 @@ from pilot_space.application.services.homepage import (
     GetActivityService,
     GetDigestService,
 )
+from pilot_space.application.services.hooks.hook_rule_service import HookRuleService
 from pilot_space.application.services.integration import (
     AutoTransitionService,
     ConnectGitHubService,

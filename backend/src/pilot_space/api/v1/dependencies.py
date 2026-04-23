@@ -55,6 +55,7 @@ from pilot_space.application.services.homepage import (
     GetActivityService,
     GetDigestService,
 )
+from pilot_space.application.services.hooks.hook_rule_service import HookRuleService
 from pilot_space.application.services.integration import (
     AutoTransitionService,
     ConnectGitHubService,
@@ -105,7 +106,6 @@ from pilot_space.application.services.onboarding import (
     GetOnboardingService,
     UpdateOnboardingService,
 )
-from pilot_space.application.services.hooks.hook_rule_service import HookRuleService
 from pilot_space.application.services.permissions.permission_service import PermissionService
 from pilot_space.application.services.plugin_lifecycle import PluginLifecycleService
 from pilot_space.application.services.pm_block_insight_service import PMBlockInsightService
