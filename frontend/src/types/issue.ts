@@ -48,6 +48,23 @@ export interface Issue {
   createdAt: string;
   updatedAt: string;
   noteLinks?: NoteIssueLink[];
+  /**
+   * Phase 89 Plan 05 — append-only version counter. Bumped on every AI apply
+   * or user revert. Wire-shape mirrored from `IssueResponse.version_number`.
+   */
+  versionNumber?: number;
+  /**
+   * Phase 89 Plan 05 — append-only history log. Each entry carries the
+   * version number (`vN` alias), who wrote it (`ai` or `user`), when, a
+   * summary, and the pre-change snapshot used by revert.
+   */
+  versionHistory?: Array<{
+    vN: number;
+    by: 'ai' | 'user';
+    at: string;
+    summary: string;
+    snapshot: Record<string, unknown>;
+  }>;
 }
 
 export interface CreateIssueData {

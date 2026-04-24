@@ -14,6 +14,7 @@ import type {
   ProposalEnvelope,
   ProposalRejectedEventData,
   ProposalRetriedEventData,
+  ProposalRevertedEventData,
   ProposalStatus,
 } from '@/features/ai/proposals/types';
 
@@ -108,6 +109,30 @@ export class ProposalsStore {
         status: 'retried',
         decidedAt: event.timestamp,
       });
+    });
+  }
+
+  /**
+   * Phase 89 Plan 06 — apply the `proposal_reverted` SSE frame. Flips the
+   * cached envelope to status='reverted' and rewrites `appliedVersion` to
+   * the new (post-revert) version number so the RevertedPill can render
+   * `v{newVersion} ← v{revertedFromVersion}` without a re-fetch.
+   *
+   * Also clears `lastAppliedProposalId` when it matches so the ⌘Z shortcut
+   * doesn't re-target the same proposal. Authoritative per D-89-05-03.
+   */
+  applyRevertedEvent(event: ProposalRevertedEventData): void {
+    const existing = this.proposals.get(event.proposalId);
+    if (!existing) return;
+    runInAction(() => {
+      this.proposals.set(event.proposalId, {
+        ...existing,
+        status: 'reverted',
+        appliedVersion: event.newVersionNumber,
+      });
+      if (this.lastAppliedProposalId === event.proposalId) {
+        this.lastAppliedProposalId = null;
+      }
     });
   }
 

@@ -7,7 +7,13 @@
  * return `undefined`.
  */
 
-export type ProposalStatus = 'pending' | 'applied' | 'rejected' | 'retried' | 'errored';
+export type ProposalStatus =
+  | 'pending'
+  | 'applied'
+  | 'rejected'
+  | 'retried'
+  | 'errored'
+  | 'reverted';
 export type DiffKind = 'text' | 'fields';
 export type ArtifactType = 'NOTE' | 'ISSUE' | 'SPEC' | 'DECISION';
 export type ChatMode = 'plan' | 'act' | 'research' | 'draft';
@@ -94,6 +100,39 @@ export interface ProposalRejectedEventData {
 export interface ProposalRetriedEventData {
   proposalId: string;
   hint: string | null;
+  timestamp: string;
+}
+
+// Phase 89 Plan 05 — revert pipeline. Mirrors
+// backend/src/pilot_space/api/v1/schemas/proposals.py camelCase aliases.
+
+/** One entry in an artifact's append-only version history. `vN` is wire alias for the version number. */
+export interface VersionHistoryEntry {
+  vN: number;
+  by: 'ai' | 'user';
+  at: string;
+  summary: string;
+  snapshot: Record<string, unknown>;
+}
+
+/** Separate wrapper returned by a dedicated history endpoint. */
+export interface VersionHistoryResponse {
+  versionNumber: number;
+  history: VersionHistoryEntry[];
+}
+
+/** POST /proposals/{id}/revert response envelope. */
+export interface RevertResultEnvelope {
+  proposal: ProposalEnvelope;
+  newVersionNumber: number;
+  newHistoryEntry: VersionHistoryEntry;
+}
+
+/** `proposal_reverted` SSE frame data. */
+export interface ProposalRevertedEventData {
+  proposalId: string;
+  newVersionNumber: number;
+  revertedFromVersion: number;
   timestamp: string;
 }
 
