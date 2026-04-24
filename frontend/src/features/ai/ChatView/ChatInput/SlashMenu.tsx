@@ -57,12 +57,12 @@ export interface SlashMenuProps {
 
 export const SlashMenu = memo<SlashMenuProps>(({ query, onSelect, onClose }) => {
   const items = useMemo(() => filterCommands(query), [query]);
-  const [selectedIdx, setSelectedIdx] = useState(0);
-
-  // Reset highlight when filter changes (selectedIdx may now be out of bounds).
-  useEffect(() => {
-    setSelectedIdx(0);
-  }, [query]);
+  const [rawIdx, setRawIdx] = useState(0);
+  // Clamp the highlight to the current filtered list. When the user types and
+  // the list shrinks below the previous cursor position, this snaps back to 0
+  // without mutating state inside an effect (avoids
+  // react-hooks/set-state-in-effect cascading-render lint).
+  const selectedIdx = items.length === 0 ? 0 : rawIdx % items.length;
 
   // Window-level keyboard handler so the contenteditable retains focus while
   // the menu owns nav keys. Capture phase ensures we run before TipTap-style
@@ -77,13 +77,14 @@ export const SlashMenu = memo<SlashMenuProps>(({ query, onSelect, onClose }) => 
       if (items.length === 0) return;
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        setSelectedIdx((i) => (i + 1) % items.length);
+        setRawIdx((i) => (i + 1) % items.length);
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
-        setSelectedIdx((i) => (i - 1 + items.length) % items.length);
+        setRawIdx((i) => (i - 1 + items.length) % items.length);
       } else if (e.key === 'Enter') {
         e.preventDefault();
-        onSelect(items[selectedIdx]);
+        const picked = items[selectedIdx];
+        if (picked) onSelect(picked);
       }
     };
     window.addEventListener('keydown', onKey, true);
@@ -117,7 +118,7 @@ export const SlashMenu = memo<SlashMenuProps>(({ query, onSelect, onClose }) => 
                 data-testid={`slash-row-${cmd.id}`}
                 role="option"
                 aria-selected={isSelected}
-                onMouseEnter={() => setSelectedIdx(i)}
+                onMouseEnter={() => setRawIdx(i)}
                 onMouseDown={(e) => {
                   // Prevent the contenteditable from losing focus before we dispatch.
                   e.preventDefault();

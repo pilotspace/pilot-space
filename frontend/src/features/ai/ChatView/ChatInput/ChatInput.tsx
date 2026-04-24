@@ -4,6 +4,8 @@
  */
 
 import { useCallback, useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { useParams, useRouter } from 'next/navigation';
 import type { KeyboardEvent } from 'react';
 import { observer } from 'mobx-react-lite';
 import { toast } from 'sonner';
@@ -38,6 +40,8 @@ import { useRecentEntities } from '../hooks/useRecentEntities';
 import type { RecentEntity } from '../hooks/useRecentEntities';
 import { ModeSelector } from './ModeSelector';
 import type { ChatMode } from './types';
+import { SlashMenu } from './SlashMenu';
+import type { SlashCommand } from './extensions/slash-extension';
 
 /**
  * Recursively walks a contenteditable node tree to produce a serialized string.
@@ -91,6 +95,10 @@ interface ChatInputProps {
     attachmentIds: string[];
     attachments: Array<{ attachmentId: string; filename: string; mimeType: string; sizeBytes: number; source: 'local' | 'google_drive' }>;
     voiceAudioUrl?: string | null;
+    /** Phase 87 Plan 02 — slash invokes (/standup /digest) force a mode for one submit. */
+    modeOverride?: ChatMode;
+    /** Phase 87 Plan 02 — marker for inline-invoke slash commands (e.g. "standup"). */
+    command?: string;
   }) => void;
   isStreaming?: boolean;
   isDisabled?: boolean;
@@ -139,6 +147,11 @@ interface ChatInputProps {
   currentMode?: ChatMode;
   /** Phase 87 Plan 01 — invoked when the user picks a new mode. */
   onModeChange?: (mode: ChatMode) => void;
+  /**
+   * Phase 87 Plan 02 — workspace slug for slash-command route templates.
+   * Falls back to `useParams().workspaceSlug` when not provided.
+   */
+  workspaceSlug?: string;
 }
 
 export const ChatInput = observer<ChatInputProps>(
@@ -171,7 +184,12 @@ export const ChatInput = observer<ChatInputProps>(
     surface = 'chat',
     currentMode,
     onModeChange,
+    workspaceSlug: workspaceSlugProp,
   }) => {
+    // Phase 87 Plan 02 — slash command routing context
+    const router = useRouter();
+    const params = useParams<{ workspaceSlug?: string }>();
+    const workspaceSlug = workspaceSlugProp ?? params?.workspaceSlug ?? '';
     const { skills: dynamicSkills } = useSkills(workspaceId);
     const { attachments, attachmentIds, addFile, addFromDrive, removeFile, reset } = useAttachments(
       {
@@ -195,9 +213,15 @@ export const ChatInput = observer<ChatInputProps>(
     const [resumeMenuOpen, setResumeMenuOpen] = useState(false);
     const [inputWidth, setInputWidth] = useState<number | null>(null);
 
-    // Slash query state — tracks text typed after '/' in the chat input
+    // Slash query state — tracks text typed after '/' in the chat input.
+    // Phase 87 Plan 02 — drives SlashMenu (the new 11-command palette). The
+    // legacy SkillMenu is no longer opened by '/' typing; it remains reachable
+    // via the Sparkles toolbar button (which exposes /resume, /new, dynamic
+    // skills) and via the SlashMenu '/skill' picker row.
     const slashQueryStartOffsetRef = useRef<number | null>(null);
     const [slashQuery, setSlashQuery] = useState<string | null>(null);
+    const [slashMenuOpen, setSlashMenuOpen] = useState(false);
+    const [slashAnchorRect, setSlashAnchorRect] = useState<DOMRect | null>(null);
 
     // When a skill close transitions to another menu (e.g. /resume),
     // skip the SkillMenu onOpenChange focus-restore to prevent the
@@ -264,17 +288,24 @@ export const ChatInput = observer<ChatInputProps>(
           // @ trigger detection for EntityPicker (D-02)
           const textBeforeCursor = getTextBeforeCursor(div);
 
-          // Slash: if text before cursor starts with '/' and has no space (still in slash command)
+          // Phase 87 Plan 02 — '/' at start of input opens SlashMenu (11-command
+          // palette). Mid-word '/' (e.g. inside http://) does NOT trigger because
+          // textBeforeCursor only starts with '/' when the slash is at position 0.
           if (textBeforeCursor.startsWith('/') && !/\s/.test(textBeforeCursor)) {
             const query = textBeforeCursor.slice(1); // text typed after '/'
             slashQueryStartOffsetRef.current = 0;
             setSlashQuery(query);
-            setSkillMenuOpen(true);
-          } else if (skillMenuOpen) {
+            // Anchor the SlashMenu popover to the input container's top-left
+            // (we render above the composer). createPortal mounts to document.body.
+            const rect = inputContainerRef.current?.getBoundingClientRect() ?? null;
+            setSlashAnchorRect(rect);
+            setSlashMenuOpen(true);
+          } else if (slashMenuOpen) {
             // '/' prefix gone, or space was typed — close menu
             slashQueryStartOffsetRef.current = null;
             setSlashQuery(null);
-            setSkillMenuOpen(false);
+            setSlashMenuOpen(false);
+            setSlashAnchorRect(null);
           }
           const atIdx = textBeforeCursor.lastIndexOf('@');
           if (atIdx >= 0 && !/\s/.test(textBeforeCursor.slice(atIdx + 1))) {
@@ -289,7 +320,7 @@ export const ChatInput = observer<ChatInputProps>(
           }
         }
       },
-      [onChange, skillMenuOpen]
+      [onChange, slashMenuOpen]
     );
 
     const handlePaste = useCallback(
@@ -433,6 +464,85 @@ export const ChatInput = observer<ChatInputProps>(
       editableRef.current?.focus();
     }, []);
 
+    // Phase 87 Plan 02 — clear the typed '/{query}' from the contenteditable.
+    const clearSlashTrigger = useCallback(() => {
+      if (!editableRef.current) return;
+      editableRef.current.textContent = '';
+      onChange('');
+      slashQueryStartOffsetRef.current = null;
+      setSlashQuery(null);
+      setSlashMenuOpen(false);
+      setSlashAnchorRect(null);
+    }, [onChange]);
+
+    // Phase 87 Plan 02 — dispatch a chosen slash command. Routes via Next.js
+    // for `route` / `picker` kinds; submits via onSubmit with modeOverride for
+    // `invoke` kinds. Stub-tolerant routes still navigate (Next handles 404);
+    // skill-missing toasts mirror the spec copy.
+    const handleSlashSelect = useCallback(
+      async (cmd: SlashCommand) => {
+        clearSlashTrigger();
+        editableRef.current?.focus();
+
+        const emitSystemMessage = (text: string) => {
+          // Local-only event. Plan 03 wires a MessageList listener; for now we
+          // also surface a toast so the fallback is user-visible.
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(
+              new CustomEvent('pilot:chat-system-message', { detail: { text } }),
+            );
+          }
+          toast(text);
+        };
+
+        if (cmd.kind === 'route' || cmd.kind === 'picker') {
+          const target = cmd.routeTemplate?.(workspaceSlug);
+          if (!target) {
+            emitSystemMessage(
+              `Coming soon — \`${cmd.keyword}\` will open the ${cmd.id} composer.`,
+            );
+            return;
+          }
+          router.push(target);
+          return;
+        }
+
+        if (cmd.kind === 'invoke' && cmd.invoke) {
+          try {
+            await cmd.invoke({
+              workspaceSlug,
+              router: { push: (p) => router.push(p) },
+              submitMessage: async (payload) => {
+                // Reuse the parent's submit pipeline. Forward modeOverride so
+                // ChatView.handleSubmit honors `research` for /standup /digest
+                // without permanently mutating the user's selected mode.
+                onSubmit({
+                  attachmentIds: [],
+                  attachments: [],
+                  voiceAudioUrl: null,
+                  modeOverride: payload.mode,
+                  command: payload.command,
+                });
+              },
+              emitSystemMessage,
+            });
+          } catch {
+            emitSystemMessage(
+              cmd.id === 'standup'
+                ? 'Standup skill is not installed in this workspace.'
+                : 'Digest skill is not installed in this workspace.',
+            );
+          }
+        }
+      },
+      [clearSlashTrigger, onSubmit, router, workspaceSlug],
+    );
+
+    const handleSlashClose = useCallback(() => {
+      clearSlashTrigger();
+      editableRef.current?.focus();
+    }, [clearSlashTrigger]);
+
     const handleSectionCancel = useCallback(() => {
       if (!editableRef.current) return;
       const lastNode = editableRef.current.lastChild;
@@ -541,7 +651,10 @@ export const ChatInput = observer<ChatInputProps>(
         // cmdk's internal keyboard handler is bound to its root div, but focus stays in the
         // contenteditable (outside cmdk). Dispatching a native KeyboardEvent on the cmdk root
         // lets React 18 event delegation pick it up and fire cmdk's synthetic onKeyDown handler.
-        if (skillMenuOpen || entityPickerOpen) {
+        // Phase 87 Plan 02 — SlashMenu owns its own window-capture keydown, so
+        // we must NOT also forward to a cmdk root (would double-fire / fight
+        // with SlashMenu's selection state).
+        if ((skillMenuOpen || entityPickerOpen) && !slashMenuOpen) {
           if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter') {
             e.preventDefault();
             const targetRef = skillMenuOpen ? skillCommandRef : entityCommandRef;
@@ -615,6 +728,7 @@ export const ChatInput = observer<ChatInputProps>(
           e.key === 'Enter' &&
           !e.shiftKey &&
           !skillMenuOpen &&
+          !slashMenuOpen &&
           !agentMenuOpen &&
           !sectionMenuOpen &&
           !resumeMenuOpen &&
@@ -645,6 +759,7 @@ export const ChatInput = observer<ChatInputProps>(
         isStreaming,
         isDisabled,
         skillMenuOpen,
+        slashMenuOpen,
         agentMenuOpen,
         sectionMenuOpen,
         resumeMenuOpen,
@@ -811,7 +926,10 @@ export const ChatInput = observer<ChatInputProps>(
                   onCancel={handleSkillCancel}
                   skills={dynamicSkills}
                   popoverWidth={inputWidth ?? undefined}
-                  searchQuery={slashQuery ?? ''}
+                  // Phase 87 Plan 02 — '/' typing now opens SlashMenu, not
+                  // SkillMenu. Sparkles button is the only entry point for
+                  // SkillMenu, which renders without a pre-filled query.
+                  searchQuery=""
                   commandRef={skillCommandRef}
                 >
                   <Button
@@ -907,6 +1025,30 @@ export const ChatInput = observer<ChatInputProps>(
             <WorkingIndicator isVisible={isStreaming} />
           </div>
         </div>
+
+        {/* Phase 87 Plan 02 — SlashMenu portal anchored above the composer.
+            Mounts only when slashMenuOpen and we have an anchor rect. */}
+        {slashMenuOpen &&
+          slashAnchorRect &&
+          typeof document !== 'undefined' &&
+          createPortal(
+            <div
+              style={{
+                position: 'fixed',
+                left: slashAnchorRect.left,
+                top: slashAnchorRect.top - 8,
+                transform: 'translateY(-100%)',
+                zIndex: 60,
+              }}
+            >
+              <SlashMenu
+                query={slashQuery ?? ''}
+                onSelect={handleSlashSelect}
+                onClose={handleSlashClose}
+              />
+            </div>,
+            document.body,
+          )}
 
         {drivePickerOpen && workspaceId && (
           <DriveFilePicker

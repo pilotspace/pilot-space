@@ -658,6 +658,7 @@ const ChatViewInternal = observer<ChatViewProps>(
           isStreaming={store.isStreaming}
           isDisabled={store.hasUnresolvedApprovals}
           workspaceId={store.workspaceId ?? ''}
+          workspaceSlug={workspaceStore.currentWorkspace?.slug ?? undefined}
           sessionId={store.sessionId ?? undefined}
           noteContext={
             store.noteContext

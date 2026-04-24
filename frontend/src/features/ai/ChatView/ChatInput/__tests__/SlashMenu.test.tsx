@@ -33,9 +33,11 @@ describe('SlashMenu', () => {
 
   it('ArrowDown / ArrowUp move aria-selected with wrap-around', () => {
     render(<SlashMenu query="" onSelect={noop} onClose={noop} />);
-    const first = screen.getByTestId(`slash-row-${SLASH_COMMANDS[0].id}`);
-    const second = screen.getByTestId(`slash-row-${SLASH_COMMANDS[1].id}`);
-    const last = screen.getByTestId(`slash-row-${SLASH_COMMANDS[SLASH_COMMANDS.length - 1].id}`);
+    const first = screen.getByTestId(`slash-row-${SLASH_COMMANDS[0]!.id}`);
+    const second = screen.getByTestId(`slash-row-${SLASH_COMMANDS[1]!.id}`);
+    const last = screen.getByTestId(
+      `slash-row-${SLASH_COMMANDS[SLASH_COMMANDS.length - 1]!.id}`,
+    );
 
     expect(first).toHaveAttribute('aria-selected', 'true');
 
@@ -60,7 +62,7 @@ describe('SlashMenu', () => {
     fireEvent.keyDown(window, { key: 'ArrowDown' });
     fireEvent.keyDown(window, { key: 'Enter' });
     expect(onSelect).toHaveBeenCalledTimes(1);
-    expect(onSelect.mock.calls[0][0].id).toBe(SLASH_COMMANDS[1].id);
+    expect(onSelect.mock.calls[0]?.[0].id).toBe(SLASH_COMMANDS[1]!.id);
   });
 
   it('Escape calls onClose', () => {
