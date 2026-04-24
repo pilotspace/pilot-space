@@ -47,6 +47,7 @@ import { TaskPanel } from './TaskPanel/TaskPanel';
 import { WaitingIndicator } from './WaitingIndicator';
 import { useApprovals } from './hooks/useApprovals';
 import { useAttachmentPreview } from './hooks/useAttachmentPreview';
+import { useRevertShortcut } from './hooks/useRevertShortcut';
 import { SkillCreatorCard } from './MessageList/SkillCreatorCard';
 import { userSkillsApi } from '@/services/api/user-skills';
 import { toast } from 'sonner';
@@ -162,6 +163,11 @@ const ChatViewInternal = observer<ChatViewProps>(
 
     // Attachment preview — opens FilePreviewModal when AttachmentChip is clicked
     const attachmentPreview = useAttachmentPreview();
+
+    // Phase 89 Plan 06 — global ⌘Z revert shortcut. Silent when no
+    // recently-applied proposal is in the 10-min window or when focus is
+    // inside an editor surface (preserves native undo).
+    useRevertShortcut();
 
     // Initialize SessionListStore (T075-T079)
     const [sessionListStore] = useState(() => new SessionListStore(store));
