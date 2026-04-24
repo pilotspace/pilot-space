@@ -14,11 +14,9 @@ from sqlalchemy.orm import selectinload
 
 from pilot_space.ai.tools.mcp_server import ToolContext, register_tool
 from pilot_space.infrastructure.database.models import (
-    AnnotationStatus,
     AnnotationType,
     Cycle,
     Note,
-    NoteAnnotation,
     WorkspaceMember,
 )
 
@@ -146,72 +144,122 @@ async def create_note_annotation(
     block_id: str | None = None,
     confidence: float = 0.8,
 ) -> dict[str, Any]:
-    """Create AI annotation for a note.
+    """Create AI annotation for a note (Phase 89 Plan 03 — routed via ProposalBus).
 
-    Adds an AI-generated suggestion to the note margin.
-    This is an AUTO_EXECUTE action (DD-003) - no approval required.
+    Builds a ``Proposal`` row and returns a pending stub. The actual insert
+    is performed by ``intent_handlers.note.execute_create_note_annotation``
+    only after the user accepts the proposal via
+    ``POST /api/v1/proposals/{id}/accept``.
+
+    The legacy DD-003 AUTO_EXECUTE label is superseded by Phase 89: all AI
+    writes require a proposal. In ``ChatMode.ACT`` the frontend can render
+    the resulting proposal as an instant-applied receipt for a UX
+    equivalent to auto-execute.
 
     Args:
         note_id: UUID of the note
-        ctx: Tool context with db_session
+        ctx: Tool context with db_session + session/message ids + chat_mode
         annotation_type: Type (suggestion, warning, issue_candidate, info)
         content: Annotation content
         block_id: Optional block ID to attach annotation to
         confidence: Confidence score (0.0-1.0)
 
     Returns:
-        Created annotation details
+        Pending-proposal stub: ``{proposal_id, status: "pending", preview}``
+        (or ``{error, created: False}`` on validation / mode-gating failure).
     """
-    # Verify note exists and belongs to workspace
+    from pilot_space.ai.proposals import (
+        build_fields_diff,
+        resolve_proposal_policy,
+    )
+    from pilot_space.ai.proposals.tool_shim import (
+        build_proposal_identity,
+        get_proposal_bus,
+        resolve_chat_mode,
+    )
+    from pilot_space.domain.proposal import ArtifactType, DiffKind
+
+    # Step 1: Read current state — verify note exists + belongs to workspace.
     note_query = select(Note).where(
         Note.id == UUID(note_id),
         Note.workspace_id == UUID(ctx.workspace_id),
     )
     result = await ctx.db_session.execute(note_query)
     note = result.scalar_one_or_none()
-
     if not note:
         return {"error": f"Note {note_id} not found", "created": False}
 
-    # Validate annotation type
+    # Validate annotation type (pre-flight — surface error to agent
+    # without emitting a proposal we'd only have to reject).
     try:
-        ann_type = AnnotationType(annotation_type)
+        AnnotationType(annotation_type)
     except ValueError:
         valid_types = [t.value for t in AnnotationType]
         return {
             "error": f"Invalid annotation_type. Valid types: {valid_types}",
             "created": False,
         }
-
-    # Validate confidence
     if not 0.0 <= confidence <= 1.0:
         return {
             "error": "Confidence must be between 0.0 and 1.0",
             "created": False,
         }
 
-    annotation = NoteAnnotation(
-        note_id=UUID(note_id),
-        block_id=block_id or None,
-        type=ann_type,
-        content=content,
-        status=AnnotationStatus.PENDING,
-        confidence=confidence,
-        workspace_id=UUID(ctx.workspace_id),
-    )
+    # Step 2: Build intent_args (JSON-serialisable kwargs replay).
+    intent_args = {
+        "note_id": note_id,
+        "annotation_type": annotation_type,
+        "content": content,
+        "block_id": block_id,
+        "confidence": confidence,
+    }
 
-    ctx.db_session.add(annotation)
-    await ctx.db_session.commit()
-    await ctx.db_session.refresh(annotation)
-
-    return {
-        "created": True,
-        "annotation": {
-            "id": str(annotation.id),
-            "type": annotation_type,
+    # Step 3: Build a fields-diff preview the frontend can render as
+    # "adding a margin annotation".
+    diff_payload = build_fields_diff(
+        current={},
+        proposed={
+            "annotation_type": annotation_type,
+            "block_id": block_id,
             "content": content,
             "confidence": confidence,
-            "status": "pending",
-            "block_id": block_id,
         },
+    )
+
+    # Step 4: Mode-gate.
+    mode = resolve_chat_mode(ctx)
+    policy = resolve_proposal_policy(mode, tool_kind="mutating")
+    if not policy.allow_creation:
+        return {
+            "created": False,
+            "proposal_status": "errored",
+            "reason": policy.reject_with_reason
+            or "Mutation not permitted in current mode",
+        }
+
+    # Step 5: Hand off to ProposalBus.
+    session_id, message_id = build_proposal_identity(ctx)
+    bus = get_proposal_bus()
+    proposal = await bus.create_proposal(
+        workspace_id=UUID(ctx.workspace_id),
+        session_id=session_id,
+        message_id=message_id,
+        target_artifact_type=ArtifactType.NOTE,
+        target_artifact_id=UUID(note_id),
+        intent_tool="create_note_annotation",
+        intent_args=intent_args,
+        diff_kind=DiffKind.FIELDS,
+        diff_payload=diff_payload,
+        reasoning=None,
+        mode=mode,
+        accept_disabled=policy.accept_disabled,
+        persist=policy.persist,
+        plan_preview_only=policy.plan_preview_only,
+    )
+
+    return {
+        "created": False,  # not yet — waiting for user decision
+        "proposal_id": str(proposal.id),
+        "status": "pending",
+        "preview": diff_payload,
     }

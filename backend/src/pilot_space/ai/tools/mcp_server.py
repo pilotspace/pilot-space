@@ -240,7 +240,13 @@ def register_tool(category: str) -> Callable[[ToolFunc], ToolFunc]:
 class ToolContext:
     """Context passed to tools during execution.
 
-    Contains database session and user context for RLS.
+    Contains database session and user context for RLS. Phase 89 adds
+    session_id / message_id / chat_mode so AI tools can build
+    ``Proposal`` rows via ``ProposalBus.create_proposal`` with the
+    correct provenance + policy. Defaults keep backwards compatibility:
+    session_id/message_id fall back to a fresh UUID (per-call) and
+    chat_mode defaults to "act" so legacy code paths still produce
+    mutating proposals.
     """
 
     db_session: AsyncSession
@@ -248,6 +254,10 @@ class ToolContext:
     user_id: str | None = None
     extra: dict[str, Any] = field(default_factory=dict)
     user_role: WorkspaceRole | None = None
+    # Phase 89 Plan 03 — provenance + policy for ProposalBus.create_proposal.
+    session_id: str | None = None
+    message_id: str | None = None
+    chat_mode: str = "act"
 
 
 class ToolRegistry:

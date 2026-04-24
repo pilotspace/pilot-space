@@ -834,6 +834,13 @@ class PilotSpaceAgent(StreamingSDKBaseAgent[ChatInput, ChatOutput]):
             extra={
                 "active_project_id": context.metadata.get("active_project_id"),
             },
+            # Phase 89 Plan 03 — proposal provenance + policy threading.
+            # message_id defaults to session_id as a Plan-03-era stub; a
+            # future plan will thread the per-assistant-message id from the
+            # SDK stream handler.
+            session_id=str(input_data.session_id) if input_data.session_id else None,
+            message_id=str(input_data.session_id) if input_data.session_id else None,
+            chat_mode=str(input_data.context.get("mode") or "act").lower(),
         )
 
         # MCP-04: pre-fetch async before sync build_mcp_servers, then merge

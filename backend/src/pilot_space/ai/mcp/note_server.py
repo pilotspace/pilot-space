@@ -596,7 +596,7 @@ def create_note_tools_server(
             "required": ["title"],
         },
     )
-    async def create_note(args: dict[str, Any]) -> dict[str, Any]:
+    async def create_note(args: dict[str, Any]) -> dict[str, Any]:  # noqa: PLR0911 — linear validation-first shim; each early return is a distinct failure mode.
         title = args.get("title", "").strip()
         if not title or len(title) > 255:
             return _text_result("Error: title must be 1-255 characters")
@@ -621,75 +621,98 @@ def create_note_tools_server(
                 )
             )
 
-        # Auto-approved: execute creation via service
+        # Phase 89 Plan 03 — route via ProposalBus.
+        # Mutation logic lives in intent_handlers.note.execute_create_note.
         if not tool_context:
             return _text_result("Error: Tool context not available")
 
         from uuid import UUID
 
-        from pilot_space.application.services.note.create_note_service import (
-            CreateNotePayload,
-            CreateNoteService,
+        from pilot_space.ai.proposals import (
+            build_fields_diff,
+            resolve_proposal_policy,
         )
-        from pilot_space.infrastructure.database.repositories.note_repository import (
-            NoteRepository,
+        from pilot_space.ai.proposals.tool_shim import (
+            build_proposal_identity,
+            get_proposal_bus,
+            resolve_chat_mode,
         )
-        from pilot_space.infrastructure.database.repositories.template_repository import (
-            TemplateRepository,
-        )
+        from pilot_space.domain.proposal import ArtifactType, DiffKind
 
-        # Convert markdown content to TipTap JSON if provided
-        tiptap_content: dict[str, Any] | None = None
-        if args.get("content_markdown"):
-            from pilot_space.application.services.note.content_converter import ContentConverter
-
-            converter = ContentConverter()
-            tiptap_content = converter.markdown_to_tiptap(args["content_markdown"])
-
-        def _safe_uuid(value: str | None) -> UUID | None:
-            if not value:
-                return None
-            try:
-                return UUID(value)
-            except (ValueError, AttributeError):
-                return None
-
-        owner_id = _safe_uuid(tool_context.user_id)
-        workspace_id = _safe_uuid(tool_context.workspace_id)
-        if not owner_id or not workspace_id:
-            return _text_result("Error: valid user and workspace context required")
-
-        project_id = _safe_uuid(args.get("project_id"))
-
-        svc_payload = CreateNotePayload(
-            workspace_id=workspace_id,
-            owner_id=owner_id,
-            title=title,
-            content=tiptap_content,
-            project_id=project_id,
-        )
-
-        svc = CreateNoteService(
-            session=tool_context.db_session,
-            note_repository=NoteRepository(tool_context.db_session),
-            template_repository=TemplateRepository(tool_context.db_session),
-        )
-
+        workspace_uuid: UUID
         try:
-            result = await svc.execute(svc_payload)
-            await tool_context.db_session.commit()
-        except Exception as exc:
-            logger.error("create_note execution failed: %s", exc, exc_info=True)
-            return _text_result(f"Error creating note: {exc}")
+            workspace_uuid = UUID(tool_context.workspace_id)
+        except (ValueError, TypeError):
+            return _text_result("Error: valid workspace context required")
+        if not tool_context.user_id:
+            return _text_result("Error: valid user context required")
 
-        note_data = {
-            "id": str(result.note.id),
-            "title": result.note.title,
+        intent_args: dict[str, Any] = {
+            "title": title,
+            "owner_id": tool_context.user_id,
         }
+        if args.get("content_markdown"):
+            intent_args["content_markdown"] = args["content_markdown"]
+        if args.get("project_id"):
+            intent_args["project_id"] = args["project_id"]
 
-        logger.info("[NoteTools] create_note executed: '%s' -> %s", title, note_data["id"])
+        diff_payload = build_fields_diff(
+            current={},
+            proposed={
+                "title": title,
+                "project_id": args.get("project_id"),
+                "has_content": bool(args.get("content_markdown")),
+            },
+        )
+
+        mode = resolve_chat_mode(tool_context)
+        policy = resolve_proposal_policy(mode, tool_kind="mutating")
+        if not policy.allow_creation:
+            return _text_result(
+                json.dumps(
+                    {
+                        "proposal_status": "errored",
+                        "reason": policy.reject_with_reason
+                        or "Mutation not permitted in current mode",
+                    }
+                )
+            )
+
+        session_id, message_id = build_proposal_identity(tool_context)
+        bus = get_proposal_bus()
+        proposal = await bus.create_proposal(
+            workspace_id=workspace_uuid,
+            session_id=session_id,
+            message_id=message_id,
+            target_artifact_type=ArtifactType.NOTE,
+            # New-note creation — no pre-existing artifact id. Use the
+            # zero-UUID sentinel (handler ignores it).
+            target_artifact_id=UUID(int=0),
+            intent_tool="create_note",
+            intent_args=intent_args,
+            diff_kind=DiffKind.FIELDS,
+            diff_payload=diff_payload,
+            reasoning=None,
+            mode=mode,
+            accept_disabled=policy.accept_disabled,
+            persist=policy.persist,
+            plan_preview_only=policy.plan_preview_only,
+        )
+
+        logger.info(
+            "[NoteTools] create_note proposal queued: '%s' -> %s",
+            title,
+            proposal.id,
+        )
         return _text_result(
-            json.dumps({"status": "executed", "operation": "create_note", "note": note_data})
+            json.dumps(
+                {
+                    "status": "pending",
+                    "operation": "create_note",
+                    "proposal_id": str(proposal.id),
+                    "preview": diff_payload,
+                }
+            )
         )
 
     @tool(

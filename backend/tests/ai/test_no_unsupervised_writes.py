@@ -1,40 +1,35 @@
-"""Audit gate: no unsupervised DB writes in AI tool modules (Phase 89 Plan 02).
+"""Audit gate: no unsupervised DB writes in AI tool modules.
 
-This gate intentionally fails until Plan 89-03 rewires every AI write tool
-to route through :class:`ProposalBus.create_proposal`. DO NOT skip or
-re-implement without reading the plan.
+ACTIVE — Phase 89 Plan 03 Task 6 (REV-89-03-B).
 
-Contract: any direct ORM mutation (``session.add``, ``session.commit``,
-``session.flush``, ``session.execute(insert/update/delete(...))``) or any
+This gate runs unconditionally in CI. Any direct ORM mutation
+(``session.add``, ``session.commit``, ``session.flush``,
+``session.execute(insert/update/delete(...))``) or any
 ``<repo>.<create|update|delete|save|upsert|insert|remove>(...)`` call found
-in ``pilot_space.ai.tools`` or ``pilot_space.ai.mcp`` is a violation. Real
-mutations belong in ``pilot_space.ai.proposals.intent_handlers`` (created
-by Plan 03) and are reached only after a user accepts a proposal.
+in ``pilot_space.ai.tools`` or ``pilot_space.ai.mcp`` is a violation.
 
-## Activation recipe (REV-89-02-B)
+Real mutations belong in ``pilot_space.ai.proposals.intent_handlers``
+and are reached only after a user accepts a proposal via
+``POST /api/v1/proposals/{id}/accept``. That directory is allow-listed
+via ``ALLOWED_PATH_FRAGMENTS``.
 
-CI by default does NOT set ``AUDIT_GATE_ACTIVE=1`` → the gate is SKIPPED
-→ CI stays green while Plan 03 is in flight.
+## Adding a new AI write tool
 
-Plan 03's final task flips the switch by ONE of:
+1. Build the intent payload (JSON-safe kwargs) + diff payload in the tool.
+2. Call ``ProposalBus.create_proposal(...)`` with ``intent_tool=<your-tool>``.
+3. Register a handler in ``pilot_space/ai/proposals/intent_handlers/<artifact>.py``
+   via ``@register_intent("<your-tool>")``.
+4. The tool returns ``{proposal_id, status: "pending", preview}`` — NOT
+   the mutated entity.
 
-1. Setting ``AUDIT_GATE_ACTIVE=1`` in the CI environment (preferred during
-   soak — you can toggle it off quickly if a false positive appears).
-2. Removing the ``@pytest.mark.skipif`` decorator entirely so the gate
-   runs unconditionally (preferred steady-state — regressions now fail CI).
-
-Either way, Plan 03 MUST land rewire commits + activation commit together
-so the gate is GREEN when it goes live.
-
-The xfail-strict strategy was considered and rejected: it would mask
-partial rewires (the gate stays FAILED, xfail marks it expected, CI stays
-GREEN) — the opposite of what we want.
+If you have a legitimate internal bookkeeping write that should never be
+user-visible (e.g. block-owner attribution), extend
+``ALLOWED_PATH_FRAGMENTS`` and document the decision in a SUMMARY.md.
 """
 
 from __future__ import annotations
 
 import ast
-import os
 import pathlib
 
 import pytest
@@ -60,9 +55,18 @@ EXECUTE_MUTATION_KEYWORDS = ("insert(", "update(", "delete(")
 # Relative path fragments that are ALLOWED to contain direct writes.
 # Plan 03 creates ``pilot_space/ai/proposals/intent_handlers/`` — that seam
 # is exactly where mutations SHOULD live, so it's allow-listed here.
+#
+# REV-89-03-C: ``ai/mcp/ownership_server.py`` is allow-listed because
+# ``set_block_owner`` is internal block-attribution bookkeeping (writes
+# ``{"owner": "ai:..."}`` into a note's TipTap content attrs). It's not a
+# user-visible content edit; routing it through a human-review proposal
+# would produce zero signal and significant UX noise. Documented in
+# 89-03-SUMMARY.md.
 ALLOWED_PATH_FRAGMENTS = (
     "ai/proposals/intent_handlers",
     "ai/proposals\\intent_handlers",  # windows path form (defensive)
+    "ai/mcp/ownership_server.py",
+    "ai\\mcp\\ownership_server.py",  # windows path form (defensive)
 )
 
 _BACKEND_SRC = pathlib.Path(__file__).resolve().parents[2] / "src"
@@ -154,15 +158,6 @@ def _collect_violations() -> dict[str, list[tuple[int, str]]]:
 
 
 @pytest.mark.audit_gate
-@pytest.mark.skipif(
-    os.getenv("AUDIT_GATE_ACTIVE") != "1",
-    reason=(
-        "Plan 89-03 not yet shipped — audit gate inactive. "
-        "Set AUDIT_GATE_ACTIVE=1 once every AI write tool has been rewired "
-        "through ProposalBus. See the module docstring for the full "
-        "activation recipe."
-    ),
-)
 def test_no_unsupervised_writes_in_ai_tools() -> None:
     """Fail if any AI tool / MCP server mutates the DB directly.
 

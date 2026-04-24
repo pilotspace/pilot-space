@@ -484,98 +484,93 @@ def create_issue_tools_server(
                 },
             )
 
-        # Auto-approved: execute creation via service
-        from datetime import date as date_type
+        # Phase 89 Plan 03 — route via ProposalBus.
+        # Mutation logic lives in intent_handlers.issue.execute_create_issue;
+        # this shim builds the intent and returns a pending stub. The
+        # actual CreateIssueService call happens on proposal accept.
+        from pilot_space.ai.proposals import (
+            build_fields_diff,
+            resolve_proposal_policy,
+        )
+        from pilot_space.ai.proposals.tool_shim import (
+            build_proposal_identity,
+            get_proposal_bus,
+            resolve_chat_mode,
+        )
+        from pilot_space.domain.proposal import ArtifactType, DiffKind
 
-        from pilot_space.application.services.issue.create_issue_service import (
-            CreateIssuePayload,
-            CreateIssueService,
-        )
-        from pilot_space.infrastructure.database.models.issue import IssuePriority
-        from pilot_space.infrastructure.database.repositories.activity_repository import (
-            ActivityRepository,
-        )
-        from pilot_space.infrastructure.database.repositories.label_repository import (
-            LabelRepository,
-        )
-
-        priority_map = {
-            "urgent": IssuePriority.URGENT,
-            "high": IssuePriority.HIGH,
-            "medium": IssuePriority.MEDIUM,
-            "low": IssuePriority.LOW,
-            "none": IssuePriority.NONE,
+        reporter_id = tool_context.user_id or str(UUID(int=0))
+        intent_args: dict[str, Any] = {
+            "project_id": str(project_uuid),
+            "title": args["title"],
+            "description": args.get("description"),
+            "priority": args.get("priority", "medium"),
+            "reporter_id": reporter_id,
         }
+        for opt in ("state_id", "assignee_id", "parent_id", "estimate_points", "target_date"):
+            if args.get(opt) is not None:
+                intent_args[opt] = args[opt]
+        if args.get("label_ids"):
+            intent_args["label_ids"] = [str(lid) for lid in args["label_ids"]]
 
-        target_date = None
-        if args.get("target_date"):
-            import contextlib
+        diff_payload = build_fields_diff(
+            current={},
+            proposed={
+                "title": args["title"],
+                "priority": args.get("priority", "medium"),
+                "assignee_id": args.get("assignee_id"),
+                "project_id": str(project_uuid),
+            },
+        )
 
-            with contextlib.suppress(ValueError):
-                target_date = date_type.fromisoformat(args["target_date"])
+        mode = resolve_chat_mode(tool_context)
+        policy = resolve_proposal_policy(mode, tool_kind="mutating")
+        if not policy.allow_creation:
+            return _text_result(
+                json.dumps(
+                    {
+                        "proposal_status": "errored",
+                        "reason": policy.reject_with_reason
+                        or "Mutation not permitted in current mode",
+                    }
+                )
+            )
 
-        def _safe_uuid(value: str | None) -> UUID | None:
-            """Parse a UUID string, returning None on invalid input."""
-            if not value:
-                return None
-            try:
-                return UUID(value)
-            except (ValueError, AttributeError):
-                return None
-
-        try:
-            label_ids = [UUID(lid) for lid in args.get("label_ids", [])]
-        except (ValueError, AttributeError):
-            label_ids = []
-
-        reporter_id = UUID(tool_context.user_id) if tool_context.user_id else UUID(int=0)
-
-        svc_payload = CreateIssuePayload(
+        session_id, message_id = build_proposal_identity(tool_context)
+        bus = get_proposal_bus()
+        proposal = await bus.create_proposal(
             workspace_id=UUID(tool_context.workspace_id),
-            project_id=project_uuid,
-            reporter_id=reporter_id,
-            name=args["title"],
-            description=args.get("description"),
-            priority=priority_map.get(args.get("priority", "medium"), IssuePriority.MEDIUM),
-            state_id=_safe_uuid(args.get("state_id")),
-            assignee_id=_safe_uuid(args.get("assignee_id")),
-            parent_id=_safe_uuid(args.get("parent_id")),
-            estimate_points=args.get("estimate_points"),
-            target_date=target_date,
-            label_ids=label_ids,
-            ai_enhanced=True,
-            ai_metadata={"source": "mcp_tool", "tool": "create_issue"},
+            session_id=session_id,
+            message_id=message_id,
+            target_artifact_type=ArtifactType.ISSUE,
+            # create_issue has no pre-existing artifact — use a zero UUID
+            # as a conventional sentinel; intent handlers ignore it.
+            target_artifact_id=UUID(int=0),
+            intent_tool="create_issue",
+            intent_args=intent_args,
+            diff_kind=DiffKind.FIELDS,
+            diff_payload=diff_payload,
+            reasoning=None,
+            mode=mode,
+            accept_disabled=policy.accept_disabled,
+            persist=policy.persist,
+            plan_preview_only=policy.plan_preview_only,
         )
-
-        svc = CreateIssueService(
-            session=tool_context.db_session,
-            issue_repository=IssueRepository(tool_context.db_session),
-            activity_repository=ActivityRepository(tool_context.db_session),
-            label_repository=LabelRepository(tool_context.db_session),
-        )
-
-        try:
-            result = await svc.execute(svc_payload)
-            await tool_context.db_session.commit()
-        except Exception as exc:
-            logger.error("create_issue execution failed: %s", exc, exc_info=True)
-            return _text_result(f"Error creating issue: {exc}")
-
-        issue = result.issue
-        issue_data = {
-            "id": str(issue.id),
-            "identifier": issue.identifier if hasattr(issue, "identifier") else None,
-            "name": issue.name,
-            "priority": issue.priority.value if issue.priority else "medium",
-        }
 
         logger.info(
-            "[IssueTools] create_issue executed: '%s' -> %s",
+            "[IssueTools] create_issue proposal queued: '%s' -> %s",
             args["title"],
-            issue_data["id"],
+            proposal.id,
         )
         return _text_result(
-            json.dumps({"status": "executed", "operation": "create_issue", "issue": issue_data})
+            json.dumps(
+                {
+                    "status": "pending",
+                    "operation": "create_issue",
+                    "proposal_id": str(proposal.id),
+                    "preview": diff_payload,
+                }
+            )
         )
 
     @tool(
@@ -692,91 +687,103 @@ def create_issue_tools_server(
             payload["remove_label_ids"] = args["remove_label_ids"]
             changes.append(f"removing {len(args['remove_label_ids'])} labels")
 
-        # PermissionCheckHook already handled the approval gate before this tool ran.
-        # Apply changes directly to the DB.
-        import contextlib
-        from datetime import date as date_type
+        # Phase 89 Plan 03 — route via ProposalBus.
+        # Mutation logic lives in intent_handlers.issue.execute_update_issue;
+        # this shim builds the intent + preview diff and hands off.
+        from pilot_space.ai.proposals import (
+            build_fields_diff,
+            resolve_proposal_policy,
+        )
+        from pilot_space.ai.proposals.tool_shim import (
+            build_proposal_identity,
+            get_proposal_bus,
+            resolve_chat_mode,
+        )
+        from pilot_space.domain.proposal import ArtifactType, DiffKind
 
-        from pilot_space.infrastructure.database.models.issue import IssuePriority
-
+        intent_args: dict[str, Any] = {"issue_id": str(issue_uuid)}
+        current_snapshot: dict[str, Any] = {
+            "title": issue.name,
+            "priority": issue.priority.value if issue.priority else None,
+            "assignee_id": str(issue.assignee_id) if issue.assignee_id else None,
+            "estimate_points": issue.estimate_points,
+        }
+        proposed_snapshot: dict[str, Any] = dict(current_snapshot)
+        for key in (
+            "title",
+            "description",
+            "priority",
+            "assignee_id",
+            "estimate_points",
+            "start_date",
+            "target_date",
+            "add_label_ids",
+            "remove_label_ids",
+        ):
+            if key in args:
+                intent_args[key] = args[key]
         if "title" in args:
-            issue.name = args["title"]
-        if "description" in args:
-            issue.description = args["description"]
-            issue.description_html = None  # Clear stale HTML so frontend falls back to markdown
+            proposed_snapshot["title"] = args["title"]
         if "priority" in args:
-            priority_map = {
-                "urgent": IssuePriority.URGENT,
-                "high": IssuePriority.HIGH,
-                "medium": IssuePriority.MEDIUM,
-                "low": IssuePriority.LOW,
-                "none": IssuePriority.NONE,
-            }
-            new_priority = priority_map.get(str(args["priority"]).lower())
-            if new_priority:
-                issue.priority = new_priority
+            proposed_snapshot["priority"] = args["priority"]
         if "assignee_id" in args:
-            with contextlib.suppress(ValueError, TypeError):
-                issue.assignee_id = UUID(args["assignee_id"]) if args["assignee_id"] else None
+            proposed_snapshot["assignee_id"] = args["assignee_id"]
         if "estimate_points" in args:
-            issue.estimate_points = args["estimate_points"]
-        if "start_date" in args:
-            with contextlib.suppress(ValueError, TypeError):
-                issue.start_date = date_type.fromisoformat(args["start_date"])
-        if "target_date" in args:
-            with contextlib.suppress(ValueError, TypeError):
-                issue.target_date = date_type.fromisoformat(args["target_date"])
+            proposed_snapshot["estimate_points"] = args["estimate_points"]
 
-        # Handle label additions/removals
-        if "add_label_ids" in args or "remove_label_ids" in args:
-            from sqlalchemy import delete, insert, select
+        diff_payload = build_fields_diff(
+            current=current_snapshot,
+            proposed=proposed_snapshot,
+        )
 
-            from pilot_space.infrastructure.database.models.issue_label import (
-                issue_labels,
-            )
-
-            result = await tool_context.db_session.execute(
-                select(issue_labels.c.label_id).where(issue_labels.c.issue_id == issue_uuid)
-            )
-            current_label_ids = {row[0] for row in result.fetchall()}
-
-            if "add_label_ids" in args:
-                for lid_str in args["add_label_ids"]:
-                    with contextlib.suppress(ValueError, TypeError):
-                        current_label_ids.add(UUID(lid_str))
-            if "remove_label_ids" in args:
-                for lid_str in args["remove_label_ids"]:
-                    with contextlib.suppress(ValueError, TypeError):
-                        current_label_ids.discard(UUID(lid_str))
-
-            await tool_context.db_session.execute(
-                delete(issue_labels).where(issue_labels.c.issue_id == issue_uuid)
-            )
-            if current_label_ids:
-                await tool_context.db_session.execute(
-                    insert(issue_labels),
-                    [{"issue_id": issue_uuid, "label_id": lid} for lid in current_label_ids],
+        mode = resolve_chat_mode(tool_context)
+        policy = resolve_proposal_policy(mode, tool_kind="mutating")
+        if not policy.allow_creation:
+            return _text_result(
+                json.dumps(
+                    {
+                        "proposal_status": "errored",
+                        "reason": policy.reject_with_reason
+                        or "Mutation not permitted in current mode",
+                    }
                 )
+            )
 
-        await tool_context.db_session.flush()
-        await tool_context.db_session.commit()
-
-        # Emit issue_updated event so frontend knows to refetch the issue
-        await publisher.publish_content_update(
-            {
-                "operation": "issue_updated",
-                "issueId": str(issue_uuid),
-                "noteId": "",
-            }
+        session_id, message_id = build_proposal_identity(tool_context)
+        bus = get_proposal_bus()
+        proposal = await bus.create_proposal(
+            workspace_id=UUID(tool_context.workspace_id),
+            session_id=session_id,
+            message_id=message_id,
+            target_artifact_type=ArtifactType.ISSUE,
+            target_artifact_id=issue_uuid,
+            intent_tool="update_issue",
+            intent_args=intent_args,
+            diff_kind=DiffKind.FIELDS,
+            diff_payload=diff_payload,
+            reasoning=None,
+            mode=mode,
+            accept_disabled=policy.accept_disabled,
+            persist=policy.persist,
+            plan_preview_only=policy.plan_preview_only,
         )
 
         logger.info(
-            "[IssueTools] update_issue applied: %s changes=%s",
+            "[IssueTools] update_issue proposal queued: %s changes=%s proposal=%s",
             args["issue_id"],
             changes,
+            proposal.id,
         )
         return _text_result(
-            f"Issue {args['issue_id']} updated: {', '.join(changes) or 'no changes'}."
+            json.dumps(
+                {
+                    "status": "pending",
+                    "operation": "update_issue",
+                    "proposal_id": str(proposal.id),
+                    "preview": diff_payload,
+                    "changes": changes,
+                }
+            )
         )
 
     return create_sdk_mcp_server(
