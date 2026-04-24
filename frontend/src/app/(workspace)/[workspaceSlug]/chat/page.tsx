@@ -148,6 +148,13 @@ export default observer(function ChatPage() {
     );
   }
 
+  // Phase 88 Plan 04 — when ?mode is present this is a homepage handoff
+  // and the auto-submit effect above already calls sendMessage(prefill).
+  // Do NOT also pass prefillValue (which would refill the composer with
+  // the just-sent text, leaving stale text in the input). prefillValue
+  // is reserved for the classic "fill but do not send" use case
+  // (e.g. ?prefill=/skill-creator) which has no ?mode.
+  const isHomepageHandoff = modeParam !== null;
   return (
     <div className="h-full">
       <ChatView
@@ -155,7 +162,7 @@ export default observer(function ChatPage() {
         approvalStore={aiStore.approval}
         userName="User"
         className="h-full"
-        prefillValue={prefill}
+        prefillValue={isHomepageHandoff ? undefined : prefill}
       />
     </div>
   );
