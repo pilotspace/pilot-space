@@ -34,6 +34,8 @@ import {
 import { ArtifactTypeBadge } from './ArtifactTypeBadge';
 import { ArtifactRendererSwitch } from './ArtifactRendererSwitch';
 import { LineageChip } from './LineageChip';
+import { VersionHistoryChip } from './VersionHistoryChip';
+import type { VersionHistoryEntry } from '@/features/ai/proposals/types';
 
 function shortId(id: string): string {
   if (id.length <= 9) return id;
@@ -78,6 +80,17 @@ export function ArtifactPeekDrawer() {
   }, [peekId, peekType]);
 
   const lineage = data?.lineage ?? null;
+
+  // Phase 89 Plan 06 — pull versionNumber + versionHistory off the
+  // artifact GET. ISSUE is wired in Plan 05. NOTE + file types fall
+  // back to no chip (nothing to show yet).
+  const versionInfo: { versionNumber: number; history: VersionHistoryEntry[] } | null =
+    data?.issue?.versionNumber != null
+      ? {
+          versionNumber: data.issue.versionNumber,
+          history: (data.issue.versionHistory ?? []) as VersionHistoryEntry[],
+        }
+      : null;
 
   return (
     <DialogPrimitive.Root
@@ -148,6 +161,13 @@ export function ArtifactPeekDrawer() {
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
+            )}
+
+            {versionInfo && (
+              <VersionHistoryChip
+                versionNumber={versionInfo.versionNumber}
+                versionHistory={versionInfo.history}
+              />
             )}
 
             <div className="ml-auto flex items-center gap-1">
