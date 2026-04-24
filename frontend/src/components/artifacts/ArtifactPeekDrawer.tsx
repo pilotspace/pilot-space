@@ -1,0 +1,235 @@
+/**
+ * ArtifactPeekDrawer — global right-side peek for any artifact.
+ *
+ * URL-driven (`?peek=&peekType=`). Mounted once at the workspace layout.
+ * - 680px wide, 16px left-edge radius, 18% scrim.
+ * - Esc closes; ⌘. escalates to split-pane focus.
+ * - Header: lineage breadcrumb, type badge, short-form ID (click to copy),
+ *   expand, pin (placeholder), more menu, close.
+ *
+ * See `.planning/phases/86-peek-drawer-split-pane-lineage/86-UI-SPEC.md` §2.
+ */
+'use client';
+
+import * as React from 'react';
+import { useParams } from 'next/navigation';
+import * as DialogPrimitive from '@radix-ui/react-dialog';
+import { Copy, Maximize2, MoreHorizontal, Pin, X } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { copyToClipboard } from '@/lib/copy-context';
+import { useArtifactPeekState } from '@/hooks/use-artifact-peek-state';
+import { useArtifactQuery } from '@/hooks/use-artifact-query';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { ArtifactTypeBadge } from './ArtifactTypeBadge';
+import { ArtifactRendererSwitch } from './ArtifactRendererSwitch';
+import { LineageChip } from './LineageChip';
+
+function shortId(id: string): string {
+  if (id.length <= 9) return id;
+  return `${id.slice(0, 4)}…${id.slice(-4)}`;
+}
+
+export function ArtifactPeekDrawer() {
+  const { peekId, peekType, isPeekOpen, closePeek, escalate } = useArtifactPeekState();
+  const params = useParams<{ workspaceSlug?: string }>();
+  const workspaceSlug = params?.workspaceSlug ?? '';
+  const { data } = useArtifactQuery(
+    isPeekOpen ? peekType : null,
+    isPeekOpen ? peekId : null,
+  );
+
+  // ⌘. → escalate
+  React.useEffect(() => {
+    if (!isPeekOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === '.') {
+        e.preventDefault();
+        escalate();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isPeekOpen, escalate]);
+
+  const handleCopyId = React.useCallback(async () => {
+    if (!peekId) return;
+    await copyToClipboard(peekId);
+  }, [peekId]);
+
+  const handleCopyLink = React.useCallback(async () => {
+    if (typeof window === 'undefined') return;
+    await copyToClipboard(window.location.href);
+  }, []);
+
+  const handlePin = React.useCallback(() => {
+    // Phase 89 will persist pins.
+    console.debug('[ArtifactPeekDrawer] Pin pressed (placeholder)', { peekId, peekType });
+  }, [peekId, peekType]);
+
+  const lineage = data?.lineage ?? null;
+
+  return (
+    <DialogPrimitive.Root
+      open={isPeekOpen}
+      onOpenChange={(open) => {
+        if (!open) closePeek();
+      }}
+    >
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay
+          data-testid="peek-drawer-overlay"
+          className={cn(
+            'fixed inset-0 z-50 bg-foreground/[0.18]',
+            'data-[state=open]:animate-in data-[state=closed]:animate-out',
+            'data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0',
+            'motion-reduce:animate-none motion-reduce:transition-none',
+          )}
+        />
+        <DialogPrimitive.Content
+          data-testid="peek-drawer-content"
+          aria-describedby={undefined}
+          className={cn(
+            'fixed inset-y-0 right-0 z-50 flex h-full w-[680px] max-w-[100vw] flex-col',
+            'bg-background shadow-xl',
+            'rounded-l-[16px] rounded-r-none border-l border-border',
+            'data-[state=open]:animate-in data-[state=closed]:animate-out',
+            'data-[state=open]:slide-in-from-right data-[state=closed]:slide-out-to-right',
+            'data-[state=open]:duration-250 data-[state=closed]:duration-200',
+            'ease-out',
+            'motion-reduce:data-[state=open]:fade-in-0 motion-reduce:data-[state=closed]:fade-out-0',
+            'motion-reduce:data-[state=open]:slide-in-from-right-0 motion-reduce:data-[state=closed]:slide-out-to-right-0',
+          )}
+        >
+          <DialogPrimitive.Title className="sr-only">
+            {data?.title ?? (peekType ? `${peekType} artifact` : 'Artifact preview')}
+          </DialogPrimitive.Title>
+
+          {/* Header — 56px */}
+          <header className="flex h-14 flex-shrink-0 items-center gap-2 border-b border-border px-4">
+            {lineage?.sourceChatId && (
+              <LineageChip
+                sourceChatId={lineage.sourceChatId}
+                sourceMessageId={lineage.sourceMessageId}
+                firstSeenAt={lineage.firstSeenAt}
+                workspaceSlug={workspaceSlug}
+              />
+            )}
+
+            {peekType && <ArtifactTypeBadge type={peekType} />}
+
+            {peekId && (
+              <TooltipProvider delayDuration={300}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={handleCopyId}
+                      className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-xs text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      aria-label="Copy artifact ID"
+                      data-testid="peek-drawer-id"
+                    >
+                      {shortId(peekId)}
+                      <Copy className="h-3 w-3" aria-hidden="true" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    <span className="text-xs">Click to copy ID</span>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+
+            <div className="ml-auto flex items-center gap-1">
+              <TooltipProvider delayDuration={300}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={escalate}
+                      aria-label="Expand to focus view"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      data-testid="peek-drawer-expand"
+                    >
+                      <Maximize2 className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    <span className="text-xs">Expand (⌘.)</span>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+
+              <button
+                type="button"
+                onClick={handlePin}
+                aria-label="Pin artifact"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                data-testid="peek-drawer-pin"
+              >
+                <Pin className="h-4 w-4" aria-hidden="true" />
+              </button>
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label="More options"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    data-testid="peek-drawer-more"
+                  >
+                    <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onSelect={handleCopyLink}>Copy link</DropdownMenuItem>
+                  {lineage?.sourceChatId && workspaceSlug && (
+                    <DropdownMenuItem asChild>
+                      <a
+                        href={
+                          lineage.sourceMessageId
+                            ? `/${workspaceSlug}/chat/${lineage.sourceChatId}#msg-${lineage.sourceMessageId}`
+                            : `/${workspaceSlug}/chat/${lineage.sourceChatId}`
+                        }
+                      >
+                        View origin chat
+                      </a>
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <DialogPrimitive.Close asChild>
+                <button
+                  type="button"
+                  aria-label="Close peek drawer"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  data-testid="peek-drawer-close"
+                >
+                  <X className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </DialogPrimitive.Close>
+            </div>
+          </header>
+
+          {/* Body */}
+          <div className="flex-1 overflow-hidden">
+            {peekType && peekId ? (
+              <ArtifactRendererSwitch type={peekType} id={peekId} />
+            ) : null}
+          </div>
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
+  );
+}

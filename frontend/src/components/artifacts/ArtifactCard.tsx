@@ -10,11 +10,13 @@
  * skills gallery) render through this component rather than bespoke cards.
  */
 import * as React from 'react';
+import { useParams } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { ARTIFACT_TYPE_TOKENS, type ArtifactTokenKey } from '@/lib/artifact-tokens';
 import { artifactLabel } from '@/lib/artifact-labels';
 import { ArtifactTypeBadge } from './ArtifactTypeBadge';
 import { ArtifactMeta } from './ArtifactMeta';
+import { LineageChip } from './LineageChip';
 
 export type ArtifactCardDensity = 'full' | 'preview' | 'compact';
 
@@ -33,8 +35,8 @@ export interface ArtifactCardProps {
   onOpenPeek?: () => void;
   children?: React.ReactNode;
   footer?: React.ReactNode;
-  /** Reserved for Phase 86 lineage chip rendering. */
-  lineage?: { sourceChatId?: string; sourceMessageId?: string };
+  /** Phase 86 lineage chip rendering (chat-born artifacts). */
+  lineage?: { sourceChatId?: string; sourceMessageId?: string; firstSeenAt?: string };
   className?: string;
 }
 
@@ -52,12 +54,15 @@ export function ArtifactCard({
   onOpenPeek: _onOpenPeek,
   children,
   footer,
-  lineage: _lineage,
+  lineage,
   className,
 }: ArtifactCardProps) {
   const tokens = ARTIFACT_TYPE_TOKENS[type];
   const typeLabel = artifactLabel(type, false);
   const interactive = Boolean(onClick);
+  const params = useParams<{ workspaceSlug?: string }>();
+  const workspaceSlug = params?.workspaceSlug ?? '';
+  const hasLineage = Boolean(lineage?.sourceChatId);
 
   const handleKeyDown = React.useCallback(
     (e: React.KeyboardEvent<HTMLElement>) => {
@@ -126,6 +131,16 @@ export function ArtifactCard({
           projectColor={projectColor}
           updatedAt={updatedAt}
         />
+        {hasLineage && density !== 'compact' && lineage && (
+          <div className="pt-0.5" onClick={(e) => e.stopPropagation()}>
+            <LineageChip
+              sourceChatId={lineage.sourceChatId}
+              sourceMessageId={lineage.sourceMessageId}
+              firstSeenAt={lineage.firstSeenAt}
+              workspaceSlug={workspaceSlug}
+            />
+          </div>
+        )}
       </div>
 
       {children && (

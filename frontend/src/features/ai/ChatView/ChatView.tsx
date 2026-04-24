@@ -76,6 +76,13 @@ interface ChatViewProps {
   /** Callback when user selects a section via # menu — sets note context to section blocks */
   onSelectSection?: (heading: HeadingItem) => void;
   className?: string;
+  /**
+   * Layout variant.
+   * - `full` (default): full-width chat surface.
+   * - `rail`: narrowed to ~380px for split-pane usage (Phase 86). Hides
+   *   secondary UI (task panel) via CSS and caps the root width.
+   */
+  variant?: 'full' | 'rail';
 }
 
 const ChatViewInternal = observer<ChatViewProps>(
@@ -93,7 +100,9 @@ const ChatViewInternal = observer<ChatViewProps>(
     noteHeadings,
     onSelectSection,
     className,
+    variant = 'full',
   }) => {
+    const isRail = variant === 'rail';
     const [inputValue, setInputValue] = useState('');
     const [taskPanelOpen, setTaskPanelOpen] = useState(true);
     const [showClearDialog, setShowClearDialog] = useState(false);
@@ -434,7 +443,15 @@ const ChatViewInternal = observer<ChatViewProps>(
     }, [store.sessionId, store.hasMoreMessages, store.isLoadingMoreMessages, sessionListStore]);
 
     return (
-      <div className={cn('flex flex-col h-full bg-background', className)} data-testid="chat-view">
+      <div
+        className={cn(
+          'flex flex-col h-full bg-background',
+          isRail && 'max-w-[380px] w-full mx-auto',
+          className,
+        )}
+        data-variant={variant}
+        data-testid="chat-view"
+      >
         {/* Compact header */}
         <ChatHeader
           title="PilotSpace Agent"
@@ -506,8 +523,8 @@ const ChatViewInternal = observer<ChatViewProps>(
             )}
           </AnimatePresence>
 
-          {/* Task panel */}
-          {store.tasks.size > 0 && (
+          {/* Task panel — hidden in rail variant to preserve space */}
+          {store.tasks.size > 0 && !isRail && (
             <div className="px-4 pb-3">
               <TaskPanel
                 tasks={agentTasks}

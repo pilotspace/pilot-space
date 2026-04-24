@@ -168,6 +168,36 @@ describe('ArtifactCard', () => {
   });
 });
 
+describe('ArtifactCard lineage (Phase 86)', () => {
+  it('renders LineageChip when lineage.sourceChatId is provided', () => {
+    render(
+      <ArtifactCard
+        type="NOTE"
+        {...BASE_PROPS}
+        lineage={{ sourceChatId: 'chat-1', sourceMessageId: 'msg-2' }}
+      />,
+    );
+    expect(screen.getByTestId('lineage-chip')).toBeInTheDocument();
+  });
+
+  it('does not render LineageChip when lineage is absent', () => {
+    render(<ArtifactCard type="NOTE" {...BASE_PROPS} />);
+    expect(screen.queryByTestId('lineage-chip')).toBeNull();
+  });
+
+  it('does not render LineageChip in compact density even with lineage', () => {
+    render(
+      <ArtifactCard
+        type="NOTE"
+        density="compact"
+        {...BASE_PROPS}
+        lineage={{ sourceChatId: 'chat-1' }}
+      />,
+    );
+    expect(screen.queryByTestId('lineage-chip')).toBeNull();
+  });
+});
+
 describe('ArtifactCardSkeleton', () => {
   it('renders with aria-busy=true', () => {
     render(<ArtifactCardSkeleton />);
