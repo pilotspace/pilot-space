@@ -69,6 +69,7 @@ from pilot_space.api.v1.routers import (
     project_artifacts_router,
     project_members_router,
     projects_router,
+    proposals_router,
     related_issues_router,
     role_skills_router,
     role_templates_router,
@@ -327,6 +328,9 @@ app.include_router(custom_roles_router, prefix=API_V1_PREFIX)
 app.include_router(workspaces_router, prefix=API_V1_PREFIX)
 app.include_router(my_projects_router, prefix=f"{API_V1_PREFIX}/workspaces")
 app.include_router(projects_router, prefix=API_V1_PREFIX)
+# Phase 89 Plan 02 — Edit Proposal pipeline REST surface.
+# Flat prefix (``/proposals``); workspace scope comes from ``X-Workspace-Id`` header.
+app.include_router(proposals_router, prefix=API_V1_PREFIX)
 app.include_router(issues_router, prefix=API_V1_PREFIX)
 app.include_router(issue_implement_router, prefix=API_V1_PREFIX)
 app.include_router(issues_ai_router, prefix=API_V1_PREFIX)

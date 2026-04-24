@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dependency_injector import containers, providers
 
+from pilot_space.ai.agents.proposal_stream_publisher import ProposalStreamPublisher
 from pilot_space.ai.infrastructure.approval import ApprovalService
 from pilot_space.ai.infrastructure.cost_tracker import CostTracker
 from pilot_space.application.services.action_button import ActionButtonService
@@ -279,6 +280,8 @@ class Container(SkillContainer, PluginContainer):
             # Phase 69 — AI memory services
             "pilot_space.application.services.memory.memory_recall_service",
             "pilot_space.application.services.memory.memory_lifecycle_service",
+            # Phase 89 Plan 02 — Edit Proposal REST surface
+            "pilot_space.api.v1.routers.proposals",
         ],
     )
 
@@ -1136,9 +1139,17 @@ class Container(SkillContainer, PluginContainer):
         ProposalRepository,
         session=providers.Callable(get_current_session),
     )
+    # Phase 89 Plan 02 — real SSE publisher. Singleton (application-wide);
+    # broadcasts onto the per-session queue resolved at publish time. The
+    # queue-resolver seam defaults to a no-op lookup; Plan 04 will wire the
+    # real chat-stream registry.
+    proposal_stream_publisher = providers.Singleton(
+        ProposalStreamPublisher,
+    )
     proposal_bus = providers.Factory(
         ProposalBus,
         repository=proposal_repository,
+        sse_publisher=proposal_stream_publisher,
     )
 
 

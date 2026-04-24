@@ -29,13 +29,6 @@ from typing import TYPE_CHECKING
 from uuid import UUID
 
 from pilot_space.ai.agents.pilotspace_stream_utils import StreamEvent, build_sse_frame
-from pilot_space.api.v1.schemas.proposals import (
-    ProposalAppliedEvent,
-    ProposalEnvelope,
-    ProposalRejectedEvent,
-    ProposalRequestEvent,
-    ProposalRetriedEvent,
-)
 from pilot_space.infrastructure.logging import get_logger
 
 if TYPE_CHECKING:
@@ -115,11 +108,14 @@ class ProposalStreamPublisher:
     async def publish_proposal_request(self, p: Proposal) -> None:
         """Emit ``proposal_request`` with the full envelope (flat-composed).
 
-        Uses :func:`ProposalEnvelope.from_entity` on the child class — because
-        the classmethod returns ``cls(...)`` it constructs a
-        :class:`ProposalRequestEvent` with the subclass-only
-        ``event_timestamp`` supplied via the alias.
+        Schema modules are imported lazily to avoid a circular import cycle:
+        ``container -> proposal_stream_publisher -> api.v1.schemas -> api.v1.__init__ -> routers -> container``.
         """
+        from pilot_space.api.v1.schemas.proposals import (
+            ProposalEnvelope,
+            ProposalRequestEvent,
+        )
+
         envelope_fields = ProposalEnvelope.from_entity(p).model_dump()
         event = ProposalRequestEvent(
             **envelope_fields,
@@ -135,6 +131,8 @@ class ProposalStreamPublisher:
         self, p: Proposal, lines_changed: int | None
     ) -> None:
         """Emit ``proposal_applied`` with the new version + optional line delta."""
+        from pilot_space.api.v1.schemas.proposals import ProposalAppliedEvent
+
         # ``applied_version`` is guaranteed non-None on APPLIED proposals.
         applied_version = p.applied_version if p.applied_version is not None else 0
         event = ProposalAppliedEvent(
@@ -153,6 +151,8 @@ class ProposalStreamPublisher:
         self, p: Proposal, reason: str | None
     ) -> None:
         """Emit ``proposal_rejected`` with an optional rejection reason."""
+        from pilot_space.api.v1.schemas.proposals import ProposalRejectedEvent
+
         event = ProposalRejectedEvent(
             proposal_id=p.id,
             reason=reason,
@@ -166,6 +166,8 @@ class ProposalStreamPublisher:
 
     async def publish_proposal_retried(self, p: Proposal, hint: str | None) -> None:
         """Emit ``proposal_retried`` with an optional retry hint."""
+        from pilot_space.api.v1.schemas.proposals import ProposalRetriedEvent
+
         event = ProposalRetriedEvent(
             proposal_id=p.id,
             hint=hint,

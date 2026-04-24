@@ -74,6 +74,7 @@ from pilot_space.api.v1.routers.pm_sprint_board import router as pm_sprint_board
 from pilot_space.api.v1.routers.project_artifacts import router as project_artifacts_router
 from pilot_space.api.v1.routers.project_members import router as project_members_router
 from pilot_space.api.v1.routers.projects import router as projects_router
+from pilot_space.api.v1.routers.proposals import router as proposals_router
 from pilot_space.api.v1.routers.related_issues import router as related_issues_router
 from pilot_space.api.v1.routers.role_skills import (
     role_templates_router,
@@ -221,6 +222,7 @@ __all__ = [
     "project_artifacts_router",
     "project_members_router",
     "projects_router",
+    "proposals_router",
     "related_issues_router",
     "role_skills_router",
     "role_templates_router",
