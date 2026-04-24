@@ -137,6 +137,7 @@ markers = [
     "benchmark: marks tests as latency/throughput benchmarks (excluded from PR gate)",
     "contract: marks tests as contract tests (schema parity between backend and frontend)",
     "postgres: requires real PostgreSQL via TEST_DATABASE_URL (skipped otherwise)",
+    "audit_gate: AST-based audit gate (Phase 89 — gated by AUDIT_GATE_ACTIVE env var)",
 ]
 
 [tool.coverage.run]
