@@ -115,6 +115,14 @@ export class PilotSpaceActions {
           },
           session_id: this.store.sessionId,
           fork_session_id: this.store.forkSessionId,
+          // Phase 87 Plan 01 (CHAT-02): conversation mode travels with every
+          // submit. Resolved per-session via PilotSpaceStore.getMode; backend
+          // treats unknown modes as "plan" (forward-compat — Phase 89 wires
+          // server-side gating). Draft mode adds `persist: false`.
+          mode: this.store.getMode(this.store.sessionId),
+          ...(this.store.getMode(this.store.sessionId) === 'draft'
+            ? { persist: false }
+            : {}),
           model_override: this.store.selectedModel
             ? {
                 provider: this.store.selectedModel.provider,

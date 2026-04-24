@@ -37,6 +37,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DestructiveApprovalModal } from './ApprovalOverlay/DestructiveApprovalModal';
 import { ChatHeader } from './ChatHeader';
 import { ChatInput } from './ChatInput/ChatInput';
+import type { ChatMode } from './ChatInput/types';
 import { ChatViewErrorBoundary } from './ChatViewErrorBoundary';
 import { ApprovalCardGroup } from './MessageList/ApprovalCardGroup';
 import { ConversationLoadingSkeleton } from './MessageList/ConversationLoadingSkeleton';
@@ -318,16 +319,52 @@ const ChatViewInternal = observer<ChatViewProps>(
       }
     }, [modalApprovals.length]);
 
+    // Phase 87 Plan 01: client-side mutating-intent stub. Plan 89 will wire
+    // a real detector backed by AI tool-call analysis. Returning false keeps
+    // the gate plumbed without blocking existing flows.
+    // TODO(phase-89): wire mutating-intent detection via AI tool-call analysis.
+    const detectMutatingIntent = useCallback(
+      (_content: string, _attachments: ReadonlyArray<unknown>): boolean => false,
+      []
+    );
+
     const handleSubmit = useCallback(
       async (payload: {
         attachmentIds: string[];
         attachments: Array<{ attachmentId: string; filename: string; mimeType: string; sizeBytes: number; source: 'local' | 'google_drive' }>;
         voiceAudioUrl?: string | null;
+        // Phase 87 Plan 01: optional mode override so Plan 02 slash invokes
+        // (/standup, /digest) can force `research` without mutating the user's
+        // selected mode in PilotSpaceStore.
+        modeOverride?: ChatMode;
       }) => {
         if (!inputValue.trim() || store.isStreaming) return;
 
         const message = inputValue.trim();
+
+        // Resolve effective mode: override (from slash invokes) wins over
+        // the user's persisted per-session selection. Default "plan".
+        const mode: ChatMode = payload.modeOverride ?? store.getMode(store.sessionId);
+
+        // Permission gating per UI-SPEC §2 — Plan and Research reject mutating
+        // submits client-side with a toast. Backend gating lands in Phase 89.
+        const isMutating = detectMutatingIntent(message, payload.attachments);
+        if (isMutating && (mode === 'plan' || mode === 'research')) {
+          toast(
+            mode === 'plan'
+              ? 'Switch to Act to make changes.'
+              : 'Research mode is read-only.'
+          );
+          return;
+        }
+
         try {
+          // For override-only invokes (e.g. /standup forces research) we must
+          // also update the persisted mode for this submit so PilotSpaceActions
+          // (which reads store.getMode()) sees the override on the wire.
+          if (payload.modeOverride && store.sessionId) {
+            store.setMode(store.sessionId, payload.modeOverride);
+          }
           setInputValue('');
           const hasAttachments = payload.attachments.length > 0;
           const hasVoice = !!payload.voiceAudioUrl;
@@ -343,7 +380,7 @@ const ChatViewInternal = observer<ChatViewProps>(
           store.error = error instanceof Error ? error.message : 'Failed to send message';
         }
       },
-      [inputValue, store]
+      [inputValue, store, detectMutatingIntent]
     );
 
     const handleConfirmClear = useCallback(() => {
@@ -664,6 +701,10 @@ const ChatViewInternal = observer<ChatViewProps>(
           onClearProjectContext={handleClearProjectContext}
           noteHeadings={noteHeadings}
           onSelectSection={onSelectSection}
+          currentMode={store.getMode(store.sessionId)}
+          onModeChange={(next) => {
+            if (store.sessionId) store.setMode(store.sessionId, next);
+          }}
         />
 
         {/* Modal for destructive actions — non-dismissable (DD-003) */}

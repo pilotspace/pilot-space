@@ -36,6 +36,8 @@ import { attachmentsApi } from '@/services/api/attachments';
 import { EntityPicker } from './EntityPicker';
 import { useRecentEntities } from '../hooks/useRecentEntities';
 import type { RecentEntity } from '../hooks/useRecentEntities';
+import { ModeSelector } from './ModeSelector';
+import type { ChatMode } from './types';
 
 /**
  * Recursively walks a contenteditable node tree to produce a serialized string.
@@ -124,6 +126,19 @@ interface ChatInputProps {
   /** Session ID for attachment uploads */
   sessionId?: string;
   className?: string;
+  /**
+   * Phase 87 Plan 01 — composer surface variant.
+   * - `chat` (default): rounded-[22px] px-4 py-3
+   * - `homepage`: rounded-[28px] px-6 py-4 (consumed by Phase 88 hero)
+   */
+  surface?: 'chat' | 'homepage';
+  /**
+   * Phase 87 Plan 01 — current conversation mode (per-session). When omitted
+   * the mode selector is hidden (back-compat for unmigrated callers).
+   */
+  currentMode?: ChatMode;
+  /** Phase 87 Plan 01 — invoked when the user picks a new mode. */
+  onModeChange?: (mode: ChatMode) => void;
 }
 
 export const ChatInput = observer<ChatInputProps>(
@@ -153,6 +168,9 @@ export const ChatInput = observer<ChatInputProps>(
     workspaceId,
     sessionId,
     className,
+    surface = 'chat',
+    currentMode,
+    onModeChange,
   }) => {
     const { skills: dynamicSkills } = useSkills(workspaceId);
     const { attachments, attachmentIds, addFile, addFromDrive, removeFile, reset } = useAttachments(
@@ -640,23 +658,37 @@ export const ChatInput = observer<ChatInputProps>(
       ]
     );
 
+    // Phase 87 Plan 01 — Gemini composer shell. Outer wrapper holds the
+    // borderless `#f0f4f9` surface; rounded-[22px] for chat, rounded-[28px]
+    // for the homepage hero variant. NO border, NO shadow.
+    const surfaceClasses =
+      surface === 'homepage'
+        ? 'rounded-[28px] px-6 py-4'
+        : 'rounded-[22px] px-4 py-3';
+
     return (
       <>
         <div
-          className={cn('border-t bg-background relative', className)}
+          data-chat-composer
+          className={cn(
+            'relative bg-[#f0f4f9]',
+            surfaceClasses,
+            isStreaming && 'opacity-95',
+            className
+          )}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
         >
           {isDragOver && (
             <div
-              className="absolute inset-0 z-20 flex items-center justify-center bg-background/80 border-2 border-dashed border-primary/50 rounded-lg pointer-events-none"
+              className="absolute inset-0 z-20 flex items-center justify-center bg-background/80 border-2 border-dashed border-primary/50 rounded-[22px] pointer-events-none"
               data-testid="drop-overlay"
             >
               <span className="text-sm font-medium text-primary">Drop to attach</span>
             </div>
           )}
-          <div className="px-3 pt-2 pb-3 space-y-2">
+          <div className="space-y-2">
             {/* Context indicator */}
             <ContextIndicator
               noteContext={noteContext}
@@ -710,17 +742,18 @@ export const ChatInput = observer<ChatInputProps>(
                 onKeyDown={handleKeyDown}
                 onPaste={handlePaste}
                 className={cn(
+                  // Phase 87 Plan 01: contenteditable inherits the composer
+                  // shell — no own border / bg / radius. The Gemini surface
+                  // wrapper above provides the visual chrome.
                   'min-h-[40px] max-h-[160px] overflow-y-auto resize-none pr-20',
-                  'rounded-xl border border-border/60 bg-muted/30',
-                  'text-sm',
-                  'px-3 py-2',
-                  'outline-none focus-visible:ring-1 focus-visible:ring-primary/40 focus-visible:border-primary/40',
+                  'bg-transparent text-base',
+                  'outline-none',
                   'transition-colors',
-                  'empty:before:content-[attr(data-placeholder)] empty:before:text-muted-foreground/60',
+                  'empty:before:content-[attr(data-placeholder)] empty:before:text-muted-foreground/70',
                   isStreaming && 'chat-input-working',
                   isDisabled && 'cursor-not-allowed opacity-50'
                 )}
-                data-placeholder="Ask anything… or type / for skills"
+                data-placeholder="Ask anything, draft a topic, or type / for commands…"
               />
 
               {/* Inline toolbar buttons */}
@@ -855,6 +888,20 @@ export const ChatInput = observer<ChatInputProps>(
                 </SessionResumeMenu>
               </div>
             </div>
+
+            {/* Phase 87 Plan 01 — right-aligned mode selector cluster.
+              * Sits below the editor/inline-toolbar. Renders only when the
+              * parent provides currentMode + onModeChange (i.e. ChatView
+              * has wired the per-session mode store). */}
+            {currentMode !== undefined && onModeChange && (
+              <div className="ml-auto flex items-center gap-3">
+                <ModeSelector
+                  value={currentMode}
+                  onChange={onModeChange}
+                  disabled={isStreaming || isDisabled}
+                />
+              </div>
+            )}
 
             {/* Working indicator when AI is processing */}
             <WorkingIndicator isVisible={isStreaming} />

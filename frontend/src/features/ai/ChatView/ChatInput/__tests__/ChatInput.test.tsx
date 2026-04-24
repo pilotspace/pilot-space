@@ -142,11 +142,11 @@ describe('ChatInput — contenteditable div behavior', () => {
     expect(screen.queryByPlaceholderText('Search skills...')).not.toBeInTheDocument();
   });
 
-  it('has placeholder text referencing / for skills', () => {
+  it('has Phase 87 Plan 01 placeholder copy referencing / for commands', () => {
     renderChatInput();
     const div = screen.getByTestId('chat-input');
     expect(div.getAttribute('data-placeholder')).toBe(
-      'Ask anything\u2026 or type / for skills'
+      'Ask anything, draft a topic, or type / for commands\u2026'
     );
   });
 
