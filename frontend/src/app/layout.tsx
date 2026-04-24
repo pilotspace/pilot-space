@@ -11,12 +11,12 @@ const fraunces = Fraunces({
   weight: ['400', '500', '600', '700'],
 });
 
-// JetBrains Mono - Line gutter numbers
+// JetBrains Mono - Line gutter numbers + artifact type badges (Phase 85, weight 600)
 const jetbrainsMono = JetBrains_Mono({
   subsets: ['latin'],
   variable: '--font-jetbrains-mono',
   display: 'swap',
-  weight: ['400'],
+  weight: ['400', '600'],
 });
 
 export const metadata: Metadata = {

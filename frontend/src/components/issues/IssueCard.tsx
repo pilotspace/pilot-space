@@ -1,5 +1,9 @@
 'use client';
 
+// TODO(phase-85): Migrate consumers to <ArtifactCard> from @/components/artifacts.
+// This legacy card is preserved for incremental migration across Phases 86-91.
+// Do not use in new features — use ArtifactCard instead.
+
 import * as React from 'react';
 import { observer } from 'mobx-react-lite';
 import {
