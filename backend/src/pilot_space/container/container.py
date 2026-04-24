@@ -11,8 +11,8 @@ from dependency_injector import containers, providers
 
 from pilot_space.ai.agents.proposal_stream_publisher import ProposalStreamPublisher
 from pilot_space.ai.infrastructure.approval import ApprovalService
-from pilot_space.ai.proposals import IntentExecutor
 from pilot_space.ai.infrastructure.cost_tracker import CostTracker
+from pilot_space.ai.proposals import IntentExecutor
 from pilot_space.application.services.action_button import ActionButtonService
 from pilot_space.application.services.admin_dashboard import AdminDashboardService
 from pilot_space.application.services.ai import (
