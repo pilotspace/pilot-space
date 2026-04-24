@@ -26,7 +26,12 @@ import type {
   SkillPreviewEvent,
   TestResultEvent,
   SkillSavedEvent,
+  ProposalRequestEvent,
+  ProposalAppliedEvent,
+  ProposalRejectedEvent,
+  ProposalRetriedEvent,
 } from './types/events';
+import type { ProposalsStore } from '@/stores/proposals/proposalsStore';
 import {
   isMessageStartEvent,
   isContentBlockStartEvent,
@@ -51,6 +56,10 @@ import {
   isSkillPreviewEvent,
   isTestResultEvent,
   isSkillSavedEvent,
+  isProposalRequestEvent,
+  isProposalAppliedEvent,
+  isProposalRejectedEvent,
+  isProposalRetriedEvent,
 } from './types/events';
 import type { PilotSpaceStore } from './PilotSpaceStore';
 import { PilotSpaceToolCallHandler } from './PilotSpaceToolCallHandler';
@@ -81,9 +90,21 @@ export class PilotSpaceStreamHandler {
   /** Safety timeout handle: synthesizes message_stop if it never arrives after question_request */
   private _questionSafetyTimeout: ReturnType<typeof setTimeout> | null = null;
 
-  constructor(private store: PilotSpaceStore) {
+  constructor(
+    private store: PilotSpaceStore,
+    private proposalsStore?: ProposalsStore
+  ) {
     this.toolCallHandler = new PilotSpaceToolCallHandler(store);
     this.sseParser = new PilotSpaceSSEParser(store, (event) => this.handleSSEEvent(event));
+  }
+
+  /**
+   * Post-construction setter for the ProposalsStore — lets the existing
+   * call site in PilotSpaceStore.ts wire in the root-store proposal cache
+   * without restructuring the AI store bootstrap order.
+   */
+  setProposalsStore(store: ProposalsStore): void {
+    this.proposalsStore = store;
   }
 
   // --- Stream Connection (delegates to PilotSpaceSSEParser) ---
@@ -150,7 +171,11 @@ export class PilotSpaceStreamHandler {
         | FocusBlockEvent
         | SkillPreviewEvent
         | TestResultEvent
-        | SkillSavedEvent;
+        | SkillSavedEvent
+        | ProposalRequestEvent
+        | ProposalAppliedEvent
+        | ProposalRejectedEvent
+        | ProposalRetriedEvent;
 
       // Route to type-specific handler
       if (isMessageStartEvent(event)) {
@@ -199,6 +224,19 @@ export class PilotSpaceStreamHandler {
         this.store.handleTestResult(event);
       } else if (isSkillSavedEvent(event)) {
         this.store.handleSkillSaved(event);
+      } else if (isProposalRequestEvent(event)) {
+        // Phase 89 Plan 02 — new edit proposal arrived. The wire shape is
+        // flat: ProposalEnvelope fields at top level + eventTimestamp.
+        // Strip the envelope-only fields for the store cache.
+        const { eventTimestamp: _eventTimestamp, ...envelope } = event.data;
+        void _eventTimestamp;
+        this.proposalsStore?.upsertProposal(envelope);
+      } else if (isProposalAppliedEvent(event)) {
+        this.proposalsStore?.applyAppliedEvent(event.data);
+      } else if (isProposalRejectedEvent(event)) {
+        this.proposalsStore?.applyRejectedEvent(event.data);
+      } else if (isProposalRetriedEvent(event)) {
+        this.proposalsStore?.applyRetriedEvent(event.data);
       }
     });
   }

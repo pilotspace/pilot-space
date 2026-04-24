@@ -30,6 +30,10 @@ import type {
   SkillPreviewEvent,
   TestResultEvent,
   SkillSavedEvent,
+  ProposalRequestEvent,
+  ProposalAppliedEvent,
+  ProposalRejectedEvent,
+  ProposalRetriedEvent,
 } from './events';
 
 /**
@@ -235,6 +239,20 @@ export function isSkillSavedEvent(event: SSEEvent): event is SkillSavedEvent {
   return event.type === 'skill_saved';
 }
 
+// Phase 89 Plan 02 — Edit Proposal pipeline.
+export function isProposalRequestEvent(event: SSEEvent): event is ProposalRequestEvent {
+  return event.type === 'proposal_request';
+}
+export function isProposalAppliedEvent(event: SSEEvent): event is ProposalAppliedEvent {
+  return event.type === 'proposal_applied';
+}
+export function isProposalRejectedEvent(event: SSEEvent): event is ProposalRejectedEvent {
+  return event.type === 'proposal_rejected';
+}
+export function isProposalRetriedEvent(event: SSEEvent): event is ProposalRetriedEvent {
+  return event.type === 'proposal_retried';
+}
+
 const KNOWN_EVENT_TYPES = new Set([
   'message_start',
   'content_block_start',
@@ -259,6 +277,11 @@ const KNOWN_EVENT_TYPES = new Set([
   'skill_preview',
   'test_result',
   'skill_saved',
+  // Phase 89: Edit Proposal pipeline
+  'proposal_request',
+  'proposal_applied',
+  'proposal_rejected',
+  'proposal_retried',
 ]);
 
 /**

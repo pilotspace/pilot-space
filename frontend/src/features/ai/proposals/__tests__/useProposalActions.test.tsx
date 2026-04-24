@@ -15,11 +15,13 @@ function makeWrapper(rootStore: RootStore) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
-  return ({ children }: { children: ReactNode }) => (
+  const Wrapper = ({ children }: { children: ReactNode }) => (
     <StoreContext.Provider value={rootStore}>
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     </StoreContext.Provider>
   );
+  Wrapper.displayName = 'TestWrapper';
+  return Wrapper;
 }
 
 describe('useProposalActions', () => {

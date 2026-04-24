@@ -26,6 +26,7 @@ import { SkillCreatorCard } from './SkillCreatorCard';
 import { SkillTestResultCard } from './SkillTestResultCard';
 import { SkillMermaidCard } from './SkillMermaidCard';
 import { InlineArtifactCard } from '@/components/chat/InlineArtifactCard';
+import { ProposalCardSlot } from '@/features/ai/proposals';
 import type { SkillPreviewEvent, TestResultEvent } from '@/stores/ai/types/events';
 
 /** Schema types handled by inline skill cards — excluded from StructuredResultCard */
@@ -283,6 +284,12 @@ export const AssistantMessage = memo<AssistantMessageProps>(({ message, classNam
             ))}
           </div>
         )}
+
+        {/* Phase 89 Plan 04 — Edit Proposal cards rendered inline with the
+            emitting assistant message. Lookup is reactive via MobX
+            (proposalsStore.getByMessageId). Slot renders nothing when no
+            proposals are keyed to this messageId. */}
+        <ProposalCardSlot messageId={message.id} />
 
         {/* Inline question: merged wizard for questionDataList, fallback to legacy questionData */}
         {message.questionDataList && message.questionDataList.length > 0 ? (

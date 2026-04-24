@@ -58,6 +58,10 @@ export class RootStore {
     // Wire cross-store references
     this.workspace.setAuthStore(this.auth);
     this.workspace.setApi(workspacesApi);
+
+    // Phase 89 Plan 04 — wire ProposalsStore into the AI SSE stream handler
+    // so proposal_* events reach the proposals cache.
+    this.ai.pilotSpace.streamHandler.setProposalsStore(this.proposals);
   }
 
   reset(): void {

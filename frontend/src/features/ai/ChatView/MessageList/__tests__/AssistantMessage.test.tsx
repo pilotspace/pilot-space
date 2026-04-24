@@ -56,6 +56,15 @@ vi.mock('@/components/chat/InlineArtifactCard', () => ({
   ),
 }));
 
+// Phase 89 Plan 04: mock ProposalCardSlot — covered by dedicated
+// ProposalCardSlot.test.tsx. Avoids pulling the ProposalsStore/RootStore
+// provider into this unit-level test.
+vi.mock('@/features/ai/proposals', () => ({
+  ProposalCardSlot: ({ messageId }: { messageId: string }) => (
+    <div data-testid="proposal-card-slot-mock" data-message-id={messageId} />
+  ),
+}));
+
 import { AssistantMessage } from '../AssistantMessage';
 
 function makeMessage(overrides: Partial<ChatMessage> = {}): ChatMessage {

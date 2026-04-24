@@ -13,7 +13,7 @@
 
 'use client';
 
-import { memo, useMemo } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { Check, Undo2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ProposalEnvelope } from './types';
@@ -48,7 +48,10 @@ export const AppliedReceipt = memo<AppliedReceiptProps>(function AppliedReceipt(
   now,
   className,
 }) {
-  const nowMs = now ?? Date.now();
+  // react-hooks/purity: avoid calling Date.now() directly during render.
+  // useState with a factory is treated as pure and only invoked at mount.
+  const [mountNow] = useState(() => Date.now());
+  const nowMs = now ?? mountNow;
   const decidedAtMs = envelope.decidedAt ? new Date(envelope.decidedAt).getTime() : nowMs;
   const elapsedMs = nowMs - decidedAtMs;
   const revertWindowOpen = elapsedMs <= REVERT_WINDOW_MS;

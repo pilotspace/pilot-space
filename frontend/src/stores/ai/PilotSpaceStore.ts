@@ -178,7 +178,7 @@ export class PilotSpaceStore {
 
   // Delegates
 
-  private readonly streamHandler: PilotSpaceStreamHandler;
+  readonly streamHandler: PilotSpaceStreamHandler;
   private readonly actions: PilotSpaceActions;
 
   constructor(_rootStore: AIStore) {

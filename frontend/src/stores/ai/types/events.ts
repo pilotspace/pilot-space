@@ -39,7 +39,12 @@ export type SSEEventType =
   // Phase 64: Chat-first skill refinement events
   | 'skill_preview'
   | 'test_result'
-  | 'skill_saved';
+  | 'skill_saved'
+  // Phase 89 Plan 02 — Edit Proposal pipeline
+  | 'proposal_request'
+  | 'proposal_applied'
+  | 'proposal_rejected'
+  | 'proposal_retried';
 
 /**
  * Base SSE event structure.
@@ -704,6 +709,46 @@ export interface SkillSavedEvent extends SSEEvent {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Phase 89 Plan 02 — Edit Proposal pipeline SSE events.
+//
+// Payload shapes mirror the Pydantic schemas in
+// backend/src/pilot_space/api/v1/schemas/proposals.py (by_alias=True →
+// camelCase on the wire). See frontend/src/features/ai/proposals/types.ts
+// for the canonical ProposalEnvelope mirror consumed by components.
+// ---------------------------------------------------------------------------
+
+import type {
+  ProposalAppliedEventData,
+  ProposalRejectedEventData,
+  ProposalRequestEventData,
+  ProposalRetriedEventData,
+} from '@/features/ai/proposals/types';
+
+/** `proposal_request` — AI wants to perform a mutation; frontend renders an EditProposalCard. */
+export interface ProposalRequestEvent extends SSEEvent {
+  type: 'proposal_request';
+  data: ProposalRequestEventData;
+}
+
+/** `proposal_applied` — user accepted a proposal; frontend swaps card → AppliedReceipt. */
+export interface ProposalAppliedEvent extends SSEEvent {
+  type: 'proposal_applied';
+  data: ProposalAppliedEventData;
+}
+
+/** `proposal_rejected` — user rejected a proposal; frontend swaps card → RejectedPill. */
+export interface ProposalRejectedEvent extends SSEEvent {
+  type: 'proposal_rejected';
+  data: ProposalRejectedEventData;
+}
+
+/** `proposal_retried` — user asked the AI to try again; frontend dims the card. */
+export interface ProposalRetriedEvent extends SSEEvent {
+  type: 'proposal_retried';
+  data: ProposalRetriedEventData;
+}
+
 // Type guards extracted to ./event-guards.ts to keep this file under 700 lines.
 // Re-export for backward compatibility.
 export {
@@ -731,4 +776,9 @@ export {
   isSkillPreviewEvent,
   isTestResultEvent,
   isSkillSavedEvent,
+  // Phase 89: Edit Proposal pipeline
+  isProposalRequestEvent,
+  isProposalAppliedEvent,
+  isProposalRejectedEvent,
+  isProposalRetriedEvent,
 } from './event-guards';
