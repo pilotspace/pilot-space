@@ -146,8 +146,10 @@ describe('RedFlagStrip (Phase 88 Plan 03)', () => {
     it('renders the AlertTriangle lucide icon for stale', () => {
       render(<RedFlagStrip workspaceId="ws-1" workspaceSlug="workspace" />);
       const link = screen.getByRole('link', { name: '12 stale tasks. Open.' });
-      // lucide-react sets `class="lucide lucide-{name}"` on its svg.
-      const icon = link.querySelector('svg.lucide-alert-triangle');
+      // lucide v0.562 renamed AlertTriangle -> TriangleAlert internally; the
+      // alias re-exports the same icon so the canonical class is
+      // `lucide-triangle-alert`.
+      const icon = link.querySelector('svg.lucide-triangle-alert');
       expect(icon).not.toBeNull();
     });
   });
@@ -180,7 +182,8 @@ describe('RedFlagStrip (Phase 88 Plan 03)', () => {
     it('renders the matching lucide icon for each kind', () => {
       render(<RedFlagStrip workspaceId="ws-1" workspaceSlug="workspace" />);
       const links = screen.getAllByRole('link');
-      expect(links[0]!.querySelector('svg.lucide-alert-triangle')).not.toBeNull();
+      // See note in "one stale flag" test re: TriangleAlert canonical class.
+      expect(links[0]!.querySelector('svg.lucide-triangle-alert')).not.toBeNull();
       expect(links[1]!.querySelector('svg.lucide-activity')).not.toBeNull();
       expect(links[2]!.querySelector('svg.lucide-sparkles')).not.toBeNull();
     });
