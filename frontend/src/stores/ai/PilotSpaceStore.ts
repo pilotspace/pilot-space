@@ -74,6 +74,18 @@ export class PilotSpaceStore {
    */
   modeBySession: Record<string, ChatMode> = {};
 
+  /**
+   * Pending mode for the as-yet-unassigned session (Phase 88 Plan 04).
+   * Set by the launchpad chat-page handler when the user submits with
+   * `?mode=` in the URL but no session_id exists yet. Read by
+   * `getMode(null)` (the actions layer's submit-time call when
+   * sessionId is still null). Migrated to `modeBySession[realId]` and
+   * cleared on the next null → real `setSessionId` transition.
+   *
+   * Additive: does NOT change existing per-session behavior.
+   */
+  pendingMode: ChatMode | null = null;
+
   /** Session state for token budget tracking (008) */
   sessionState: SessionState = {
     sessionId: null,
@@ -267,22 +279,48 @@ export class PilotSpaceStore {
   }
 
   setSessionId(sessionId: string | null): void {
+    const previous = this.sessionId;
     this.sessionId = sessionId;
+
+    // Phase 88 Plan 04: migrate pendingMode → modeBySession on the
+    // first null → real transition. Guards against:
+    //   - real → real (no migration; explicit setMode owns the value)
+    //   - real → null (no clobber; pendingMode survives session reset)
+    //   - null → null (no-op)
+    // Only the null → real edge consumes pendingMode.
+    if (previous === null && sessionId !== null && this.pendingMode !== null) {
+      this.modeBySession[sessionId] = this.pendingMode;
+      this.pendingMode = null;
+    }
   }
 
   /**
    * Resolve the conversation mode for a given session.
    * Returns "plan" for unknown sessions or when sessionId is null
    * (handles unset-session case without throwing).
+   *
+   * Phase 88 Plan 04: when sessionId is null AND pendingMode is set,
+   * returns pendingMode. Lets the launchpad handoff thread its chosen
+   * mode through the very first sendMessage (which fires before the
+   * backend assigns a session_id).
    */
   getMode(sessionId: string | null): ChatMode {
-    if (!sessionId) return 'plan';
+    if (!sessionId) return this.pendingMode ?? 'plan';
     return this.modeBySession[sessionId] ?? 'plan';
   }
 
   /** Set the conversation mode for a session (per-session isolation). */
   setMode(sessionId: string, mode: ChatMode): void {
     this.modeBySession[sessionId] = mode;
+  }
+
+  /**
+   * Phase 88 Plan 04: stage a mode for the as-yet-unassigned session.
+   * Consumed by `getMode(null)` and migrated into `modeBySession[realId]`
+   * on the next null → real `setSessionId` transition.
+   */
+  setPendingMode(mode: ChatMode | null): void {
+    this.pendingMode = mode;
   }
 
   /** Set fork session ID for "what-if" exploration (consumed on next sendMessage). */
