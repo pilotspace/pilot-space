@@ -23,6 +23,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -228,6 +229,25 @@ class Issue(WorkspaceScopedModel):
     technical_requirements: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
+    )
+
+    # Phase 89 Plan 01 — version columns for Edit Proposal revert / history chip.
+    # ``version_history`` element shape: {vN, by, at, summary, snapshot}.
+    version_number: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=1,
+        server_default="1",
+    )
+    # server_default is dialect-specific: PG uses '[]'::jsonb (per migration 111);
+    # SQLite/test fallback uses the generic JSON literal '[]'. Using text("'[]'")
+    # here keeps the ORM schema cross-dialect while the migration keeps its
+    # PG-native cast.
+    version_history: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONBCompat,
+        nullable=False,
+        default=list,
+        server_default=text("'[]'"),
     )
 
     # Relationships
