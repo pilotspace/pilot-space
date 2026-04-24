@@ -29,6 +29,7 @@ import type {
 import type { SkillDefinition } from './types/skills';
 import { PilotSpaceStreamHandler } from './PilotSpaceStreamHandler';
 import { PilotSpaceActions } from './PilotSpaceActions';
+import type { ChatMode } from '@/features/ai/ChatView/ChatInput/types';
 
 // Interfaces extracted to types/store-types.ts to keep this file under 700 lines.
 import type {
@@ -65,6 +66,13 @@ export class PilotSpaceStore {
     wordCount: 0,
   };
   sessionId: string | null = null;
+
+  /**
+   * Per-session conversation mode (Phase 87 — Plan 01).
+   * Keyed by session ID; defaults to "plan" when a session has no entry.
+   * Not persisted across reloads — restored from last message's mode on session load (Plan 05).
+   */
+  modeBySession: Record<string, ChatMode> = {};
 
   /** Session state for token budget tracking (008) */
   sessionState: SessionState = {
@@ -260,6 +268,21 @@ export class PilotSpaceStore {
 
   setSessionId(sessionId: string | null): void {
     this.sessionId = sessionId;
+  }
+
+  /**
+   * Resolve the conversation mode for a given session.
+   * Returns "plan" for unknown sessions or when sessionId is null
+   * (handles unset-session case without throwing).
+   */
+  getMode(sessionId: string | null): ChatMode {
+    if (!sessionId) return 'plan';
+    return this.modeBySession[sessionId] ?? 'plan';
+  }
+
+  /** Set the conversation mode for a session (per-session isolation). */
+  setMode(sessionId: string, mode: ChatMode): void {
+    this.modeBySession[sessionId] = mode;
   }
 
   /** Set fork session ID for "what-if" exploration (consumed on next sendMessage). */
