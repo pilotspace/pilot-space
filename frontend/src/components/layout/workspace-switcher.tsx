@@ -2,12 +2,32 @@
 
 import { observer } from 'mobx-react-lite';
 import { useRouter } from 'next/navigation';
-import { useState, useRef, useCallback, useEffect } from 'react';
-import { Building2, Check, ChevronsUpDown, Loader2, Plus } from 'lucide-react';
-import { useWorkspaceStore } from '@/stores';
+import { useState, useRef, useCallback, useMemo } from 'react';
+import {
+  Building2,
+  Check,
+  ChevronsUpDown,
+  FileText,
+  FolderKanban,
+  LayoutGrid,
+  Loader2,
+  Settings,
+  Ticket,
+  Users,
+} from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import { useUIStore, useWorkspaceStore } from '@/stores';
 import { workspacesApi } from '@/services/api/workspaces';
 import { addRecentWorkspace } from '@/components/workspace-selector';
 import { Button } from '@/components/ui/button';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
 import {
   Dialog,
   DialogContent,
@@ -18,11 +38,12 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { toSlug } from '@/lib/slug';
-import { getLastWorkspacePath } from '@/lib/workspace-nav';
+import { getLastWorkspacePath, getOrderedRecentWorkspaces } from '@/lib/workspace-nav';
+import { useSwitcherQueryStringSync } from '@/hooks/useSwitcherQueryStringSync';
+import { useSettingsModal } from '@/features/settings/settings-modal-context';
 import { ApiError } from '@/services/api/client';
 import type { Workspace } from '@/types';
 
@@ -31,6 +52,27 @@ import type { Workspace } from '@/types';
 // ---------------------------------------------------------------------------
 
 const SLUG_PATTERN = /^[a-z0-9-]*$/;
+
+// ---------------------------------------------------------------------------
+// JUMP TO items (NAV-02 — Phase 84 routes /tasks and /topics)
+// ---------------------------------------------------------------------------
+
+interface JumpToItem {
+  id: string;
+  label: string;
+  icon: LucideIcon;
+  /** When `null`, onSelect opens the settings modal instead of routing. */
+  path: ((slug: string) => string) | null;
+}
+
+const JUMP_TO_ITEMS: JumpToItem[] = [
+  { id: 'projects', label: 'Projects', icon: FolderKanban, path: (slug) => `/${slug}/projects` },
+  { id: 'tasks', label: 'Tasks', icon: Ticket, path: (slug) => `/${slug}/tasks` },
+  { id: 'topics', label: 'Topics', icon: FileText, path: (slug) => `/${slug}/topics` },
+  { id: 'artifacts', label: 'All artifacts', icon: LayoutGrid, path: (slug) => `/${slug}/artifacts` },
+  { id: 'members', label: 'Members', icon: Users, path: (slug) => `/${slug}/members` },
+  { id: 'settings', label: 'Settings', icon: Settings, path: null },
+];
 
 // ---------------------------------------------------------------------------
 // CreateWorkspaceDialog — internal, not exported
@@ -286,7 +328,49 @@ const CreateWorkspaceDialog = observer(function CreateWorkspaceDialog({
 });
 
 // ---------------------------------------------------------------------------
-// WorkspaceSwitcher — exported
+// WorkspacePill — exported trigger button (Surface 2 anchor)
+// ---------------------------------------------------------------------------
+
+interface WorkspacePillProps {
+  /** Display name shown inside the pill. */
+  name: string;
+  /** Used for aria-label in collapsed/icon-only contexts. */
+  ariaLabel?: string;
+  onClick?: () => void;
+}
+
+export const WorkspacePill = observer(function WorkspacePill({
+  name,
+  ariaLabel,
+  onClick,
+}: WorkspacePillProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      data-testid="workspace-pill"
+      aria-label={ariaLabel ?? 'Switch workspace'}
+      className={cn(
+        'flex h-9 items-center gap-2 rounded-full border border-[var(--border-card)]',
+        'bg-[var(--surface-page)] px-3 min-w-[200px] max-w-[208px]',
+        'transition-colors hover:bg-[var(--surface-input)]',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1'
+      )}
+    >
+      <Building2 className="h-4 w-4 shrink-0 text-[var(--text-muted)]" aria-hidden="true" />
+      <span className="flex-1 truncate text-left text-[13px] font-medium text-[var(--text-heading)]">
+        {name}
+      </span>
+      <ChevronsUpDown
+        className="h-3 w-3 shrink-0 text-[var(--text-muted)]"
+        aria-hidden="true"
+      />
+    </button>
+  );
+});
+
+// ---------------------------------------------------------------------------
+// WorkspaceSwitcher — exported (Popover + cmdk Surface 2)
 // ---------------------------------------------------------------------------
 
 interface WorkspaceSwitcherProps {
@@ -298,153 +382,240 @@ export const WorkspaceSwitcher = observer(function WorkspaceSwitcher({
   currentSlug,
   collapsed,
 }: WorkspaceSwitcherProps) {
+  const uiStore = useUIStore();
   const workspaceStore = useWorkspaceStore();
   const router = useRouter();
+  const settings = useSettingsModal();
 
-  const [popoverOpen, setPopoverOpen] = useState(false);
+  // Bidirectional sync between ?switcher=1 and uiStore.workspaceSwitcherOpen
+  useSwitcherQueryStringSync();
+
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
-  // Fetch all workspaces when popover opens so the list is populated
-  useEffect(() => {
-    if (popoverOpen) {
-      workspaceStore.fetchWorkspaces();
-    }
-  }, [popoverOpen, workspaceStore]);
+  const handleOpenChange = useCallback(
+    (next: boolean) => {
+      if (next) uiStore.openWorkspaceSwitcher();
+      else uiStore.closeWorkspaceSwitcher();
+    },
+    [uiStore]
+  );
 
   const currentWorkspace: Workspace | undefined =
     workspaceStore.getWorkspaceBySlug(currentSlug) ?? workspaceStore.currentWorkspace ?? undefined;
 
   const displayName = currentWorkspace?.name ?? currentSlug;
 
+  // Resolve the WORKSPACES list (recency-first, alphabetical fallback).
+  // We always emit alphabetical leftovers after recents so single-workspace
+  // users (no recents recorded yet) still see their workspace listed.
+  const workspacesToShow = useMemo<Workspace[]>(() => {
+    const recents = getOrderedRecentWorkspaces(workspaceStore);
+    const ordered: Workspace[] = [...recents];
+    const seen = new Set(ordered.map((w) => w.id));
+    for (const w of workspaceStore.workspaceList) {
+      if (!seen.has(w.id)) {
+        ordered.push(w);
+        seen.add(w.id);
+      }
+    }
+    return ordered;
+    // observer() + reading workspaceList inside the closure is enough for MobX
+    // to track recomputes when workspaces are added/removed; we don't need it
+    // in the dep array.
+  }, [workspaceStore]);
+
+  // Slug used by JUMP TO row navigation. Falls back to first known workspace
+  // if currentWorkspace is unset (rare, e.g. first-render race).
+  const currentWorkspaceSlug =
+    workspaceStore.currentWorkspace?.slug ??
+    currentSlug ??
+    workspaceStore.workspaceList[0]?.slug ??
+    '';
+
   const handleSelectWorkspace = useCallback(
     (ws: Workspace) => {
-      workspaceStore.selectWorkspace(ws.id);
       addRecentWorkspace(ws.slug);
-      setPopoverOpen(false);
       const lastPath = getLastWorkspacePath(ws.slug);
       router.push(lastPath ?? `/${ws.slug}`);
+      uiStore.closeWorkspaceSwitcher();
     },
-    [workspaceStore, router]
+    [router, uiStore]
+  );
+
+  const handleSelectJumpTo = useCallback(
+    (item: JumpToItem) => {
+      if (item.path === null) {
+        // Settings: open modal, not router push
+        settings.openSettings();
+      } else if (currentWorkspaceSlug) {
+        router.push(item.path(currentWorkspaceSlug));
+      }
+      uiStore.closeWorkspaceSwitcher();
+    },
+    [router, settings, uiStore, currentWorkspaceSlug]
   );
 
   const handleOpenCreate = useCallback(() => {
-    setPopoverOpen(false);
+    uiStore.closeWorkspaceSwitcher();
     setCreateDialogOpen(true);
-  }, []);
+  }, [uiStore]);
 
-  const popoverListContent = (
-    <div role="menu" aria-label="Workspaces">
-      {workspaceStore.workspaceList.length === 0 ? (
-        <p className="px-2 py-3 text-center text-xs text-muted-foreground">No workspaces found.</p>
-      ) : (
-        workspaceStore.workspaceList.map((ws) => {
-          const isActive = ws.slug === currentSlug;
-          return (
-            <button
-              key={ws.id}
-              type="button"
-              aria-current={isActive ? 'true' : undefined}
-              onClick={() => handleSelectWorkspace(ws)}
-              className={cn(
-                'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-xs',
-                'transition-colors hover:bg-accent hover:text-accent-foreground',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                isActive && 'font-medium text-foreground'
-              )}
-            >
-              <Building2
-                className={cn(
-                  'h-3.5 w-3.5 shrink-0',
-                  isActive ? 'text-primary' : 'text-muted-foreground'
-                )}
-                aria-hidden="true"
-              />
-              <div className="flex flex-col items-start flex-1 min-w-0">
-                <span className="truncate text-left text-xs font-medium leading-tight">
-                  {ws.name}
-                </span>
-                <span className="text-[10px] text-muted-foreground leading-tight">
-                  {ws.memberCount} member{ws.memberCount !== 1 ? 's' : ''}
-                </span>
-              </div>
-              {isActive && <Check className="h-3 w-3 shrink-0 text-primary" aria-hidden="true" />}
-            </button>
-          );
-        })
-      )}
+  // ---------------------------------------------------------------------------
+  // Popover content — shared between collapsed (Tooltip-wrapped) and expanded.
+  // ---------------------------------------------------------------------------
 
-      <Separator className="my-1" />
+  const popoverContent = (
+    <PopoverContent
+      side="bottom"
+      align="start"
+      sideOffset={8}
+      className="w-[320px] rounded-2xl p-0 bg-[var(--surface-page)] border border-[var(--border-card)]"
+      style={{ boxShadow: 'var(--shadow-floating)' }}
+    >
+      <Command className="bg-transparent">
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--border-card)]">
+          <CommandInput
+            placeholder="Jump to…"
+            className="text-[15px] placeholder:text-[var(--text-muted)] font-medium border-0 px-0 h-8"
+          />
+          <kbd className="font-mono text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[var(--surface-input)] text-[var(--text-muted)]">
+            ⌘K
+          </kbd>
+        </div>
+        <CommandList className="max-h-[400px] p-2">
+          <CommandEmpty className="py-6 text-center text-[13px] text-[var(--text-muted)]">
+            No matches.
+          </CommandEmpty>
 
-      <button
-        type="button"
-        onClick={handleOpenCreate}
-        className={cn(
-          'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-xs',
-          'text-muted-foreground transition-colors',
-          'hover:bg-accent hover:text-accent-foreground',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
-        )}
-      >
-        <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-        <span>Create workspace</span>
-      </button>
-    </div>
+          <CommandGroup heading="WORKSPACES">
+            {workspacesToShow.map((ws, idx) => {
+              const isActive = workspaceStore.currentWorkspaceId === ws.id;
+              return (
+                <CommandItem
+                  key={ws.id}
+                  value={`ws-${ws.slug}-${ws.name}`}
+                  onSelect={() => handleSelectWorkspace(ws)}
+                  data-testid={`switcher-ws-${ws.slug}`}
+                  className={cn(
+                    'gap-2 rounded-md px-2 py-2',
+                    isActive && 'bg-[var(--surface-input)]'
+                  )}
+                >
+                  <Building2
+                    className={cn(
+                      'h-4 w-4 shrink-0',
+                      isActive
+                        ? 'text-[var(--brand-primary)]'
+                        : 'text-[var(--text-muted)]'
+                    )}
+                    aria-hidden="true"
+                  />
+                  <span className="flex-1 truncate text-[13px] text-[var(--text-heading)]">
+                    {ws.name}
+                  </span>
+                  {idx === 1 && (
+                    <kbd className="font-mono text-[10px] text-[var(--text-muted)]">⌘2</kbd>
+                  )}
+                  {idx === 2 && (
+                    <kbd className="font-mono text-[10px] text-[var(--text-muted)]">⌘3</kbd>
+                  )}
+                  {isActive && (
+                    <Check
+                      className="h-4 w-4 text-[var(--brand-primary)]"
+                      aria-label="Current workspace"
+                      data-testid={`switcher-active-check-${ws.slug}`}
+                    />
+                  )}
+                </CommandItem>
+              );
+            })}
+          </CommandGroup>
+
+          <CommandGroup heading="JUMP TO">
+            {JUMP_TO_ITEMS.map((item) => {
+              const Icon = item.icon;
+              return (
+                <CommandItem
+                  key={item.id}
+                  value={`jump-${item.id}-${item.label}`}
+                  onSelect={() => handleSelectJumpTo(item)}
+                  data-testid={`switcher-jump-${item.id}`}
+                  className="gap-2 rounded-md px-2 py-2"
+                >
+                  <Icon
+                    className="h-4 w-4 shrink-0 text-[var(--text-muted)]"
+                    aria-hidden="true"
+                  />
+                  <span className="flex-1 truncate text-[13px] text-[var(--text-heading)]">
+                    {item.label}
+                  </span>
+                </CommandItem>
+              );
+            })}
+          </CommandGroup>
+        </CommandList>
+
+        <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--border-card)]">
+          <button
+            type="button"
+            onClick={handleOpenCreate}
+            data-testid="switcher-new-workspace"
+            className="text-[13px] font-medium text-[var(--brand-primary)] hover:text-[var(--brand-dark)] focus-visible:outline-none focus-visible:underline"
+          >
+            + New workspace
+          </button>
+          <span className="font-mono text-[10px] text-[var(--text-muted)]">↵ to jump</span>
+        </div>
+      </Command>
+    </PopoverContent>
   );
+
+  // ---------------------------------------------------------------------------
+  // Collapsed sidebar — show icon-only trigger inside Tooltip
+  // ---------------------------------------------------------------------------
 
   if (collapsed) {
     return (
       <>
-        <Tooltip delayDuration={0}>
-          <TooltipTrigger asChild>
-            <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+        <Popover open={uiStore.workspaceSwitcherOpen} onOpenChange={handleOpenChange}>
+          <Tooltip delayDuration={0}>
+            <TooltipTrigger asChild>
               <PopoverTrigger asChild>
                 <button
                   type="button"
+                  data-testid="workspace-pill"
                   className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-sidebar-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   aria-label={`Switch workspace (current: ${displayName})`}
-                  aria-haspopup="listbox"
-                  aria-expanded={popoverOpen}
+                  aria-haspopup="dialog"
+                  aria-expanded={uiStore.workspaceSwitcherOpen}
                 >
                   <Building2 className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
                 </button>
               </PopoverTrigger>
-              <PopoverContent className="w-52 p-1" side="right" align="start" sideOffset={6}>
-                {popoverListContent}
-              </PopoverContent>
-            </Popover>
-          </TooltipTrigger>
-          <TooltipContent side="right">{displayName}</TooltipContent>
-        </Tooltip>
+            </TooltipTrigger>
+            <TooltipContent side="right">{displayName}</TooltipContent>
+          </Tooltip>
+          {popoverContent}
+        </Popover>
         <CreateWorkspaceDialog open={createDialogOpen} onOpenChange={setCreateDialogOpen} />
       </>
     );
   }
 
+  // ---------------------------------------------------------------------------
+  // Expanded sidebar — full WorkspacePill trigger
+  // ---------------------------------------------------------------------------
+
   return (
     <>
-      <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+      <Popover open={uiStore.workspaceSwitcherOpen} onOpenChange={handleOpenChange}>
         <PopoverTrigger asChild>
-          <button
-            type="button"
-            className={cn(
-              'flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 min-h-[36px] text-left',
-              'transition-colors hover:bg-sidebar-accent/50',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1'
-            )}
-            aria-label="Switch workspace"
-            aria-haspopup="listbox"
-            aria-expanded={popoverOpen}
-          >
-            <span className="min-w-0 flex-1 truncate text-xs font-semibold text-sidebar-foreground leading-tight">
-              {displayName}
-            </span>
-            <ChevronsUpDown className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden="true" />
-          </button>
+          <WorkspacePill
+            name={displayName}
+            ariaLabel="Switch workspace"
+          />
         </PopoverTrigger>
-
-        <PopoverContent className="w-52 p-1" side="bottom" align="start" sideOffset={6}>
-          {popoverListContent}
-        </PopoverContent>
+        {popoverContent}
       </Popover>
 
       <CreateWorkspaceDialog open={createDialogOpen} onOpenChange={setCreateDialogOpen} />
