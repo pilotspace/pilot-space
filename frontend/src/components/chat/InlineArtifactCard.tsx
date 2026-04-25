@@ -36,6 +36,7 @@ import {
   GitCommit,
   Link as LinkIcon,
   Presentation,
+  Sparkles,
 } from 'lucide-react';
 
 import { ArtifactCard } from '@/components/artifacts/ArtifactCard';
@@ -98,6 +99,7 @@ export const INLINE_TYPE_ICON: Record<ArtifactTokenKey, LucideIcon> = {
   ISSUE: CheckSquare,
   SPEC: FileText,
   DECISION: GitCommit,
+  SKILL: Sparkles,
   // Tier 2 file
   MD: FileText,
   HTML: Code2,

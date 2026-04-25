@@ -41,6 +41,19 @@ export const ARTIFACT_TYPE_TOKENS = {
     badgeBg: 'rgba(217,133,63,0.14)',
     badgeText: '#92400e',
   },
+  SKILL: {
+    // Phase 91 — brand-violet SKILL accent (UI-SPEC §Color, design-debt 1).
+    // gEnd intentionally fades to white (not a 100-shade) because the card
+    // body is white; this keeps the gradient strip a soft halo rather than a
+    // hard band. badgeText/badgeBg cleared WCAG AA at >=5.3:1 over the
+    // 12% violet on white card surface (verified in artifact-tokens.test.ts).
+    tier: 1,
+    gStart: '#f5f3ff',
+    gEnd: '#ffffff',
+    accent: '#7c5cff',
+    badgeBg: 'rgba(124,92,255,0.12)',
+    badgeText: '#5a3df0',
+  },
   // Tier 2 — file artifacts
   MD: {
     tier: 2,

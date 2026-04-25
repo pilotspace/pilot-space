@@ -92,6 +92,7 @@ function Dispatch({ data }: { data: ArtifactData }) {
       return data.issue ? <IssueReadOnly issue={data.issue} /> : <EmptyState />;
     case 'SPEC':
     case 'DECISION':
+    case 'SKILL':
     case 'MD':
     case 'CODE':
     case 'HTML':
