@@ -52,13 +52,18 @@ describe('filterCommands', () => {
 });
 
 describe('SLASH_COMMANDS registry', () => {
-  it('contains exactly 11 entries in the documented order', () => {
-    expect(SLASH_COMMANDS).toHaveLength(11);
+  // Phase 91 Plan 05: /skills was added BEFORE /skill (typing "/sk" should
+  // surface the gallery option first), bumping the registry from 11 to 12
+  // entries. /skill was repurposed: description "Open a skill by name" and
+  // stubTolerant removed (the route is no longer a stub).
+  it('contains exactly 12 entries in the documented order', () => {
+    expect(SLASH_COMMANDS).toHaveLength(12);
     expect(SLASH_COMMANDS.map((c) => c.id)).toEqual([
       'topic',
       'task',
       'spec',
       'decision',
+      'skills',
       'skill',
       'members',
       'settings',
@@ -83,5 +88,35 @@ describe('SLASH_COMMANDS registry', () => {
         expect(typeof cmd.routeTemplate).toBe('function');
       }
     }
+  });
+});
+
+describe('Phase 91 Plan 05 — /skills + /skill semantics', () => {
+  it('/skills exists with kind:route and routeTemplate yielding /{ws}/skills', () => {
+    const cmd = SLASH_COMMANDS.find((c) => c.id === 'skills');
+    expect(cmd).toBeDefined();
+    expect(cmd!.kind).toBe('route');
+    expect(cmd!.keyword).toBe('/skills');
+    expect(cmd!.routeTemplate?.('alpha')).toBe('/alpha/skills');
+  });
+
+  it('/skill description is "Open a skill by name" (was "Run a skill")', () => {
+    const cmd = SLASH_COMMANDS.find((c) => c.id === 'skill');
+    expect(cmd).toBeDefined();
+    expect(cmd!.description).toBe('Open a skill by name');
+  });
+
+  it('/skill no longer carries stubTolerant flag (the route is no longer a stub)', () => {
+    const cmd = SLASH_COMMANDS.find((c) => c.id === 'skill');
+    expect(cmd).toBeDefined();
+    expect(cmd!.stubTolerant).toBeUndefined();
+  });
+
+  it('typing "sk" in filterCommands surfaces /skills before /skill', () => {
+    const matches = filterCommands('sk');
+    const ids = matches.map((c) => c.id);
+    expect(ids).toContain('skills');
+    expect(ids).toContain('skill');
+    expect(ids.indexOf('skills')).toBeLessThan(ids.indexOf('skill'));
   });
 });

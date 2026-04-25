@@ -428,6 +428,8 @@ export const ChatInput = observer<ChatInputProps>(
         setSlashQuery(null);
         setSkillMenuOpen(false);
         slashQueryStartOffsetRef.current = null;
+        // Session-only skills retain their existing handling — they have no
+        // detail page (no slug); they trigger session UX instead.
         // Special handling for /resume - open session picker instead
         if (skill.name === 'resume') {
           editableRef.current.textContent = '';
@@ -444,27 +446,18 @@ export const ChatInput = observer<ChatInputProps>(
           editableRef.current.focus();
           return;
         }
-        // Replace leading '/query' with '/skillname '
-        const firstNode = editableRef.current.firstChild;
-        if (firstNode?.nodeType === Node.TEXT_NODE) {
-          firstNode.textContent = `/${skill.name} `;
-        } else {
-          editableRef.current.textContent = `/${skill.name} `;
-        }
-        onChange(`/${skill.name} `);
-        // Defer focus + cursor placement so Radix's onCloseAutoFocus fires first
-        setTimeout(() => {
-          if (!editableRef.current) return;
-          editableRef.current.focus();
-          // Move cursor to end
-          const range = document.createRange();
-          range.selectNodeContents(editableRef.current);
-          range.collapse(false);
-          window.getSelection()?.removeAllRanges();
-          window.getSelection()?.addRange(range);
-        }, 0);
+        // Phase 91 Plan 05 — repurpose: picking a skill from the chat composer
+        // (Sparkles button → SkillMenu, or `/skill <name>` slash picker) now
+        // NAVIGATES to the detail page instead of inserting `/skill ` into
+        // the chat input. SKILL-04: discoverable from anywhere.
+        editableRef.current.textContent = '';
+        onChange('');
+        const target = skill.slug
+          ? `/${workspaceSlug}/skills/${skill.slug}`
+          : `/${workspaceSlug}/skills`;
+        router.push(target);
       },
-      [onChange, onNewSession, setSkillMenuOpen]
+      [onChange, onNewSession, setSkillMenuOpen, router, workspaceSlug]
     );
 
     const handleAgentSelect = useCallback(

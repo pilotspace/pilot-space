@@ -16,6 +16,7 @@
 import { memo, useEffect, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
 import {
+  BookOpen,
   CalendarDays,
   CheckSquare,
   FileText,
@@ -44,6 +45,8 @@ const ICONS: Record<string, React.ComponentType<{ className?: string; style?: CS
   Network,
   CalendarDays,
   Newspaper,
+  // Phase 91 Plan 05 — /skills uses BookOpen.
+  BookOpen,
 };
 
 export interface SlashMenuProps {

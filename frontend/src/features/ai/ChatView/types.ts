@@ -100,6 +100,15 @@ export interface SkillDefinition {
     | 'skills';
   icon: string;
   examples?: string[];
+  /**
+   * Phase 91 Plan 05 — backend skill slug (filesystem dir name). Present on
+   * skills sourced from the API (Plan 91-01 widened SkillResponse to include
+   * `slug`); absent on session-only skills (`resume`, `new`) and on locally-
+   * generated user-skill definitions which use a synthetic name as their
+   * identifier. The chat composer's /skill picker uses this field to navigate
+   * to the detail page (`/{workspaceSlug}/skills/{slug}`).
+   */
+  slug?: string;
 }
 
 /**

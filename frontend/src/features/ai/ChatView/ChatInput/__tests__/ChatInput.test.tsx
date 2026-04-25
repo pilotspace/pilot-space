@@ -18,9 +18,35 @@ vi.mock('mobx-react-lite', () => ({
   observer: (component: unknown) => component,
 }));
 
-// Mock useSkills hook — no API calls in unit tests
+// Phase 91 Plan 05 — override the global next/navigation mock so we can
+// assert router.push calls from handleSkillSelect.
+const pushMock = vi.fn();
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({
+    push: pushMock,
+    replace: vi.fn(),
+    prefetch: vi.fn(),
+    back: vi.fn(),
+    forward: vi.fn(),
+  }),
+  usePathname: () => '/',
+  useSearchParams: () => new URLSearchParams(),
+  useParams: () => ({ workspaceSlug: 'alpha' }),
+}));
+
+// Phase 91 Plan 05 — provide a controllable skills list so the SkillMenu
+// receives backend skills with `slug` populated. Default empty for baseline
+// tests; per-test override via `currentSkills` set inside `it` bodies.
+let currentSkills: Array<{
+  name: string;
+  description: string;
+  category: string;
+  icon: string;
+  examples?: string[];
+  slug?: string;
+}> = [];
 vi.mock('../../hooks/useSkills', () => ({
-  useSkills: () => ({ skills: [] }),
+  useSkills: () => ({ skills: currentSkills, isLoading: false, error: null }),
 }));
 
 // Mock useAttachments hook — not relevant to trigger detection tests
@@ -69,7 +95,7 @@ vi.mock('../EntityPicker', () => ({
 }));
 
 import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi, beforeAll } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import { ChatInput } from '../ChatInput';
 
 // cmdk and ResizeObserver are not available in JSDOM
@@ -261,5 +287,109 @@ describe('ChatInput — contenteditable div behavior', () => {
     fireEvent.input(div);
 
     expect(onChange).toHaveBeenCalled();
+  });
+});
+
+// ─── Phase 91 Plan 05 — handleSkillSelect navigation behavior ────────────
+//
+// REPURPOSE: picking a skill from the chat-side SkillMenu (Sparkles button or
+// via the /skill picker) used to text-insert `/skillname ` into the chat
+// composer. Now it navigates to the skill detail page using `skill.slug`.
+// Session-only skills (`resume`, `new`) preserve their existing handlers.
+//
+// Implementation note: Radix Popover content portals at open transition time;
+// in JSDOM the open transition happens synchronously after the click, but
+// `findByText` is used (with implicit waitFor) to give the portal mount a
+// microtask tick.
+
+describe('ChatInput — Phase 91 Plan 05 skill-select navigation', () => {
+  beforeAll(() => {
+    Element.prototype.scrollIntoView = vi.fn();
+    global.ResizeObserver = vi.fn().mockImplementation(() => ({
+      observe: vi.fn(),
+      unobserve: vi.fn(),
+      disconnect: vi.fn(),
+    }));
+  });
+
+  beforeEach(() => {
+    pushMock.mockReset();
+    currentSkills = [];
+  });
+
+  it('selecting a backend skill from SkillMenu navigates to /{ws}/skills/{slug}', async () => {
+    currentSkills = [
+      {
+        name: 'extract-issues',
+        description: 'Extract issues from notes',
+        category: 'issues',
+        icon: 'ListTodo',
+        slug: 'extract-issues',
+      },
+    ];
+    renderChatInput({ value: '' });
+
+    // Open SkillMenu via the Sparkles toolbar button.
+    const sparklesBtn = screen.getByRole('button', { name: /open skill menu/i });
+    fireEvent.click(sparklesBtn);
+
+    // The popover content renders a row with the skill keyword (`/skillname`).
+    const row = await screen.findByText('/extract-issues');
+    fireEvent.click(row);
+
+    expect(pushMock).toHaveBeenCalledWith('/alpha/skills/extract-issues');
+  });
+
+  it('selecting a backend skill without slug falls back to /{ws}/skills', async () => {
+    currentSkills = [
+      {
+        name: 'legacy-skill',
+        description: 'No slug populated',
+        category: 'planning',
+        icon: 'Wand2',
+        // no slug — exercises the fallback branch
+      },
+    ];
+    renderChatInput({ value: '' });
+
+    const sparklesBtn = screen.getByRole('button', { name: /open skill menu/i });
+    fireEvent.click(sparklesBtn);
+
+    const row = await screen.findByText('/legacy-skill');
+    fireEvent.click(row);
+
+    expect(pushMock).toHaveBeenCalledWith('/alpha/skills');
+  });
+
+  it('selecting the session-only "new" skill calls onNewSession and does NOT navigate', async () => {
+    // SESSION_SKILLS (resume, new) have no slug; the handler short-circuits
+    // before the router.push call. The mocked useSkills returns whatever is
+    // in `currentSkills`, so we explicitly include the 'new' session skill.
+    currentSkills = [
+      {
+        name: 'new',
+        description: 'Start a fresh conversation session',
+        category: 'session',
+        icon: 'Plus',
+      },
+    ];
+    const onNewSession = vi.fn();
+    render(
+      <ChatInput
+        value=""
+        onChange={vi.fn()}
+        onSubmit={vi.fn()}
+        onNewSession={onNewSession}
+      />
+    );
+
+    const sparklesBtn = screen.getByRole('button', { name: /open skill menu/i });
+    fireEvent.click(sparklesBtn);
+
+    const newRow = await screen.findByText('/new');
+    fireEvent.click(newRow);
+
+    expect(onNewSession).toHaveBeenCalled();
+    expect(pushMock).not.toHaveBeenCalled();
   });
 });

@@ -36,6 +36,12 @@ function userSkillToDefinition(skill: UserSkill): SkillDefinition {
 
 /**
  * Merge API skills with session-only skills and provide fallback.
+ *
+ * Phase 91 Plan 05: `slug` is propagated from API skills (Plan 91-01 widened
+ * SkillResponse) so the chat /skill picker can navigate to the detail page.
+ * `slug` is optional in `SkillDefinition` because session-only skills
+ * (`resume`, `new`) and locally-generated user-skill definitions don't have
+ * a backend slug.
  */
 function mergeSkills(
   apiSkills:
@@ -45,6 +51,7 @@ function mergeSkills(
         category: string;
         icon: string;
         examples: string[];
+        slug?: string;
       }>
     | undefined,
   userSkills: UserSkill[] | undefined,
@@ -57,6 +64,7 @@ function mergeSkills(
         category: s.category as SkillDefinition['category'],
         icon: s.icon,
         examples: s.examples,
+        slug: s.slug,
       }))
     : fallback;
 

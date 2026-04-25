@@ -101,15 +101,30 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     routeTemplate: (ws) => `/${ws}/decisions/new`,
     stubTolerant: true,
   },
+  // Phase 91 Plan 05 — /skills (plural) opens the gallery directly.
+  // Inserted BEFORE /skill so typing "/sk" surfaces both options with
+  // /skills first.
+  {
+    id: 'skills',
+    keyword: '/skills',
+    description: 'Browse all skills',
+    iconName: 'BookOpen',
+    iconColor: '#29a386',
+    kind: 'route',
+    routeTemplate: (ws) => `/${ws}/skills`,
+  },
+  // Phase 91 Plan 05 — /skill <name> repurposed: was "Run a skill" (chat
+  // submission via SkillMenu text-insert); now opens the detail page on
+  // pick. The bare-keyword Enter still routes to the gallery via
+  // routeTemplate. stubTolerant removed — the route is no longer a stub.
   {
     id: 'skill',
     keyword: '/skill',
-    description: 'Run a skill',
+    description: 'Open a skill by name',
     iconName: 'Wand2',
     iconColor: '#29a386',
     kind: 'picker',
     routeTemplate: (ws) => `/${ws}/skills`,
-    stubTolerant: true,
   },
   {
     id: 'members',
