@@ -11,6 +11,11 @@ export { SkillDetailPage } from './components/SkillDetailPage';
 export { SkillReferenceFiles } from './components/SkillReferenceFiles';
 export { SkillFilePreview } from './components/SkillFilePreview';
 export { SkillGraphView, miniMapNodeColor } from './components/SkillGraphView';
+export { SkillsViewToggle, type SkillsViewToggleProps } from './components/SkillsViewToggle';
+export {
+  useSkillsViewQueryStringSync,
+  type SkillsViewMode,
+} from './hooks/useSkillsViewQueryStringSync';
 // Note: the SkillGraphNode/FileGraphNode COMPONENTS are intentionally NOT
 // re-exported from this barrel — `SkillGraphNode` is also the name of a TYPE
 // from `./lib/skill-graph` (Plan 92-01's public contract). Consumers that
