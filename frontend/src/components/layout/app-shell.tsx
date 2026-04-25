@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { CommandPalette } from '@/components/search/CommandPalette';
 import { useCommandPaletteShortcut } from '@/hooks/useCommandPaletteShortcut';
+import { useWorkspaceSwitchShortcuts } from '@/hooks/useWorkspaceSwitchShortcuts';
 import type { ReactNode } from 'react';
 
 interface AppShellProps {
@@ -28,6 +29,8 @@ export const AppShell = observer(function AppShell({ children }: AppShellProps) 
 
   // Register global Cmd+K / Ctrl+K shortcut
   useCommandPaletteShortcut();
+  // Register global Cmd+2 / Cmd+3 workspace-switch shortcuts (Plan 90-04)
+  useWorkspaceSwitchShortcuts();
 
   // Auto-collapse sidebar on mobile and tablet; restore on desktop
   useEffect(() => {
