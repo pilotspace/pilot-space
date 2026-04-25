@@ -163,4 +163,125 @@ describe('useArtifactPeekState', () => {
     const { result } = renderHook(() => useArtifactPeekState());
     expect(result.current.view).toBe('split');
   });
+
+  // -------------------------------------------------------------------------
+  // Phase 91 Plan 04 — skill-file peek scheme.
+  //
+  // Same `peek` query param overloaded with a `skill-file:` prefix. Entity
+  // peek (`peek=<id>&peekType=<TOKEN>`) MUST keep working unchanged; that's
+  // the load-bearing invariant verified by the cases above.
+  // -------------------------------------------------------------------------
+
+  describe('skill-file peek scheme', () => {
+    it('starts with skillFile=null and isSkillFilePeek=false on empty URL', () => {
+      const { result } = renderHook(() => useArtifactPeekState());
+      expect(result.current.skillFile).toBeNull();
+      expect(result.current.isSkillFilePeek).toBe(false);
+    });
+
+    it('skillFile is null when entity peek is set', () => {
+      setSearchParams('peek=n123&peekType=NOTE');
+      const { result } = renderHook(() => useArtifactPeekState());
+      expect(result.current.skillFile).toBeNull();
+      expect(result.current.isSkillFilePeek).toBe(false);
+      // Entity-peek path remains untouched
+      expect(result.current.peekId).toBe('n123');
+      expect(result.current.peekType).toBe('NOTE');
+      expect(result.current.isPeekOpen).toBe(true);
+    });
+
+    it('decodes ?peek=skill-file:foo/bar.md into skillFile', () => {
+      setSearchParams('peek=skill-file:foo/bar.md');
+      const { result } = renderHook(() => useArtifactPeekState());
+      expect(result.current.skillFile).toEqual({ slug: 'foo', path: 'bar.md' });
+      expect(result.current.isSkillFilePeek).toBe(true);
+      expect(result.current.isPeekOpen).toBe(true);
+    });
+
+    it('forces peekId/peekType to null on skill-file peek (no entity dispatch)', () => {
+      setSearchParams('peek=skill-file:foo/bar.md&peekType=NOTE');
+      const { result } = renderHook(() => useArtifactPeekState());
+      expect(result.current.peekId).toBeNull();
+      expect(result.current.peekType).toBeNull();
+      expect(result.current.skillFile).toEqual({ slug: 'foo', path: 'bar.md' });
+    });
+
+    it('decodes nested multi-segment skill-file paths', () => {
+      setSearchParams('peek=skill-file:my-skill/sub/dir/file.py');
+      const { result } = renderHook(() => useArtifactPeekState());
+      expect(result.current.skillFile).toEqual({
+        slug: 'my-skill',
+        path: 'sub/dir/file.py',
+      });
+    });
+
+    it('openSkillFilePeek writes ?peek=skill-file:slug/path with no peekType', () => {
+      const { result } = renderHook(() => useArtifactPeekState());
+      act(() => {
+        result.current.openSkillFilePeek('ai-context', 'architecture.md');
+      });
+      expect(replaceMock).toHaveBeenCalledTimes(1);
+      const url = (replaceMock.mock.calls[0]?.[0] ?? '') as string;
+      // URLSearchParams.toString() percent-encodes ':' to %3A and '/' to %2F.
+      // Decoded form is what matters; assert via decodeURIComponent.
+      const decoded = decodeURIComponent(url);
+      expect(decoded).toContain('peek=skill-file:ai-context/architecture.md');
+      expect(decoded).not.toContain('peekType=');
+      expect(decoded).not.toContain('focus=');
+      expect(decoded).not.toContain('view=');
+    });
+
+    it('openSkillFilePeek clears any pre-existing focus params', () => {
+      setSearchParams('focus=f1&focusType=ISSUE&view=split');
+      const { result } = renderHook(() => useArtifactPeekState());
+      act(() => {
+        result.current.openSkillFilePeek('s', 'a.md');
+      });
+      const url = (replaceMock.mock.calls[0]?.[0] ?? '') as string;
+      expect(url).not.toContain('focus=');
+      expect(url).not.toContain('focusType=');
+      expect(url).not.toContain('view=');
+    });
+
+    it('closePeek strips skill-file peek correctly', () => {
+      setSearchParams('peek=skill-file:foo/bar.md');
+      const { result } = renderHook(() => useArtifactPeekState());
+      act(() => {
+        result.current.closePeek();
+      });
+      const url = (replaceMock.mock.calls[0]?.[0] ?? '') as string;
+      expect(url).not.toContain('peek=');
+    });
+
+    it('escalate is a no-op when isSkillFilePeek (Phase 92 deferred)', () => {
+      setSearchParams('peek=skill-file:foo/bar.md');
+      const { result } = renderHook(() => useArtifactPeekState());
+      act(() => {
+        result.current.escalate();
+      });
+      expect(replaceMock).not.toHaveBeenCalled();
+    });
+
+    it('escalate still works for entity peek (regression guard)', () => {
+      setSearchParams('peek=n1&peekType=NOTE');
+      const { result } = renderHook(() => useArtifactPeekState());
+      act(() => {
+        result.current.escalate();
+      });
+      expect(replaceMock).toHaveBeenCalledTimes(1);
+      const url = (replaceMock.mock.calls[0]?.[0] ?? '') as string;
+      expect(url).toContain('focus=n1');
+      expect(url).toContain('focusType=NOTE');
+    });
+
+    it('malformed skill-file payload leaves skillFile null and falls back to entity', () => {
+      // No slash → decodeSkillFilePeek returns null. Value treated as a plain
+      // peekId; without a peekType, isPeekOpen stays false.
+      setSearchParams('peek=skill-file:onlyslug');
+      const { result } = renderHook(() => useArtifactPeekState());
+      expect(result.current.skillFile).toBeNull();
+      expect(result.current.isSkillFilePeek).toBe(false);
+      expect(result.current.isPeekOpen).toBe(false);
+    });
+  });
 });

@@ -6,7 +6,18 @@
  *
  * Peek and focus are mutually exclusive — opening one removes the other.
  *
- * See `.planning/phases/86-peek-drawer-split-pane-lineage/86-UI-SPEC.md` §7.
+ * Phase 91 Plan 04 — additive extension for skill reference files. The same
+ * `peek` query param is overloaded with a `skill-file:<slug>/<path>` prefix
+ * scheme (single-param, no `peekType` companion) so the existing entity-peek
+ * dispatch (`peek=<id>&peekType=<TOKEN>`) is preserved verbatim. When the
+ * prefix matches, `skillFile` is populated and `peekId`/`peekType` are forced
+ * to `null` so downstream consumers don't try to resolve the value via
+ * `useArtifactQuery`. `escalate` is a no-op for skill-file peeks (split-pane
+ * for files is deferred to Phase 92).
+ *
+ * See `.planning/phases/86-peek-drawer-split-pane-lineage/86-UI-SPEC.md` §7
+ * and `.planning/phases/91-skills-gallery-detail-palette-chat-surfacing/91-CONTEXT.md`
+ * §Peek Drawer Integration.
  */
 'use client';
 
@@ -16,8 +27,17 @@ import {
   isArtifactTokenKey,
   type ArtifactTokenKey,
 } from '@/lib/artifact-tokens';
+import {
+  decodeSkillFilePeek,
+  encodeSkillFilePeek,
+} from '@/features/skills/lib/skill-peek';
 
 export type ArtifactPeekView = 'split' | 'read' | 'chat';
+
+export interface SkillFilePeekTarget {
+  slug: string;
+  path: string;
+}
 
 export interface PeekStateAPI {
   peekId: string | null;
@@ -27,6 +47,10 @@ export interface PeekStateAPI {
   view: ArtifactPeekView;
   isPeekOpen: boolean;
   isFocusOpen: boolean;
+  /** Phase 91 — non-null when `?peek=skill-file:<slug>/<path>` is present. */
+  skillFile: SkillFilePeekTarget | null;
+  /** Phase 91 — convenience flag mirrors `skillFile !== null`. */
+  isSkillFilePeek: boolean;
   openPeek: (id: string, type: ArtifactTokenKey) => void;
   closePeek: () => void;
   openFocus: (id: string, type: ArtifactTokenKey, view?: ArtifactPeekView) => void;
@@ -34,6 +58,8 @@ export interface PeekStateAPI {
   escalate: () => void;
   demote: () => void;
   setView: (view: ArtifactPeekView) => void;
+  /** Phase 91 — opens the drawer at a skill reference file. */
+  openSkillFilePeek: (slug: string, path: string) => void;
 }
 
 const ALL_PEEK_KEYS = ['peek', 'peekType', 'focus', 'focusType', 'view'] as const;
@@ -53,13 +79,22 @@ export function useArtifactPeekState(): PeekStateAPI {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const peekId = searchParams.get('peek');
-  const peekType = normalizeType(searchParams.get('peekType'));
+  const peekRaw = searchParams.get('peek');
+  // Phase 91 — detect the skill-file: prefix BEFORE the entity-peek path so
+  // we never confuse it for a (peekId, peekType) pair. When skillFile is
+  // non-null, peekId/peekType are forced to null so consumers like
+  // useArtifactQuery don't attempt to resolve the value as an artifact UUID.
+  const skillFile = decodeSkillFilePeek(peekRaw);
+  const peekId = skillFile ? null : peekRaw;
+  const peekType = skillFile
+    ? null
+    : normalizeType(searchParams.get('peekType'));
   const focusId = searchParams.get('focus');
   const focusType = normalizeType(searchParams.get('focusType'));
   const view = normalizeView(searchParams.get('view'));
 
-  const isPeekOpen = Boolean(peekId && peekType);
+  const isSkillFilePeek = skillFile !== null;
+  const isPeekOpen = Boolean((peekId && peekType) || skillFile);
   const isFocusOpen = Boolean(focusId && focusType);
 
   const buildUrl = useCallback(
@@ -121,9 +156,26 @@ export function useArtifactPeekState(): PeekStateAPI {
   }, [buildUrl, replace]);
 
   const escalate = useCallback(() => {
+    // Phase 91 — split-pane for skill files is deferred to Phase 92.
+    if (isSkillFilePeek) return;
     if (!peekId || !peekType) return;
     openFocus(peekId, peekType, 'split');
-  }, [openFocus, peekId, peekType]);
+  }, [isSkillFilePeek, openFocus, peekId, peekType]);
+
+  const openSkillFilePeek = useCallback(
+    (slug: string, path: string) => {
+      replace(
+        buildUrl({
+          peek: encodeSkillFilePeek(slug, path),
+          peekType: null,
+          focus: null,
+          focusType: null,
+          view: null,
+        }),
+      );
+    },
+    [buildUrl, replace],
+  );
 
   const demote = useCallback(() => {
     if (!focusId || !focusType) return;
@@ -147,6 +199,8 @@ export function useArtifactPeekState(): PeekStateAPI {
       view,
       isPeekOpen,
       isFocusOpen,
+      skillFile,
+      isSkillFilePeek,
       openPeek,
       closePeek,
       openFocus,
@@ -154,6 +208,7 @@ export function useArtifactPeekState(): PeekStateAPI {
       escalate,
       demote,
       setView,
+      openSkillFilePeek,
     }),
     [
       peekId,
@@ -163,6 +218,8 @@ export function useArtifactPeekState(): PeekStateAPI {
       view,
       isPeekOpen,
       isFocusOpen,
+      skillFile,
+      isSkillFilePeek,
       openPeek,
       closePeek,
       openFocus,
@@ -170,6 +227,7 @@ export function useArtifactPeekState(): PeekStateAPI {
       escalate,
       demote,
       setView,
+      openSkillFilePeek,
     ],
   );
 }
