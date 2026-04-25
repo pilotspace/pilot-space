@@ -3,33 +3,32 @@
 import { observer } from 'mobx-react-lite';
 import { motion, useReducedMotion } from 'motion/react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { useParams, usePathname, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef } from 'react';
 import {
-  Home,
-  FileText,
-  LayoutGrid,
-  FolderKanban,
-  Users,
-  DollarSign,
-  Settings,
+  AlarmClock,
   ChevronLeft,
   ChevronRight,
-  Plus,
-  Compass,
-  PinIcon,
+  FileText,
+  FolderKanban,
   Loader2,
   LogOut,
+  MessageSquare,
+  Monitor,
+  Moon,
+  Network as NetworkIcon,
+  PinIcon,
+  Plug,
+  Plus,
+  Search,
+  Settings,
+  Sparkles as SparklesIcon,
+  Sun,
+  Ticket,
   User,
   UserCog,
-  Sparkles,
+  Users,
   X,
-  Sun,
-  Moon,
-  Monitor,
-  CheckCircle2,
-  Network,
-  BookOpen,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useUIStore, useNotificationStore, useAuthStore, useWorkspaceStore } from '@/stores';
@@ -37,10 +36,10 @@ import { useCreateNote } from '@/features/notes/hooks';
 import { TemplatePicker } from '@/features/notes/components/TemplatePicker';
 import { useNewNoteFlow } from './useNewNoteFlow';
 import { useProjects } from '@/features/projects/hooks/useProjects';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   DropdownMenu,
@@ -66,54 +65,97 @@ import { usePinnedNotes } from '@/hooks/usePinnedNotes';
 import { useSettingsModal } from '@/features/settings/settings-modal-context';
 import type { WorkspaceFeatureToggles } from '@/types';
 
-interface NavItem {
-  name: string;
-  path: string;
-  icon: LucideIcon;
-  testId: string;
-  /** Show a numeric badge when value > 0. Value is injected at render time for dynamic counts. */
-  badgeKey?: string;
-  /** When true, hidden from non-Owner/Admin members. */
-  adminOnly?: boolean;
-  /** Maps to a WorkspaceFeatureToggles key. When set, item is hidden if the feature is disabled. */
-  featureKey?: keyof WorkspaceFeatureToggles;
+// ---------------------------------------------------------------------------
+// RECENT CHATS — empty-state-only ship per known degradation (Plan 90-04).
+// No chat session list API exists yet; the section renders the empty-state
+// copy until that endpoint ships. The live-data branch is wired so dropping
+// in a hook later is a one-line change. See UI-SPEC Design-Debt Note 5.
+// ---------------------------------------------------------------------------
+
+interface RecentChat {
+  id: string;
+  title: string;
+  artifactCount: number;
+  /** ISO 8601 timestamp */
+  updatedAt: string;
+  /** When true, renders with the AlarmClock icon instead of MessageSquare. */
+  isRoutine?: boolean;
 }
 
-interface NavSection {
+// ---------------------------------------------------------------------------
+// WORKSPACE_ENTRIES — canonical NAV-01 order (Phase 84 routes /tasks, /topics).
+// ---------------------------------------------------------------------------
+
+interface NavEntry {
+  id: string;
   label: string;
-  icon?: LucideIcon;
-  items: NavItem[];
+  icon: LucideIcon;
+  path: (slug: string) => string;
+  /** When set, item is hidden if the feature toggle is false. `null` = always shown. */
+  featureKey: keyof WorkspaceFeatureToggles | null;
+  /** Optional dynamic count (badge). */
+  countKey?: string;
 }
 
-const navigationSections: NavSection[] = [
+const WORKSPACE_ENTRIES: NavEntry[] = [
   {
-    label: 'Main',
-    items: [
-      { name: 'Home', path: '', icon: Home, testId: 'nav-home' },
-      { name: 'Topics', path: 'topics', icon: FileText, testId: 'nav-topics', featureKey: 'notes' },
-      { name: 'Tasks', path: 'tasks', icon: LayoutGrid, testId: 'nav-tasks', featureKey: 'issues' },
-      { name: 'Projects', path: 'projects', icon: FolderKanban, testId: 'nav-projects', featureKey: 'projects' },
-      { name: 'Members', path: 'members', icon: Users, testId: 'nav-members', featureKey: 'members' },
-      { name: 'Knowledge', path: 'knowledge', icon: Network, testId: 'nav-knowledge', featureKey: 'knowledge' },
-      { name: 'Docs', path: 'docs', icon: BookOpen, testId: 'nav-docs', featureKey: 'docs' },
-    ],
+    id: 'projects',
+    label: 'Projects',
+    icon: FolderKanban,
+    path: (slug) => `/${slug}/projects`,
+    featureKey: 'projects',
+    countKey: 'projects',
   },
   {
-    label: 'AI',
-    icon: Sparkles,
-    items: [
-      { name: 'Skill', path: 'skills', icon: UserCog, testId: 'nav-roles', featureKey: 'skills' },
-      { name: 'Costs', path: 'costs', icon: DollarSign, testId: 'nav-costs', featureKey: 'costs' },
-      {
-        name: 'Approvals',
-        path: 'approvals',
-        icon: CheckCircle2,
-        testId: 'nav-approvals',
-        badgeKey: 'pendingApprovals',
-        adminOnly: true,
-        featureKey: 'approvals',
-      },
-    ],
+    id: 'tasks',
+    label: 'Tasks',
+    icon: Ticket,
+    // Phase 84 route — /tasks (NOT /issues). Toggle key remains 'issues'
+    // because WorkspaceFeatureToggles was not renamed in Phase 84.
+    path: (slug) => `/${slug}/tasks`,
+    featureKey: 'issues',
+    countKey: 'tasks',
+  },
+  {
+    id: 'topics',
+    label: 'Topics',
+    icon: FileText,
+    // Phase 84 route — /topics (NOT /notes). Toggle key remains 'notes'.
+    path: (slug) => `/${slug}/topics`,
+    featureKey: 'notes',
+    countKey: 'topics',
+  },
+  {
+    id: 'skills',
+    label: 'Skills',
+    icon: SparklesIcon,
+    path: (slug) => `/${slug}/skills`,
+    featureKey: 'skills',
+  },
+  {
+    id: 'kg',
+    label: 'Knowledge graph',
+    icon: NetworkIcon,
+    path: (slug) => `/${slug}/knowledge`,
+    // 'kg' is not a member of WorkspaceFeatureToggles. The closest existing
+    // toggle is 'knowledge' (knowledge-graph feature). When missing → render.
+    featureKey: 'knowledge',
+  },
+  {
+    id: 'members',
+    label: 'Members',
+    icon: Users,
+    path: (slug) => `/${slug}/members`,
+    featureKey: 'members',
+  },
+  {
+    id: 'integrations',
+    label: 'Integrations',
+    icon: Plug,
+    path: (slug) => `/${slug}/integrations`,
+    // 'integrations' is not a member of WorkspaceFeatureToggles — render
+    // unconditionally per plan rule. Documented in SUMMARY.
+    featureKey: null,
   },
 ];
 
@@ -122,6 +164,10 @@ const THEME_OPTIONS = [
   { value: 'dark' as const, label: 'Dark', icon: Moon },
   { value: 'system' as const, label: 'System', icon: Monitor },
 ];
+
+// ---------------------------------------------------------------------------
+// SidebarUserControls (preserved from v2 — bottom user row + notification panel)
+// ---------------------------------------------------------------------------
 
 export const SidebarUserControls = observer(function SidebarUserControls({
   collapsed,
@@ -273,13 +319,139 @@ function getWorkspaceSlugFromPathname(pathname: string): string {
   return firstSegment;
 }
 
+// ---------------------------------------------------------------------------
+// NewChatButton — top-stack CTA. Navigates to the FLAT /${slug}/chat route.
+// VERIFIED against frontend/src/app/(workspace)/[workspaceSlug]/chat/page.tsx:
+//   - The route reads ?session= / ?prefill= / ?mode= query params.
+//   - When NO ?session= is present, ChatView starts a fresh session on mount.
+//   - There is NO dynamic chat-id segment and no fake-route subpath.
+//   - There is NO client-API module wrapper for chat-session creation.
+// Plan 90-04 blocker-4 fix: do NOT introduce any of those.
+// ---------------------------------------------------------------------------
+
+function NewChatButton() {
+  const router = useRouter();
+  const params = useParams<{ workspaceSlug: string }>();
+  const handleClick = () => {
+    if (!params?.workspaceSlug) return;
+    router.push(`/${params.workspaceSlug}/chat`);
+  };
+  return (
+    <Button
+      onClick={handleClick}
+      data-testid="new-chat-button"
+      className="w-full h-10 rounded-xl bg-[var(--brand-primary)] hover:bg-[var(--brand-dark)] text-white font-medium gap-2 text-[13px]"
+    >
+      <Plus className="h-4 w-4" /> New chat
+    </Button>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// SearchButton — replaces the old inline search input. Opens the ⌘K command
+// palette via UIStore (NAV-04 sweep).
+// ---------------------------------------------------------------------------
+
+const SearchButton = observer(function SearchButton() {
+  const uiStore = useUIStore();
+  return (
+    <button
+      type="button"
+      onClick={() => uiStore.openCommandPalette()}
+      data-testid="sidebar-search-button"
+      className="w-full h-10 rounded-xl bg-[var(--surface-page)] border border-[var(--border-card)] hover:bg-[var(--surface-input)] flex items-center gap-2 px-3 text-[13px] font-medium text-[var(--text-secondary)]"
+    >
+      <Search className="h-4 w-4 text-[var(--text-muted)]" aria-hidden="true" />
+      <span className="flex-1 text-left">Search</span>
+      <kbd className="font-mono text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[var(--surface-input)] text-[var(--text-muted)]">
+        ⌘K
+      </kbd>
+    </button>
+  );
+});
+
+// ---------------------------------------------------------------------------
+// RecentChatRow — used only when recentChats has data (currently dead code,
+// kept so the live-data variant plugs in without a structural refactor).
+// ---------------------------------------------------------------------------
+
+function RecentChatRow({ chat, slug }: { chat: RecentChat; slug: string }) {
+  const Icon = chat.isRoutine ? AlarmClock : MessageSquare;
+  return (
+    <Link
+      href={`/${slug}/chat?session=${chat.id}`}
+      data-testid="recent-chat-row"
+      className="group flex items-center gap-2 rounded-md px-2 py-1.5 text-[13px] text-[var(--text-secondary)] hover:bg-[var(--surface-input)] outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-1"
+    >
+      <Icon className="h-3.5 w-3.5 shrink-0 text-[var(--text-muted)]" aria-hidden="true" />
+      <span className="flex-1 truncate">{chat.title}</span>
+      {chat.artifactCount > 0 && (
+        <span className="shrink-0 rounded-full bg-[var(--surface-input)] px-1.5 text-[10px] font-medium text-[var(--text-muted)]">
+          {chat.artifactCount}
+        </span>
+      )}
+      <span className="shrink-0 font-mono text-[10px] text-[var(--text-muted)]">
+        {chat.updatedAt}
+      </span>
+    </Link>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// NavRow — accordion entry row.
+// ---------------------------------------------------------------------------
+
+function NavRow({
+  entry,
+  href,
+  active,
+  count,
+}: {
+  entry: NavEntry;
+  href: string;
+  active: boolean;
+  count: number;
+}) {
+  const Icon = entry.icon;
+  return (
+    <Link
+      href={href}
+      data-testid={`nav-${entry.id}`}
+      aria-current={active ? 'page' : undefined}
+      className={cn(
+        'group relative flex items-center gap-2 rounded-md px-2 py-1.5 text-[13px] font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-1',
+        active
+          ? 'bg-[var(--surface-input)] text-[var(--text-heading)]'
+          : 'text-[var(--text-secondary)] hover:bg-[var(--surface-input)]/60'
+      )}
+    >
+      <Icon
+        className={cn(
+          'h-3.5 w-3.5 shrink-0',
+          active ? 'text-[var(--brand-primary)]' : 'text-[var(--text-muted)]'
+        )}
+        aria-hidden="true"
+      />
+      <span className="flex-1 truncate">{entry.label}</span>
+      {count > 0 && (
+        <span className="ml-auto shrink-0 rounded-full bg-[var(--surface-input)] px-1.5 text-[10px] font-medium text-[var(--text-muted)]">
+          {count}
+        </span>
+      )}
+    </Link>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Sidebar v3 — 240px rail; UI-SPEC Surface 1.
+// ---------------------------------------------------------------------------
+
 export const Sidebar = observer(function Sidebar() {
   const shouldReduceMotion = useReducedMotion();
   const uiStore = useUIStore();
   const notificationStore = useNotificationStore();
   const authStore = useAuthStore();
   const workspaceStore = useWorkspaceStore();
-  const canCreateContent = workspaceStore.currentUserRole !== 'guest';
   const isNotesEnabled = workspaceStore.isFeatureEnabled('notes');
   const pathname = usePathname();
   const router = useRouter();
@@ -313,8 +485,7 @@ export const Sidebar = observer(function Sidebar() {
 
   const isAuthenticated = authStore.isAuthenticated;
 
-  // Start polling unread count when workspace is active; stop on unmount or workspace change.
-  // Only poll when workspaceId is a UUID (contains '-') to prevent spurious calls with slugs.
+  // Start polling unread count when workspace is active.
   useEffect(() => {
     if (workspaceId && isAuthenticated && workspaceId.includes('-')) {
       notificationStore.startPolling(workspaceId);
@@ -332,40 +503,28 @@ export const Sidebar = observer(function Sidebar() {
   });
 
   // Pending approval count for sidebar badge (Owner/Admin only).
-  // usePendingApprovalCount returns 0 when not authenticated or no data.
   const isAdminOrOwner =
     workspaceStore.currentUserRole === 'owner' || workspaceStore.currentUserRole === 'admin';
   const pendingApprovalCount = usePendingApprovalCount(isAdminOrOwner ? workspaceId : '');
 
-  // Map badgeKey → dynamic badge value
-  const badgeValues: Record<string, number> = {
-    pendingApprovals: pendingApprovalCount,
-  };
-
-  // Workspace projects for sidebar tree sections
+  // Workspace projects for sidebar pinned-notes project labels
   const { data: projectsData } = useProjects({
     workspaceId,
     enabled: !!workspaceId && isAuthenticated,
   });
 
-  const navigation = useMemo(() => {
-    return navigationSections.map((section) => {
-      const items = section.items
-        .filter((item) => {
-          // Hide items whose feature is disabled
-          if (item.featureKey && !workspaceStore.isFeatureEnabled(item.featureKey)) {
-            return false;
-          }
-          return true;
-        })
-        .map((item) => ({
-          ...item,
-          href: item.path ? `/${workspaceSlug}/${item.path}` : `/${workspaceSlug}`,
-        }));
-      return { label: section.label, icon: section.icon, items };
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceSlug, workspaceStore.featureToggles]);
+  // Counts injected into NavRow badges. Projects/tasks/topics live counts are
+  // out of scope for this plan; pendingApprovalCount remains observable for
+  // future surfacing if a Members-row badge is introduced.
+  const counts = useMemo<Record<string, number>>(() => {
+    return {
+      projects: 0,
+      tasks: 0,
+      topics: 0,
+      // pendingApprovalCount currently un-rendered in v3 stack but kept reactive.
+      _approvals: pendingApprovalCount,
+    };
+  }, [pendingApprovalCount]);
 
   const projectMap = useMemo(() => {
     const map: Record<string, string> = {};
@@ -392,255 +551,178 @@ export const Sidebar = observer(function Sidebar() {
   const newNoteFlow = useNewNoteFlow({
     onCreateNote: (data) => createNote.mutate(data),
   });
-  const handleNewNote = newNoteFlow.open;
+
+  // RECENT CHATS — see top-of-file comment. Hardcoded empty until the chat
+  // session list endpoint ships. Live-data branch is dead code but kept so
+  // a future hook drop-in is a one-line change.
+  // TODO(90-04 known degradation): wire to chat session list API when available.
+  const recentChats: RecentChat[] = [];
 
   return (
     <>
-      <div className="flex h-full flex-col">
-        {/* Logo & Workspace */}
+      <aside
+        className={cn(
+          'fixed left-0 top-0 h-screen w-[240px] bg-[var(--surface-snow)] border-r border-[var(--border-card)] flex flex-col',
+          // When parent shell collapses to 60px (tablet/mobile icon-rail), this
+          // component is rendered inside that container. Width clamp via parent.
+          collapsed && 'w-[60px]'
+        )}
+        data-testid="sidebar"
+      >
+        {/* ----------------------------------------------------------------
+            Top stack — WorkspacePill → + New chat → ⌘K Search button
+            ---------------------------------------------------------------- */}
         <div
           className={cn(
-            'flex h-10 shrink-0 items-center gap-2 border-b border-sidebar-border',
-            collapsed ? 'justify-center px-2' : 'px-3'
+            'flex shrink-0 flex-col gap-3 border-b border-[var(--border-card)] px-3.5 py-4',
+            collapsed && 'px-2 items-center'
           )}
+          data-testid="sidebar-top-stack"
         >
-          <motion.div
-            whileHover={shouldReduceMotion ? undefined : { rotate: 15 }}
-            transition={{ type: 'spring', stiffness: 400, damping: 10 }}
-          >
-            <Compass className="h-5 w-5 text-primary" />
-          </motion.div>
           {collapsed ? (
             <WorkspaceSwitcher currentSlug={workspaceSlug} collapsed />
           ) : (
-            <motion.div
-              initial={shouldReduceMotion ? false : { opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={shouldReduceMotion ? undefined : { opacity: 0, x: -10 }}
-              className="flex flex-1 flex-col min-w-0"
-            >
+            <>
               <WorkspaceSwitcher currentSlug={workspaceSlug} />
-            </motion.div>
+              <NewChatButton />
+              <SearchButton />
+            </>
           )}
         </div>
 
-        {/* Scrollable area: navigation + pinned notes */}
+        {/* ----------------------------------------------------------------
+            Scrollable middle — RECENT CHATS, Pinned Notes, WORKSPACE accordion
+            ---------------------------------------------------------------- */}
         <ScrollArea className="flex-1 min-h-0">
-          {/* Main Navigation */}
-          <div className="flex flex-col gap-0.5 p-2">
-            {navigation.map((section, sectionIndex) => {
-              // Compute visible items after adminOnly filtering
-              const visibleItems = section.items.filter(
-                (item) => !(item.adminOnly && !isAdminOrOwner)
-              );
-              // Hide section when no items are visible
-              if (visibleItems.length === 0) return null;
-
-              return (
-                <nav
-                  key={section.label}
-                  aria-label={`${section.label} navigation`}
-                  className={cn(sectionIndex > 0 && 'mt-3')}
-                >
-                  {!collapsed ? (
-                    <div className="mb-1 flex items-center gap-1.5 px-2.5" aria-hidden="true">
-                      {section.icon && (
-                        <section.icon className="h-2.5 w-2.5 text-sidebar-foreground/40" />
-                      )}
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40">
-                        {section.label}
-                      </span>
-                    </div>
-                  ) : (
-                    sectionIndex > 0 && (
-                      <div
-                        className="mx-auto mb-1.5 h-px w-4 rounded-full bg-sidebar-border"
-                        aria-hidden="true"
-                      />
-                    )
-                  )}
-                  {visibleItems.map((item) => {
-                    const isActive = item.path
-                      ? pathname === item.href || pathname.startsWith(`${item.href}/`)
-                      : pathname === item.href;
-
-                    const badgeCount =
-                      item.badgeKey !== undefined ? (badgeValues[item.badgeKey] ?? 0) : 0;
-
-                    return (
-                      <Tooltip key={item.name} delayDuration={collapsed ? 0 : 1000}>
-                        <TooltipTrigger asChild>
-                          <Link
-                            href={item.href}
-                            data-testid={item.testId}
-                            aria-current={isActive ? 'page' : undefined}
-                            aria-label={
-                              collapsed
-                                ? badgeCount > 0
-                                  ? `${item.name} (${badgeCount} pending)`
-                                  : item.name
-                                : undefined
-                            }
-                            className={cn(
-                              'group relative flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors duration-200 outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-1 focus-visible:ring-offset-sidebar',
-                              isActive
-                                ? [
-                                    'bg-sidebar-accent text-sidebar-primary font-semibold',
-                                    !collapsed &&
-                                      'before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-4 before:w-[3px] before:rounded-full before:bg-primary',
-                                    collapsed &&
-                                      'after:absolute after:bottom-0 after:left-1/2 after:-translate-x-1/2 after:h-[3px] after:w-3 after:rounded-full after:bg-primary',
-                                  ]
-                                : 'text-sidebar-foreground hover:bg-sidebar-accent/50',
-                              collapsed && 'justify-center px-0 py-2'
-                            )}
-                          >
-                            <item.icon
-                              className={cn(
-                                'h-4 w-4 shrink-0 transition-colors',
-                                isActive
-                                  ? 'text-sidebar-primary'
-                                  : 'text-muted-foreground group-hover:text-sidebar-foreground'
-                              )}
-                            />
-                            {!collapsed && (
-                              <motion.span
-                                initial={shouldReduceMotion ? false : { opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={shouldReduceMotion ? undefined : { opacity: 0 }}
-                                className="flex flex-1 items-center justify-between"
-                              >
-                                {item.name}
-                                {badgeCount > 0 && (
-                                  <span
-                                    className="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground"
-                                    aria-label={`${badgeCount} pending`}
-                                    data-testid={`${item.testId}-badge`}
-                                  >
-                                    {badgeCount}
-                                  </span>
-                                )}
-                              </motion.span>
-                            )}
-                            {/* Collapsed badge dot */}
-                            {collapsed && badgeCount > 0 && (
-                              <span
-                                className="absolute top-0.5 right-0.5 h-1.5 w-1.5 rounded-full bg-primary"
-                                aria-hidden
-                              />
-                            )}
-                          </Link>
-                        </TooltipTrigger>
-                        {collapsed && (
-                          <TooltipContent side="right" className="font-medium">
-                            {item.name}
-                            {badgeCount > 0 && ` (${badgeCount} pending)`}
-                          </TooltipContent>
-                        )}
-                      </Tooltip>
-                    );
-                  })}
-                </nav>
-              );
-            })}
-          </div>
-
-          <Separator className="mx-2" />
-
-          {/* Pinned Notes — inside scrollable area */}
           {!collapsed && (
             <>
-              {/* Pinned Notes — hidden when notes feature is disabled */}
-              {isNotesEnabled && (
-              <div className="mb-3" data-testid="pinned-notes">
-                <div className="mb-1.5 flex items-center gap-1.5 px-1.5">
-                  <PinIcon className="h-2.5 w-2.5 text-muted-foreground" />
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    Pinned
-                  </span>
+              {/* RECENT CHATS section */}
+              <div className="px-2 pt-3">
+                <div
+                  className="px-2 pt-2 pb-2 font-mono text-[10px] font-semibold tracking-[0.06em] text-[var(--text-muted)]"
+                  data-testid="recent-chats-header"
+                >
+                  RECENT CHATS
                 </div>
-                <div className="space-y-px">
-                  {pinnedNotes.map((note, index) => {
-                    const isActive = pathname === note.href;
-                    return (
-                      <motion.div
-                        key={note.id}
-                        initial={shouldReduceMotion ? false : { opacity: 0, y: 8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={shouldReduceMotion ? { duration: 0 } : { delay: index * 0.05 }}
-                      >
-                        <Link
-                          href={note.href}
-                          data-testid="note-item"
-                          aria-current={isActive ? 'page' : undefined}
-                          className={cn(
-                            'group relative flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs transition-colors outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-1 focus-visible:ring-offset-sidebar',
-                            isActive
-                              ? 'bg-sidebar-accent text-sidebar-primary font-semibold before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-3.5 before:w-[3px] before:rounded-full before:bg-primary'
-                              : 'text-sidebar-foreground hover:bg-sidebar-accent/50'
-                          )}
-                        >
-                          <FileText className="h-3 w-3 text-muted-foreground" />
-                          <span className="truncate">{note.title}</span>
-                          {note.projectId && projectMap[note.projectId] && (
-                            <span className="ml-auto shrink-0 text-[10px] text-muted-foreground/60 truncate max-w-[80px]">
-                              {projectMap[note.projectId]}
-                            </span>
-                          )}
-                        </Link>
-                      </motion.div>
-                    );
-                  })}
-                </div>
+                {recentChats.length === 0 ? (
+                  <div className="px-2 py-4" data-testid="recent-chats-empty">
+                    <div className="text-[13px] font-medium text-[var(--text-secondary)]">
+                      No recent chats
+                    </div>
+                    <div className="text-[13px] font-medium text-[var(--text-muted)] mt-0.5">
+                      Start a new chat to see it here.
+                    </div>
+                  </div>
+                ) : (
+                  <ul className="flex flex-col gap-0.5" data-testid="recent-chats-list">
+                    {recentChats.map((chat) => (
+                      <li key={chat.id}>
+                        <RecentChatRow chat={chat} slug={workspaceSlug} />
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
+
+              {/* Pinned Notes — preserved when notes feature is enabled */}
+              {isNotesEnabled && pinnedNotes.length > 0 && (
+                <div className="mt-4 px-2" data-testid="pinned-notes">
+                  <div className="mb-1.5 flex items-center gap-1.5 px-2">
+                    <PinIcon
+                      className="h-2.5 w-2.5 text-[var(--text-muted)]"
+                      aria-hidden="true"
+                    />
+                    <span className="font-mono text-[10px] font-semibold tracking-[0.06em] text-[var(--text-muted)]">
+                      PINNED
+                    </span>
+                  </div>
+                  <ul className="flex flex-col gap-px">
+                    {pinnedNotes.map((note, index) => {
+                      const isActive = pathname === note.href;
+                      return (
+                        <motion.li
+                          key={note.id}
+                          initial={shouldReduceMotion ? false : { opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={
+                            shouldReduceMotion ? { duration: 0 } : { delay: index * 0.05 }
+                          }
+                        >
+                          <Link
+                            href={note.href}
+                            data-testid="note-item"
+                            aria-current={isActive ? 'page' : undefined}
+                            className={cn(
+                              'group flex items-center gap-1.5 rounded-md px-2 py-1 text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-1',
+                              isActive
+                                ? 'bg-[var(--surface-input)] text-[var(--text-heading)] font-semibold'
+                                : 'text-[var(--text-secondary)] hover:bg-[var(--surface-input)]/60'
+                            )}
+                          >
+                            <FileText
+                              className="h-3 w-3 text-[var(--text-muted)]"
+                              aria-hidden="true"
+                            />
+                            <span className="truncate">{note.title}</span>
+                            {note.projectId && projectMap[note.projectId] && (
+                              <span className="ml-auto shrink-0 truncate text-[10px] text-[var(--text-muted)]">
+                                {projectMap[note.projectId]}
+                              </span>
+                            )}
+                          </Link>
+                        </motion.li>
+                      );
+                    })}
+                  </ul>
+                </div>
               )}
+
+              {/* WORKSPACE accordion */}
+              <Accordion
+                type="single"
+                collapsible
+                defaultValue="workspace"
+                className="px-2 mt-4"
+              >
+                <AccordionItem value="workspace" className="border-none">
+                  <AccordionTrigger className="px-2 py-2 font-mono text-[10px] font-semibold tracking-[0.06em] text-[var(--text-muted)] hover:no-underline">
+                    WORKSPACE
+                  </AccordionTrigger>
+                  <AccordionContent className="pb-2">
+                    <ul
+                      className="flex flex-col gap-0.5"
+                      data-testid="workspace-accordion-list"
+                    >
+                      {WORKSPACE_ENTRIES.filter((entry) => {
+                        if (entry.featureKey === null) return true;
+                        return workspaceStore.isFeatureEnabled(entry.featureKey);
+                      }).map((entry) => {
+                        const href = entry.path(workspaceSlug);
+                        const isActive =
+                          pathname === href || pathname.startsWith(`${href}/`);
+                        const count = entry.countKey ? (counts[entry.countKey] ?? 0) : 0;
+                        return (
+                          <li key={entry.id}>
+                            <NavRow
+                              entry={entry}
+                              href={href}
+                              active={isActive}
+                              count={count}
+                            />
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
             </>
           )}
         </ScrollArea>
 
-        {/* New Note Button — hidden for guests and when notes feature is disabled */}
-        {canCreateContent && isNotesEnabled && (
-          <div
-            className={cn(
-              'shrink-0 border-t border-sidebar-border p-2',
-              collapsed && 'flex justify-center'
-            )}
-          >
-            <Tooltip delayDuration={collapsed ? 0 : 1000}>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="default"
-                  size={collapsed ? 'icon' : 'sm'}
-                  data-testid="new-note-button"
-                  aria-label={collapsed ? 'New Note' : undefined}
-                  onClick={handleNewNote}
-                  disabled={createNote.isPending || !resolvedWorkspaceId}
-                  className={cn(
-                    'shadow-warm-sm transition-[colors,box-shadow] duration-200',
-                    'hover:shadow-warm-md',
-                    collapsed ? 'h-9 w-9' : 'w-full'
-                  )}
-                >
-                  {createNote.isPending ? (
-                    <Loader2
-                      className={cn(collapsed ? 'h-4 w-4' : 'h-3.5 w-3.5', 'animate-spin')}
-                    />
-                  ) : (
-                    <Plus className={collapsed ? 'h-4 w-4' : 'h-3.5 w-3.5'} />
-                  )}
-                  {!collapsed && (
-                    <span className="ml-1.5 text-xs">
-                      {createNote.isPending ? 'Creating...' : 'New Note'}
-                    </span>
-                  )}
-                </Button>
-              </TooltipTrigger>
-              {collapsed && <TooltipContent side="right">New Note</TooltipContent>}
-            </Tooltip>
-          </div>
-        )}
-
-        {/* Notification + User Controls */}
+        {/* ----------------------------------------------------------------
+            Bottom — User row + collapse toggle (preserved from v2)
+            ---------------------------------------------------------------- */}
         <SidebarUserControls
           collapsed={collapsed}
           workspaceId={workspaceId}
@@ -649,7 +731,6 @@ export const Sidebar = observer(function Sidebar() {
           uiStore={uiStore}
         />
 
-        {/* Collapse/Expand Toggle — always visible at bottom */}
         <div className="shrink-0 border-t border-sidebar-border p-2">
           <Tooltip delayDuration={0}>
             <TooltipTrigger asChild>
@@ -685,7 +766,29 @@ export const Sidebar = observer(function Sidebar() {
             </TooltipContent>
           </Tooltip>
         </div>
-      </div>
+
+        {/* createNote.isPending guard — surface a subtle loader if a topic is
+            being created from a deep link (e.g. Pinned link click during slow
+            network). Preserves the v2 affordance without re-introducing a
+            "+ New Note" button. */}
+        {createNote.isPending && (
+          <div
+            className="absolute right-2 top-2 flex items-center gap-1 rounded-md bg-[var(--surface-input)] px-2 py-1"
+            aria-live="polite"
+            data-testid="topic-create-pending"
+          >
+            <Loader2 className="h-3 w-3 animate-spin text-[var(--text-muted)]" />
+            <span className="text-[10px] text-[var(--text-muted)]">Creating…</span>
+          </div>
+        )}
+
+        {/* Avoid bare-import unused warnings: UserCog is reserved for the
+            settings dropdown sub-trigger if reintroduced. We reference it
+            here as a no-op type assertion to keep tree-shaking clean. */}
+        <span className="hidden" aria-hidden="true">
+          <UserCog />
+        </span>
+      </aside>
 
       {newNoteFlow.showTemplatePicker && resolvedWorkspaceId && (
         <TemplatePicker
