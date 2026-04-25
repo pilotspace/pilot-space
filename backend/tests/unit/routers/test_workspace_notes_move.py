@@ -50,6 +50,9 @@ def _make_note(workspace_id: UUID, project_id: UUID | None = None) -> MagicMock:
     note.word_count = 10
     note.owner_id = uuid4()
     note.icon_emoji = None
+    # Phase 93 — topic-tree fields populated by _note_to_response.
+    note.parent_topic_id = None
+    note.topic_depth = 0
     return note
 
 

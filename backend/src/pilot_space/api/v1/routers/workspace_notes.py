@@ -91,7 +91,13 @@ async def _resolve_workspace(
 
 
 def _note_to_response(note: Note) -> NoteResponse:
-    """Convert Note model to NoteResponse schema."""
+    """Convert Note model to NoteResponse schema.
+
+    Phase 93: includes ``parent_topic_id``/``topic_depth`` so any endpoint
+    returning a NoteResponse exposes the topic-tree position. Without these
+    fields the frontend sidebar tree (Plan 93-04) cannot reconstruct the
+    hierarchy from list/detail/update/move/pin payloads.
+    """
     return NoteResponse(
         id=note.id,
         created_at=note.created_at,
@@ -103,6 +109,8 @@ def _note_to_response(note: Note) -> NoteResponse:
         word_count=note.word_count,
         last_edited_by_id=note.owner_id,
         icon_emoji=note.icon_emoji,
+        parent_topic_id=note.parent_topic_id,
+        topic_depth=note.topic_depth,
     )
 
 
@@ -131,6 +139,8 @@ def _note_to_detail_response(note: Note) -> NoteDetailResponse:
         word_count=note.word_count,
         last_edited_by_id=note.owner_id,
         icon_emoji=note.icon_emoji,
+        parent_topic_id=note.parent_topic_id,
+        topic_depth=note.topic_depth,
         content=content,
         annotation_count=len(note.annotations) if note.annotations else 0,
         discussion_count=len(note.discussions) if note.discussions else 0,
@@ -151,6 +161,8 @@ def _note_to_tree_response(note: Note) -> PageTreeResponse:
         word_count=note.word_count,
         last_edited_by_id=note.owner_id,
         icon_emoji=note.icon_emoji,
+        parent_topic_id=note.parent_topic_id,
+        topic_depth=note.topic_depth,
         parent_id=note.parent_id,
         depth=note.depth,
         position=note.position,
