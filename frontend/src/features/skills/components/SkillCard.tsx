@@ -15,6 +15,7 @@
  */
 'use client';
 
+import { createElement } from 'react';
 import { Network, Clock } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ArtifactCard } from '@/components/artifacts/ArtifactCard';
@@ -36,14 +37,16 @@ function relativeTime(iso: string | null): string {
 }
 
 function SkillIcon({ name }: { name: string | null | undefined }) {
-  const Component = resolveLucideIcon(name);
-  return (
-    <Component
-      className="h-5 w-5 shrink-0"
-      style={{ color: '#7c5cff' }}
-      aria-hidden
-    />
-  );
+  // Resolve via static map then render through React.createElement so the
+  // react-hooks/static-components ESLint rule doesn't false-positive on the
+  // uppercase JSX-tag pattern. The lucide component returned is one of 23
+  // statically-imported singletons — never created at render time.
+  const component = resolveLucideIcon(name);
+  return createElement(component, {
+    className: 'h-5 w-5 shrink-0',
+    style: { color: '#7c5cff' },
+    'aria-hidden': true,
+  });
 }
 
 function SkillCardFooter({ skill }: { skill: Skill }) {
