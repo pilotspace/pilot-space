@@ -10,6 +10,13 @@ export { SkillsGalleryPage } from './components/SkillsGalleryPage';
 export { SkillDetailPage } from './components/SkillDetailPage';
 export { SkillReferenceFiles } from './components/SkillReferenceFiles';
 export { SkillFilePreview } from './components/SkillFilePreview';
+export { SkillGraphView, miniMapNodeColor } from './components/SkillGraphView';
+// Note: the SkillGraphNode/FileGraphNode COMPONENTS are intentionally NOT
+// re-exported from this barrel — `SkillGraphNode` is also the name of a TYPE
+// from `./lib/skill-graph` (Plan 92-01's public contract). Consumers that
+// need the components import them directly from `./components/graph-nodes/`.
+export { GraphEmptyState } from './components/graph-states/GraphEmptyState';
+export { GraphErrorState } from './components/graph-states/GraphErrorState';
 export { resolveLucideIcon } from './lib/skill-icon';
 export {
   encodeSkillFilePeek,

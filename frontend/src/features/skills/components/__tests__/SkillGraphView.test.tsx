@@ -195,7 +195,8 @@ describe('SkillGraphView', () => {
 
     expect(screen.getByTestId('react-flow')).toBeInTheDocument();
     expect(reactFlowSpy).toHaveBeenCalledTimes(1);
-    const props = reactFlowSpy.mock.calls[0][0] as Record<string, unknown>;
+    const firstCall = reactFlowSpy.mock.calls[0]!;
+    const props = firstCall[0] as Record<string, unknown>;
     const nodeTypes = props.nodeTypes as Record<string, unknown>;
     expect(nodeTypes).toHaveProperty('skill');
     expect(nodeTypes).toHaveProperty('file');
@@ -281,7 +282,8 @@ describe('SkillGraphView', () => {
 
     render(<SkillGraphView />);
 
-    const props = reactFlowSpy.mock.calls[0][0] as Record<string, unknown>;
+    const firstCall = reactFlowSpy.mock.calls[0]!;
+    const props = firstCall[0] as Record<string, unknown>;
     expect(props.nodesDraggable).toBe(false);
     const proOptions = props.proOptions as Record<string, unknown>;
     expect(proOptions.hideAttribution).toBe(true);
@@ -337,7 +339,8 @@ describe('SkillGraphView', () => {
     render(<SkillGraphView />);
 
     expect(miniMapSpy).toHaveBeenCalledTimes(1);
-    const miniProps = miniMapSpy.mock.calls[0][0] as Record<string, unknown>;
+    const miniCall = miniMapSpy.mock.calls[0]!;
+    const miniProps = miniCall[0] as Record<string, unknown>;
     expect(miniProps.position).toBe('bottom-right');
     expect(typeof miniProps.nodeColor).toBe('function');
     const colorFn = miniProps.nodeColor as (n: { type?: string }) => string;
