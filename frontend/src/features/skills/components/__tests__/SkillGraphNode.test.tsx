@@ -10,7 +10,6 @@
  *  - expanded preview content (skill name + `{N} refs` JBM meta)
  */
 
-import * as React from 'react';
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import type { NodeProps } from '@xyflow/react';
@@ -185,15 +184,18 @@ describe('FileGraphNode', () => {
   });
 
   it('renders the correct icon by extension', () => {
+    // lucide-react attaches `lucide-{kebab}` to the svg's class. Some icons
+    // are exposed under display-name aliases (e.g. `Code2` → `code-xml`,
+    // `Image` → `image`), so we match against the LIBRARY's emitted class.
     const cases: Array<[string, string]> = [
-      ['docs/notes.md', 'FileText'],
-      ['scripts/run.py', 'Code2'],
-      ['assets/logo.png', 'Image'],
-      ['data/values.csv', 'Table'],
-      ['LICENSE', 'File'],
+      ['docs/notes.md', 'lucide-file-text'],
+      ['scripts/run.py', 'lucide-code-xml'],
+      ['assets/logo.png', 'lucide-image'],
+      ['data/values.csv', 'lucide-table'],
+      ['LICENSE', 'lucide-file'],
     ];
 
-    for (const [path, expectedIconName] of cases) {
+    for (const [path, expectedClass] of cases) {
       const { container, unmount } = render(
         <FileGraphNode
           {...makeNodeProps(
@@ -202,17 +204,12 @@ describe('FileGraphNode', () => {
           )}
         />,
       );
-      // lucide-react attaches `lucide-{name-kebab}` class to the svg.
       const svg = container.querySelector('svg[aria-hidden="true"]');
       expect(svg, `svg present for ${path}`).toBeTruthy();
-      const expectedKebab = expectedIconName
-        .replace(/([A-Z0-9])/g, '-$1')
-        .toLowerCase()
-        .replace(/^-/, '');
-      expect(
-        svg!.className.baseVal ?? svg!.getAttribute('class') ?? '',
-        `expected lucide-${expectedKebab} class for ${path}`,
-      ).toContain(`lucide-${expectedKebab}`);
+      const cls = svg!.getAttribute('class') ?? '';
+      expect(cls, `expected ${expectedClass} for ${path}, got ${cls}`).toContain(
+        expectedClass,
+      );
       unmount();
     }
   });
