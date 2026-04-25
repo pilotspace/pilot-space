@@ -7,7 +7,15 @@
  */
 export { SkillCard, type SkillCardProps } from './components/SkillCard';
 export { SkillsGalleryPage } from './components/SkillsGalleryPage';
+export { SkillDetailPage } from './components/SkillDetailPage';
+export { SkillReferenceFiles } from './components/SkillReferenceFiles';
+export { SkillFilePreview } from './components/SkillFilePreview';
 export { resolveLucideIcon } from './lib/skill-icon';
+export {
+  encodeSkillFilePeek,
+  decodeSkillFilePeek,
+  SKILL_FILE_PEEK_PREFIX,
+} from './lib/skill-peek';
 export {
   useSkillCatalog,
   SKILLS_CATALOG_QUERY_KEY,
