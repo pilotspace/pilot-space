@@ -215,6 +215,10 @@
   /* Accessible text colors (AA compliant) */
   --primary-text: #1f7d66;
   --ai-text: #4a6f8f;
+
+  /* Phase 90 — v3 nav surfaces (palette/popover floating shadow + global focus ring) */
+  --shadow-floating: 0 12px 40px rgb(0 0 0 / 0.12);
+  --focus-ring: 0 0 0 2px #29a386, 0 0 0 4px transparent;
 }
 
 /* =============================================================================
@@ -316,6 +320,10 @@
   /* Accessible text colors (AA compliant) */
   --primary-text: #4ecaa8;
   --ai-text: #8fb5d3;
+
+  /* Phase 90 — v3 nav surfaces (dark variants of floating shadow + focus ring) */
+  --shadow-floating: 0 12px 40px rgb(0 0 0 / 0.45);
+  --focus-ring: 0 0 0 2px #3db896, 0 0 0 4px transparent;
 }
 
 /* =============================================================================
