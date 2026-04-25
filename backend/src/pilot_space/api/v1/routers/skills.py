@@ -25,6 +25,10 @@ def _to_response(info: SkillInfo) -> SkillResponse:
         category=info.category,
         icon=info.icon,
         examples=info.examples,
+        slug=info.slug,
+        feature_module=info.feature_module,
+        reference_files=info.reference_files,
+        updated_at=info.updated_at,
     )
 
 
