@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select, text, update
 from sqlalchemy.orm import joinedload, selectinload
 
 from pilot_space.infrastructure.database.models.note import Note
@@ -19,6 +19,13 @@ if TYPE_CHECKING:
 
     from sqlalchemy import RowMapping
     from sqlalchemy.ext.asyncio import AsyncSession
+
+
+# ── Topic-hierarchy invariants ───────────────────────────────────────────────
+# Max depth for the topic-level hierarchy (separate from page-level max=2).
+TOPIC_MAX_DEPTH: int = 5
+# Hard cap on ancestor walk hops (TOPIC_MAX_DEPTH + 1 to include the node itself).
+_TOPIC_ANCESTOR_HOP_CAP: int = TOPIC_MAX_DEPTH + 1
 
 
 class NoteRepository(BaseRepository[Note]):
@@ -406,6 +413,244 @@ class NoteRepository(BaseRepository[Note]):
         )
         result = await self.session.execute(cte_sql, {"root_id": str(note_id)})
         return result.mappings().all()
+
+    # ── Topic-level hierarchy (Phase 93) ────────────────────────────────────
+    # The methods below operate on `parent_topic_id` / `topic_depth`, NOT
+    # `parent_id` / `depth` / `position`. The two hierarchies are orthogonal.
+
+    async def list_topic_children(
+        self,
+        workspace_id: UUID,
+        parent_topic_id: UUID | None,
+        *,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[Sequence[Note], int]:
+        """Return (rows, total_count) for direct topic children.
+
+        ``parent_topic_id=None`` lists root-level topics (top of the tree).
+        Ordered by ``created_at DESC``. Soft-deleted rows are excluded.
+
+        Args:
+            workspace_id: workspace scoping (defense-in-depth on top of RLS).
+            parent_topic_id: parent's id, or None for the workspace's roots.
+            page: 1-based page number.
+            page_size: page size, must be >= 1.
+        """
+        page = max(page, 1)
+        page_size = max(page_size, 1)
+
+        base = select(Note).where(
+            Note.workspace_id == workspace_id,
+            Note.is_deleted == False,  # noqa: E712
+        )
+        if parent_topic_id is None:
+            base = base.where(Note.parent_topic_id.is_(None))
+        else:
+            base = base.where(Note.parent_topic_id == parent_topic_id)
+
+        # Total count (paginate on a stable filtered set).
+        count_query = (
+            select(func.count()).select_from(Note).where(
+                Note.workspace_id == workspace_id,
+                Note.is_deleted == False,  # noqa: E712
+            )
+        )
+        if parent_topic_id is None:
+            count_query = count_query.where(Note.parent_topic_id.is_(None))
+        else:
+            count_query = count_query.where(Note.parent_topic_id == parent_topic_id)
+
+        total_result = await self.session.execute(count_query)
+        total = total_result.scalar() or 0
+
+        rows_query = (
+            base.order_by(Note.created_at.desc())
+            .limit(page_size)
+            .offset((page - 1) * page_size)
+        )
+        rows_result = await self.session.execute(rows_query)
+        rows = rows_result.scalars().all()
+        return rows, total
+
+    async def list_topic_ancestors(self, note_id: UUID) -> list[Note]:
+        """Walk parent_topic_id chain upward; returns root → leaf order.
+
+        Includes the node itself as the LAST element. Length ≤ 6
+        (TOPIC_MAX_DEPTH + 1). If a cycle is somehow present in the DB
+        (defense-in-depth — move_topic prevents this at write time), the
+        walk is truncated at the hop cap.
+
+        Args:
+            note_id: leaf note id whose ancestor chain to walk.
+
+        Returns:
+            list of Note ordered root → leaf, INCLUDING the leaf.
+            Empty list if note_id does not exist or is soft-deleted.
+        """
+        chain: list[Note] = []
+        seen: set[UUID] = set()
+        current_id: UUID | None = note_id
+
+        for _ in range(_TOPIC_ANCESTOR_HOP_CAP):
+            if current_id is None or current_id in seen:
+                break
+            seen.add(current_id)
+
+            result = await self.session.execute(
+                select(Note).where(
+                    Note.id == current_id,
+                    Note.is_deleted == False,  # noqa: E712
+                )
+            )
+            node = result.scalar_one_or_none()
+            if node is None:
+                break
+            chain.append(node)
+            current_id = node.parent_topic_id
+
+        # chain is leaf → root; reverse to root → leaf as documented.
+        chain.reverse()
+        return chain
+
+    async def move_topic(
+        self,
+        topic_id: UUID,
+        new_parent_topic_id: UUID | None,
+    ) -> Note:
+        """Reparent ``topic_id`` under ``new_parent_topic_id`` (root if None).
+
+        Atomic over the moved row + every descendant via a single savepoint
+        (``begin_nested``) inside the caller's outer transaction. Uses
+        Python BFS instead of a Postgres-only recursive CTE so the same code
+        runs on the SQLite test DB.
+
+        Validations (all raise ``ValueError`` with sentinel messages so the
+        Phase 93-02 service layer can map them to typed domain exceptions):
+
+          * ``"topic_not_found"`` — topic_id missing or soft-deleted
+          * ``"parent_not_found"`` — new_parent_topic_id missing / deleted
+          * ``"cross_workspace_move"`` — parent in a different workspace
+          * ``"topic_cycle"`` — target equals topic_id or sits in its subtree
+          * ``"topic_max_depth"`` — any descendant would exceed depth 5
+
+        Returns:
+            the refreshed source Note.
+        """
+        # ── Self-cycle short-circuit ────────────────────────────────────────
+        # Match against topic_id BEFORE any DB lookups: cheaper, clearer.
+        if new_parent_topic_id is not None and new_parent_topic_id == topic_id:
+            raise ValueError("topic_cycle")
+
+        # ── Load source row ─────────────────────────────────────────────────
+        source_result = await self.session.execute(
+            select(Note).where(
+                Note.id == topic_id,
+                Note.is_deleted == False,  # noqa: E712
+            )
+        )
+        source = source_result.scalar_one_or_none()
+        if source is None:
+            raise ValueError("topic_not_found")
+
+        # ── Load + validate new parent (if any) ─────────────────────────────
+        if new_parent_topic_id is None:
+            new_root_depth = 0
+        else:
+            parent_result = await self.session.execute(
+                select(Note).where(
+                    Note.id == new_parent_topic_id,
+                    Note.is_deleted == False,  # noqa: E712
+                )
+            )
+            parent = parent_result.scalar_one_or_none()
+            if parent is None:
+                raise ValueError("parent_not_found")
+            if parent.workspace_id != source.workspace_id:
+                raise ValueError("cross_workspace_move")
+
+            # Cycle check: walk parent's chain upward — if topic_id appears
+            # anywhere, the move would create a cycle.
+            cursor: UUID | None = parent.parent_topic_id
+            seen: set[UUID] = {parent.id}
+            for _ in range(_TOPIC_ANCESTOR_HOP_CAP):
+                if cursor is None:
+                    break
+                if cursor == topic_id:
+                    raise ValueError("topic_cycle")
+                if cursor in seen:
+                    # Defensive break on pre-existing cycle.
+                    break
+                seen.add(cursor)
+                ancestor_result = await self.session.execute(
+                    select(Note.parent_topic_id).where(Note.id == cursor)
+                )
+                cursor = ancestor_result.scalar_one_or_none()
+
+            new_root_depth = parent.topic_depth + 1
+
+        # ── BFS-load source's descendants ──────────────────────────────────
+        # Frontier-by-frontier load; cap at TOPIC_MAX_DEPTH iterations since
+        # max subtree height is bounded.
+        # Map: descendant_id -> (parent_id, current_depth)
+        descendants: dict[UUID, tuple[UUID, int]] = {}
+        frontier: list[UUID] = [topic_id]
+        for _ in range(TOPIC_MAX_DEPTH + 1):  # +1 = guard against pre-existing depth violations
+            if not frontier:
+                break
+            child_result = await self.session.execute(
+                select(Note.id, Note.parent_topic_id, Note.topic_depth).where(
+                    Note.parent_topic_id.in_(frontier),
+                    Note.is_deleted == False,  # noqa: E712
+                )
+            )
+            next_frontier: list[UUID] = []
+            for row in child_result.all():
+                child_id, child_parent_id, child_depth = row
+                # parent_topic_id is non-null because we filtered by .in_(frontier).
+                descendants[child_id] = (child_parent_id, child_depth)
+                next_frontier.append(child_id)
+            frontier = next_frontier
+
+        # ── Compute new depths via BFS from source ─────────────────────────
+        new_depths: dict[UUID, int] = {topic_id: new_root_depth}
+        queue: list[UUID] = [topic_id]
+        while queue:
+            current = queue.pop(0)
+            current_new_depth = new_depths[current]
+            for desc_id, (desc_parent_id, _desc_old_depth) in descendants.items():
+                if desc_parent_id == current and desc_id not in new_depths:
+                    new_depths[desc_id] = current_new_depth + 1
+                    queue.append(desc_id)
+
+        # ── Reject if any new depth exceeds the invariant ──────────────────
+        if any(d > TOPIC_MAX_DEPTH for d in new_depths.values()):
+            raise ValueError("topic_max_depth")
+
+        # ── Apply updates atomically ───────────────────────────────────────
+        # Single savepoint so depth + parent updates roll back together if
+        # any UPDATE raises mid-flight. Caller controls the outer commit.
+        async with self.session.begin_nested():
+            await self.session.execute(
+                update(Note)
+                .where(Note.id == topic_id)
+                .values(
+                    parent_topic_id=new_parent_topic_id,
+                    topic_depth=new_root_depth,
+                )
+            )
+            for desc_id, new_depth in new_depths.items():
+                if desc_id == topic_id:
+                    continue
+                await self.session.execute(
+                    update(Note)
+                    .where(Note.id == desc_id)
+                    .values(topic_depth=new_depth)
+                )
+
+        await self.session.flush()
+        await self.session.refresh(source)
+        return source
 
     async def search_full_text(
         self,
