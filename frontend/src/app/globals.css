@@ -9,6 +9,18 @@
    ============================================================================= */
 
 @theme inline {
+  /* =============================================================================
+     BREAKPOINT CONTRACT (Phase 94 / MIG-03)
+     xs:  425px  custom (mobile)
+     sm:  640px  framework default
+     md:  768px  framework default
+     lg: 1024px  framework default
+     xl: 1280px  framework default
+     2xl:1536px  framework default
+     ============================================================================= */
+  /* Custom breakpoint — Tailwind v4 emits `xs:` variants once registered. */
+  --breakpoint-xs: 425px;
+
   /* Color mappings */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
