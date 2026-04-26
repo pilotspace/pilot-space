@@ -20,6 +20,7 @@ const TEST_USER = {
 };
 
 const AUTH_STATE_PATH = path.join(__dirname, '.auth/user.json');
+const SEED_CONTEXT_PATH = path.join(__dirname, '.auth/seed-context.json');
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'http://localhost:18000';
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -207,6 +208,34 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
     console.log(`✅ Global setup: Auth state saved to ${AUTH_STATE_PATH}`);
 
     await browser.close();
+
+    // Phase 94 Plan 03 — write seed-context.json so capstone E2E specs
+    // can resolve workspace + entity ids without hardcoding. Best-effort:
+    // we currently seed only workspace identity. Specs that require
+    // deeper entities (chat session w/ assistant message, pending
+    // proposal, depth=5 topic chain) check for `null` and `test.skip`.
+    const workspaceId = (() => {
+      const matched = wsList.items?.find?.(
+        (w: { slug: string; id?: string }) => w.slug === 'workspace'
+      );
+      return matched?.id ?? null;
+    })();
+    const seedCtx = {
+      workspaceSlug: 'workspace',
+      workspaceId: workspaceId ?? '',
+      rootTopicId: null,
+      childTopicAId: null,
+      childTopicBId: null,
+      deepTopicId: null,
+      taskId: null,
+      chatSessionId: null,
+      artifactId: null,
+      pendingProposalId: null,
+      skillSlug: null,
+      skillReferenceFilePath: null,
+    };
+    fs.writeFileSync(SEED_CONTEXT_PATH, JSON.stringify(seedCtx, null, 2));
+    console.log(`✅ Global setup: Seed context written to ${SEED_CONTEXT_PATH}`);
 
     // Verify auth state file has content
     const authState = JSON.parse(fs.readFileSync(AUTH_STATE_PATH, 'utf-8'));
