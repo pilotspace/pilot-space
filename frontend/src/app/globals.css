@@ -219,6 +219,7 @@
   /* Phase 90 — v3 nav surfaces (palette/popover floating shadow + global focus ring) */
   --shadow-floating: 0 12px 40px rgb(0 0 0 / 0.12);
   --focus-ring: 0 0 0 2px #29a386, 0 0 0 4px transparent;
+  --focus-ring-offset: 2px;
 }
 
 /* =============================================================================
@@ -324,6 +325,23 @@
   /* Phase 90 — v3 nav surfaces (dark variants of floating shadow + focus ring) */
   --shadow-floating: 0 12px 40px rgb(0 0 0 / 0.45);
   --focus-ring: 0 0 0 2px #3db896, 0 0 0 4px transparent;
+  --focus-ring-offset: 2px;
+}
+
+/* =============================================================================
+   PHASE 94-01 — A11Y: 44×44 invisible hit-target expansion utility
+   ============================================================================= */
+.hit-target-44 {
+  position: relative;
+}
+.hit-target-44::before {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  min-width: 44px;
+  min-height: 44px;
+  /* Invisible click area; pointer-events forwarded to the parent */
+  pointer-events: auto;
 }
 
 /* =============================================================================
