@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils';
 import { copyToClipboard } from '@/lib/copy-context';
 import { useArtifactPeekState } from '@/hooks/use-artifact-peek-state';
 import { useArtifactQuery } from '@/hooks/use-artifact-query';
+import { useViewport } from '@/hooks/useViewport';
 import {
   Tooltip,
   TooltipContent,
@@ -55,6 +56,9 @@ export function ArtifactPeekDrawer() {
   } = useArtifactPeekState();
   const params = useParams<{ workspaceSlug?: string }>();
   const workspaceSlug = params?.workspaceSlug ?? '';
+  // Phase 94 Plan 02 (MIG-03) — bottom-sheet variant @ <768px.
+  const { peekMode } = useViewport();
+  const isBottomSheet = peekMode === 'bottom-sheet';
   // Phase 91 — skill-file peeks use a separate body component (SkillFilePreview)
   // and do NOT participate in the artifact-resolution query. We still call
   // useArtifactQuery (with both args nulled when isSkillFilePeek) so the hook
@@ -124,17 +128,36 @@ export function ArtifactPeekDrawer() {
         />
         <DialogPrimitive.Content
           data-testid="peek-drawer-content"
+          data-peek-mode={peekMode}
           aria-describedby={undefined}
           className={cn(
-            'fixed inset-y-0 right-0 z-50 flex h-full w-[680px] max-w-[100vw] flex-col',
-            'bg-background shadow-xl',
-            'rounded-l-[16px] rounded-r-none border-l border-border',
-            'data-[state=open]:animate-in data-[state=closed]:animate-out',
-            'data-[state=open]:slide-in-from-right data-[state=closed]:slide-out-to-right',
-            'data-[state=open]:duration-250 data-[state=closed]:duration-200',
-            'ease-out',
-            'motion-reduce:data-[state=open]:fade-in-0 motion-reduce:data-[state=closed]:fade-out-0',
-            'motion-reduce:data-[state=open]:slide-in-from-right-0 motion-reduce:data-[state=closed]:slide-out-to-right-0',
+            'fixed z-50 flex flex-col bg-background shadow-xl',
+            // Phase 94 Plan 02 (MIG-03) — branch on peekMode.
+            isBottomSheet
+              ? [
+                  // Bottom-sheet (<768): full-width, slides up from bottom,
+                  // 90vh max so the user can still see the page underneath
+                  // and dismiss via tap-outside.
+                  'inset-x-0 bottom-0 top-auto h-[90vh] w-full max-w-none',
+                  'rounded-t-[16px] rounded-b-none border-t border-border',
+                  'data-[state=open]:animate-in data-[state=closed]:animate-out',
+                  'data-[state=open]:slide-in-from-bottom data-[state=closed]:slide-out-to-bottom',
+                  'data-[state=open]:duration-250 data-[state=closed]:duration-200',
+                  'ease-out',
+                  'motion-reduce:data-[state=open]:fade-in-0 motion-reduce:data-[state=closed]:fade-out-0',
+                  'motion-reduce:data-[state=open]:slide-in-from-bottom-0 motion-reduce:data-[state=closed]:slide-out-to-bottom-0',
+                ]
+              : [
+                  // Side drawer (≥768): existing right-side behavior preserved.
+                  'inset-y-0 right-0 h-full w-[680px] max-w-[100vw]',
+                  'rounded-l-[16px] rounded-r-none border-l border-border',
+                  'data-[state=open]:animate-in data-[state=closed]:animate-out',
+                  'data-[state=open]:slide-in-from-right data-[state=closed]:slide-out-to-right',
+                  'data-[state=open]:duration-250 data-[state=closed]:duration-200',
+                  'ease-out',
+                  'motion-reduce:data-[state=open]:fade-in-0 motion-reduce:data-[state=closed]:fade-out-0',
+                  'motion-reduce:data-[state=open]:slide-in-from-right-0 motion-reduce:data-[state=closed]:slide-out-to-right-0',
+                ],
           )}
         >
           <DialogPrimitive.Title className="sr-only">

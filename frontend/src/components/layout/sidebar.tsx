@@ -53,6 +53,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useResponsive } from '@/hooks/useMediaQuery';
+import { useViewport } from '@/hooks/useViewport';
 import { cn } from '@/lib/utils';
 import type { AuthStore } from '@/stores/AuthStore';
 import type { NotificationStore } from '@/stores/NotificationStore';
@@ -458,6 +459,12 @@ export const Sidebar = observer(function Sidebar() {
   const router = useRouter();
   const collapsed = uiStore.sidebarCollapsed;
   const { isSmallScreen } = useResponsive();
+  // Phase 94 Plan 02 (MIG-03): expose the viewport-derived sidebar mode as a
+  // `data-sidebar-mode` attribute so e2e specs and tests can assert layout
+  // shape without depending on width measurements. The existing
+  // `sidebarCollapsed` user-pref still drives visual state (60px collapse on
+  // tablet/mobile via app-shell); this attribute reports the *spec* mode.
+  const { sidebarMode } = useViewport();
   const prevPathnameRef = useRef(pathname);
 
   // Auto-close sidebar on mobile when navigating
@@ -569,6 +576,7 @@ export const Sidebar = observer(function Sidebar() {
           collapsed && 'w-[60px]'
         )}
         data-testid="sidebar"
+        data-sidebar-mode={sidebarMode}
       >
         {/* ----------------------------------------------------------------
             Top stack — WorkspacePill → + New chat → ⌘K Search button

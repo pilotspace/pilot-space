@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Menu } from 'lucide-react';
 import { useUIStore } from '@/stores';
 import { useResponsive } from '@/hooks/useMediaQuery';
+import { useViewport } from '@/hooks/useViewport';
 import { Sidebar } from './sidebar';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -21,6 +22,9 @@ interface AppShellProps {
 export const AppShell = observer(function AppShell({ children }: AppShellProps) {
   const uiStore = useUIStore();
   const { isMobile, isTablet } = useResponsive();
+  // Phase 94 Plan 02 — viewport-derived layout-mode hint exposed as a data
+  // attribute so the responsive Playwright sweep can assert app-shell shape.
+  const { sidebarMode } = useViewport();
   const sidebarOpen = !uiStore.sidebarCollapsed;
 
   useEffect(() => {
@@ -43,7 +47,11 @@ export const AppShell = observer(function AppShell({ children }: AppShellProps) 
   }, [isMobile, isTablet]);
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-background">
+    <div
+      className="flex h-screen w-full overflow-hidden bg-background"
+      data-app-shell
+      data-sidebar-mode={sidebarMode}
+    >
       {/* Global Cmd+K search palette */}
       <CommandPalette />
 

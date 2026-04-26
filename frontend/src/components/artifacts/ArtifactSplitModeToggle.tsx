@@ -15,6 +15,7 @@ import {
   useArtifactPeekState,
   type ArtifactPeekView,
 } from '@/hooks/use-artifact-peek-state';
+import { useViewport } from '@/hooks/useViewport';
 import { cn } from '@/lib/utils';
 
 interface ModeDef {
@@ -35,9 +36,20 @@ export interface ArtifactSplitModeToggleProps {
 
 export function ArtifactSplitModeToggle({ className }: ArtifactSplitModeToggleProps) {
   const { view, setView } = useArtifactPeekState();
+  // Phase 94 Plan 02 (MIG-03) — at <768 the side-by-side split layout is
+  // unusable; collapse to a Read | Chat tab pair. The 'split' mode is hidden
+  // (no DOM entry) so cycling via arrow keys never lands on it on small
+  // viewports. Selecting it via deep-link is auto-corrected to 'read' by
+  // useArtifactPeekState (out of scope here — peek-state hook owns that).
+  const { splitMode } = useViewport();
+  const isTabsMode = splitMode === 'tabs';
+  const visibleModes = React.useMemo(
+    () => (isTabsMode ? MODES.filter((m) => m.key !== 'split') : MODES),
+    [isTabsMode],
+  );
   const activeIndex = React.useMemo(
-    () => Math.max(0, MODES.findIndex((m) => m.key === view)),
-    [view],
+    () => Math.max(0, visibleModes.findIndex((m) => m.key === view)),
+    [view, visibleModes],
   );
   const refs = React.useRef<Array<HTMLButtonElement | null>>([]);
 
@@ -46,8 +58,8 @@ export function ArtifactSplitModeToggle({ className }: ArtifactSplitModeTogglePr
       if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
       e.preventDefault();
       const delta = e.key === 'ArrowRight' ? 1 : -1;
-      const next = (activeIndex + delta + MODES.length) % MODES.length;
-      const nextMode = MODES[next];
+      const next = (activeIndex + delta + visibleModes.length) % visibleModes.length;
+      const nextMode = visibleModes[next];
       if (!nextMode) return;
       setView(nextMode.key);
       // Move focus to the newly-active button on next frame
@@ -55,12 +67,12 @@ export function ArtifactSplitModeToggle({ className }: ArtifactSplitModeTogglePr
         refs.current[next]?.focus();
       });
     },
-    [activeIndex, setView],
+    [activeIndex, setView, visibleModes],
   );
 
   return (
     <div
-      role="radiogroup"
+      role={isTabsMode ? 'tablist' : 'radiogroup'}
       aria-label="Artifact view mode"
       onKeyDown={handleKeyDown}
       className={cn(
@@ -68,8 +80,9 @@ export function ArtifactSplitModeToggle({ className }: ArtifactSplitModeTogglePr
         className,
       )}
       data-testid="split-mode-toggle"
+      data-split-mode={splitMode}
     >
-      {MODES.map((mode, idx) => {
+      {visibleModes.map((mode, idx) => {
         const isActive = mode.key === view;
         return (
           <button
@@ -78,8 +91,9 @@ export function ArtifactSplitModeToggle({ className }: ArtifactSplitModeTogglePr
               refs.current[idx] = el;
             }}
             type="button"
-            role="radio"
-            aria-checked={isActive}
+            role={isTabsMode ? 'tab' : 'radio'}
+            aria-checked={isTabsMode ? undefined : isActive}
+            aria-selected={isTabsMode ? isActive : undefined}
             tabIndex={isActive ? 0 : -1}
             onClick={() => setView(mode.key)}
             className={cn(
