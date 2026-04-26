@@ -324,3 +324,85 @@ describe('UIStore — workspace switcher + palette extensions', () => {
     dispose();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Plan 93-05 — palette move-mode (Move-to picker plumbing)
+// ---------------------------------------------------------------------------
+
+describe('UIStore — palette move-mode (93-05)', () => {
+  let uiStore: UIStore;
+
+  beforeEach(() => {
+    localStorageMock.clear();
+    vi.clearAllMocks();
+    uiStore = new UIStore();
+  });
+
+  afterEach(() => {
+    uiStore.dispose();
+  });
+
+  it('paletteMode defaults to null (Decision T: search ≡ null)', () => {
+    expect(uiStore.paletteMode).toBe(null);
+    expect(uiStore.paletteMoveSourceId).toBe(null);
+    expect(uiStore.paletteMoveSourceParentId).toBe(null);
+  });
+
+  it("openPaletteForMove sets commandPaletteOpen + scope='topics' + mode='move' + sourceId + parentBefore", () => {
+    uiStore.openPaletteForMove('note-1', 'parent-A');
+
+    expect(uiStore.commandPaletteOpen).toBe(true);
+    expect(uiStore.paletteScope).toBe('topics');
+    expect(uiStore.paletteMode).toBe('move');
+    expect(uiStore.paletteMoveSourceId).toBe('note-1');
+    expect(uiStore.paletteMoveSourceParentId).toBe('parent-A');
+  });
+
+  it('openPaletteForMove with no parentBeforeId defaults to null (root-level source)', () => {
+    uiStore.openPaletteForMove('root-topic');
+
+    expect(uiStore.paletteMoveSourceId).toBe('root-topic');
+    expect(uiStore.paletteMoveSourceParentId).toBe(null);
+  });
+
+  it('closeCommandPalette resets paletteMode + paletteMoveSourceId + paletteMoveSourceParentId', () => {
+    uiStore.openPaletteForMove('note-2', 'parent-B');
+    expect(uiStore.paletteMode).toBe('move');
+
+    uiStore.closeCommandPalette();
+
+    expect(uiStore.commandPaletteOpen).toBe(false);
+    expect(uiStore.paletteScope).toBe('all');
+    expect(uiStore.palettePrefixMode).toBe(null);
+    expect(uiStore.paletteMode).toBe(null);
+    expect(uiStore.paletteMoveSourceId).toBe(null);
+    expect(uiStore.paletteMoveSourceParentId).toBe(null);
+  });
+
+  it('openCommandPalette (legacy ⌘K path) leaves paletteMode at null — backwards-compat invariant', () => {
+    uiStore.openCommandPalette();
+
+    expect(uiStore.commandPaletteOpen).toBe(true);
+    // Critical: legacy openers must NOT accidentally trigger move mode.
+    expect(uiStore.paletteMode).toBe(null);
+    expect(uiStore.paletteMoveSourceId).toBe(null);
+  });
+
+  it('paletteMode is MobX-observable (autorun fires when openPaletteForMove is called)', () => {
+    let reactionCount = 0;
+
+    const dispose = autorun(() => {
+      const _val = uiStore.paletteMode;
+      void _val;
+      reactionCount++;
+    });
+
+    const initialCount = reactionCount;
+
+    uiStore.openPaletteForMove('note-3');
+
+    expect(reactionCount).toBeGreaterThan(initialCount);
+
+    dispose();
+  });
+});

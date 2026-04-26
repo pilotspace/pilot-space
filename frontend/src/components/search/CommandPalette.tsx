@@ -43,6 +43,8 @@ import type { PaletteScope } from '@/stores/UIStore';
 import { useSkillCatalog } from '@/features/skills/hooks';
 import { resolveLucideIcon } from '@/features/skills/lib/skill-icon';
 import type { Skill } from '@/types/skill';
+// Plan 93-05 — Move-to picker body, rendered when paletteMode === 'move'.
+import { MoveToPickerContent } from '@/features/topics/components';
 
 import {
   detectPrefixMode,
@@ -414,7 +416,16 @@ export const CommandPalette = observer(function CommandPalette() {
     results.notes[0]?.title ?? results.issues[0]?.name ?? results.issues[0]?.title ?? undefined;
   const ghost = ghostCompletion(effectiveQuery, firstResultTitle);
 
-  const placeholder = placeholderForPrefix(uiStore.palettePrefixMode);
+  // Plan 93-05 — when paletteMode === 'move', the palette becomes a Move-to
+  // picker. We branch the result body, the input placeholder, and the footer
+  // legend; everything else (Dialog, sizing, dismiss handler) is reused from
+  // the search render path so backwards-compat stays trivial.
+  const isMoveMode =
+    uiStore.paletteMode === 'move' && uiStore.paletteMoveSourceId !== null;
+
+  const placeholder = isMoveMode
+    ? 'Move topic to…'
+    : placeholderForPrefix(uiStore.palettePrefixMode);
   const modeChipChar =
     uiStore.palettePrefixMode === 'tasks'
       ? '#'
@@ -430,40 +441,46 @@ export const CommandPalette = observer(function CommandPalette() {
     <CommandDialog
       open={open}
       onOpenChange={handleOpenChange}
-      title="Command Palette"
-      description="Search chats, topics, tasks, specs, and people"
+      title={isMoveMode ? 'Move to…' : 'Command Palette'}
+      description={
+        isMoveMode
+          ? 'Pick a destination topic'
+          : 'Search chats, topics, tasks, specs, and people'
+      }
       className="max-w-none w-[680px] rounded-[20px] top-[120px] translate-y-0 p-0"
       showCloseButton={false}
     >
-      {/* ── Scope tabs ── */}
-      <ul
-        role="tablist"
-        aria-label="Palette scope"
-        className="flex gap-1 px-4 py-2 border-b border-[var(--border-card)]"
-      >
-        {SCOPES.map((s) => (
-          <li key={s.id}>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={scope === s.id}
-              data-scope={s.id}
-              className={cn(
-                'px-3 py-1.5 rounded-md text-[13px] font-medium transition-colors',
-                scope === s.id
-                  ? 'bg-[#29a38615] text-[var(--brand-primary)] font-semibold'
-                  : 'text-[var(--text-muted)] hover:bg-[var(--surface-input)]'
-              )}
-              onClick={() => {
-                uiStore.setPaletteScope(s.id);
-                manualScopeOverrideRef.current = true;
-              }}
-            >
-              {s.label}
-            </button>
-          </li>
-        ))}
-      </ul>
+      {/* ── Scope tabs ── (hidden in 93-05 move mode — picker has no scope) */}
+      {!isMoveMode && (
+        <ul
+          role="tablist"
+          aria-label="Palette scope"
+          className="flex gap-1 px-4 py-2 border-b border-[var(--border-card)]"
+        >
+          {SCOPES.map((s) => (
+            <li key={s.id}>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={scope === s.id}
+                data-scope={s.id}
+                className={cn(
+                  'px-3 py-1.5 rounded-md text-[13px] font-medium transition-colors',
+                  scope === s.id
+                    ? 'bg-[#29a38615] text-[var(--brand-primary)] font-semibold'
+                    : 'text-[var(--text-muted)] hover:bg-[var(--surface-input)]'
+                )}
+                onClick={() => {
+                  uiStore.setPaletteScope(s.id);
+                  manualScopeOverrideRef.current = true;
+                }}
+              >
+                {s.label}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
 
       {/* ── Input row: mode chip + CommandInput + ghost overlay + ⌘K ── */}
       <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--border-card)]">
@@ -505,11 +522,21 @@ export const CommandPalette = observer(function CommandPalette() {
 
       {/* ── Results list ── */}
       <CommandList className="max-h-[420px]">
+        {/* Plan 93-05 move-mode branch — render the Move-to picker body
+            instead of the search groups. */}
+        {isMoveMode && workspaceId && uiStore.paletteMoveSourceId && (
+          <MoveToPickerContent
+            workspaceId={workspaceId}
+            sourceId={uiStore.paletteMoveSourceId}
+            parentBeforeId={uiStore.paletteMoveSourceParentId}
+          />
+        )}
+
         {/* Loading */}
-        {isLoading && <ResultSkeleton />}
+        {!isMoveMode && isLoading && <ResultSkeleton />}
 
         {/* Error */}
-        {fetchError && !isLoading && (
+        {!isMoveMode && fetchError && !isLoading && (
           <div role="alert" className="px-3 py-4 text-[13px] text-destructive text-center">
             {fetchError}
           </div>
@@ -517,7 +544,7 @@ export const CommandPalette = observer(function CommandPalette() {
 
         {/* No-query empty state — suppressed in 'skills' scope where the
             catalog is the empty-query view (Plan 91-05). */}
-        {!isLoading && !hasQuery && scope !== 'skills' && (
+        {!isMoveMode && !isLoading && !hasQuery && scope !== 'skills' && (
           <div className="py-12 text-center">
             <div className="text-[13px] font-medium text-[var(--text-secondary)]">
               Search everything
@@ -545,7 +572,7 @@ export const CommandPalette = observer(function CommandPalette() {
         )}
 
         {/* Topics group */}
-        {!isLoading && hasQuery && showTopics && results.notes.length > 0 && (
+        {!isMoveMode && !isLoading && hasQuery && showTopics && results.notes.length > 0 && (
           <CommandGroup heading="TOPICS" className={GROUP_HEADING_CLS}>
             {results.notes.map((note) => (
               <CommandItem
@@ -560,7 +587,7 @@ export const CommandPalette = observer(function CommandPalette() {
         )}
 
         {/* Tasks group */}
-        {!isLoading && hasQuery && showTasks && results.issues.length > 0 && (
+        {!isMoveMode && !isLoading && hasQuery && showTasks && results.issues.length > 0 && (
           <CommandGroup heading="TASKS" className={GROUP_HEADING_CLS}>
             {results.issues.map((issue) => (
               <CommandItem
@@ -578,7 +605,7 @@ export const CommandPalette = observer(function CommandPalette() {
             Rendered OUTSIDE cmdk's CommandGroup because cmdk requires
             CommandItem children; using plain markup keeps the visual
             tab parity without breaking cmdk's filter index. */}
-        {!isLoading && hasQuery && showChats && (
+        {!isMoveMode && !isLoading && hasQuery && showChats && (
           <div data-palette-group="chats" className="px-2 py-1">
             <div className="px-2 py-1.5 font-mono text-[10px] font-semibold tracking-[0.04em] uppercase text-[var(--text-muted)]">
               CHATS
@@ -595,7 +622,7 @@ export const CommandPalette = observer(function CommandPalette() {
             Each row navigates to the detail page on select; ⌘K palette closes
             via handleOpenChange(false). Hidden in 'all' scope when filter
             yields zero matches (UI-SPEC: never render empty groups). */}
-        {!isLoading && showSkills && hasSkillResults && (scope === 'skills' || hasQuery) && (
+        {!isMoveMode && !isLoading && showSkills && hasSkillResults && (scope === 'skills' || hasQuery) && (
           <CommandGroup heading="SKILLS" className={GROUP_HEADING_CLS}>
             {filteredSkills.map((skill) => (
               <CommandItem
@@ -614,7 +641,7 @@ export const CommandPalette = observer(function CommandPalette() {
         )}
 
         {/* Skills empty state — only when user is explicitly in 'skills' scope. */}
-        {!isLoading && scope === 'skills' && !hasSkillResults && (
+        {!isMoveMode && !isLoading && scope === 'skills' && !hasSkillResults && (
           <div data-palette-group="skills" className="px-2 py-1">
             <div className="px-2 py-1.5 font-mono text-[10px] font-semibold tracking-[0.04em] uppercase text-[var(--text-muted)]">
               SKILLS
@@ -627,7 +654,7 @@ export const CommandPalette = observer(function CommandPalette() {
         )}
 
         {/* Specs group — empty-state placeholder until specs API wired */}
-        {!isLoading && hasQuery && showSpecs && (
+        {!isMoveMode && !isLoading && hasQuery && showSpecs && (
           <div data-palette-group="specs" className="px-2 py-1">
             <div className="px-2 py-1.5 font-mono text-[10px] font-semibold tracking-[0.04em] uppercase text-[var(--text-muted)]">
               SPECS
@@ -640,7 +667,7 @@ export const CommandPalette = observer(function CommandPalette() {
         )}
 
         {/* People group — empty-state placeholder until members API wired */}
-        {!isLoading && hasQuery && showPeople && (
+        {!isMoveMode && !isLoading && hasQuery && showPeople && (
           <div data-palette-group="people" className="px-2 py-1">
             <div className="px-2 py-1.5 font-mono text-[10px] font-semibold tracking-[0.04em] uppercase text-[var(--text-muted)]">
               PEOPLE
@@ -656,7 +683,7 @@ export const CommandPalette = observer(function CommandPalette() {
             UI-SPEC Copywriting Contract: no "No results" heading above.
             Wrapped in CommandGroup with an explicit heading prop to keep
             cmdk happy (empty-string heading renders nothing visible). */}
-        {!isLoading && !fetchError && hasQuery && !hasResults && (
+        {!isMoveMode && !isLoading && !fetchError && hasQuery && !hasResults && (
           <CommandGroup heading="" className={GROUP_HEADING_CLS}>
             <CommandItem
               value={`ai-fallback-${query}`}
@@ -679,15 +706,19 @@ export const CommandPalette = observer(function CommandPalette() {
         )}
       </CommandList>
 
-      {/* ── Footer legend ── */}
+      {/* ── Footer legend ── (Plan 93-05: 'open' → 'move' when in move mode) */}
       <div className="flex items-center gap-3 px-5 py-3 border-t border-[var(--border-card)] font-mono text-[10px] text-[var(--text-muted)]">
         <span>↑↓ navigate</span>
         <span>·</span>
-        <span>↵ open</span>
+        <span>{isMoveMode ? '↵ move' : '↵ open'}</span>
+        {!isMoveMode && (
+          <>
+            <span>·</span>
+            <span>⌘↵ open in split</span>
+          </>
+        )}
         <span>·</span>
-        <span>⌘↵ open in split</span>
-        <span>·</span>
-        <span>esc close</span>
+        <span>{isMoveMode ? 'esc cancel' : 'esc close'}</span>
       </div>
     </CommandDialog>
   );

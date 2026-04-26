@@ -4,3 +4,4 @@
 
 export { TopicTreeRow, type TopicTreeRowProps } from './TopicTreeRow';
 export { TopicTreeContainer, type TopicTreeContainerProps } from './TopicTreeContainer';
+export { MoveToPickerContent } from './MoveToPickerContent';

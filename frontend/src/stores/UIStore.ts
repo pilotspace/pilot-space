@@ -9,6 +9,20 @@ export type PaletteScope = 'all' | 'chats' | 'topics' | 'tasks' | 'specs' | 'ski
 
 export type PalettePrefixMode = null | 'tasks' | 'people' | 'pages' | 'commands';
 
+/**
+ * Palette mode (Plan 93-05 Decision T).
+ *
+ * - `null` (default) and `'search'` are equivalent — CommandPalette renders the
+ *   default scope-tab + results UI.
+ * - `'move'` switches CommandPalette to the Move-to picker (renders
+ *   `MoveToPickerContent`); set by `openPaletteForMove(noteId, parentBeforeId)`.
+ *
+ * Backwards-compat invariant: any flow that opens the palette via the existing
+ * `openCommandPalette` / `commandPaletteOpen=true` paths leaves `paletteMode`
+ * untouched (default `null`), so the search behavior is preserved.
+ */
+export type PaletteMode = null | 'search' | 'move';
+
 export interface ModalState {
   isOpen: boolean;
   data?: unknown;
@@ -45,6 +59,13 @@ export class UIStore {
   workspaceSwitcherOpen = false;
   paletteScope: PaletteScope = 'all';
   palettePrefixMode: PalettePrefixMode = null;
+  // Plan 93-05 — palette mode + move-to source. Defaults preserve legacy
+  // search behavior (Decision V backwards-compat invariant).
+  paletteMode: PaletteMode = null;
+  paletteMoveSourceId: string | null = null;
+  /** Cached parent of the move-source so useMoveTopic can dispatch the
+   *  dual-key optimistic write without re-deriving `oldParentId`. */
+  paletteMoveSourceParentId: string | null = null;
   isFocusMode = false;
   hydrated = false;
 
@@ -202,6 +223,11 @@ export class UIStore {
     this.commandPaletteOpen = false;
     this.paletteScope = 'all';
     this.palettePrefixMode = null;
+    // Plan 93-05 — single reset path also clears move-mode state so a
+    // subsequent ⌘K open returns to the default search UI.
+    this.paletteMode = null;
+    this.paletteMoveSourceId = null;
+    this.paletteMoveSourceParentId = null;
   }
 
   toggleCommandPalette(): void {
@@ -226,6 +252,24 @@ export class UIStore {
 
   setPalettePrefixMode(mode: PalettePrefixMode): void {
     this.palettePrefixMode = mode;
+  }
+
+  /**
+   * Plan 93-05 — open the command palette in Move-to mode for the given topic.
+   *
+   * Sets `commandPaletteOpen=true`, scopes to `topics`, sets `paletteMode='move'`,
+   * and records both `paletteMoveSourceId` and `paletteMoveSourceParentId` so
+   * `useMoveTopic.mutate({...})` has the `oldParentId` it needs for the dual-key
+   * optimistic write. The picker itself uses `useTopicsForMove` which already
+   * filters out the source + descendants, so the cached parent is the only piece
+   * not recoverable from there.
+   */
+  openPaletteForMove(noteId: string, parentBeforeId: string | null = null): void {
+    this.commandPaletteOpen = true;
+    this.paletteScope = 'topics';
+    this.paletteMode = 'move';
+    this.paletteMoveSourceId = noteId;
+    this.paletteMoveSourceParentId = parentBeforeId;
   }
 
   enterFocusMode(): void {
