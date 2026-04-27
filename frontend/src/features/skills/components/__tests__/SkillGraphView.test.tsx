@@ -318,6 +318,43 @@ describe('SkillGraphView', () => {
     expect(rfRoot.getAttribute('role')).not.toBe('application');
   });
 
+  it('canvas wrapper uses absolute inset-0 to prevent height collapse (#138)', () => {
+    // Regression for #138: parent ViewportShell uses `min-height` (not
+    // `height`), so the inner role="application" wrapper must NOT rely on
+    // `height: 100%`. JSDOM cannot measure layout, so this asserts the
+    // structural invariant — `position: absolute` + `inset: 0` inside the
+    // already-`relative` ViewportShell — that mathematically prevents the
+    // height-collapse observed in the browser.
+    setData(
+      { isSuccess: true, status: 'success' },
+      { nodes: [], edges: [], cycles: [] },
+      {
+        flowNodes: [
+          {
+            id: 'skill:alpha',
+            type: 'skill',
+            position: { x: 0, y: 0 },
+            data: { label: 'Alpha', kind: 'skill', refCount: 0 },
+          },
+        ],
+        flowEdges: [],
+        isReady: true,
+      },
+    );
+
+    render(<SkillGraphView />);
+
+    const region = screen.getByRole('application');
+    // The wrapper must be positioned absolutely inside the relative shell so
+    // the React Flow canvas fills its parent regardless of `height` vs
+    // `min-height` on ancestors.
+    expect(region).toHaveClass('absolute');
+    expect(region).toHaveClass('inset-0');
+    // And it must NOT use `h-full` (height:100%), which collapses to 0 when
+    // the parent uses `min-height` instead of `height`.
+    expect(region).not.toHaveClass('h-full');
+  });
+
   it('mounts MiniMap with skill/file color function', () => {
     setData(
       { isSuccess: true, status: 'success' },

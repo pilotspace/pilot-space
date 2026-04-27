@@ -162,7 +162,7 @@ export function SkillGraphView({
           role="application"
           aria-label={canvasAriaLabel}
           onKeyDown={keyboardNav.onKeyDown}
-          className="h-full w-full focus-visible:outline-2 focus-visible:outline-[#29a386]"
+          className="absolute inset-0 focus-visible:outline-2 focus-visible:outline-[#29a386]"
         >
           <ReactFlow
             nodes={flowNodes}
