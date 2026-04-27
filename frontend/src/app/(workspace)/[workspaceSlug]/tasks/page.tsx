@@ -1,7 +1,9 @@
 'use client';
 
-import { useParams } from 'next/navigation';
+import { useEffect } from 'react';
+import { useParams, useSearchParams } from 'next/navigation';
 import { IssueViewsRoot } from '@/features/issues/components/views/IssueViewsRoot';
+import { useIssueViewStore } from '@/stores/RootStore';
 
 /**
  * Workspace-level Tasks page (user-visible alias for /issues).
@@ -11,6 +13,15 @@ import { IssueViewsRoot } from '@/features/issues/components/views/IssueViewsRoo
 export default function TasksPage() {
   const params = useParams();
   const workspaceSlug = params.workspaceSlug as string;
+  const searchParams = useSearchParams();
+  const issueViewStore = useIssueViewStore();
+
+  useEffect(() => {
+    const filter = searchParams?.get('filter');
+    if (filter === 'stale') {
+      issueViewStore.setFilterStates(['Backlog', 'Todo']);
+    }
+  }, [searchParams, issueViewStore]);
 
   return (
     <div className="flex h-full flex-col">
