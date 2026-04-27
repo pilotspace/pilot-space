@@ -27,12 +27,13 @@
 'use client';
 
 import { useCallback } from 'react';
-import { Plus } from 'lucide-react';
+import { Settings } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { ArtifactCardSkeleton } from '@/components/artifacts/ArtifactCardSkeleton';
 import { Button } from '@/components/ui/button';
 import { useArtifactPeekState } from '@/hooks/use-artifact-peek-state';
+import { useSettingsModal } from '@/features/settings/settings-modal-context';
 import { useSkillCatalog, SKILLS_CATALOG_QUERY_KEY } from '../hooks';
 import { useSkillsViewQueryStringSync } from '../hooks/useSkillsViewQueryStringSync';
 import { SkillCard } from './SkillCard';
@@ -44,6 +45,7 @@ export function SkillsGalleryPage() {
   const workspaceSlug = params?.workspaceSlug ?? '';
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { openSettings } = useSettingsModal();
   const { data, isPending, isError } = useSkillCatalog();
   const [mode, setMode] = useSkillsViewQueryStringSync();
   const peekState = useArtifactPeekState();
@@ -80,10 +82,10 @@ export function SkillsGalleryPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => router.push(`/${workspaceSlug}/settings/skills`)}
+              onClick={() => openSettings('skills')}
               className="text-[13px] font-medium gap-1.5"
             >
-              <Plus className="h-3.5 w-3.5" /> New Skill
+              <Settings className="h-3.5 w-3.5" /> Manage Skills
             </Button>
             <SkillsViewToggle value={mode} onValueChange={setMode} />
           </div>
