@@ -27,6 +27,7 @@
 'use client';
 
 import { useCallback } from 'react';
+import { Plus } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { ArtifactCardSkeleton } from '@/components/artifacts/ArtifactCardSkeleton';
@@ -75,7 +76,15 @@ export function SkillsGalleryPage() {
               {data.length}
             </span>
           )}
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => router.push(`/${workspaceSlug}/settings/skills`)}
+              className="text-[13px] font-medium gap-1.5"
+            >
+              <Plus className="h-3.5 w-3.5" /> New Skill
+            </Button>
             <SkillsViewToggle value={mode} onValueChange={setMode} />
           </div>
         </div>

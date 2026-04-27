@@ -12,6 +12,7 @@ import {
   ChevronRight,
   FileText,
   FolderKanban,
+  Home,
   Loader2,
   LogOut,
   MessageSquare,
@@ -333,6 +334,21 @@ function getWorkspaceSlugFromPathname(pathname: string): string {
 // Plan 90-04 blocker-4 fix: do NOT introduce any of those.
 // ---------------------------------------------------------------------------
 
+function HomeButton() {
+  const router = useRouter();
+  const params = useParams<{ workspaceSlug: string }>();
+  return (
+    <button
+      type="button"
+      onClick={() => params?.workspaceSlug && router.push(`/${params.workspaceSlug}`)}
+      data-testid="home-button"
+      className="w-full h-8 flex items-center gap-2 rounded-lg px-2 text-[13px] font-medium text-[var(--text-secondary)] hover:bg-[var(--surface-input)] transition-colors"
+    >
+      <Home className="h-3.5 w-3.5 shrink-0" /> Home
+    </button>
+  );
+}
+
 function NewChatButton() {
   const router = useRouter();
   const params = useParams<{ workspaceSlug: string }>();
@@ -606,6 +622,7 @@ export const Sidebar = observer(function Sidebar() {
           ) : (
             <>
               <WorkspaceSwitcher currentSlug={workspaceSlug} />
+              <HomeButton />
               <NewChatButton />
               <SearchButton />
             </>
