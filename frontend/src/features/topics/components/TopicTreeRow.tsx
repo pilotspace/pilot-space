@@ -18,11 +18,12 @@
  */
 
 import { observer } from 'mobx-react-lite';
-import { useParams, usePathname } from 'next/navigation';
+import { useParams, usePathname, useRouter } from 'next/navigation';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { ChevronRight, FileText } from 'lucide-react';
 import type React from 'react';
+import { useRef } from 'react';
 import { cn } from '@/lib/utils';
 import type { Note } from '@/types';
 import { topicTreeStore } from '../stores/TopicTreeStore';
@@ -43,6 +44,8 @@ export const TopicTreeRow = observer(function TopicTreeRow({
   const pathname = usePathname();
   const params = useParams<{ workspaceSlug?: string }>();
   const workspaceSlug = params?.workspaceSlug ?? '';
+  const router = useRouter();
+  const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
 
   const { setNodeRef, listeners, attributes, transform, transition, isDragging } = useSortable({
     id: note.id,
@@ -66,6 +69,19 @@ export const TopicTreeRow = observer(function TopicTreeRow({
       data-topic-id={note.id}
       {...attributes}
       {...listeners}
+      onPointerDown={(e) => {
+        pointerStartRef.current = { x: e.clientX, y: e.clientY };
+      }}
+      onPointerUp={(e) => {
+        const start = pointerStartRef.current;
+        if (!start) return;
+        const dx = Math.abs(e.clientX - start.x);
+        const dy = Math.abs(e.clientY - start.y);
+        if (dx < 5 && dy < 5) {
+          router.push(`/${workspaceSlug}/topics/${note.id}`);
+        }
+        pointerStartRef.current = null;
+      }}
       onContextMenu={(e) => {
         if (onContextMenu) onContextMenu(e, note);
       }}
@@ -75,7 +91,7 @@ export const TopicTreeRow = observer(function TopicTreeRow({
         transition,
       }}
       className={cn(
-        'group relative flex items-center gap-1.5 h-8 pr-2 text-[13px] font-medium',
+        'group relative flex items-center gap-1.5 h-8 pr-2 text-[13px] font-medium cursor-pointer',
         'motion-safe:transition-colors motion-safe:duration-150',
         'outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-1',
         isActive
