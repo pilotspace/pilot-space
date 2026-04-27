@@ -5,6 +5,7 @@ import { motion, useReducedMotion } from 'motion/react';
 import Link from 'next/link';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   AlarmClock,
   ChevronLeft,
@@ -66,6 +67,7 @@ import { usePinnedNotes } from '@/hooks/usePinnedNotes';
 import { useSettingsModal } from '@/features/settings/settings-modal-context';
 import type { WorkspaceFeatureToggles } from '@/types';
 import { TopicTreeContainer } from '@/features/topics/components';
+import { aiApi } from '@/services/api/ai';
 
 // ---------------------------------------------------------------------------
 // RECENT CHATS — empty-state-only ship per known degradation (Plan 90-04).
@@ -560,11 +562,22 @@ export const Sidebar = observer(function Sidebar() {
     onCreateNote: (data) => createNote.mutate(data),
   });
 
-  // RECENT CHATS — see top-of-file comment. Hardcoded empty until the chat
-  // session list endpoint ships. Live-data branch is dead code but kept so
-  // a future hook drop-in is a one-line change.
-  // TODO(90-04 known degradation): wire to chat session list API when available.
-  const recentChats: RecentChat[] = [];
+  const { data: sessionsData } = useQuery({
+    queryKey: ['ai-sessions', resolvedWorkspaceId],
+    queryFn: () => aiApi.listSessions(resolvedWorkspaceId!),
+    enabled: !!resolvedWorkspaceId && isAuthenticated,
+    staleTime: 30_000,
+  });
+
+  const recentChats: RecentChat[] = useMemo(() => {
+    if (!sessionsData?.sessions) return [];
+    return sessionsData.sessions.slice(0, 5).map((s) => ({
+      id: s.id,
+      title: s.title || 'Untitled chat',
+      artifactCount: 0,
+      updatedAt: s.updated_at,
+    }));
+  }, [sessionsData]);
 
   return (
     <>

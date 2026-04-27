@@ -349,6 +349,22 @@ export const aiApi = {
    */
   listSkills: () => apiClient.get<{ skills: Skill[] }>('/skills'),
 
+  listSessions: (workspaceId: string, options?: { limit?: number }) =>
+    apiClient.get<{
+      sessions: Array<{
+        id: string;
+        title: string | null;
+        agent_name: string;
+        turn_count: number;
+        created_at: string;
+        updated_at: string;
+      }>;
+      total: number;
+    }>('/ai/sessions', {
+      params: { limit: options?.limit ?? 10 },
+      headers: { 'X-Workspace-Id': workspaceId },
+    }),
+
   /**
    * Create issues from AI extraction results (auto-approve, DD-003 non-destructive).
    * @param workspaceId - Workspace UUID (unused, kept for interface compatibility)
