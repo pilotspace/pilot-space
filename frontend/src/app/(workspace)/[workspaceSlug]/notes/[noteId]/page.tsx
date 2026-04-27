@@ -414,7 +414,12 @@ function NoteDetailPage() {
              breadcrumb in that case; project-scoped topic ancestry is
              still discoverable via the sidebar topic tree. Personal /
              top-level topics (no projectId) keep the breadcrumb. */}
-      {!note.projectId && (
+      {/* TopicBreadcrumb suppressed — NoteCanvas header already shows
+          "Topics > {title} > date > word count" which provides the same
+          navigation context. Rendering both creates a double-chrome visual
+          inconsistency flagged in the design audit. Sidebar topic tree
+          remains for deep-nested ancestor navigation. */}
+      {false && (
         <TopicBreadcrumb
           workspaceId={workspaceId}
           workspaceSlug={workspaceSlug}
