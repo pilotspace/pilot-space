@@ -284,6 +284,8 @@ class Container(SkillContainer, PluginContainer):
             "pilot_space.application.services.memory.memory_lifecycle_service",
             # Phase 89 Plan 02 — Edit Proposal REST surface
             "pilot_space.api.v1.routers.proposals",
+            # Phase 87.1 Plan 02 — AI file generation tool
+            "pilot_space.ai.tools.file_generation",
         ],
     )
 

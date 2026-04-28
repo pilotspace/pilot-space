@@ -341,6 +341,23 @@ class ContextTooLargeError(AIError):
         self.max_context = max_context
 
 
+class FileGenerationError(AIError):
+    """Raised when AI file-generation tool fails validation or sanitisation.
+
+    Used by ``ai/tools/file_generation.py`` (Phase 87.1 Plan 02). Distinct
+    from the artifact-upload service ``ValidationError`` because the tool
+    surface has its own error vocabulary (UNSUPPORTED_FORMAT, FILE_TOO_LARGE,
+    EMPTY_FILE, NO_USER) and is auto-executed without approval, so the
+    error must surface clearly to the agent so it can recover or apologise.
+
+    The ``code`` argument is propagated to ``self.code`` via the parent
+    ``AIError.__init__``; callers and tests should assert on ``.code``.
+    """
+
+    error_code = "file_generation_error"
+    http_status = 422
+
+
 class AgentExecutionError(AIError):
     """Raised when an AI agent fails during execution.
 
@@ -386,6 +403,7 @@ __all__ = [
     "AITimeoutError",
     "AgentExecutionError",
     "ContextTooLargeError",
+    "FileGenerationError",
     "InvalidResponseError",
     "ProviderUnavailableError",
     "RateLimitError",
