@@ -26,6 +26,10 @@ from pilot_space.ai.mcp.comment_server import (
     create_comment_tools_server,
 )
 from pilot_space.ai.mcp.event_publisher import EventPublisher
+from pilot_space.ai.mcp.file_server import (
+    SERVER_NAME as FILE_SERVER_NAME,
+    create_file_tools_server,
+)
 from pilot_space.ai.mcp.interaction_server import (
     SERVER_NAME as INTERACTION_SERVER_NAME,
     create_interaction_server,
@@ -231,6 +235,14 @@ def build_mcp_servers(
     # Memory recall tool — registered unconditionally (core agent capability).
     # Allows agent to fetch workspace memories on-demand instead of pre-loading.
     servers[MEMORY_SERVER_NAME] = create_memory_server(
+        tool_context=tool_context,
+    )
+
+    # File generation (Phase 87.1) — registered unconditionally per
+    # CONTEXT.md. AUTO_EXECUTE; no feature toggle gate. Provides the
+    # create_file tool that emits Markdown / HTML artifacts as
+    # download cards in chat.
+    servers[FILE_SERVER_NAME] = create_file_tools_server(
         tool_context=tool_context,
     )
 

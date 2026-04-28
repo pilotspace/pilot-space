@@ -131,6 +131,15 @@ TOOL_APPROVAL_MAP: dict[str, ToolApprovalLevel] = {
     "get_comments": ToolApprovalLevel.AUTO_EXECUTE,
     # Comment tools - REQUIRE_APPROVAL (content modification)
     "update_comment": ToolApprovalLevel.REQUIRE_APPROVAL,
+    # File generation - AUTO_EXECUTE (Phase 87.1 CONTEXT.md decision):
+    # Non-destructive content creation explicitly requested by the user
+    # in chat. Output is not visible to teammates until shared. This
+    # intentionally deviates from CREATE_NOTE / CREATE_ISSUE
+    # (REQUIRE_APPROVAL) — the file is private to the requester until
+    # they share it, and approval friction would break the chat-first
+    # UX of "agent makes thing -> user sees thing". A future workspace
+    # admin override may flip this to REQUIRE_APPROVAL (deferred).
+    "create_file": ToolApprovalLevel.AUTO_EXECUTE,
 }
 
 
