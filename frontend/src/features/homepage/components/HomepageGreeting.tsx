@@ -26,18 +26,41 @@
 import { useAuthStore } from '@/stores';
 import { cn } from '@/lib/utils';
 
+function capitalize(token: string): string {
+  if (!token) return '';
+  return token.charAt(0).toUpperCase() + token.slice(1).toLowerCase();
+}
+
+/**
+ * Derive a usable first-name token from an email local-part.
+ *
+ * `tin.dang` → `Tin`
+ * `e2e-test` → `E2e`
+ * `gabriel_o` → `Gabriel`
+ * Empty / unsplittable → '' (caller falls back to "there").
+ */
+function firstNameFromEmailPrefix(emailPrefix: string): string {
+  if (!emailPrefix) return '';
+  const head = emailPrefix.split(/[._-]/).find((segment) => segment.length > 0);
+  return head ? capitalize(head) : '';
+}
+
 function resolveFirstName(
   userDisplayName: string,
   emailPrefix: string,
 ): string {
-  // If displayName is empty OR matches the email-prefix fallback that
-  // AuthStore.userDisplayName synthesizes when user.name is empty, treat
-  // as "no real name".
-  if (!userDisplayName || userDisplayName === emailPrefix) {
-    return 'there';
+  // When AuthStore.userDisplayName surfaces a real name (i.e. NOT the
+  // email-prefix fallback it synthesizes when `user.name` is empty), use the
+  // first whitespace-separated token.
+  if (userDisplayName && userDisplayName !== emailPrefix) {
+    const first = userDisplayName.trim().split(/\s+/)[0];
+    if (first) return first;
   }
-  const first = userDisplayName.trim().split(/\s+/)[0];
-  return first || 'there';
+  // Otherwise derive a sensible first name from the email local-part so the
+  // hero greeting still feels personal (e.g. "Hi E2e," instead of
+  // "Hi there,") for accounts that signed up without setting a display name.
+  const derived = firstNameFromEmailPrefix(emailPrefix);
+  return derived || 'there';
 }
 
 export function HomepageGreeting() {
