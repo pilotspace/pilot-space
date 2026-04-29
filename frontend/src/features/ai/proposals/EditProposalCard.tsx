@@ -188,6 +188,7 @@ export const EditProposalCard = observer<EditProposalCardProps>(function EditPro
         className
       )}
       data-testid="edit-proposal-card"
+      data-proposal-id={envelope.id}
       data-mode={envelope.mode}
     >
       {/* HEADER */}

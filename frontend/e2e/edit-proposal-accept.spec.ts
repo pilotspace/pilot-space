@@ -4,10 +4,8 @@
  * Phase 94 Plan 03 Phase 2 — seed data (pendingProposalId + chatSessionId)
  * is now written by global-setup via POST /api/v1/_test/seed/bootstrap.
  *
- * Remaining blocker: ProposalCardSlot / EditProposalCard does not emit
- * `data-proposal-id` on its root element, so the locator never matches.
- * Unskip after the proposal card component adds that attribute.
- * TODO(94-03-phase3): add data-proposal-id to EditProposalCard/ProposalCardSlot root.
+ * MIG-04 flow (c): EditProposalCard and AppliedReceipt now emit
+ * `data-proposal-id` on their root elements (MIG-04 gap closed).
  *
  * Accept hits POST /proposals/{id}/accept (NOT /apply — verified
  * via frontend/src/features/ai/proposals/proposalApi.ts).
@@ -24,9 +22,8 @@ test.describe('edit proposal accept', () => {
     const seed = getSeedContext();
     test.skip(
       !seed.pendingProposalId || !seed.chatSessionId,
-      'TODO(94-03-phase3): EditProposalCard does not render data-proposal-id — ' +
-        'add that attribute to the card root before this spec can locate the card. ' +
-        `Seed data available: pendingProposalId=${seed.pendingProposalId ?? 'null'} chatSessionId=${seed.chatSessionId ?? 'null'}`
+      `Seed data unavailable: pendingProposalId=${seed.pendingProposalId ?? 'null'} chatSessionId=${seed.chatSessionId ?? 'null'}. ` +
+        'Run global-setup (POST /api/v1/_test/seed/bootstrap) to seed data.'
     );
 
     await page.goto(

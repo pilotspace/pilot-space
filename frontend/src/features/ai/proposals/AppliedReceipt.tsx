@@ -98,6 +98,8 @@ export const AppliedReceipt = memo<AppliedReceiptProps>(function AppliedReceipt(
       role="status"
       aria-label={ariaLabel}
       data-testid="applied-receipt"
+      data-proposal-id={envelope.id}
+      data-proposal-status="applied"
       className={cn(
         'w-full max-w-[720px] rounded-[14px] min-h-12 px-4 py-3',
         'flex items-center gap-3 flex-wrap',
