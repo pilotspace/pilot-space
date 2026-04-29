@@ -122,25 +122,36 @@ def create_note_tools_server(
         if ws_err:
             return _text_result(f"Error: {ws_err}")
 
-        ai_op = "replace_block" if operation == "replace" else "append_blocks"
         logger.info(
-            "mcp_tool_invoked", tool="update_note_block", operation=ai_op, block_id=block_id
+            "mcp_tool_invoked", tool="update_note_block", operation=operation, block_id=block_id
         )
-        lvl = await _chk("update_note_block", AT.REPLACE_CONTENT, tool_context)
-        status = "approval_required" if lvl.value != "auto_execute" else "pending_apply"
-        await publisher.publish_focus_and_content(
-            note_id,
-            block_id,
-            {
-                "status": status,
-                "operation": ai_op,
-                "noteId": note_id,
-                "blockId": block_id,
-                "markdown": args["new_content_markdown"],
-                "afterBlockId": block_id if ai_op == "append_blocks" else None,
+        await _chk("update_note_block", AT.REPLACE_CONTENT, tool_context)
+
+        from uuid import UUID
+
+        from pilot_space.ai.mcp.note_proposal_helpers import route_through_proposal_bus
+        from pilot_space.ai.proposals import build_text_diff
+        from pilot_space.domain.proposal import DiffKind
+
+        try:
+            note_uuid = UUID(note_id)
+        except (ValueError, TypeError):
+            return _text_result(f"Error: invalid note_id: {note_id}")
+
+        diff_payload = build_text_diff("", args.get("new_content_markdown", ""))
+        result = await route_through_proposal_bus(
+            tool_context=tool_context,
+            intent_tool="update_note_block",
+            intent_args={
+                "block_id": block_id,
+                "new_content_markdown": args.get("new_content_markdown", ""),
+                "operation": operation,
             },
+            diff_payload=diff_payload,
+            diff_kind=DiffKind.TEXT,
+            target_artifact_id=note_uuid,
         )
-        return _text_result(f"Block ¶{block_id[:8]} {ai_op.replace('_', ' ')}d.")
+        return _text_result(result or "{}")
 
     @tool(
         "enhance_text",
@@ -165,20 +176,30 @@ def create_note_tools_server(
         if ws_err:
             return _text_result(f"Error: {ws_err}")
         logger.info("mcp_tool_invoked", tool="enhance_text", block_id=block_id)
-        lvl = await _chk("enhance_text", None, tool_context)
-        status = "approval_required" if lvl.value != "auto_execute" else "pending_apply"
-        await publisher.publish_focus_and_content(
-            note_id,
-            block_id,
-            {
-                "status": status,
-                "operation": "replace_block",
-                "noteId": note_id,
-                "blockId": block_id,
-                "markdown": args["enhanced_markdown"],
-            },
+        await _chk("enhance_text", None, tool_context)
+
+        from uuid import UUID
+
+        from pilot_space.ai.mcp.note_proposal_helpers import route_through_proposal_bus
+        from pilot_space.ai.proposals import build_text_diff
+        from pilot_space.domain.proposal import DiffKind
+
+        try:
+            note_uuid = UUID(note_id)
+        except (ValueError, TypeError):
+            return _text_result(f"Error: invalid note_id: {note_id}")
+
+        enhanced = args.get("enhanced_markdown", "")
+        diff_payload = build_text_diff("", enhanced)
+        result = await route_through_proposal_bus(
+            tool_context=tool_context,
+            intent_tool="enhance_text",
+            intent_args={"block_id": block_id, "enhanced_markdown": enhanced},
+            diff_payload=diff_payload,
+            diff_kind=DiffKind.TEXT,
+            target_artifact_id=note_uuid,
         )
-        return _text_result(f"Block ¶{block_id[:8]} enhanced.")
+        return _text_result(result or "{}")
 
     @tool(
         "write_to_note",
@@ -208,21 +229,29 @@ def create_note_tools_server(
         if ws_err:
             return _text_result(f"Error: {ws_err}")
         logger.info("mcp_tool_invoked", tool="write_to_note", note_id=note_id)
-        lvl = await _chk("write_to_note", AT.REPLACE_CONTENT, tool_context)
-        status = "approval_required" if lvl.value != "auto_execute" else "pending_apply"
-        await publisher.publish_focus_and_content(
-            note_id,
-            None,
-            {
-                "status": status,
-                "operation": "append_blocks",
-                "noteId": note_id,
-                "markdown": markdown,
-                "afterBlockId": None,
-            },
-            scroll_to_end=True,
+        await _chk("write_to_note", AT.REPLACE_CONTENT, tool_context)
+
+        from uuid import UUID
+
+        from pilot_space.ai.mcp.note_proposal_helpers import route_through_proposal_bus
+        from pilot_space.ai.proposals import build_text_diff
+        from pilot_space.domain.proposal import DiffKind
+
+        try:
+            note_uuid = UUID(note_id)
+        except (ValueError, TypeError):
+            return _text_result(f"Error: invalid note_id: {note_id}")
+
+        diff_payload = build_text_diff("", markdown)
+        result = await route_through_proposal_bus(
+            tool_context=tool_context,
+            intent_tool="write_to_note",
+            intent_args={"markdown": markdown},
+            diff_payload=diff_payload,
+            diff_kind=DiffKind.TEXT,
+            target_artifact_id=note_uuid,
         )
-        return _text_result("Content appended to note.")
+        return _text_result(result or "{}")
 
     @tool(
         "extract_issues",
@@ -655,6 +684,9 @@ def create_note_tools_server(
             intent_args["content_markdown"] = args["content_markdown"]
         if args.get("project_id"):
             intent_args["project_id"] = args["project_id"]
+        # ARTF-04 — stamp the originating chat session so LineageChip works.
+        if tool_context.session_id:
+            intent_args["source_chat_session_id"] = tool_context.session_id
 
         diff_payload = build_fields_diff(
             current={},
@@ -761,17 +793,29 @@ def create_note_tools_server(
             return _text_result("Error: no changes specified")
 
         logger.info("mcp_tool_invoked", tool="update_note", note_id=note_id, changes=changes)
-        lvl = await _chk("update_note", AT.UPDATE_NOTE, tool_context)
-        status = "approval_required" if lvl.value != "auto_execute" else "pending_apply"
-        return _text_result(
-            json.dumps(
-                {
-                    "status": status,
-                    "operation": "update_note",
-                    "payload": {"note_id": note_id, "changes": changes},
-                }
-            )
+        await _chk("update_note", AT.UPDATE_NOTE, tool_context)
+
+        from uuid import UUID
+
+        from pilot_space.ai.mcp.note_proposal_helpers import route_through_proposal_bus
+        from pilot_space.ai.proposals import build_fields_diff
+        from pilot_space.domain.proposal import DiffKind
+
+        try:
+            note_uuid = UUID(note_id)
+        except (ValueError, TypeError):
+            return _text_result(f"Error: invalid note_id: {note_id}")
+
+        diff_payload = build_fields_diff(current={}, proposed=changes)
+        result = await route_through_proposal_bus(
+            tool_context=tool_context,
+            intent_tool="update_note",
+            intent_args={"changes": changes},
+            diff_payload=diff_payload,
+            diff_kind=DiffKind.FIELDS,
+            target_artifact_id=note_uuid,
         )
+        return _text_result(result or "{}")
 
     return create_sdk_mcp_server(
         name=SERVER_NAME,
