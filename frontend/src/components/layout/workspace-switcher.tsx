@@ -38,7 +38,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { toSlug } from '@/lib/slug';
-import { getLastWorkspacePath, getOrderedRecentWorkspaces } from '@/lib/workspace-nav';
+import { getOrderedRecentWorkspaces } from '@/lib/workspace-nav';
 import { useSwitcherQueryStringSync } from '@/hooks/useSwitcherQueryStringSync';
 import { useSettingsModal } from '@/features/settings/settings-modal-context';
 import { ApiError } from '@/services/api/client';
@@ -543,12 +543,21 @@ export const WorkspaceSwitcher = observer(function WorkspaceSwitcher({
 
   const handleSelectWorkspace = useCallback(
     (ws: Workspace) => {
+      // Don't switch to the workspace we're already on — router.push to the
+      // current path is a no-op, which looks broken to the user.
+      if (ws.id === currentWorkspace?.id) {
+        uiStore.closeWorkspaceSwitcher();
+        return;
+      }
       addRecentWorkspace(ws.slug);
-      const lastPath = getLastWorkspacePath(ws.slug);
-      router.push(lastPath ?? `/${ws.slug}`);
+      // Close the popover BEFORE navigating so the closeWorkspaceSwitcher
+      // state update doesn't race with the router transition. Always land on
+      // the workspace home (chat-first launchpad); deep last-path restore was
+      // surprising when the stored path 404'd in the new workspace.
       uiStore.closeWorkspaceSwitcher();
+      router.push(`/${ws.slug}`);
     },
-    [router, uiStore]
+    [router, uiStore, currentWorkspace?.id]
   );
 
   const handleOpenSettings = useCallback(
