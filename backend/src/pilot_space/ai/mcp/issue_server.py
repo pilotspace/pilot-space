@@ -512,6 +512,8 @@ def create_issue_tools_server(
                 intent_args[opt] = args[opt]
         if args.get("label_ids"):
             intent_args["label_ids"] = [str(lid) for lid in args["label_ids"]]
+        if tool_context.session_id:
+            intent_args["source_chat_session_id"] = tool_context.session_id
 
         diff_payload = build_fields_diff(
             current={},

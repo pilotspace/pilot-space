@@ -252,6 +252,13 @@ async def execute_create_issue(
         label_repository=LabelRepository(session),
     )
     result = await svc.execute(payload)
+
+    # ARTF-04: stamp originating chat session for LineageChip attribution.
+    source_chat_session_id = _safe_uuid(args.get("source_chat_session_id"))
+    if source_chat_session_id is not None:
+        result.issue.source_chat_session_id = source_chat_session_id
+        await session.flush()
+
     return IntentExecutionOutcome(
         applied_version=result.issue.version_number or 1,
         lines_changed=None,

@@ -161,6 +161,12 @@ class IssueResponse(BaseSchema):
     ai_metadata: dict[str, Any] | None
     has_ai_enhancements: bool
 
+    # AI lineage: originating chat session (ARTF-04)
+    source_chat_session_id: UUID | None = Field(
+        default=None,
+        description="AI chat session ID that originated this issue, for LineageChip.",
+    )
+
     # Counts
     sub_issue_count: int = 0
 
@@ -216,6 +222,7 @@ class IssueResponse(BaseSchema):
             ],
             ai_metadata=issue.ai_metadata,
             has_ai_enhancements=issue.has_ai_enhancements,
+            source_chat_session_id=getattr(issue, "source_chat_session_id", None),
             sub_issue_count=len(issue.sub_issues) if issue.sub_issues else 0,
             version_number=getattr(issue, "version_number", None) or 1,
             version_history=list(getattr(issue, "version_history", None) or []),

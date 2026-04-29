@@ -170,6 +170,13 @@ class Issue(WorkspaceScopedModel):
         nullable=True,
     )
 
+    # AI lineage: originating chat session (ARTF-04 — migration 114)
+    source_chat_session_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("ai_sessions.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
     # Estimation and dates
     estimate_points: Mapped[int | None] = mapped_column(
         Integer,
