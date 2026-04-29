@@ -49,6 +49,12 @@ export interface Issue {
   updatedAt: string;
   noteLinks?: NoteIssueLink[];
   /**
+   * ARTF-04 lineage: UUID of the AI chat session that originated this issue.
+   * Populated on AI-tool created issues; null/undefined for user-created issues.
+   * camelCase alias of backend `source_chat_session_id`.
+   */
+  sourceChatSessionId?: string | null;
+  /**
    * Phase 89 Plan 05 — append-only version counter. Bumped on every AI apply
    * or user revert. Wire-shape mirrored from `IssueResponse.version_number`.
    */

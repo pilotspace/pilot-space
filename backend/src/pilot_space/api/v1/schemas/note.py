@@ -153,6 +153,11 @@ class NoteResponse(EntitySchema):
         ge=0,
         description="Depth in the topic tree (0 = root, max = 5).",
     )
+    # ARTF-04 — lineage: AI chat session that created this note (if any).
+    source_chat_session_id: UUID | None = Field(
+        default=None,
+        description="AI chat session ID that originated this note, for LineageChip.",
+    )
 
 
 class NoteDetailResponse(NoteResponse):

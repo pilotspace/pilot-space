@@ -67,7 +67,10 @@ export function useArtifactQuery(
           id,
           note,
           title: note.title,
-          lineage: null,
+          // ARTF-04: populate lineage from AI-stamped session id.
+          lineage: note.sourceChatSessionId
+            ? { sourceChatId: note.sourceChatSessionId }
+            : null,
         };
       }
       if (type === 'ISSUE') {
@@ -78,7 +81,10 @@ export function useArtifactQuery(
           id,
           issue,
           title: issue.name ?? issue.title ?? issue.identifier,
-          lineage: null,
+          // ARTF-04: populate lineage from AI-stamped session id.
+          lineage: issue.sourceChatSessionId
+            ? { sourceChatId: issue.sourceChatSessionId }
+            : null,
         };
       }
       // Phase 87.1 Plan 04 — fetch MD/HTML content via workspace-scoped

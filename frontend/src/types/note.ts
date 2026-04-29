@@ -48,6 +48,12 @@ export interface Note {
    * Root topics are depth 0; max enforced at 5 by the backend service.
    */
   topicDepth?: number;
+  /**
+   * ARTF-04 lineage: UUID of the AI chat session that originated this note.
+   * Populated on AI-tool created notes; null/undefined for user-created notes.
+   * camelCase alias of backend `source_chat_session_id`.
+   */
+  sourceChatSessionId?: string | null;
   owner?: User;
   collaborators?: User[];
   linkedIssues: LinkedIssueBrief[];

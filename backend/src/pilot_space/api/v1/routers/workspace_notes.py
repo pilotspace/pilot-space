@@ -111,6 +111,7 @@ def _note_to_response(note: Note) -> NoteResponse:
         icon_emoji=note.icon_emoji,
         parent_topic_id=note.parent_topic_id,
         topic_depth=note.topic_depth,
+        source_chat_session_id=note.source_chat_session_id,  # ARTF-04 lineage
     )
 
 
@@ -141,6 +142,7 @@ def _note_to_detail_response(note: Note) -> NoteDetailResponse:
         icon_emoji=note.icon_emoji,
         parent_topic_id=note.parent_topic_id,
         topic_depth=note.topic_depth,
+        source_chat_session_id=note.source_chat_session_id,  # ARTF-04 lineage
         content=content,
         annotation_count=len(note.annotations) if note.annotations else 0,
         discussion_count=len(note.discussions) if note.discussions else 0,
