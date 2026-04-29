@@ -2,7 +2,7 @@
 
 import { observer } from 'mobx-react-lite';
 import { useRouter } from 'next/navigation';
-import { useState, useRef, useCallback, useMemo } from 'react';
+import { forwardRef, useState, useRef, useCallback, useMemo } from 'react';
 import {
   Building2,
   Check,
@@ -417,41 +417,44 @@ const LeaveWorkspaceDialog = observer(function LeaveWorkspaceDialog({
 // WorkspacePill — exported trigger button (Surface 2 anchor)
 // ---------------------------------------------------------------------------
 
-interface WorkspacePillProps {
+interface WorkspacePillProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   name: string;
   ariaLabel?: string;
-  onClick?: () => void;
 }
 
-export const WorkspacePill = observer(function WorkspacePill({
-  name,
-  ariaLabel,
-  onClick,
-}: WorkspacePillProps) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      data-testid="workspace-pill"
-      aria-label={ariaLabel ?? 'Switch workspace'}
-      className={cn(
-        'flex h-9 w-full items-center gap-2 rounded-full border border-border',
-        'bg-background px-3',
-        'transition-colors hover:bg-sidebar-accent',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1'
-      )}
-    >
-      <Building2 className="h-4 w-4 shrink-0 text-[var(--text-muted)]" aria-hidden="true" />
-      <span className="flex-1 truncate text-left text-[13px] font-medium text-[var(--text-heading)]">
-        {name}
-      </span>
-      <ChevronsUpDown
-        className="h-3 w-3 shrink-0 text-[var(--text-muted)]"
-        aria-hidden="true"
-      />
-    </button>
-  );
-});
+// Forward ref + spread all props so Radix `PopoverTrigger asChild` can attach
+// its ref, pointer/keyboard handlers, and aria/data attrs. Without spreading,
+// Radix-injected handlers (onPointerDown, onKeyDown) are dropped and the
+// popover never opens.
+export const WorkspacePill = forwardRef<HTMLButtonElement, WorkspacePillProps>(
+  function WorkspacePill({ name, ariaLabel, className, ...rest }, ref) {
+    return (
+      <button
+        ref={ref}
+        type="button"
+        data-testid="workspace-pill"
+        aria-label={ariaLabel ?? 'Switch workspace'}
+        {...rest}
+        className={cn(
+          'flex h-9 w-full items-center gap-2 rounded-full border border-border',
+          'bg-background px-3',
+          'transition-colors hover:bg-sidebar-accent',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
+          className
+        )}
+      >
+        <Building2 className="h-4 w-4 shrink-0 text-[var(--text-muted)]" aria-hidden="true" />
+        <span className="flex-1 truncate text-left text-[13px] font-medium text-[var(--text-heading)]">
+          {name}
+        </span>
+        <ChevronsUpDown
+          className="h-3 w-3 shrink-0 text-[var(--text-muted)]"
+          aria-hidden="true"
+        />
+      </button>
+    );
+  }
+);
 
 // ---------------------------------------------------------------------------
 // WorkspaceSwitcher — Popover + cmdk Surface 2.
