@@ -162,24 +162,36 @@ async def test_create_file_emits_artifact_created_sse(
     )
     assert result is not None
 
-    # Drain queue or assert publish call — both shapes are acceptable since
-    # we monkey-patched EventPublisher.publish above.
-    assert publish_mock.await_count >= 1
-    frame_arg = publish_mock.await_args_list[0].args[0]
-    assert "event: artifact_created" in frame_arg
-    body_str = frame_arg.split("data: ", 1)[1].strip()
-    body = json.loads(body_str)
-    assert body == {
+    # Phase 87.2 — now emits TWO frames: artifact_generating (before upload)
+    # and artifact_created (after upload). Verify both in order.
+    assert publish_mock.await_count == 2
+
+    # Frame 0 — artifact_generating (pre-generation placeholder).
+    generating_frame = publish_mock.await_args_list[0].args[0]
+    assert "event: artifact_generating" in generating_frame
+    gen_body = json.loads(generating_frame.split("data: ", 1)[1].strip())
+    assert "placeholder_id" in gen_body
+    placeholder_id = gen_body["placeholder_id"]
+    assert gen_body["filename"] == "report.md"
+    assert gen_body["format"] == "md"
+    assert gen_body["mime_type"] == "text/markdown"
+
+    # Frame 1 — artifact_created (post-generation, with placeholder_id threaded through).
+    created_frame = publish_mock.await_args_list[1].args[0]
+    assert "event: artifact_created" in created_frame
+    created_body = json.loads(created_frame.split("data: ", 1)[1].strip())
+    assert created_body == {
         "artifact_id": artifact_id,
         "filename": "report.md",
         "mime_type": "text/markdown",
         "size_bytes": 24,
         "format": "md",
+        "placeholder_id": placeholder_id,
     }
 
 
 @pytest.mark.asyncio
-async def test_create_file_does_not_emit_on_error(
+async def test_create_file_emits_failed_event_on_error(
     publisher: EventPublisher,
     fake_tool_context: MagicMock,
     monkeypatch: pytest.MonkeyPatch,
@@ -218,6 +230,22 @@ async def test_create_file_does_not_emit_on_error(
     )
     # Tool returns a structured error result, NOT raising.
     assert result is not None
-    # No SSE frame on the error path — the SDK handles tool_result event
-    # automatically.
-    assert publish_mock.await_count == 0
+    # Phase 87.2 — on error path, TWO frames are emitted:
+    #   1. artifact_generating (pre-generation placeholder)
+    #   2. artifact_generation_failed (flip placeholder to error state)
+    assert publish_mock.await_count == 2
+
+    # Frame 0 — artifact_generating.
+    generating_frame = publish_mock.await_args_list[0].args[0]
+    assert "event: artifact_generating" in generating_frame
+    gen_body = json.loads(generating_frame.split("data: ", 1)[1].strip())
+    placeholder_id = gen_body["placeholder_id"]
+    assert placeholder_id  # non-empty uuid
+
+    # Frame 1 — artifact_generation_failed.
+    failed_frame = publish_mock.await_args_list[1].args[0]
+    assert "event: artifact_generation_failed" in failed_frame
+    failed_body = json.loads(failed_frame.split("data: ", 1)[1].strip())
+    assert failed_body["placeholder_id"] == placeholder_id
+    assert failed_body["error_code"] == "EMPTY_FILE"
+    assert "message" in failed_body

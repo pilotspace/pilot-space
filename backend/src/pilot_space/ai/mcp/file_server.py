@@ -26,6 +26,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
+from uuid import uuid4
 
 from claude_agent_sdk import McpSdkServerConfig, create_sdk_mcp_server, tool
 
@@ -90,6 +91,31 @@ def _build_create_file_handler(
                 "administrator."
             )
 
+        # Phase 87.2 — generate a stable placeholder_id BEFORE the upload
+        # so the frontend can render an immediate spinner. The id is threaded
+        # through to artifact_created so the UI can do an in-place swap.
+        placeholder_id = str(uuid4())
+        fmt = args.get("format", "")
+        mime_type_hint = FORMAT_MIME_MAP.get(fmt, "application/octet-stream")
+
+        if publisher is not None:
+            from pilot_space.ai.agents.pilotspace_stream_utils import (
+                StreamEvent,
+                build_sse_frame,
+            )
+
+            await publisher.publish(
+                build_sse_frame(
+                    StreamEvent.ARTIFACT_GENERATING,
+                    {
+                        "placeholder_id": placeholder_id,
+                        "filename": args.get("filename", "file"),
+                        "format": fmt,
+                        "mime_type": mime_type_hint,
+                    },
+                )
+            )
+
         artifact_repo = ArtifactRepository(tool_context.db_session)
         upload_service = ArtifactUploadService(
             session=tool_context.db_session,
@@ -118,6 +144,24 @@ def _build_create_file_handler(
                 error_code=exc.code,
                 success=False,
             )
+            # Phase 87.2 — emit artifact_generation_failed so the frontend
+            # can flip the placeholder pill to an error state.
+            if publisher is not None:
+                from pilot_space.ai.agents.pilotspace_stream_utils import (
+                    StreamEvent,
+                    build_sse_frame,
+                )
+
+                await publisher.publish(
+                    build_sse_frame(
+                        StreamEvent.ARTIFACT_GENERATION_FAILED,
+                        {
+                            "placeholder_id": placeholder_id,
+                            "error_code": exc.code,
+                            "message": exc.message,
+                        },
+                    )
+                )
             return _text_result(
                 json.dumps(
                     {
@@ -136,6 +180,9 @@ def _build_create_file_handler(
         # included on the wire — the frontend re-fetches them on demand
         # via the existing /artifacts/{id}/url endpoint
         # (T-87.1-03-03 information disclosure mitigation).
+        # Phase 87.2 — placeholder_id echoed so the frontend can do an
+        # in-place swap (placeholder ref id stays stable, realArtifactId
+        # carries the actual UUID).
         if publisher is not None:
             from pilot_space.ai.agents.pilotspace_stream_utils import (
                 StreamEvent,
@@ -152,6 +199,7 @@ def _build_create_file_handler(
                         "mime_type": payload["mime_type"],
                         "size_bytes": payload["size_bytes"],
                         "format": payload["format"],
+                        "placeholder_id": placeholder_id,
                     },
                 )
             )

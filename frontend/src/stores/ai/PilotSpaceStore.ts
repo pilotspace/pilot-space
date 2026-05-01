@@ -679,6 +679,133 @@ export class PilotSpaceStore {
     };
   }
 
+  /**
+   * Phase 87.2 — swap a 'generating' placeholder with the completed artifact.
+   *
+   * Finds the artifact in the streaming message by `placeholderId` (which is
+   * stored as `ref.id`) and updates it in-place:
+   *   - status → 'ready'
+   *   - realArtifactId → the real artifact UUID
+   *   - title updated if the server supplied a sanitised filename
+   *   - updatedAt set to now
+   *
+   * React key is unchanged (ref.id stays as placeholder_id), so no remount
+   * occurs and there is no layout shift on swap.
+   *
+   * If no placeholder is found (race / no publisher path), appends as a new
+   * ready artifact instead (backward-compatible with pre-Phase-87.2 sessions).
+   */
+  swapPlaceholderWithArtifact(
+    placeholderId: string,
+    realArtifactId: string,
+    update: Partial<import('@/components/chat/InlineArtifactCard').InlineArtifactRef>,
+  ): void {
+    const currentId = this.streamingState.currentMessageId;
+    if (!currentId) {
+      console.warn(
+        '[PilotSpaceStore] swapPlaceholderWithArtifact: no streaming message — dropping swap',
+        { placeholderId, realArtifactId },
+      );
+      return;
+    }
+    const idx = this.messages.findIndex((m) => m.id === currentId);
+    if (idx < 0) {
+      console.warn(
+        '[PilotSpaceStore] swapPlaceholderWithArtifact: streaming message not in store',
+        { currentId, placeholderId },
+      );
+      return;
+    }
+    const msg = this.messages[idx]!;
+    const artifacts = msg.artifacts ?? [];
+    const placeholderIdx = artifacts.findIndex((a) => a.id === placeholderId);
+
+    if (placeholderIdx >= 0) {
+      // In-place update — React key (artifact.id) stays stable.
+      const updated = artifacts.map((a, i) =>
+        i === placeholderIdx
+          ? { ...a, ...update, status: 'ready' as const, realArtifactId }
+          : a,
+      );
+      this.messages[idx] = { ...msg, artifacts: updated };
+    } else {
+      // No placeholder found — backward-compatible append as ready artifact.
+      if (artifacts.length < 50) {
+        const readyRef: import('@/components/chat/InlineArtifactCard').InlineArtifactRef = {
+          id: realArtifactId,
+          status: 'ready',
+          realArtifactId,
+          updatedAt: new Date().toISOString(),
+          ...update,
+        } as import('@/components/chat/InlineArtifactCard').InlineArtifactRef;
+        this.messages[idx] = { ...msg, artifacts: [...artifacts, readyRef] };
+      } else {
+        console.warn(
+          '[PilotSpaceStore] swapPlaceholderWithArtifact: placeholder not found + cap reached — dropping',
+          { placeholderId, realArtifactId },
+        );
+      }
+    }
+  }
+
+  /**
+   * Phase 87.2 — flip a 'generating' placeholder to 'failed' state.
+   *
+   * Finds by `placeholderId` in the streaming message and sets status to
+   * 'failed' with the supplied error message. If not found (race), no-ops.
+   */
+  markArtifactFailed(placeholderId: string, errorMessage: string): void {
+    const currentId = this.streamingState.currentMessageId;
+    if (!currentId) {
+      console.warn(
+        '[PilotSpaceStore] markArtifactFailed: no streaming message',
+        { placeholderId },
+      );
+      return;
+    }
+    const idx = this.messages.findIndex((m) => m.id === currentId);
+    if (idx < 0) return;
+    const msg = this.messages[idx]!;
+    const artifacts = msg.artifacts ?? [];
+    const placeholderIdx = artifacts.findIndex((a) => a.id === placeholderId);
+    if (placeholderIdx < 0) {
+      console.warn(
+        '[PilotSpaceStore] markArtifactFailed: placeholder not found — dropping',
+        { placeholderId },
+      );
+      return;
+    }
+    const updated = artifacts.map((a, i) =>
+      i === placeholderIdx
+        ? { ...a, status: 'failed' as const, errorMessage }
+        : a,
+    );
+    this.messages[idx] = { ...msg, artifacts: updated };
+  }
+
+  /**
+   * Phase 87.2 — clean up any dangling 'generating' placeholders in the
+   * streaming message. Called from onComplete / onError to ensure abandoned
+   * spinners don't persist if the SSE connection drops between
+   * `artifact_generating` and `artifact_created`.
+   */
+  flushGeneratingPlaceholders(reason: string): void {
+    const currentId = this.streamingState.currentMessageId;
+    if (!currentId) return;
+    const idx = this.messages.findIndex((m) => m.id === currentId);
+    if (idx < 0) return;
+    const msg = this.messages[idx]!;
+    const artifacts = msg.artifacts ?? [];
+    const hasGenerating = artifacts.some((a) => a.status === 'generating');
+    if (!hasGenerating) return;
+    const flushed = artifacts.map((a) =>
+      a.status === 'generating'
+        ? { ...a, status: 'failed' as const, errorMessage: reason }
+        : a,
+    );
+    this.messages[idx] = { ...msg, artifacts: flushed };
+  }
+
   // Actions - Context Management
 
   setWorkspaceId(workspaceId: string | null): void {

@@ -40,12 +40,30 @@ export interface SSEClientOptions {
   /** Called for each parsed SSE event */
   onMessage: (event: SSEEvent) => void;
   /**
-   * Phase 87.1 Plan 04 — called when a `artifact_created` event arrives.
-   * The wire payload (snake_case) is mapped to the frontend `InlineArtifactRef`
-   * (camelCase, ArtifactTokenKey). When set, `artifact_created` events are
-   * intercepted here and NOT forwarded to `onMessage`.
+   * Phase 87.1 Plan 04 — called when a `artifact_created` event arrives
+   * WITHOUT a `placeholder_id` (legacy append path / chat reload).
+   * The wire payload is mapped to the frontend `InlineArtifactRef`.
+   * Intercepted and NOT forwarded to `onMessage`.
    */
   onArtifactCreated?: (ref: InlineArtifactRef) => void;
+  /**
+   * Phase 87.2 — called when `artifact_created` arrives WITH a `placeholder_id`
+   * (swap path). Raw wire payload passed through so the caller can perform the
+   * in-place swap via `swapPlaceholderWithArtifact`. Intercepted and NOT
+   * forwarded to `onMessage` or `onArtifactCreated`.
+   */
+  onArtifactCreatedSwap?: (payload: unknown) => void;
+  /**
+   * Phase 87.2 — called when an `artifact_generating` event arrives.
+   * Raw wire payload passed through; caller is responsible for mapping to
+   * a placeholder InlineArtifactRef. Intercepted and NOT forwarded to `onMessage`.
+   */
+  onArtifactGenerating?: (payload: unknown) => void;
+  /**
+   * Phase 87.2 — called when an `artifact_generation_failed` event arrives.
+   * Raw wire payload passed through. Intercepted and NOT forwarded to `onMessage`.
+   */
+  onArtifactGenerationFailed?: (payload: unknown) => void;
   /** Called on unrecoverable error */
   onError?: (error: Error) => void;
   /** Called when stream completes normally */
@@ -236,16 +254,40 @@ export class SSEClient {
    * passed to `onArtifactCreated` if registered. They are NOT also forwarded
    * to `onMessage` — preventing double-handling.
    *
+   * Phase 87.2 — `artifact_generating` and `artifact_generation_failed` are
+   * similarly intercepted and routed to their respective callbacks when set.
+   *
    * All other events flow through `onMessage` unchanged.
    */
   private dispatchEvent(event: SSEEvent): void {
-    if (event.type === 'artifact_created' && this.options.onArtifactCreated) {
-      const ref = mapArtifactCreatedPayload(event.data);
-      if (ref) {
-        this.options.onArtifactCreated(ref);
+    if (event.type === 'artifact_generating') {
+      this.options.onArtifactGenerating?.(event.data);
+      return;
+    }
+
+    if (event.type === 'artifact_generation_failed') {
+      this.options.onArtifactGenerationFailed?.(event.data);
+      return;
+    }
+
+    if (event.type === 'artifact_created') {
+      const d = event.data && typeof event.data === 'object'
+        ? (event.data as Record<string, unknown>)
+        : null;
+      const hasPlaceholder = d && typeof d['placeholder_id'] === 'string' && d['placeholder_id'];
+      if (hasPlaceholder && this.options.onArtifactCreatedSwap) {
+        // Phase 87.2 — swap path: placeholder_id present, route to swap callback.
+        this.options.onArtifactCreatedSwap(event.data);
+      } else if (this.options.onArtifactCreated) {
+        // Legacy append path: no placeholder_id (pre-87.2 or chat reload).
+        const ref = mapArtifactCreatedPayload(event.data);
+        if (ref) {
+          this.options.onArtifactCreated(ref);
+        }
       }
       return;
     }
+
     this.options.onMessage(event);
   }
 

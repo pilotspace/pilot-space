@@ -254,4 +254,100 @@ describe('InlineArtifactCard — variant resolution + chrome', () => {
     render(<InlineArtifactCard artifact={ref} />);
     expect(screen.getByText('design.md')).toBeTruthy();
   });
+
+  // Phase 87.2 — generating + failed placeholder states
+  it('Test 13: status=generating → renders [data-inline-card="generating"] with spinner and filename', () => {
+    const ref: InlineArtifactRef = {
+      id: 'placeholder-uuid-1',
+      type: 'MD',
+      title: 'report.md',
+      status: 'generating',
+    };
+    const { container } = render(<InlineArtifactCard artifact={ref} />);
+    const el = container.querySelector('[data-inline-card="generating"]');
+    expect(el).not.toBeNull();
+    // aria-busy signals in-progress state to assistive tech
+    expect(el?.getAttribute('aria-busy')).toBe('true');
+    // Loader2 spinner present as an SVG
+    expect(el?.querySelector('svg')).not.toBeNull();
+    // Filename visible
+    expect(screen.getByText('report.md')).toBeTruthy();
+    // Does NOT open peek on any interaction (no button role)
+    expect(el?.tagName).not.toBe('BUTTON');
+  });
+
+  it('Test 14: status=generating → same h-7 height class as compact pill (no layout shift)', () => {
+    const ref: InlineArtifactRef = {
+      id: 'placeholder-uuid-2',
+      type: 'MD',
+      title: 'spec.md',
+      status: 'generating',
+    };
+    const { container } = render(<InlineArtifactCard artifact={ref} />);
+    const el = container.querySelector('[data-inline-card="generating"]');
+    // h-7 class is applied — matching CompactVariant outer height
+    expect(el?.className).toContain('h-7');
+  });
+
+  it('Test 15: status=failed → renders [data-inline-card="failed"] with AlertCircle and filename', () => {
+    const ref: InlineArtifactRef = {
+      id: 'placeholder-uuid-3',
+      type: 'MD',
+      title: 'report.md',
+      status: 'failed',
+      errorMessage: 'File too large',
+    };
+    const { container } = render(<InlineArtifactCard artifact={ref} />);
+    const el = container.querySelector('[data-inline-card="failed"]');
+    expect(el).not.toBeNull();
+    expect(el?.getAttribute('role')).toBe('alert');
+    // AlertCircle SVG present
+    expect(el?.querySelector('svg')).not.toBeNull();
+    // Filename and error message both visible
+    expect(el?.textContent).toContain('report.md');
+    expect(el?.textContent).toContain('File too large');
+  });
+
+  it('Test 16: status=failed without errorMessage → renders without detail suffix', () => {
+    const ref: InlineArtifactRef = {
+      id: 'placeholder-uuid-4',
+      type: 'HTML',
+      title: 'page.html',
+      status: 'failed',
+    };
+    const { container } = render(<InlineArtifactCard artifact={ref} />);
+    const el = container.querySelector('[data-inline-card="failed"]');
+    expect(el).not.toBeNull();
+    // No error detail suffix (no " · ...")
+    expect(el?.textContent).not.toContain('·');
+  });
+
+  it('Test 17: status=ready → renders normal compact variant (backward compat)', () => {
+    const ref: InlineArtifactRef = {
+      id: 'placeholder-uuid-5',
+      type: 'MD',
+      title: 'notes.md',
+      status: 'ready',
+      realArtifactId: 'real-artifact-uuid',
+    };
+    const { container } = render(<InlineArtifactCard artifact={ref} />);
+    // Falls through to normal compact pill rendering
+    expect(container.querySelector('[data-inline-card="compact"]')).not.toBeNull();
+    expect(container.querySelector('[data-inline-card="generating"]')).toBeNull();
+    expect(container.querySelector('[data-inline-card="failed"]')).toBeNull();
+  });
+
+  it('Test 18: realArtifactId routes openPeek to real id, not placeholder id', () => {
+    const ref: InlineArtifactRef = {
+      id: 'placeholder-uuid-6',
+      type: 'MD',
+      title: 'notes.md',
+      status: 'ready',
+      realArtifactId: 'real-artifact-uuid-abc',
+    };
+    const { container } = render(<InlineArtifactCard artifact={ref} />);
+    const pill = container.querySelector('[data-compact-pill]') as HTMLElement;
+    fireEvent.click(pill);
+    expect(openPeekMock).toHaveBeenCalledWith('real-artifact-uuid-abc', 'MD');
+  });
 });

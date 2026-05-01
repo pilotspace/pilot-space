@@ -21,6 +21,9 @@ const ARTIFACT_FORMAT_TO_TOKEN: Record<string, ArtifactTokenKey> = {
  * Phase 87.1 Plan 04 — Map the SSE `artifact_created` wire payload (snake_case
  * from the `pilot-files` MCP server) to a frontend `InlineArtifactRef`.
  *
+ * Phase 87.2 — when `placeholder_id` is present in the payload, this function
+ * returns `null` and callers should use `mapArtifactCreatedSwapPayload` instead.
+ *
  * Mirrors the helper in lib/sse-client.ts but is reused here because
  * `consumeSSEStream` / `parseSSEBuffer` paths bypass the SSEClient layer.
  */
@@ -39,6 +42,32 @@ function mapArtifactCreatedPayload(data: unknown): InlineArtifactRef | null {
     type,
     title: filename,
     updatedAt: new Date().toISOString(),
+  };
+}
+
+/**
+ * Phase 87.2 — Map the SSE `artifact_generating` wire payload to a placeholder
+ * `InlineArtifactRef` with `status: 'generating'`.
+ *
+ * Wire shape: `{ placeholder_id, filename, format, mime_type }`
+ * The `id` is set to `placeholder_id` so the React key stays stable
+ * across the swap when `artifact_created` arrives.
+ */
+function mapArtifactGeneratingPayload(data: unknown): InlineArtifactRef | null {
+  if (!data || typeof data !== 'object') return null;
+  const d = data as Record<string, unknown>;
+  const placeholderId = d['placeholder_id'];
+  if (typeof placeholderId !== 'string' || !placeholderId) return null;
+  const filenameRaw = d['filename'];
+  const formatRaw = d['format'];
+  const filename = typeof filenameRaw === 'string' ? filenameRaw : 'file';
+  const formatKey = typeof formatRaw === 'string' ? formatRaw.toLowerCase() : '';
+  const type: ArtifactTokenKey = ARTIFACT_FORMAT_TO_TOKEN[formatKey] ?? 'MD';
+  return {
+    id: placeholderId,
+    type,
+    title: filename,
+    status: 'generating',
   };
 }
 
@@ -71,13 +100,48 @@ export class PilotSpaceSSEParser {
       url: absoluteUrl,
       method: 'GET',
       onMessage: (event: SSEEvent) => this.onEvent(event),
-      // Phase 87.1 Plan 04 — intercept artifact_created and route to store.
+      // Phase 87.1 Plan 04 — legacy append path (no placeholder_id).
       onArtifactCreated: (ref) =>
         runInAction(() => {
           this.store.appendArtifactToStreamingMessage(ref);
         }),
+      // Phase 87.2 — swap path: artifact_created with placeholder_id.
+      onArtifactCreatedSwap: (payload) =>
+        runInAction(() => {
+          const d = payload as Record<string, unknown>;
+          const placeholderId = typeof d['placeholder_id'] === 'string' ? d['placeholder_id'] : null;
+          const artifactId = typeof d['artifact_id'] === 'string' ? d['artifact_id'] : null;
+          if (!placeholderId || !artifactId) return;
+          const filenameRaw = d['filename'];
+          const formatRaw = d['format'];
+          const filename = typeof filenameRaw === 'string' ? filenameRaw : undefined;
+          const formatKey = typeof formatRaw === 'string' ? formatRaw.toLowerCase() : '';
+          const type: ArtifactTokenKey = ARTIFACT_FORMAT_TO_TOKEN[formatKey] ?? 'MD';
+          this.store.swapPlaceholderWithArtifact(placeholderId, artifactId, {
+            type,
+            title: filename,
+            updatedAt: new Date().toISOString(),
+          });
+        }),
+      // Phase 87.2 — intercept artifact_generating: push placeholder.
+      onArtifactGenerating: (payload) =>
+        runInAction(() => {
+          const ref = mapArtifactGeneratingPayload(payload);
+          if (ref) this.store.appendArtifactToStreamingMessage(ref);
+        }),
+      // Phase 87.2 — intercept artifact_generation_failed: flip placeholder.
+      onArtifactGenerationFailed: (payload) =>
+        runInAction(() => {
+          const d = payload as Record<string, unknown>;
+          const placeholderId = typeof d['placeholder_id'] === 'string' ? d['placeholder_id'] : '';
+          const msg = typeof d['message'] === 'string' ? d['message'] : 'Generation failed';
+          if (placeholderId) this.store.markArtifactFailed(placeholderId, msg);
+        }),
       onComplete: () => {
         runInAction(() => {
+          // Phase 87.2 — flush any dangling 'generating' placeholders before
+          // clearing streamingState so they don't spin forever.
+          this.store.flushGeneratingPlaceholders('Generation interrupted');
           this.store.updateStreamingState({
             isStreaming: false,
             streamContent: '',
@@ -87,6 +151,8 @@ export class PilotSpaceSSEParser {
       },
       onError: (err) => {
         runInAction(() => {
+          // Phase 87.2 — flush dangling placeholders on connection error too.
+          this.store.flushGeneratingPlaceholders('Generation interrupted');
           this.store.updateStreamingState({
             isStreaming: false,
             streamContent: '',
@@ -125,6 +191,8 @@ export class PilotSpaceSSEParser {
             }
           }
           runInAction(() => {
+            // Phase 87.2 — flush dangling 'generating' placeholders on normal completion.
+            this.store.flushGeneratingPlaceholders('Generation interrupted');
             this.store.updateStreamingState({
               isStreaming: false,
               streamContent: '',
@@ -148,6 +216,8 @@ export class PilotSpaceSSEParser {
       }
     } catch (err) {
       runInAction(() => {
+        // Phase 87.2 — flush dangling placeholders on stream error too.
+        this.store.flushGeneratingPlaceholders('Generation interrupted');
         this.store.updateStreamingState({
           isStreaming: false,
           streamContent: '',
@@ -164,19 +234,71 @@ export class PilotSpaceSSEParser {
    * Phase 87.1 Plan 04 — route a parsed event.
    * `artifact_created` updates the streaming message's artifacts[] directly
    * and is NOT forwarded to the regular onEvent handler.
+   *
+   * Phase 87.2 — also intercepts `artifact_generating` (push placeholder)
+   * and `artifact_generation_failed` (flip placeholder to failed). Neither
+   * is forwarded to `onEvent`.
    */
   private dispatchEvent(event: SSEEvent): void {
-    if (event.type === 'artifact_created') {
-      const ref = mapArtifactCreatedPayload(event.data);
+    if (event.type === 'artifact_generating') {
+      const ref = mapArtifactGeneratingPayload(event.data);
       if (ref) {
         runInAction(() => {
           this.store.appendArtifactToStreamingMessage(ref);
         });
       } else {
-        console.warn('[sse] dropped malformed artifact_created event');
+        console.warn('[sse] dropped malformed artifact_generating event');
       }
       return;
     }
+
+    if (event.type === 'artifact_created') {
+      const d = event.data as Record<string, unknown> | null;
+      const placeholderId = d && typeof d['placeholder_id'] === 'string' ? d['placeholder_id'] : null;
+      const artifactId = d && typeof d['artifact_id'] === 'string' ? d['artifact_id'] : null;
+
+      if (placeholderId && artifactId) {
+        // Phase 87.2 — in-place swap: placeholder_id → real artifact.
+        const filenameRaw = d?.['filename'];
+        const formatRaw = d?.['format'];
+        const filename = typeof filenameRaw === 'string' ? filenameRaw : undefined;
+        const formatKey = typeof formatRaw === 'string' ? formatRaw.toLowerCase() : '';
+        const type: ArtifactTokenKey = ARTIFACT_FORMAT_TO_TOKEN[formatKey] ?? 'MD';
+        runInAction(() => {
+          this.store.swapPlaceholderWithArtifact(placeholderId, artifactId, {
+            type,
+            title: filename,
+            updatedAt: new Date().toISOString(),
+          });
+        });
+      } else {
+        // No placeholder_id — legacy append path (pre-87.2 or reload).
+        const ref = mapArtifactCreatedPayload(event.data);
+        if (ref) {
+          runInAction(() => {
+            this.store.appendArtifactToStreamingMessage(ref);
+          });
+        } else {
+          console.warn('[sse] dropped malformed artifact_created event');
+        }
+      }
+      return;
+    }
+
+    if (event.type === 'artifact_generation_failed') {
+      const d = event.data as Record<string, unknown> | null;
+      const placeholderId = d && typeof d['placeholder_id'] === 'string' ? d['placeholder_id'] : null;
+      const msg = d && typeof d['message'] === 'string' ? d['message'] : 'Generation failed';
+      if (placeholderId) {
+        runInAction(() => {
+          this.store.markArtifactFailed(placeholderId, msg);
+        });
+      } else {
+        console.warn('[sse] dropped malformed artifact_generation_failed event');
+      }
+      return;
+    }
+
     this.onEvent(event);
   }
 

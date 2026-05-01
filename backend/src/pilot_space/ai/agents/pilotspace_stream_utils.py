@@ -121,6 +121,19 @@ class StreamEvent(StrEnum):
     # ``artifacts[]`` array so InlineArtifactCard renders without reload.
     ARTIFACT_CREATED = "artifact_created"
 
+    # Phase 87.2 — live placeholder card while generate_file is in progress.
+    # ``artifact_generating`` is emitted BEFORE the upload call so the chat UI
+    # can render a shimmer/spinner placeholder immediately. Payload:
+    #   {placeholder_id, filename, format, mime_type}
+    # ``placeholder_id`` is a server-side uuid4 threaded through to
+    # ``artifact_created`` so the frontend can do an in-place swap by id.
+    ARTIFACT_GENERATING = "artifact_generating"
+
+    # Phase 87.2 — emitted on FileGenerationError AFTER artifact_generating
+    # so the frontend can flip the placeholder to an error pill.
+    # Payload: {placeholder_id, error_code, message}
+    ARTIFACT_GENERATION_FAILED = "artifact_generation_failed"
+
 
 def build_sse_frame(event: StreamEvent | str, data: dict[str, Any]) -> str:
     """Build a wire-format SSE frame.

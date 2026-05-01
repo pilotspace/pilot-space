@@ -24,6 +24,7 @@
 import * as React from 'react';
 import { useState } from 'react';
 import {
+  AlertCircle,
   ChevronDown,
   ChevronUp,
   CheckSquare,
@@ -35,6 +36,7 @@ import {
   FileType,
   GitCommit,
   Link as LinkIcon,
+  Loader2,
   Presentation,
   Sparkles,
 } from 'lucide-react';
@@ -75,6 +77,27 @@ export interface InlineArtifactRef {
     label: string;
     rows: InlineArtifactGroupRow[];
   };
+  /**
+   * Phase 87.2 — live placeholder lifecycle.
+   *
+   * - `'generating'`: upload in progress; render shimmer/spinner pill.
+   * - `'ready'` | undefined: upload complete; render normal compact/full card.
+   * - `'failed'`: upload failed; render error pill.
+   *
+   * When status is `'generating'`, `id` holds the server-side `placeholder_id`
+   * (a uuid4). On swap (`artifact_created` arrives), the ref is mutated
+   * in-place: `status → 'ready'`, `realArtifactId` set to the real artifact
+   * UUID. React key stays stable (no remount, no layout shift).
+   */
+  status?: 'generating' | 'ready' | 'failed';
+  /**
+   * Phase 87.2 — real artifact UUID after successful generation. Only set
+   * when `status === 'ready'`. Click handlers and peek routing use
+   * `realArtifactId ?? id` so the correct resource is opened.
+   */
+  realArtifactId?: string;
+  /** Phase 87.2 — error detail when `status === 'failed'`. */
+  errorMessage?: string;
 }
 
 export interface InlineArtifactCardProps {
@@ -130,14 +153,25 @@ function resolveVariant(ref: InlineArtifactRef): InlineArtifactVariant {
 // ---------------------------------------------------------------------------
 
 export function InlineArtifactCard({ artifact }: InlineArtifactCardProps) {
-  const variant = resolveVariant(artifact);
   const { openPeek } = useArtifactPeekState();
+
+  // Phase 87.2 — placeholder lifecycle states take priority over variant routing.
+  if (artifact.status === 'generating') {
+    return <GeneratingVariant artifact={artifact} />;
+  }
+  if (artifact.status === 'failed') {
+    return <FailedVariant artifact={artifact} />;
+  }
+
+  const variant = resolveVariant(artifact);
+  // Use realArtifactId for peek routing when set (post-swap), fall back to id.
+  const peekId = artifact.realArtifactId ?? artifact.id;
 
   if (variant === 'full') {
     return (
       <FullVariant
         artifact={artifact}
-        onOpenPeek={() => openPeek(artifact.id, artifact.type)}
+        onOpenPeek={() => openPeek(peekId, artifact.type)}
       />
     );
   }
@@ -152,7 +186,7 @@ export function InlineArtifactCard({ artifact }: InlineArtifactCardProps) {
   return (
     <CompactVariant
       artifact={artifact}
-      onOpenPeek={() => openPeek(artifact.id, artifact.type)}
+      onOpenPeek={() => openPeek(peekId, artifact.type)}
     />
   );
 }
@@ -297,6 +331,71 @@ function GroupVariant({
           {hidden === 1 ? 'Show 1 more' : `Show ${hidden} more`}
         </button>
       )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// GeneratingVariant — compact pill matching ready-state dimensions exactly.
+// Same h-7 / rounded-full / px-3 chrome as CompactVariant so no layout shift
+// occurs when the card swaps to ready state (Phase 87.2 constraint).
+// ---------------------------------------------------------------------------
+
+function GeneratingVariant({ artifact }: { artifact: InlineArtifactRef }) {
+  const tokens = ARTIFACT_TYPE_TOKENS[artifact.type];
+  const title = artifact.title ?? 'file';
+
+  return (
+    <div
+      data-inline-card="generating"
+      aria-busy="true"
+      aria-label={`Creating ${title}…`}
+      className="inline-flex h-7 max-w-[280px] cursor-default items-center gap-2 rounded-full border bg-card px-3 opacity-70"
+      style={{ borderColor: tokens.accent + '55' }}
+    >
+      <Loader2
+        className="h-3.5 w-3.5 flex-shrink-0 animate-spin"
+        style={{ color: tokens.accent }}
+        aria-hidden="true"
+      />
+      <span
+        className="flex-shrink-0 font-mono text-[10px] font-semibold uppercase tracking-wider"
+        style={{ color: tokens.badgeText }}
+      >
+        Creating
+      </span>
+      <span className="truncate text-xs font-medium">{title}</span>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// FailedVariant — compact pill with error icon; no-click (TODO: retry).
+// Same outer dimensions as CompactVariant for layout stability.
+// ---------------------------------------------------------------------------
+
+function FailedVariant({ artifact }: { artifact: InlineArtifactRef }) {
+  const title = artifact.title ?? 'file';
+  const detail = artifact.errorMessage ? ` · ${artifact.errorMessage}` : '';
+
+  return (
+    <div
+      data-inline-card="failed"
+      role="alert"
+      aria-label={`Couldn't create ${title}${detail}`}
+      className="inline-flex h-7 max-w-[280px] cursor-default items-center gap-2 rounded-full border border-destructive/40 bg-card px-3 opacity-80"
+    >
+      <AlertCircle
+        className="h-3.5 w-3.5 flex-shrink-0 text-destructive"
+        aria-hidden="true"
+      />
+      <span className="flex-shrink-0 font-mono text-[10px] font-semibold uppercase tracking-wider text-destructive">
+        Failed
+      </span>
+      <span className="truncate text-xs font-medium text-muted-foreground">
+        {title}
+        {detail}
+      </span>
     </div>
   );
 }
